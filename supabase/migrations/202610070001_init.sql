@@ -1,4 +1,4 @@
--- Stracker: single-owner study notebook schema. Run with Supabase CLI or SQL Editor.
+-- Stracker: per-account study notebook schema. Run with Supabase CLI or SQL Editor.
 create extension if not exists pgcrypto;
 
 create or replace function public.set_updated_at()
@@ -218,8 +218,11 @@ for all to authenticated
 using (bucket_id = 'mistake-images' and (storage.foldername(name))[1] = auth.uid()::text)
 with check (bucket_id = 'mistake-images' and (storage.foldername(name))[1] = auth.uid()::text);
 
--- Create a profile row from trusted auth metadata. Owner setup itself is performed
--- in Supabase Dashboard after disabling public signups; there is intentionally no sign-up endpoint here.
+-- Create a profile row from trusted auth metadata. This runs for every account created
+-- through Supabase Auth (the public /signup page or a dashboard invite). Sign-up itself is
+-- a Supabase Auth setting, not an endpoint here; the app never writes this row itself, and
+-- the account's notebook (settings + seeded syllabus) is initialized by that signed-in user
+-- through the existing RLS-scoped tables.
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
