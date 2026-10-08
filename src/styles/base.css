@@ -1,7 +1,18 @@
 /* STRACKER · warm paper, pencil lines, quiet colour */
+
+/* TYPOGRAPHY CONTRACT
+ *  1. One interface family. `--app-font-family` is written to <html> by AppearanceContext
+ *     (applyInterfaceFont) from the font being rendered: a live Settings preview, otherwise the
+ *     saved app_settings.interface_font. It is the only place a UI family is chosen.
+ *  2. Components use the semantic roles below, or inherit. They never name a family, and they
+ *     never use !important to force one.
+ *  3. Native controls, option lists and placeholders inherit (the `font: inherit` rules below).
+ *     Portals and overlays inherit from <html>, so they follow the selected font too.
+ *  4. One documented non-UI exception: `--font-code`, for fenced AI code (.ai-code-block) only.
+ *     Monospace must not be used for navigation, controls, headings, tables or prose.
+ *  5. Exports (JSON, CSV, PDF, DOCX) keep their own typography and never read these tokens.
+ */
 :root {
-  /* The only interface font family. AppearanceContext updates this token from the
-     persisted Settings preference; every element (including portals) inherits it. */
   --app-font-family: 'Poppins', 'Open Sans', 'Trebuchet MS', system-ui, sans-serif;
   /* Backwards-compatible semantic aliases control typography roles, not font choices.
      Keep them pointed at the global token so existing/new component rules cannot split
@@ -11,6 +22,8 @@
   --font-heading: var(--app-font-family);
   --font-label: var(--app-font-family);
   --font-number: var(--app-font-family);
+  /* The documented monospace exception (contract item 4). Used by .ai-code-block only. */
+  --font-code: ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #29332d;
   background: #f7f4ec;
   font-synthesis: none;

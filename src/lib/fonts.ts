@@ -3,11 +3,18 @@ import { INTERFACE_FONTS, type InterfaceFont } from '../types/index.js'
 /**
  * Registry for the one application-wide interface font.
  *
- * `stack` is the canonical mapping from the persisted preference to
- * `--app-font-family`. AppearanceContext applies it once to `<html>`; every semantic
- * typography token in base.css aliases that variable, so components inherit the same
- * family instead of maintaining their own choices. Families are bundled locally in
- * main.tsx with font-display: swap and each stack ends in a system fallback.
+ * Ownership, end to end (one owner per concern, no second writer):
+ *  - `app_settings.interface_font` is the source of truth. It changes only when
+ *    Settings → Appearance → "Save appearance settings" runs, through DataContext.updateSettings.
+ *  - SettingsPage owns the draft. Picking a font edits the draft and previews it globally;
+ *    it persists nothing, and Discard or leaving Settings drops the draft.
+ *  - AppearanceContext owns runtime application. It resolves the effective font (a live preview
+ *    from the Settings draft, otherwise the saved value) and never writes it anywhere.
+ *  - `--app-font-family` on <html> is only the rendering mechanism. Every semantic typography
+ *    token in base.css aliases it, so components inherit one family instead of naming their own.
+ *
+ * `stack` is the canonical mapping from a preference to `--app-font-family`. Families are
+ * bundled locally in main.tsx with font-display: swap, and each stack ends in a system fallback.
  */
 export interface InterfaceFontOption {
   value: InterfaceFont

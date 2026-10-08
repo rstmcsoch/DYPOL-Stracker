@@ -76,7 +76,7 @@ npm audit
 
 Settings is organised into five tabs — **Account, Exam, Appearance, Study rhythm, and Data** — so long forms stay scannable. Each tab keeps its own draft, shows a dot while it has unsaved edits, and saves independently; the arrow keys move between tabs. Data resets and sign-out live in the Data and Account tabs behind their own confirmation dialogs, never behind a plain Save.
 
-The header switch and *Settings → Appearance → Notebook theme* edit the same value, so they never disagree: switching to `Auto` in Settings follows the device, and the next press of the header switch pins an explicit light or night choice.
+The header switch saves its choice immediately. *Settings → Appearance → Notebook theme* is part of the Appearance draft and saves with *Save appearance settings*. Both edit the same saved value, so once saved they never disagree: switching to `Auto` in Settings follows the device, and the next press of the header switch pins an explicit light or night choice.
 
 *Settings → Appearance → Interface font* selects the single family used across the entire interface — content, headings, navigation, forms, tables, dialogs, notifications, and dynamically mounted UI:
 
@@ -87,7 +87,11 @@ The header switch and *Settings → Appearance → Notebook theme* edit the same
 | Sora | Sora |
 | Open Sans | Open Sans |
 
-Each selectable family is bundled locally (latin subset, regular through bold) with `font-display: swap` and a system-sans fallback. Appearance settings update the root `--app-font-family` token, and body copy, headings, labels, numbers, native controls, portals and overlays all inherit that one value. The preference is stored in `app_settings.interface_font` and restores with the rest of your settings. Exports are intentionally separate: JSON, CSV, PDF, and DOCX keep their own typography and are never re-rendered in the interface font.
+Each selectable family is bundled locally (latin subset, regular through bold) with `font-display: swap` and a system-sans fallback.
+
+Picking a font is a draft. It previews across the whole interface at once, the Appearance tab shows its unsaved-changes dot, and nothing is written until you press **Save appearance settings**. Repeated picks save only the final choice. **Discard** restores the saved font, theme, and global font. Leaving Settings without saving reverts the preview and drops the draft, the same as every other unsaved tab. The saved value lives in `app_settings.interface_font` and restores on reload.
+
+The effective font is applied once, as `--app-font-family` on the root element. Body copy, headings, labels, numbers, native controls, portals and overlays all inherit it. Components never name a family of their own, and nothing uses `!important` to force one. The one documented monospace exception is the `--font-code` token, which only fenced AI code blocks (`.ai-code-block`) use. Exports are intentionally separate: JSON, CSV, PDF, and DOCX keep their own typography and are never re-rendered in the interface font.
 
 ## Supabase setup (per-account, private by default)
 

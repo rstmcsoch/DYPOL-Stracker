@@ -22,9 +22,18 @@ describe('interface font registry', () => {
     expect(interfaceFontOption('open-sans').stack.startsWith("'Open Sans'")).toBe(true)
   })
 
-  it('routes the Settings picker through the global appearance setter', () => {
+  it('routes the Settings picker into the unsaved draft and its preview, never into a persisting setter', () => {
     const settingsPage = readFileSync(`${process.cwd()}/src/pages/SettingsPage.tsx`, 'utf8')
-    expect(settingsPage).toContain('setInterfaceFont(option.value)')
+    expect(settingsPage).toContain("onChange={() => patch('interface_font', option.value)}")
+    expect(settingsPage).toContain('useInterfaceFontPreview(draft.interface_font)')
+    expect(settingsPage).not.toContain('setInterfaceFont')
+  })
+
+  it('keeps font persistence out of AppearanceContext, which only resolves and applies the font', () => {
+    const appearance = readFileSync(`${process.cwd()}/src/contexts/AppearanceContext.tsx`, 'utf8')
+    expect(appearance).not.toMatch(/setInterfaceFont|pendingFont|writeQueue|\bupsert\(/)
+    // Theme persists through the shared settings writer; the font field itself is never written here.
+    expect(appearance).not.toMatch(/interface_font\s*:/)
   })
 
   it('applies every selected family through the single document-level CSS token', () => {
