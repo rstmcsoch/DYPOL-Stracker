@@ -10,12 +10,24 @@ export interface AppUser {
   isLocal: boolean
 }
 
+export interface SignUpResult {
+  /** True when Supabase created the user but still expects the emailed confirmation link. */
+  needsEmailConfirmation: boolean
+}
+
 interface AuthContextValue {
   user: AppUser | null
   loading: boolean
   error: string | null
   clearError: () => void
   signIn: (email: string, password: string) => Promise<void>
+  /**
+   * Creates a real Supabase account. The profile row is written by the database
+   * trigger on `auth.users`; the notebook itself (settings + seeded syllabus) is
+   * initialized by the authenticated data session after the first sign-in.
+   */
+  signUp: (email: string, password: string, displayName: string) => Promise<SignUpResult>
+  resendConfirmation: (email: string) => Promise<void>
   signOut: () => Promise<void>
   startLocalPreview: () => void
   sendPasswordReset: (email: string) => Promise<void>
@@ -42,6 +54,18 @@ function friendlyAuthError(message: string): string {
   if (normalized.includes('too many requests')) return 'Too many attempts. Wait a moment, then try again.'
   if (normalized.includes('failed to fetch') || normalized.includes('network')) return 'Could not reach the sign-in service. Check your connection and try again.'
   return 'We could not complete that authentication request. Please try again.'
+}
+
+/** Sign-up specific mapping: the shared mapper would hide the useful cases. */
+function friendlySignUpError(message: string): string {
+  const normalized = message.toLowerCase()
+  if (normalized.includes('already registered') || normalized.includes('already been registered')) return 'That email already has a Stracker account. Log in instead, or reset the password.'
+  if (normalized.includes('signups not allowed') || normalized.includes('signup disabled')) return 'This deployment does not allow new accounts to be created yet. Enable email sign-ups in Supabase Auth, or sign in with an existing account.'
+  if (normalized.includes('password should be') || normalized.includes('password is too short')) return 'Use at least 8 characters for your password.'
+  if (normalized.includes('unable to validate email') || normalized.includes('invalid email')) return 'That email address does not look right. Check it and try again.'
+  if (normalized.includes('too many requests') || normalized.includes('rate limit')) return 'Too many attempts. Wait a moment, then try again.'
+  if (normalized.includes('failed to fetch') || normalized.includes('network')) return 'Could not reach the sign-up service. Check your connection and try again.'
+  return friendlyAuthError(message)
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -95,6 +119,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
       if (signInError) {
         const message = friendlyAuthError(signInError.message)
+        setError(message)
+        throw new Error(message)
+      }
+    },
+    signUp: async (email, password, displayName) => {
+      setError(null)
+      if (!supabase) {
+        const message = 'Cloud authentication is not configured. Add the Supabase project URL and public key to the deployment environment before creating an account.'
+        setError(message)
+        throw new Error(message)
+      }
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: { display_name: displayName.trim() },
+          emailRedirectTo: `${window.location.origin}/`
+        }
+      })
+      if (signUpError) {
+        const message = friendlySignUpError(signUpError.message)
+        setError(message)
+        throw new Error(message)
+      }
+      // With email confirmation enabled Supabase returns a user but no session.
+      // Without it the session arrives immediately and the route guard opens the notebook.
+      return { needsEmailConfirmation: !data.session }
+    },
+    resendConfirmation: async email => {
+      setError(null)
+      if (!supabase) throw new Error('Cloud authentication is not configured.')
+      const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: email.trim() })
+      if (resendError) {
+        const message = friendlySignUpError(resendError.message)
         setError(message)
         throw new Error(message)
       }

@@ -11,7 +11,7 @@ export default defineConfig({
       manifest: {
         name: 'Stracker — JEE 2027 Study Notebook',
         short_name: 'Stracker',
-        description: 'A private notebook for JEE 2027 study plans, revision, tests, and focus sessions.',
+        description: 'A private study notebook for JEE 2027 plans, revision, tests and focus sessions — by DYPOL LABS.',
         theme_color: '#f7f4ec',
         background_color: '#f7f4ec',
         display: 'standalone',

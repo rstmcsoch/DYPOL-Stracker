@@ -1,6 +1,6 @@
 # Stracker
 
-**Stracker by DYPOL LABS** is a private, responsive study notebook for JEE 2027 preparation. It combines a seeded, editable syllabus with test tracking, mistake review, spaced revision, daily planning, focus sessions, analytics, and portable exports. The interface is designed to feel like a well-used notebook and works on desktop and mobile.
+**Stracker by DYPOL LABS** is a private, responsive study notebook for JEE 2027 preparation, published behind a public product homepage. It combines a seeded, editable syllabus with test tracking, mistake review, spaced revision, daily planning, focus sessions, analytics, and portable exports. The interface is designed to feel like a well-used notebook and works on desktop and mobile.
 
 ## What is included
 
@@ -14,9 +14,24 @@
 - **Exports and backups:** re-importable JSON notebook backup, UTF-8 test-history CSV, and selectable/date-ranged PDF and DOCX reports. Backup import validates records and relationships, previews the merge, and requires confirmation.
 - **Privacy and offline support:** Supabase Auth, user-scoped PostgreSQL tables with RLS, a private image bucket, browser-local IndexedDB caching, and an owner-scoped sync queue for offline changes.
 - **Appearance controls:** a light/night switch in the top-right corner (desktop header and mobile top bar) that stays in step with the theme choice in Settings, plus an interface-font preference — Default (the Stracker notebook hand), Poppins, Sora, or Open Sans.
+- **Public homepage and separate authentication:** a marketing-free product homepage on `/` for visitors, dedicated `/login` and `/signup` pages, and password recovery on `/reset-password`. Signed-in visitors go straight to the notebook instead.
 - **Installable PWA:** application manifest, service worker, app icons, and offline-cached application shell.
 
 The seeded syllabus is an editable topic grouping, not a claim that an official JEE 2027 notification has been published. Check the current NTA/JEE bulletin when it is released and adjust the list in the notebook if the official syllabus changes.
+
+## Public routes
+
+| Route | Visitor | Signed in |
+| --- | --- | --- |
+| `/` | Public Stracker homepage | The notebook dashboard |
+| `/login` | Log-in page | Redirected to `/` |
+| `/signup` | Sign-up page (real Supabase account) | Redirected to `/` |
+| `/reset-password` | Request a reset link, or set a new password from the emailed link | Same page; the recovery link needs this route, so it is never redirected away |
+| `/syllabus`, `/tests`, `/mistakes`, `/retry`, `/planner`, `/revision`, `/analytics`, `/weak-areas`, `/backup`, `/settings`, `/focus` | Redirected to `/login` | The notebook |
+
+The guard is a single check on the restored session, so there is no redirect loop: while the session is being restored nothing else renders, and the installed PWA (`start_url: "/"`) opens the homepage for visitors and the notebook for signed-in users. A signed-out deep link such as `/syllabus` is remembered and replayed after a successful log-in.
+
+The homepage is server-configuration agnostic: it never reads `import.meta.env`, never renders a provider key, and ships no third-party scripts, stock imagery or remote fonts. Its only texture is a ~300-byte inline SVG grain plus CSS.
 
 ## Run locally
 
@@ -61,12 +76,12 @@ The header switch and *Settings → Notebook theme* edit the same value, so they
 
 Only the default cut of each family is loaded (latin subset, regular to bold) and each family falls back to a system sans if it cannot be fetched, so the app stays usable offline or behind a blocked font host. The preference is stored in `app_settings.interface_font` and restores with the rest of your settings. Exports are intentionally separate: JSON, CSV, PDF, and DOCX keep their own typography and are never re-rendered in the interface font.
 
-## Supabase setup (private account)
+## Supabase setup (per-account, private by default)
 
 1. Create a Supabase project and keep its URL and **publishable/anon key** available for the browser app.
-2. Apply the migrations in [`supabase/migrations/`](supabase/migrations) in filename order (starting with `202610070001_init.sql`) from the Supabase SQL Editor or with the Supabase CLI. It creates the application tables, owner-only RLS policies, timestamp triggers, a private `mistake-images` bucket, storage ownership policies, and a profile trigger.
-3. In Supabase Auth, disable public sign-ups. Create or invite only the owner account from the dashboard. Stracker deliberately has no public registration workflow.
-4. In **Authentication → URL Configuration**, add the deployed app URL and its `/reset-password` route to the allowed redirect URLs. Configure the email provider and password-reset delivery to suit your project.
+2. Apply the migrations in [`supabase/migrations/`](supabase/migrations) in filename order (starting with `202610070001_init.sql`) from the Supabase SQL Editor or with the Supabase CLI. It creates the application tables, owner-only RLS policies, timestamp triggers, a private `mistake-images` bucket, storage ownership policies, and the `handle_new_user` profile trigger.
+3. In **Authentication → Sign In / Providers → Email**, enable **Allow new users to sign up** so the public `/signup` page can create accounts, and decide whether email confirmation is required. Every account gets its own RLS-scoped notebook: chapters, tests, mistakes, revisions, plans and sessions are readable only by the account that wrote them, so an open sign-up never exposes another student's records. Turning sign-ups off again also works — `/signup` then reports that this deployment does not accept new accounts, and existing users keep signing in.
+4. In **Authentication → URL Configuration**, add the deployed app URL, its `/signup` route as a redirect target for confirmation emails, and its `/reset-password` route to the allowed redirect URLs. Configure the email provider and password-reset delivery to suit your project.
 5. Copy `.env.example` to `.env.local` and set:
 
    ```dotenv
@@ -74,7 +89,7 @@ Only the default cut of each family is loaded (latin subset, regular to bold) an
    VITE_SUPABASE_ANON_KEY=YOUR_PUBLIC_PUBLISHABLE_OR_ANON_KEY
    ```
 
-6. Restart the dev server and sign in using the owner account created in Supabase Auth.
+6. Restart the dev server and sign in. From a clean deployment, open `/signup` and create the first account, or create it from the Supabase dashboard and log in at `/login`.
 
 **Never put a Supabase `service_role` key or any other private server secret in a `VITE_*` variable or the browser bundle.** The browser uses only the public key; RLS and the private storage policies are the access boundary. Review the generated policies and authentication settings in your own Supabase project before entering personal data.
 
