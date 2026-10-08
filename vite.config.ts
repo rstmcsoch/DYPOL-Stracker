@@ -15,7 +15,9 @@ export default defineConfig({
         theme_color: '#f7f4ec',
         background_color: '#f7f4ec',
         display: 'standalone',
-        orientation: 'portrait-primary',
+        // The installed app is usable in either orientation: the layout adapts to the
+        // available width and height instead of assuming portrait.
+        orientation: 'any',
         start_url: '/',
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

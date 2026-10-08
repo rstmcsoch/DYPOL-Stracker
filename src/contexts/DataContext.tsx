@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { defaultSettings, seedChapters } from '../lib/defaults'
 import { assetKey, localDb } from '../lib/database'
 import { createId } from '../lib/id'
+import { normalizeInterfaceFont } from '../lib/fonts'
 import { relatedRowsForRemoval } from '../lib/data-relations'
 import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
 import { supabase, supabaseConfigured } from '../lib/supabase'
@@ -102,7 +103,10 @@ async function readLocal(userId: string): Promise<AppData> {
     testSubjectScores: subjectScores as unknown as TestSubjectScore[], testChapterLinks: chapterLinks as unknown as TestChapterLink[],
     mistakes: enrichedMistakes as unknown as Mistake[], tasks: tasks as unknown as DailyTask[], goals: goals as unknown as WeeklyGoal[],
     sessions: sessions as unknown as StudySession[], settings: localSettings ? ({
-      ...localSettings, main_exam_date: localSettings.main_exam_date ?? '', advanced_exam_date: localSettings.advanced_exam_date ?? ''
+      ...localSettings,
+      main_exam_date: localSettings.main_exam_date ?? '',
+      advanced_exam_date: localSettings.advanced_exam_date ?? '',
+      interface_font: normalizeInterfaceFont(localSettings.interface_font)
     }) : defaultSettings(userId),
     profile: (profiles[0] as unknown as Profile | undefined) ?? null
   }
@@ -218,7 +222,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
           const remoteTime = typeof remote?.updated_at === 'string' ? remote.updated_at : ''
           if (remote && remoteTime > localTime) {
             const normalized = change.table === 'app_settings' ? {
-              ...remote, main_exam_date: remote.main_exam_date ?? '', advanced_exam_date: remote.advanced_exam_date ?? ''
+              ...remote,
+              main_exam_date: remote.main_exam_date ?? '',
+              advanced_exam_date: remote.advanced_exam_date ?? '',
+              interface_font: normalizeInterfaceFont(remote.interface_font)
             } : remote
             await localDb.table(change.table).put(normalized as object)
             setData(current => updateOne(current, change.table, normalized as Record<string, unknown>))
@@ -273,7 +280,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const next = emptyData(userId)
       for (const [table, rawRows] of fetched) {
         let rows = table === 'app_settings' ? rawRows.map(row => ({
-          ...row, main_exam_date: row.main_exam_date ?? '', advanced_exam_date: row.advanced_exam_date ?? ''
+          ...row,
+          main_exam_date: row.main_exam_date ?? '',
+          advanced_exam_date: row.advanced_exam_date ?? '',
+          interface_font: normalizeInterfaceFont(row.interface_font)
         })) : rawRows
         if (table === 'mistakes') {
           rows = await Promise.all(rawRows.map(async row => {

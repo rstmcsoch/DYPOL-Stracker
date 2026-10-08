@@ -13,6 +13,7 @@ export function defaultSettings(userId: string, ownerName = ''): AppSettings {
     advanced_exam_date: '',
     target_score: 240,
     theme: 'light',
+    interface_font: 'default',
     weak_threshold: 60,
     strong_threshold: 80,
     dropping_threshold: 10,

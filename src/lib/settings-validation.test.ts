@@ -38,6 +38,26 @@ describe('settings validation', () => {
     }
   })
 
+  it('defaults the interface font for rows saved before the preference existed', () => {
+    const legacy = { ...validSettings } as Record<string, unknown>
+    delete legacy.interface_font
+    const parsed = settingsSchema.safeParse(legacy)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.interface_font).toBe('default')
+  })
+
+  it('only accepts the four supported interface fonts and never free-form CSS', () => {
+    expect(settingsSchema.safeParse({ ...validSettings, interface_font: 'poppins' }).success).toBe(true)
+    expect(settingsSchema.safeParse({ ...validSettings, interface_font: 'sora' }).success).toBe(true)
+    expect(settingsSchema.safeParse({ ...validSettings, interface_font: 'open-sans' }).success).toBe(true)
+    expect(settingsSchema.safeParse({ ...validSettings, interface_font: 'comic-sans' }).success).toBe(false)
+    expect(settingsSchema.safeParse({ ...validSettings, interface_font: "Poppins'; color: red" }).success).toBe(false)
+
+    const parsed = settingsSchema.safeParse({ ...validSettings, interface_font: 'comic-sans' })
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(settingsFieldErrors(parsed.error).interface_font).toContain('Poppins')
+  })
+
   it('keeps thresholds and fractional score metrics finite and within their intended decimal precision', () => {
     expect(settingsSchema.safeParse({ ...validSettings, weak_threshold: 0 }).success).toBe(true)
     expect(settingsSchema.safeParse({ ...validSettings, weak_threshold: 0, strong_threshold: 0.01 }).success).toBe(true)

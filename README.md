@@ -13,6 +13,7 @@
 - **Analytics:** subject and chapter signals, test trends, study time, streaks, mistake summaries, weak areas, and rule-based study prompts. Empty or incomplete data is shown as such rather than invented.
 - **Exports and backups:** re-importable JSON notebook backup, UTF-8 test-history CSV, and selectable/date-ranged PDF and DOCX reports. Backup import validates records and relationships, previews the merge, and requires confirmation.
 - **Privacy and offline support:** Supabase Auth, user-scoped PostgreSQL tables with RLS, a private image bucket, browser-local IndexedDB caching, and an owner-scoped sync queue for offline changes.
+- **Appearance controls:** a light/night switch in the top-right corner (desktop header and mobile top bar) that stays in step with the theme choice in Settings, plus an interface-font preference — Default (the Stracker notebook hand), Poppins, Sora, or Open Sans.
 - **Installable PWA:** application manifest, service worker, app icons, and offline-cached application shell.
 
 The seeded syllabus is an editable topic grouping, not a claim that an official JEE 2027 notification has been published. Check the current NTA/JEE bulletin when it is released and adjust the list in the notebook if the official syllabus changes.
@@ -45,10 +46,25 @@ npm test
 npm audit
 ```
 
+## Appearance and typography
+
+The header switch and *Settings → Notebook theme* edit the same value, so they never disagree: switching to `Auto` in Settings follows the device, and the next press of the header switch pins an explicit light or night choice.
+
+*Settings → Interface font* selects the family the whole interface uses — dashboard, navigation, forms, tables, dialogs, and empty states:
+
+| Choice | Family |
+| --- | --- |
+| Default | Patrick Hand (the Stracker notebook hand, bundled locally) |
+| Poppins | Poppins |
+| Sora | Sora |
+| Open Sans | Open Sans |
+
+Only the default cut of each family is loaded (latin subset, regular to bold) and each family falls back to a system sans if it cannot be fetched, so the app stays usable offline or behind a blocked font host. The preference is stored in `app_settings.interface_font` and restores with the rest of your settings. Exports are intentionally separate: JSON, CSV, PDF, and DOCX keep their own typography and are never re-rendered in the interface font.
+
 ## Supabase setup (private account)
 
 1. Create a Supabase project and keep its URL and **publishable/anon key** available for the browser app.
-2. Apply [`supabase/migrations/202610070001_init.sql`](supabase/migrations/202610070001_init.sql) from the Supabase SQL Editor or with the Supabase CLI. It creates the application tables, owner-only RLS policies, timestamp triggers, a private `mistake-images` bucket, storage ownership policies, and a profile trigger.
+2. Apply the migrations in [`supabase/migrations/`](supabase/migrations) in filename order (starting with `202610070001_init.sql`) from the Supabase SQL Editor or with the Supabase CLI. It creates the application tables, owner-only RLS policies, timestamp triggers, a private `mistake-images` bucket, storage ownership policies, and a profile trigger.
 3. In Supabase Auth, disable public sign-ups. Create or invite only the owner account from the dashboard. Stracker deliberately has no public registration workflow.
 4. In **Authentication → URL Configuration**, add the deployed app URL and its `/reset-password` route to the allowed redirect URLs. Configure the email provider and password-reset delivery to suit your project.
 5. Copy `.env.example` to `.env.local` and set:

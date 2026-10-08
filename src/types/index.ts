@@ -7,6 +7,14 @@ export type MistakeType = 'Concept' | 'Silly' | 'Calculation' | 'Time' | 'Guess'
 export type RetryStatus = 'pending' | 'retried'
 export type ThemeMode = 'light' | 'dark' | 'auto'
 
+/**
+ * Interface fonts the owner can choose for the Stracker UI.
+ * Only default cuts of each family are exposed — no variants, weights, or pairings —
+ * and the value is a closed union so no arbitrary CSS can be stored.
+ */
+export const INTERFACE_FONTS = ['default', 'poppins', 'sora', 'open-sans'] as const
+export type InterfaceFont = (typeof INTERFACE_FONTS)[number]
+
 export interface BaseRecord {
   id: string
   user_id?: string
@@ -114,6 +122,7 @@ export interface AppSettings extends BaseRecord {
   advanced_exam_date: string
   target_score: number
   theme: ThemeMode
+  interface_font: InterfaceFont
   weak_threshold: number
   strong_threshold: number
   dropping_threshold: number
