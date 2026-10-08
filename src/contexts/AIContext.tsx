@@ -95,11 +95,13 @@ interface AIContextValue {
 
 const AIContext = createContext<AIContextValue|null>(null)
 
-interface APIErrorPayload { error?:string; message?:string }
+interface APIErrorPayload { error?:string; message?:string; reference?:string }
 class AIRequestError extends Error {
-  constructor(message:string,readonly code:string,readonly status:number) { super(message); this.name='AIRequestError' }
+  constructor(message:string,readonly code:string,readonly status:number,readonly reference?:string) { super(message); this.name='AIRequestError' }
 }
 async function readError(response:Response):Promise<APIErrorPayload> {
+  // A non-JSON body (for example an HTML page served when /api is missing) yields no message, so the
+  // caller reports the HTTP status instead of a misleading generic failure.
   try { return await response.json() as APIErrorPayload } catch { return {} }
 }
 
@@ -134,6 +136,7 @@ export function AIProvider({ children }: { children:ReactNode }) {
   const [largeOpen,setLargeOpen] = useState(false)
   const [lastRequest,setLastRequest] = useState<LastRequest|null>(null)
   const controllerRef = useRef<AbortController|null>(null)
+  const inflightRequestIdRef = useRef<string|null>(null)
   const conversationRef = useRef<string|null>(null)
   const requestLockRef = useRef(false)
   const actionConfirmLocksRef = useRef(new Set<string>())
@@ -155,8 +158,19 @@ export function AIProvider({ children }: { children:ReactNode }) {
       if (!navigator.onLine) throw new Error('AI is unavailable while offline. Your Stracker notebook is still available.')
       throw new Error('The Stracker AI service could not be reached. Check your connection and try again.')
     }
-    const payload = await response.json().catch(() => ({})) as T & APIErrorPayload
-    if (!response.ok) throw new AIRequestError(typeof payload.message === 'string' ? payload.message : 'Stracker could not complete that AI request. Try again.',typeof payload.error === 'string' ? payload.error : 'request_failed',response.status)
+    // Read as text first: a deployment that serves index.html (no /api routes) or an upstream proxy
+    // page must produce a specific diagnosis, not a silent empty object that looks like success.
+    const text = await response.text().catch(() => '')
+    let payload: (T & APIErrorPayload) | null = null
+    try { payload = text ? JSON.parse(text) as T & APIErrorPayload : null } catch { payload = null }
+    const reference = payload && typeof payload.reference === 'string' ? payload.reference : undefined
+    if (!payload || typeof payload !== 'object') {
+      throw new AIRequestError(`Stracker's AI service returned an unexpected response (HTTP ${response.status}). Check that the /api routes are deployed, then try again.`,'non_json_response',response.status)
+    }
+    if (!response.ok) {
+      const base = typeof payload.message === 'string' ? payload.message : `Stracker could not complete that AI request (HTTP ${response.status}). Try again.`
+      throw new AIRequestError(reference ? `${base} Reference: ${reference}` : base,typeof payload.error === 'string' ? payload.error : 'request_failed',response.status,reference)
+    }
     return payload as T
   },[accessToken])
 
@@ -207,8 +221,9 @@ export function AIProvider({ children }: { children:ReactNode }) {
   },[apiFetch])
 
   const saveProvider = useCallback(async (draft:AIProviderDraft) => {
-    const result = await apiFetch<{provider:AIProviderConfig}>('/api/ai/providers',{method:'POST',body:JSON.stringify(draft)})
+    const result = await apiFetch<{provider?:AIProviderConfig}>('/api/ai/providers',{method:'POST',body:JSON.stringify(draft)})
     await refreshProviders()
+    if (!result.provider) throw new AIRequestError('The provider was not saved. Try again.','provider_not_returned',200)
     return result.provider
   },[apiFetch,refreshProviders])
 
@@ -286,6 +301,7 @@ export function AIProvider({ children }: { children:ReactNode }) {
     requestLockRef.current = true
     const controller = new AbortController()
     controllerRef.current = controller
+    inflightRequestIdRef.current = requestId
     setActiveTask({id:requestId,conversationId:conversationRef.current,status:'queued',progress:'Connecting to your AI provider…',cancellable:true,startedAt:now})
     let response:Response
     try {
@@ -308,7 +324,7 @@ export function AIProvider({ children }: { children:ReactNode }) {
 
     if (!response.ok) {
       const error = await readError(response)
-      const messageText = error.message ?? 'Stracker could not complete that AI request. Try again.'
+      const messageText = error.message ?? `Stracker could not complete that AI request (HTTP ${response.status}). Try again.`
       setMessages(current => current.map(item => item.id === assistantId ? { ...item,status:'failed',content:messageText,error:messageText } : item))
       setActiveTask(current => current ? { ...current,status:'failed',progress:'Request failed.' } : current)
       requestLockRef.current = false; controllerRef.current = null
@@ -448,8 +464,11 @@ export function AIProvider({ children }: { children:ReactNode }) {
 
   const stopTask = useCallback(() => {
     if (!controllerRef.current) return
+    const requestId = inflightRequestIdRef.current
     controllerRef.current.abort(new DOMException('Stopped by the user','AbortError'))
-  },[])
+    // Tell the server explicitly: closing the connection alone does not cancel provider work.
+    if (requestId) void apiFetch('/api/ai/tasks',{method:'POST',body:JSON.stringify({requestId})}).catch(() => undefined)
+  },[apiFetch])
 
   const confirmAction = useCallback(async (actionId:string,approved:boolean):Promise<boolean> => {
     if (actionConfirmLocksRef.current.has(actionId)) return false

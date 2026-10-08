@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-import { ApiError } from './http'
-import { redactPotentialSecrets } from '../../src/lib/ai/sanitize'
+import { ApiError } from './http.js'
+import { redactPotentialSecrets } from '../../src/lib/ai/sanitize.js'
 export { redactPotentialSecrets }
 
 const KEY_BYTES = 32

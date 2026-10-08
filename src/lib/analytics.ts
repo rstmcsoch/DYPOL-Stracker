@@ -1,10 +1,10 @@
 import { addDays, differenceInCalendarDays, parseISO, startOfWeek, format } from 'date-fns'
-import { indiaDate, indiaToday } from './date'
-import { percent } from './format'
+import { indiaDate, indiaToday } from './date.js'
+import { percent } from './format.js'
 import type {
   AppData, Chapter, MistakeType, Subject, TestChapterLink, TestRecord, TestSubjectScore
-} from '../types'
-import { SUBJECTS } from '../types'
+} from '../types/index.js'
+import { SUBJECTS } from '../types/index.js'
 
 export interface ChapterPerformance {
   chapter: Chapter

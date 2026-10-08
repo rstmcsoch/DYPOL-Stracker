@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import type { ApiRequest, ApiResponse } from '../_lib/http'
-import { ApiError, parseQueryValue, readJson, sendJson } from '../_lib/http'
-import { withAuthenticatedRequest } from '../_lib/handler'
+import type { ApiRequest, ApiResponse } from '../_lib/http.js'
+import { ApiError, parseQueryValue, readJson, sendJson } from '../_lib/http.js'
+import { withAuthenticatedRequest } from '../_lib/handler.js'
 
 function queryParam(req: ApiRequest, name: string): string | undefined {
   const fromQuery = parseQueryValue(req.query?.[name])

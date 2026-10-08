@@ -1,9 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { inferCapabilities, runtimeHealth, type ProviderConfigRow, type AIProviderId } from './registry'
-import { decryptCredential, redactPotentialSecrets } from './secrets'
-import { completeWithProvider, providerCallFromConfig, safeProviderError, ProviderFailure, type AgentMessage } from './provider-adapters'
-import { ApiError } from './http'
-import { MODEL_TOOLS, prepareToolCall, toolProgress, type ActionPreview } from './tools'
+import { inferCapabilities, runtimeHealth, type ProviderConfigRow, type AIProviderId } from './registry.js'
+import { decryptCredential, redactPotentialSecrets } from './secrets.js'
+import { completeWithProvider, providerCallFromConfig, safeProviderError, type AgentMessage } from './provider-adapters.js'
+import { ApiError } from './http.js'
+import { AIError, connectionStatusFor, cooldownSecondsFor, type AIErrorCode } from './ai-errors.js'
+import { logAIEvent } from './diagnostics.js'
+import { MODEL_TOOLS, prepareToolCall, toolProgress, type ActionPreview } from './tools.js'
 
 export interface AgentEventSink {
   (event: string, data: Record<string, unknown>): void
@@ -54,6 +56,18 @@ The current Stracker date is ${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asi
 const STRACKER_INTENT = /\b(my|mine|stracker|test|tests|score|marks|average|performance|weak|strong|chapter|revision|revis(e|ion)|mistake|task|goal|study time|study hours|dashboard|analytics|exam date|add|create|delete|remove|update|record|mark|complete|change|set|plan|compare|trend|today's tasks)\b/i
 const COMPLEX_INTENT = /\b(analy[sz]|compare|trend|why|plan|recommend|strategy|historical|performance|weakest|repeated|drop(ping)?|month|week)\b/i
 
+function fallbackReason(code: AIErrorCode): string {
+  switch (code) {
+    case 'INVALID_CREDENTIAL': return 'The provider rejected its saved API key.'
+    case 'RATE_LIMITED': return 'The provider rate limit was reached.'
+    case 'INSUFFICIENT_BALANCE': return 'The provider reports insufficient balance or quota.'
+    case 'MODEL_NOT_FOUND': return 'The selected model is unavailable.'
+    case 'UNSUPPORTED_CAPABILITY': return 'The selected model cannot handle this request.'
+    case 'TIMEOUT': return 'The provider took too long to respond.'
+    default: return 'The selected provider could not complete this request.'
+  }
+}
+
 function providerName(config: ProviderConfigRow): string {
   return config.display_name || config.provider_id
 }
@@ -79,26 +93,35 @@ async function getCandidates(admin: SupabaseClient, userId: string): Promise<Pro
   return (data ?? []) as ProviderConfigRow[]
 }
 
-function statusFromHealth(health: string): { status: string; cooldownSeconds: number; disable: boolean } {
-  if (health === 'authentication_failed') return { status:'authentication_failed', cooldownSeconds:0, disable:true }
-  if (health === 'model_unavailable') return { status:'model_unavailable', cooldownSeconds:0, disable:true }
-  if (health === 'rate_limited') return { status:'rate_limited', cooldownSeconds:90, disable:false }
-  if (health === 'unsupported') return { status:'unsupported', cooldownSeconds:0, disable:true }
-  if (health === 'timeout' || health === 'provider_unavailable' || health === 'malformed_response') return { status:'provider_unavailable', cooldownSeconds:30, disable:false }
-  return { status:'provider_unavailable', cooldownSeconds:20, disable:false }
+const DISABLING_CODES: ReadonlySet<AIErrorCode> = new Set(['INVALID_CREDENTIAL', 'MODEL_NOT_FOUND', 'INSUFFICIENT_BALANCE', 'REQUEST_INVALID', 'UNSUPPORTED_CAPABILITY'])
+
+/**
+ * Stop is the only user-initiated cancellation. It is recorded as status 'cancelled' by the cancel
+ * endpoint; closing or navigating away never sets it. Checked at each safe checkpoint so no further
+ * provider round or Stracker tool write starts after Stop.
+ */
+async function stopRequested(admin: SupabaseClient, userId: string, taskId: string): Promise<boolean> {
+  const { data, error } = await admin.from('ai_tasks').select('status').eq('user_id', userId).eq('id', taskId).maybeSingle()
+  if (error) {
+    logAIEvent('warn', 'stop_check_failed', { taskId, userId })
+    return false
+  }
+  return data?.status === 'cancelled'
 }
 
-async function updateProviderHealth(admin: SupabaseClient, userId: string, row: ProviderConfigRow, health: string): Promise<void> {
-  const state = statusFromHealth(health)
+export async function updateProviderHealth(admin: SupabaseClient, userId: string, row: ProviderConfigRow, failure: AIError): Promise<void> {
+  const cooldown = cooldownSecondsFor(failure.aiCode)
+  const disable = DISABLING_CODES.has(failure.aiCode)
   const patch: Record<string, unknown> = {
-    connection_status:state.status,
-    cooldown_until:state.cooldownSeconds ? new Date(Date.now() + state.cooldownSeconds * 1000).toISOString() : null,
-    failure_count:Math.min(1000,row.failure_count + 1),
-    last_checked_at:new Date().toISOString(),
-    enabled:state.disable ? false : row.enabled,
-    is_default:state.disable ? false : row.is_default
+    connection_status: connectionStatusFor(failure.aiCode),
+    cooldown_until: cooldown ? new Date(Date.now() + cooldown * 1000).toISOString() : null,
+    failure_count: Math.min(1000, row.failure_count + 1),
+    last_checked_at: new Date().toISOString(),
+    enabled: disable ? false : row.enabled,
+    is_default: disable ? false : row.is_default
   }
-  await admin.from('ai_provider_configs').update(patch).eq('user_id',userId).eq('id',row.id)
+  const { error } = await admin.from('ai_provider_configs').update(patch).eq('user_id', userId).eq('id', row.id)
+  if (error) logAIEvent('warn', 'provider_health_update_failed', { userId, configId: row.id, code: failure.aiCode })
 }
 
 async function refreshProviderHealth(admin: SupabaseClient, userId: string, row: ProviderConfigRow): Promise<void> {
@@ -145,7 +168,7 @@ async function withProviderTimeout<T>(parent: AbortSignal, run: (signal: AbortSi
   try {
     return await run(controller.signal)
   } catch (error) {
-    if (timedOut && !parent.aborted) throw new ProviderFailure('timeout','The provider took too long to respond.')
+    if (timedOut && !parent.aborted) throw new AIError('TIMEOUT', { userMessage: 'The provider took too long to respond. Try again or use another configured provider.' })
     throw error
   } finally {
     clearTimeout(timer)
@@ -191,7 +214,7 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
   const used = new Set<string>()
 
   while (rounds <= TOOL_ITERATION_LIMIT) {
-    if (input.signal.aborted) return { status:'cancelled',content:'',providerId:lastProvider?.provider_id ?? null,modelId:lastProvider?.model_id ?? null,fallbackFrom:fallbackFrom?.provider_id ?? null }
+    if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:lastProvider?.provider_id ?? null,modelId:lastProvider?.model_id ?? null,fallbackFrom:fallbackFrom?.provider_id ?? null }
     if (Date.now() - start > TOTAL_BUDGET_MS) throw new ApiError(504,'task_timeout','This AI task reached its time limit. Retry with a shorter request.')
     const selected = chosen
     used.add(selected.id)
@@ -217,15 +240,16 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
       rounds += 1
     } catch (error) {
       if (input.signal.aborted) return { status:'cancelled',content:'',providerId:selected.provider_id,modelId:selected.model_id,fallbackFrom:fallbackFrom?.provider_id ?? null }
-      const failure = safeProviderError(error)
-      await updateProviderHealth(input.adminClient,input.userId,selected,failure.health)
+      const failure = safeProviderError(error,{ provider:selected.provider_id,model:selected.model_id })
+      logAIEvent('warn','provider_failure',{ taskId:input.taskId,userId:input.userId,stage:'completion',round:rounds,provider:selected.provider_id,model:selected.model_id,durationMs:Date.now()-start,...failure.diagnostics() })
+      await updateProviderHealth(input.adminClient,input.userId,selected,failure)
       const next = availableCandidates.find(row => !used.has(row.id))
-      if (!failure.retryable && failure.health !== 'malformed_response') throw new ApiError(failure.status === 401 ? 401 : failure.status === 404 ? 422 : 503, failure.health, failure.message)
-      if (!next || used.size > FALLBACK_LIMIT) throw new ApiError(failure.status === 401 ? 401 : failure.status === 404 || failure.health === 'unsupported' ? 422 : failure.status === 429 ? 429 : 503, failure.health, failure.message)
+      if (!next || used.size > FALLBACK_LIMIT || !failure.fallbackEligible) throw failure
       if (onProviderDelta.length) input.emit('reset',{ reason:'The previous provider returned an incomplete response.' })
       fallbackFrom ??= selected
       chosen = next
-      input.emit('fallback',{ from:providerName(selected),to:providerName(next),reason:failure.health === 'authentication_failed' ? 'The provider rejected its saved API key.' : failure.health === 'rate_limited' ? 'The provider rate limit was reached.' : failure.health === 'model_unavailable' ? 'The selected model is unavailable.' : failure.health === 'timeout' ? 'The provider took too long to respond.' : 'The selected provider could not complete this request.' })
+      input.emit('fallback',{ from:providerName(selected),to:providerName(next),reason:fallbackReason(failure.aiCode) })
+      logAIEvent('info','provider_fallback',{ taskId:input.taskId,userId:input.userId,from:selected.provider_id,fromModel:selected.model_id,to:next.provider_id,toModel:next.model_id,code:failure.aiCode })
       await input.adminClient.from('ai_tasks').update({ status:'fallback',provider_id:next.provider_id,model_id:next.model_id,progress:'Trying your configured fallback model.' }).eq('user_id',input.userId).eq('id',input.taskId)
       input.emit('status',{ status:'fallback',progress:`Trying your configured ${providerName(next)} model…`,...humanTaskState(next,selected) })
       continue
@@ -234,9 +258,10 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
     const toolCallsFromProvider = completion.toolCalls
     if (!toolCallsFromProvider.length) {
       finalText = completion.text.trim()
-      if (!finalText) throw new ApiError(502,'empty_response','The provider returned an empty answer. Retry or use another provider.')
+      if (!finalText) throw new AIError('MALFORMED_RESPONSE',{ provider:selected.provider_id,model:selected.model_id,providerMessage:'empty final answer' })
       const safeText = redactPotentialSecrets(finalText).slice(0,20_000)
       await input.adminClient.from('ai_messages').insert({ user_id:input.userId,conversation_id:input.conversationId,role:'assistant',content:safeText,provider_id:selected.provider_id,model_id:selected.model_id,status:'completed',metadata:{ fallback_from:fallbackFrom ? {provider_id:fallbackFrom.provider_id,model_id:fallbackFrom.model_id} : null } })
+      if (await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:selected.provider_id,modelId:selected.model_id,fallbackFrom:fallbackFrom?.provider_id ?? null }
       await input.adminClient.from('ai_tasks').update({ status:'completed',provider_id:selected.provider_id,model_id:selected.model_id,progress:'Completed.',completed_at:new Date().toISOString(),metadata:{ fallback_from:fallbackFrom?.provider_id ?? null } }).eq('user_id',input.userId).eq('id',input.taskId)
       await input.adminClient.from('ai_conversations').update({ updated_at:new Date().toISOString() }).eq('user_id',input.userId).eq('id',input.conversationId)
       input.emit('done',{ content:safeText,...humanTaskState(selected,fallbackFrom),taskId:input.taskId })
@@ -246,11 +271,11 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
     if (rounds > TOOL_ITERATION_LIMIT || toolCalls + toolCallsFromProvider.length > TOOL_CALL_LIMIT) {
       throw new ApiError(429,'tool_limit','Stracker AI reached its safe tool-call limit. Ask a smaller question to continue.')
     }
-    agentMessages.push({ role:'assistant',content:completion.text,toolCalls:toolCallsFromProvider })
+    agentMessages.push({ role:'assistant',content:completion.text,toolCalls:toolCallsFromProvider,providerData:completion.providerData })
     let pendingAction: ActionPreview | undefined
     for (const call of toolCallsFromProvider) {
       toolCalls += 1
-      if (input.signal.aborted) return { status:'cancelled',content:'',providerId:selected.provider_id,modelId:selected.model_id,fallbackFrom:fallbackFrom?.provider_id ?? null }
+      if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:selected.provider_id,modelId:selected.model_id,fallbackFrom:fallbackFrom?.provider_id ?? null }
       const progress = toolProgress(call.name)
       await input.adminClient.from('ai_tasks').update({ status:'tool_call',provider_id:selected.provider_id,model_id:selected.model_id,progress }).eq('user_id',input.userId).eq('id',input.taskId)
       input.emit('status',{ status:'tool_call',progress,providerId:selected.provider_id,modelId:selected.model_id })

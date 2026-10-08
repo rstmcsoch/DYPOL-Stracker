@@ -1,7 +1,8 @@
 import { lookup } from 'node:dns/promises'
 import type { LookupAddress } from 'node:dns'
-import { AI_PROVIDER_IDS, type AIProviderId, type AIProtocol, type AICapabilities, type AIModelOption } from '../../src/lib/ai/catalog'
-import { ApiError } from './http'
+import { AI_PROVIDER_IDS, type AIProviderId, type AIProtocol, type AICapabilities, type AIModelOption } from '../../src/lib/ai/catalog.js'
+import { ApiError } from './http.js'
+import { catalogModel, RETIRED_MODEL_IDS } from '../../src/lib/ai/model-catalog.js'
 
 export type { AIProviderId, AIProtocol, AICapabilities, AIModelOption }
 export interface ProviderSetup {
@@ -59,6 +60,18 @@ export function providerId(value: unknown): AIProviderId {
 
 export function inferCapabilities(provider: AIProviderId, modelId: string, protocol: AIProtocol, declared?: Partial<AICapabilities>, discoveryMethods?: string[]): AICapabilities {
   const name = modelId.toLowerCase()
+  // Curated catalog entries are authoritative; regex inference is only used for discovered, unlisted IDs.
+  const known = provider === 'custom' ? null : catalogModel(provider, modelId)
+  if (known) {
+    return {
+      supportsStreaming: true,
+      supportsTools: known.supportsTools,
+      supportsVision: false,
+      supportsStructuredOutput: known.supportsStructuredOutput,
+      supportsReasoning: known.supportsReasoning,
+      supportsCancellation: true
+    }
+  }
   const generative = !/(embedding|embed|audio|transcri|moderation|image-generation|imagen|tts|whisper|realtime)/i.test(name)
   const discoverySaysGenerate = !discoveryMethods || discoveryMethods.includes('generateContent')
   const protocolMatches = provider === 'gemini' ? protocol === 'google' : provider === 'anthropic' ? protocol === 'anthropic-compatible' : protocol === 'openai-compatible'
@@ -69,7 +82,7 @@ export function inferCapabilities(provider: AIProviderId, modelId: string, proto
       : provider === 'openai'
         ? generative && /^(gpt-|chatgpt-|o[1-9]|o[1-9]-)/.test(name)
         : provider === 'deepseek'
-          ? generative && /^deepseek-(chat|reasoner|v\d)/.test(name)
+          ? generative && /^deepseek-(flash|v\d)/.test(name) && !RETIRED_MODEL_IDS.has(name)
           : provider === 'qwen'
             ? generative && /^qwen(?:-|\d)/.test(name)
             : Boolean(declared?.supportsTools))

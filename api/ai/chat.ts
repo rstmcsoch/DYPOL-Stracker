@@ -1,10 +1,11 @@
 import { z } from 'zod'
-import type { ApiRequest, ApiResponse } from '../_lib/http'
+import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { ApiError, readJson, publicError, sendJson } from '../_lib/http'
-import { authenticateRequest } from '../_lib/supabase'
-import { redactPotentialSecrets } from '../_lib/secrets'
-import { runAssistant } from '../_lib/agent'
+import { ApiError, readJson, publicError, sendJson } from '../_lib/http.js'
+import { logAIEvent } from '../_lib/diagnostics.js'
+import { authenticateRequest } from '../_lib/supabase.js'
+import { redactPotentialSecrets } from '../_lib/secrets.js'
+import { runAssistant } from '../_lib/agent.js'
 
 const requestSchema = z.object({
   conversationId: z.uuid().nullable().optional(),
@@ -137,15 +138,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     res.setHeader('X-Accel-Buffering','no')
     res.flushHeaders?.()
     event(res,'task',{ id:task.id,conversationId,status:'running' })
+    // Closing, minimizing, or navigating away must NOT cancel the task. The task keeps running and its
+    // result is saved, so it can be reviewed later. Only the explicit Stop action (tasks POST) cancels.
     const controller = new AbortController()
     let clientDisconnected = false
-    const onClose = () => {
-      if (!res.writableEnded) { clientDisconnected = true; controller.abort(new DOMException('Client disconnected','AbortError')) }
-    }
-    const onAborted = () => { clientDisconnected = true; controller.abort(new DOMException('Request aborted','AbortError')) }
+    const onClose = () => { if (!res.writableEnded) clientDisconnected = true }
     res.on('close',onClose)
-    req.on('aborted',onAborted)
     const heartbeat = setInterval(() => { if (!res.writableEnded && !res.destroyed) res.write(':keepalive\n\n') },15_000)
+    const taskStarted = Date.now()
     try {
       const result = await runAssistant({
         userId,conversationId,taskId:task.id as string,message:currentMessage,pageContext,priorMessages:prior,
@@ -156,16 +156,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         await adminClient.from('ai_tasks').update({ status:'cancelled',progress:'Cancelled by you.',completed_at:new Date().toISOString() }).eq('user_id',userId).eq('id',task.id)
         if (!clientDisconnected) event(res,'cancelled',{ taskId:task.id })
       }
+      logAIEvent('info', 'chat_task_finished', { taskId: task.id as string, userId, endpoint: 'chat', status: result.status, provider: result.providerId, model: result.modelId, fallbackFrom: result.fallbackFrom, durationMs: Date.now() - taskStarted })
       if (!res.writableEnded && !res.destroyed) res.end()
     } catch (error) {
       const publicResult = publicError(error)
+      logAIEvent(controller.signal.aborted ? 'info' : 'error', 'chat_task_failed', { taskId: task.id as string, userId, endpoint: 'chat', status: publicResult.status, code: publicResult.body.code ?? publicResult.body.error, reference: publicResult.body.reference, durationMs: Date.now() - taskStarted })
       await adminClient.from('ai_tasks').update({ status:controller.signal.aborted ? 'cancelled' : 'failed',progress:controller.signal.aborted ? 'Cancelled by you.' : 'Request failed.',completed_at:new Date().toISOString() }).eq('user_id',userId).eq('id',task.id)
       if (!clientDisconnected && !controller.signal.aborted) event(res,'error',{ error:publicResult.body.error,message:publicResult.body.message,taskId:task.id })
       if (!res.writableEnded && !res.destroyed) res.end()
     } finally {
       clearInterval(heartbeat)
       res.removeListener('close',onClose)
-      req.removeListener('aborted',onAborted)
     }
   } catch (error) {
     const result = publicError(error)

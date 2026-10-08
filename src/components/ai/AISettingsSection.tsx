@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { AlertTriangle, Check, CircleHelp, KeyRound, LoaderCircle, Pencil, Plus, RefreshCw, ShieldCheck, Sparkles, Star, Trash2 } from 'lucide-react'
 import { AI_PROVIDERS, AI_STATUS_COPY, DEFAULT_CAPABILITIES, providerLabel, statusTone, type AIModelOption, type AIProviderConfig, type AIProviderId } from '../../lib/ai/catalog'
+import { defaultModelFor } from '../../lib/ai/model-catalog'
 import { useAI, type AIProviderDraft } from '../../contexts/AIContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
 import { Button, Dialog, Field, NotebookCard, StatusBadge } from '../ui'
 import { AIProviderMark } from './AIProviderMark'
 
-const DEFAULT_MODEL:Record<AIProviderId,string> = { gemini:'gemini-2.5-flash',openai:'gpt-4.1-mini',anthropic:'claude-3-5-haiku-latest',deepseek:'deepseek-chat',qwen:'qwen-plus',custom:'' }
+const DEFAULT_MODEL:Record<AIProviderId,string> = { gemini:defaultModelFor('gemini'),openai:defaultModelFor('openai'),anthropic:defaultModelFor('anthropic'),deepseek:defaultModelFor('deepseek'),qwen:defaultModelFor('qwen'),custom:'' }
 
 export function AISettingsSection() {
   const { user } = useAuth()

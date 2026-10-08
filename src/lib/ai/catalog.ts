@@ -8,6 +8,7 @@ export type AIConnectionStatus =
   | 'testing'
   | 'authentication_failed'
   | 'rate_limited'
+  | 'insufficient_balance'
   | 'provider_unavailable'
   | 'model_unavailable'
   | 'configuration_incomplete'
@@ -72,6 +73,7 @@ export const AI_STATUS_COPY: Record<AIConnectionStatus, string> = {
   testing: 'Testing…',
   authentication_failed: 'Authentication failed',
   rate_limited: 'Rate limited',
+  insufficient_balance: 'Insufficient balance',
   provider_unavailable: 'Provider unavailable',
   model_unavailable: 'Model unavailable',
   configuration_incomplete: 'Configuration incomplete',
@@ -94,6 +96,6 @@ export function providerLabel(id: AIProviderId | string): string {
 export function statusTone(status: AIConnectionStatus): 'good' | 'warn' | 'bad' | 'muted' {
   if (status === 'connected') return 'good'
   if (status === 'authentication_failed' || status === 'model_unavailable' || status === 'unsupported') return 'bad'
-  if (status === 'rate_limited' || status === 'provider_unavailable' || status === 'testing') return 'warn'
+  if (status === 'rate_limited' || status === 'insufficient_balance' || status === 'provider_unavailable' || status === 'testing') return 'warn'
   return 'muted'
 }

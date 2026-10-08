@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { describeUnexpectedError, logAIEvent, newReference } from './diagnostics.js'
 
 export interface ApiRequest extends IncomingMessage {
   body?: unknown
@@ -58,10 +59,21 @@ export function methodNotAllowed(res: ApiResponse, allowed: string[]): void {
   sendJson(res, 405, { error: 'method_not_allowed', message: 'That AI request method is not supported.' })
 }
 
-export function publicError(error: unknown): { status: number; body: { error: string; message: string } } {
-  if (error instanceof ApiError) return { status: error.status, body: { error: error.code, message: error.message } }
-  // Never return provider payloads, stack traces, headers, or request values to a browser.
-  return { status: 500, body: { error: 'internal_error', message: 'Stracker could not complete that AI request. Try again.' } }
+export interface PublicErrorBody { error: string; message: string; reference?: string; code?: string; provider?: string | null; retryable?: boolean; fallbackEligible?: boolean }
+
+export function publicError(error: unknown): { status: number; body: PublicErrorBody } {
+  if (error instanceof ApiError) {
+    const body: PublicErrorBody = { error: error.code, message: error.message }
+    // AI-specific details are added by AIError (see ai-errors.ts) without exposing provider payloads.
+    const details = error as unknown as { aiCode?: string; provider?: string | null; retryable?: boolean; fallbackEligible?: boolean }
+    if (details.aiCode) Object.assign(body, { code: details.aiCode, provider: details.provider ?? null, retryable: details.retryable ?? false, fallbackEligible: details.fallbackEligible ?? false })
+    return { status: error.status, body }
+  }
+  // Unexpected failure: keep the browser message safe, but give the user a reference that maps to a
+  // structured server log entry containing the redacted error class and application frames.
+  const reference = newReference('err')
+  logAIEvent('error', 'unhandled_server_error', { reference, ...describeUnexpectedError(error) })
+  return { status: 500, body: { error: 'internal_error', message: `Stracker AI encountered a server error. Reference ${reference}.`, reference, code: 'INTERNAL_ERROR', retryable: true } }
 }
 
 export function parseQueryValue(value: string | string[] | undefined): string | undefined {

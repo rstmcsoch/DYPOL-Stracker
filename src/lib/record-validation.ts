@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import type { TableName } from '../types'
-import { goalSchema } from './goal-validation'
-import { settingsSchema } from './settings-validation'
-import { taskInputSchema } from './task-validation'
-import { chapterScoreInputSchema, POSTGRES_INTEGER_MAX, subjectScoreInputSchema, testFormSchema } from './test-validation'
+import type { TableName } from '../types/index.js'
+import { goalSchema } from './goal-validation.js'
+import { settingsSchema } from './settings-validation.js'
+import { taskInputSchema } from './task-validation.js'
+import { chapterScoreInputSchema, POSTGRES_INTEGER_MAX, subjectScoreInputSchema, testFormSchema } from './test-validation.js'
 
 const nonNegativePostgresInteger = z.number().finite().int().min(0).max(POSTGRES_INTEGER_MAX)
 const positivePostgresInteger = z.number().finite().int().min(1).max(POSTGRES_INTEGER_MAX)
