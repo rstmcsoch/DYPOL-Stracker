@@ -4,6 +4,39 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f7f4ec" />
+    <script>
+      // Boot-time font restore: applies the saved interface font before first paint so a
+      // returning reader never sees the default family flash, and preloads the active
+      // family's regular face (the only weight every page needs first). The stacks mirror
+      // src/lib/fonts.ts and the cache key is written by src/contexts/AppearanceContext.tsx
+      // — keep all three in sync. The Default cut is the device font, so it needs neither.
+      (function () {
+        try {
+          var stacks = {
+            poppins: "'Poppins', 'Trebuchet MS', system-ui, sans-serif",
+            sora: "'Sora', 'Trebuchet MS', system-ui, sans-serif",
+            'open-sans': "'Open Sans', 'Trebuchet MS', system-ui, sans-serif"
+          };
+          var regularFace = {
+            poppins: '/assets/fonts/poppins-latin-400-normal.woff2',
+            sora: '/assets/fonts/sora-latin-400-normal.woff2',
+            'open-sans': '/assets/fonts/open-sans-latin-400-normal.woff2'
+          };
+          var saved = localStorage.getItem('stracker-interface-font');
+          if (!saved || !stacks[saved]) return;
+          document.documentElement.style.setProperty('--app-font-family', stacks[saved]);
+          var preload = document.createElement('link');
+          preload.rel = 'preload';
+          preload.as = 'font';
+          preload.type = 'font/woff2';
+          preload.crossOrigin = 'anonymous';
+          preload.href = regularFace[saved];
+          document.head.appendChild(preload);
+        } catch (error) {
+          // Blocked storage or an unknown cached value: the app applies the saved font after mount.
+        }
+      })();
+    </script>
     <meta name="application-name" content="Stracker" />
     <meta name="description" content="Stracker by DYPOL LABS is a digital study notebook for JEE preparation: syllabus tracking, a test journal, mistakes and retries, spaced revision, daily planning, focus sessions and analytics." />
     <meta property="og:title" content="Stracker by DYPOL LABS — a serious JEE 2027 study notebook" />

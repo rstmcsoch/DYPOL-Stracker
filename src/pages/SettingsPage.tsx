@@ -5,7 +5,6 @@ import { AlertOctagon, Bell, CalendarDays, Check, Cloud, Database, KeyRound, Log
 import { Button, Dialog, Field, NotebookCard, PageHeader, StatusBadge } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
-import { useAppearance } from '../contexts/AppearanceContext'
 import { useToast } from '../contexts/ToastContext'
 import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
@@ -37,7 +36,6 @@ const TAB_FIELDS: Record<Exclude<SettingsTab, 'data'>, (keyof AppSettings)[]> = 
 
 export default function SettingsPage() {
   const { data, upsert } = useData()
-  const { setInterfaceFont } = useAppearance()
   const { user, signOut } = useAuth()
   const { notify } = useToast()
   const queryClient = useQueryClient()
@@ -356,14 +354,14 @@ export default function SettingsPage() {
               <div className="settings-section-content">
                 <div className="font-choice-grid" role="radiogroup" aria-label="Interface font">
                   {INTERFACE_FONT_OPTIONS.map(option => <label className={`font-choice ${draft.interface_font === option.value ? 'selected' : ''}`} key={option.value}>
-                    <input type="radio" name="interface_font" value={option.value} checked={draft.interface_font === option.value} onChange={() => { patch('interface_font', option.value); setInterfaceFont(option.value) }} />
+                    <input type="radio" name="interface_font" value={option.value} checked={draft.interface_font === option.value} onChange={() => patch('interface_font', option.value)} />
                     {/* These two samples intentionally preview each option; the rest of the UI inherits the global token. */}
                     <span className="font-choice-sample" style={{ fontFamily: option.stack }} aria-hidden="true">Aa</span>
                     <span className="font-choice-copy"><strong style={{ fontFamily: option.stack }}>{option.label}</strong><small>{option.note}</small></span>
                     {draft.interface_font === option.value && <span className="theme-check"><Check size={13} /></span>}
                   </label>)}
                 </div>
-                <div className="settings-note-line"><Type size={15} /> Applies immediately to every page, heading, sidebar, button, form, dialog, chart label and notification. JSON, CSV, PDF and DOCX exports keep their own typography.</div>
+                <div className="settings-note-line"><Type size={15} /> Save to apply it across every page, heading, sidebar, button, form, dialog, chart label and notification. JSON, CSV, PDF and DOCX exports keep their own typography.</div>
               </div>
             </NotebookCard>
           </fieldset>
