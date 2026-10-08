@@ -10,6 +10,7 @@ import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
 import { INTERFACE_FONT_OPTIONS } from '../lib/fonts'
 import { settingsFieldErrors, settingsSchema } from '../lib/settings-validation'
+import { AISettingsSection } from '../components/ai/AISettingsSection'
 import type { AppSettings, InterfaceFont, Profile, ThemeMode } from '../types'
 
 export default function SettingsPage() {
@@ -186,6 +187,7 @@ export default function SettingsPage() {
   const auto = draft.theme === 'auto'
   return <div className="content-page settings-page">
     <PageHeader eyebrow="MAKE IT YOUR OWN" title="Settings" subtitle="Small adjustments for the way you study." doodle={<SlidersHorizontal size={19} />} action={<div className="settings-header-actions">{hasUnsavedChanges && <Button type="button" variant="quiet" onClick={resetChanges} disabled={saving}>Reset changes</Button>}<Button form="settings-form" type="submit" loading={saving} aria-busy={saving}><Save size={16} /> {saving ? 'Saving settings…' : 'Save settings'}</Button></div>} />
+    <AISettingsSection />
     <form id="settings-form" className="settings-form" noValidate onSubmit={save}>
       <fieldset className="settings-form-fields" disabled={saving}>
       <NotebookCard className="settings-section"><SectionLabel icon={<UserRound size={18} />} title="Owner" note="Your notebook belongs to this account." /><div className="settings-section-content"><div className="settings-owner-row"><div className="settings-avatar">{(draft.owner_name.trim()[0] ?? 'S').toUpperCase()}</div><div className="settings-owner-fields"><Field label="Name in your notebook" error={errors.owner_name}><input maxLength={100} value={draft.owner_name} onChange={event => patch('owner_name', event.target.value)} placeholder="What should Stracker call you?" /></Field><Field label="Account email"><input type="email" value={user?.email ?? ''} readOnly aria-readonly="true" /><span className="field-hint">Email and password are managed by secure Supabase authentication.</span></Field></div></div><div className="settings-note-line"><Shield size={15} /> Public registration is disabled. Only the signed-in account can read or change its rows.</div><div className="settings-account-actions"><Button type="button" variant="secondary" onClick={() => setPasswordDialogOpen(true)} disabled={!user || user.isLocal}><KeyRound size={15} /> Change password</Button><Button type="button" variant="quiet" onClick={() => void signOutFromSettings()} loading={signingOut}><LogOut size={15} /> Sign out</Button></div>{user?.isLocal && <small className="settings-account-note">Password changes are available for a cloud-authenticated owner account.</small>}</div></NotebookCard>

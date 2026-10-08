@@ -78,6 +78,26 @@ Only the default cut of each family is loaded (latin subset, regular to bold) an
 
 **Never put a Supabase `service_role` key or any other private server secret in a `VITE_*` variable or the browser bundle.** The browser uses only the public key; RLS and the private storage policies are the access boundary. Review the generated policies and authentication settings in your own Supabase project before entering personal data.
 
+### Stracker AI (BYOK)
+
+Stracker AI is an optional, authenticated Vercel Node API that calls **your own** Gemini, OpenAI, Anthropic, DeepSeek, Qwen, or custom OpenAI-/Anthropic-compatible provider. DYPOL does not supply or proxy a DYPOL-owned model key. Provider usage is billed under your provider account. When you send a prompt, the prompt and the limited Stracker data required by the selected analytics tool are sent to the configured provider; review that provider’s retention and privacy policies before connecting it. AI requests need an internet connection and are not available in the device-only local preview.
+
+1. Deploy the project to Vercel and apply `20261008150000_ai_assistant.sql` and `20261008160000_ai_atomic_test_write.sql` in filename order after the existing Stracker migrations. The second migration adds narrow, owner-scoped atomic test/chapter-score, Full Mock subject-score, and revision-completion RPCs; it does not enable arbitrary SQL access. **Do not deploy the AI UI against a Supabase project until its migrations have been applied.**
+2. In Vercel Project Settings → Environment Variables, add the server-only values below. Keep `SUPABASE_SERVICE_ROLE_KEY` and `AI_CREDENTIALS_ENCRYPTION_KEY` unprefixed; never add either as a `VITE_*` variable. Generate a fresh encryption key with `openssl rand -hex 32`, store it in your password manager, and keep it stable: changing it without migrating stored provider credentials makes those credentials unreadable.
+
+   ```dotenv
+   SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+   SUPABASE_ANON_KEY=YOUR_PUBLIC_PUBLISHABLE_OR_ANON_KEY
+   SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVER_ONLY_SERVICE_ROLE_KEY
+   AI_CREDENTIALS_ENCRYPTION_KEY=64_HEX_CHARACTERS_FROM_OPENSSL
+   ```
+
+   The browser still uses only `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. The AI function authenticates the user’s Supabase bearer token, scopes reads and writes to that owner, and stores provider keys only as authenticated AES-256-GCM ciphertext. Raw provider keys are never returned; settings display a masked status and provide test, disable, and remove controls.
+3. Redeploy the Vercel project after migrations and server environment variables are ready. The chat function is configured for up to 60 seconds; the Vercel plan must permit that duration. `/api/ai/*` is implemented as Vercel Node functions, so a Netlify-only static deploy keeps the existing notebook but does not provide Stracker AI.
+4. Sign in, open **Settings → AI Assistant**, connect a provider with your own API key, choose a model, and test it. Only enabled, configured providers are eligible for capability-aware fallback. Model/tool support varies by provider; unsupported analytics tools are not simulated. Writes—including deletes—are previewed and require your explicit confirmation; the UI reports success only after the owner-scoped write returns successfully.
+
+Conversation history, task status, and pending confirmations are stored in the signed-in account’s AI tables. Clearing an AI conversation does not alter study data. AI tool access is limited to canonical Stracker analytics and validated app actions—no user-provided SQL. The Vercel API uses the server-only Supabase service-role key only after verifying a user session; normal study-data operations use the authenticated user client and existing row ownership checks.
+
 ### Data and offline behavior
 
 Application records are keyed to the signed-in Supabase user and protected by row-level security. Mistake images are stored privately beneath that user's UUID path. The browser keeps an IndexedDB cache for responsive use and offline access; offline edits are queued and reconciled when connectivity returns. When the server has a newer `updated_at` value, the latest cloud version wins for that record. A local preview is a separate device-only mode, not a cloud backup.
@@ -89,7 +109,7 @@ JSON, CSV, PDF, and DOCX exports are generated in the browser. Keep JSON backups
 Both included deployment configs support client-side route fallback:
 
 - **Netlify:** connect the repository, use `npm run build` and publish `dist`. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as build environment variables.
-- **Vercel:** import the repository; Vite's production output is `dist`. Add the same two public environment variables to the project.
+- **Vercel:** import the repository; Vite's production output is `dist`. Add the two public `VITE_SUPABASE_*` variables for the browser. To enable Stracker AI, also follow [Stracker AI (BYOK)](#stracker-ai-byok) for server-only environment variables, database migrations, and function duration.
 
 Serve the production app over HTTPS so browser authentication, IndexedDB, and service-worker installation work as intended. After deployment, add the exact production URL and `/reset-password` redirect URL to Supabase Auth settings. Do not add the service-role key to either host's client-side environment variables.
 
