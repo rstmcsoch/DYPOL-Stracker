@@ -54,11 +54,30 @@ export interface AIProviderDraft {
   region?:'international'|'china'
   capabilities?:Record<string,boolean>
 }
+/**
+ * Deployment-level AI backend status, from the public /api/ai/health check:
+ * - 'ok': the serverless AI backend is deployed and its server configuration is complete.
+ * - 'misconfigured': the backend answered but is missing server-only environment variables.
+ * - 'unreachable': no JSON health endpoint answered (functions not deployed, offline, or local dev).
+ * - 'unknown': not checked yet.
+ * This is deliberately distinct from per-user provider state: a user can have a perfectly saved
+ * provider key while the deployment itself is misconfigured, and the UI must not conflate them.
+ */
+export type AIBackendStatus = 'unknown' | 'ok' | 'misconfigured' | 'unreachable'
+export interface AIBackendHealth {
+  configured:boolean
+  reason?:string|null
+  missing?:string[]
+  invalid?:string[]
+}
 interface LastRequest { message:string; messageId:string; assistantId:string; pageContext:string|null }
 interface AIContextValue {
   providers:AIProviderConfig[]
   providersLoading:boolean
   providersError:string|null
+  backendStatus:AIBackendStatus
+  backendHealth:AIBackendHealth|null
+  checkBackendHealth:()=>Promise<void>
   refreshProviders:()=>Promise<void>
   discoverModels:(draft:AIProviderDraft)=>Promise<{models:AIModelOption[];discoveryAvailable:boolean;message?:string}>
   saveProvider:(draft:AIProviderDraft)=>Promise<AIProviderConfig>
@@ -125,6 +144,8 @@ export function AIProvider({ children }: { children:ReactNode }) {
   const [providers,setProviders] = useState<AIProviderConfig[]>([])
   const [providersLoading,setProvidersLoading] = useState(false)
   const [providersError,setProvidersError] = useState<string|null>(null)
+  const [backendStatus,setBackendStatus] = useState<AIBackendStatus>('unknown')
+  const [backendHealth,setBackendHealth] = useState<AIBackendHealth|null>(null)
   const [recentConversations,setRecentConversations] = useState<AIConversationSummary[]>([])
   const [recentTasks,setRecentTasks] = useState<AIRecentTask[]>([])
   const [conversationId,setConversationId] = useState<string|null>(null)
@@ -174,6 +195,30 @@ export function AIProvider({ children }: { children:ReactNode }) {
     return payload as T
   },[accessToken])
 
+  /**
+   * Public, unauthenticated configuration health check. It reports only booleans, a safe reason
+   * code, and the names of missing environment variables — never secret values — so the UI can
+   * distinguish a misconfigured/unavailable Stracker AI backend from ordinary per-user states
+   * (no provider connected, invalid key, rate limit) before the user attempts anything.
+   */
+  const checkBackendHealth = useCallback(async () => {
+    try {
+      const response = await fetch('/api/ai/health',{ headers:{ Accept:'application/json' }, cache:'no-store' })
+      const text = await response.text().catch(() => '')
+      let payload:AIBackendHealth|null = null
+      try { payload = text ? JSON.parse(text) as AIBackendHealth : null } catch { payload = null }
+      if (!payload || typeof payload !== 'object' || typeof payload.configured !== 'boolean') {
+        // A non-JSON body means the /api routes are not deployed here (SPA fallback, local dev).
+        setBackendStatus('unreachable'); setBackendHealth(null)
+        return
+      }
+      setBackendHealth(payload)
+      setBackendStatus(payload.configured ? 'ok' : 'misconfigured')
+    } catch {
+      setBackendStatus('unreachable'); setBackendHealth(null)
+    }
+  },[])
+
   const refreshProviders = useCallback(async () => {
     if (!user || user.isLocal) { setProviders([]); setProvidersError(null); return }
     setProvidersLoading(true)
@@ -205,14 +250,17 @@ export function AIProvider({ children }: { children:ReactNode }) {
   useEffect(() => {
     if (!user) {
       setProviders([]); setRecentConversations([]); setRecentTasks([]); setConversationId(null); setMessages([]); setActiveTask(null)
+      setBackendStatus('unknown'); setBackendHealth(null)
       return
     }
     if (user.isLocal) {
       setProviders([]); setProvidersError(null); setRecentConversations([]); setRecentTasks([]); setConversationId(null); setMessages([])
+      setBackendStatus('unknown'); setBackendHealth(null)
       return
     }
+    void checkBackendHealth()
     void Promise.all([refreshProviders(),loadConversations(),loadTasks()])
-  },[user?.id,user?.isLocal,refreshProviders,loadConversations,loadTasks,user])
+  },[user?.id,user?.isLocal,checkBackendHealth,refreshProviders,loadConversations,loadTasks,user])
 
   const discoverModels = useCallback(async (draft:AIProviderDraft) => {
     const { id,...setup } = draft
@@ -511,10 +559,10 @@ export function AIProvider({ children }: { children:ReactNode }) {
 
   const isBusy = activeTask !== null && ['queued','running','tool_call','fallback','retrying'].includes(activeTask.status)
   const value = useMemo<AIContextValue>(() => ({
-    providers,providersLoading,providersError,refreshProviders,discoverModels,saveProvider,testProvider,patchProvider,removeProvider,
+    providers,providersLoading,providersError,backendStatus,backendHealth,checkBackendHealth,refreshProviders,discoverModels,saveProvider,testProvider,patchProvider,removeProvider,
     recentConversations,recentTasks,loadConversations,loadTasks,openConversation,clearConversation,newConversation,conversationId,conversationTitle,messages,activeTask,isBusy,lastRequest,
     sendMessage,retryLast,stopTask,confirmAction,panelOpen,minimized,largeOpen,openPanel,minimizePanel,closePanel,restorePanel,expandPanel,collapseLarge
-  }),[providers,providersLoading,providersError,refreshProviders,discoverModels,saveProvider,testProvider,patchProvider,removeProvider,recentConversations,recentTasks,loadConversations,loadTasks,openConversation,clearConversation,newConversation,conversationId,conversationTitle,messages,activeTask,isBusy,lastRequest,sendMessage,retryLast,stopTask,confirmAction,panelOpen,minimized,largeOpen,openPanel,minimizePanel,closePanel,restorePanel,expandPanel,collapseLarge])
+  }),[providers,providersLoading,providersError,backendStatus,backendHealth,checkBackendHealth,refreshProviders,discoverModels,saveProvider,testProvider,patchProvider,removeProvider,recentConversations,recentTasks,loadConversations,loadTasks,openConversation,clearConversation,newConversation,conversationId,conversationTitle,messages,activeTask,isBusy,lastRequest,sendMessage,retryLast,stopTask,confirmAction,panelOpen,minimized,largeOpen,openPanel,minimizePanel,closePanel,restorePanel,expandPanel,collapseLarge])
   return <AIContext.Provider value={value}>{children}</AIContext.Provider>
 }
 

@@ -12,7 +12,7 @@ const DEFAULT_MODEL:Record<AIProviderId,string> = { gemini:defaultModelFor('gemi
 
 export function AISettingsSection() {
   const { user } = useAuth()
-  const { providers,providersLoading,providersError,refreshProviders,saveProvider,testProvider,patchProvider,removeProvider,discoverModels,openPanel } = useAI()
+  const { providers,providersLoading,providersError,backendStatus,backendHealth,checkBackendHealth,refreshProviders,saveProvider,testProvider,patchProvider,removeProvider,discoverModels,openPanel } = useAI()
   const { notify } = useToast()
   const [editing,setEditing] = useState<AIProviderConfig|null>(null)
   const [draft,setDraft] = useState<AIProviderDraft|null>(null)
@@ -108,7 +108,9 @@ export function AISettingsSection() {
       <div className="ai-privacy-note" role="note"><ShieldCheck size={17} /><span><strong>Your key stays server-side.</strong> Provider credentials are encrypted at rest and are never stored in browser storage or returned to the app. Your messages and relevant Stracker data are sent to the provider you choose; provider billing, quota, and privacy terms apply.</span></div>
 
       {user?.isLocal && <div className="ai-service-notice"><AlertTriangle size={17} /><span>AI requires a signed-in cloud account and the secure server configuration. Local preview stays available without AI or network dependencies.</span></div>}
-      {providersError && !user?.isLocal && <div className="ai-service-notice"><AlertTriangle size={17} /><span>{providersError}</span><Button variant="quiet" size="sm" onClick={() => void refreshProviders()}>Retry</Button></div>}
+      {!user?.isLocal && backendStatus === 'misconfigured' && <div className="ai-service-notice" role="alert"><AlertTriangle size={17} /><span><strong>The Stracker AI backend is not configured for this deployment.</strong> The administrator must finish the server setup. The server reports: {backendHealth?.reason ?? 'incomplete server configuration'}{(backendHealth?.missing?.length || backendHealth?.invalid?.length) ? <> Missing or malformed: {[...(backendHealth?.missing ?? []),...(backendHealth?.invalid ?? [])].map(name => <code key={name}>{name}</code>)}</> : null} The health endpoint <code>/api/ai/health</code> shows this diagnosis; provider keys cannot be saved until it is fixed.</span><Button variant="quiet" size="sm" onClick={() => void checkBackendHealth()}>Recheck</Button></div>}
+      {!user?.isLocal && backendStatus === 'unreachable' && <div className="ai-service-notice" role="alert"><AlertTriangle size={17} /><span><strong>The Stracker AI backend is unavailable.</strong> The deployed app has no <code>/api/ai/*</code> functions. Deploy the Vercel AI backend (see the README) and reload.</span><Button variant="quiet" size="sm" onClick={() => void checkBackendHealth()}>Recheck</Button></div>}
+      {providersError && !user?.isLocal && backendStatus !== 'misconfigured' && backendStatus !== 'unreachable' && <div className="ai-service-notice"><AlertTriangle size={17} /><span>{providersError}</span><Button variant="quiet" size="sm" onClick={() => void refreshProviders()}>Retry</Button></div>}
 
       <div className="ai-provider-list" aria-live="polite">
         {providersLoading && providers.length === 0 ? <div className="ai-settings-loading"><LoaderCircle size={17} className="spin" /> Checking provider connections…</div> : providers.length ? providers.map(provider => {

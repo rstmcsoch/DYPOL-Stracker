@@ -1,20 +1,19 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import { ApiError } from './http.js'
+import { credentialEncryptionKey, credentialEncryptionStatus } from './server-config.js'
+import { logAIEvent } from './diagnostics.js'
 import { redactPotentialSecrets } from '../../src/lib/ai/sanitize.js'
 export { redactPotentialSecrets }
 
-const KEY_BYTES = 32
-
 function encryptionKey(): Buffer {
-  const raw = process.env.AI_CREDENTIALS_ENCRYPTION_KEY?.trim()
-  if (!raw) throw new ApiError(503, 'credential_store_unavailable', 'Secure AI credential storage is not configured. Contact the Stracker administrator.')
-  let key: Buffer
-  if (/^[a-f\d]{64}$/i.test(raw)) key = Buffer.from(raw, 'hex')
-  else {
-    try { key = Buffer.from(raw, 'base64') }
-    catch { throw new ApiError(503, 'credential_store_unavailable', 'Secure AI credential storage is not configured. Contact the Stracker administrator.') }
+  const key = credentialEncryptionKey()
+  if (!key) {
+    // Log whether the key is missing or malformed — never the value — and expose the same safe
+    // reason code to the client so Settings can name the actual problem.
+    const reason = credentialEncryptionStatus() === 'missing' ? 'credential_encryption_missing' : 'credential_encryption_invalid'
+    logAIEvent('warn', 'ai_credential_store_not_configured', { reason })
+    throw new ApiError(503, 'credential_store_unavailable', 'Secure AI credential storage is not configured. Contact the Stracker administrator.', { reason })
   }
-  if (key.byteLength !== KEY_BYTES) throw new ApiError(503, 'credential_store_unavailable', 'Secure AI credential storage is not configured. Contact the Stracker administrator.')
   return key
 }
 
