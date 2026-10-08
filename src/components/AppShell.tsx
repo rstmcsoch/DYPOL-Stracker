@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { Button, Dialog, Field, IconButton } from './ui'
+import { ThemeToggle } from './ThemeToggle'
 import { indiaToday } from '../lib/date'
 import { createId } from '../lib/id'
 import { taskInputSchema } from '../lib/task-validation'
@@ -67,16 +68,20 @@ export function AppFrame() {
 
   return <div className="app-shell">
     <aside className="sidebar" aria-label="Main navigation">
-      <Brand />
-      <div className="sidebar-date"><span className="date-dot" />{new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date())}</div>
-      <div className="nav-caption">YOUR NOTEBOOK</div>
-      <nav className="nav-list">
-        {mainNav.map(item => <NavItem key={item.to} {...item} />)}
-      </nav>
-      <div className="nav-divider"><span>KEEP GOING</span><span className="hand-line" /></div>
-      <nav className="nav-list">
-        {moreNav.map(item => <NavItem key={item.to} {...item} />)}
-      </nav>
+      <div className="sidebar-head">
+        <Brand />
+        <div className="sidebar-date"><span className="date-dot" />{new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date())}</div>
+      </div>
+      <div className="sidebar-scroll">
+        <div className="nav-caption">YOUR NOTEBOOK</div>
+        <nav className="nav-list" aria-label="Study sections">
+          {mainNav.map(item => <NavItem key={item.to} {...item} />)}
+        </nav>
+        <div className="nav-divider"><span>KEEP GOING</span><span className="hand-line" /></div>
+        <nav className="nav-list" aria-label="More study tools">
+          {moreNav.map(item => <NavItem key={item.to} {...item} />)}
+        </nav>
+      </div>
       <div className="sidebar-bottom">
         <button className="sidebar-search" onClick={() => setSearchOpen(true)}><Search size={16} /><span>Search your notebook</span><kbd>⌘ K</kbd></button>
         <div className="sidebar-user">
@@ -90,6 +95,7 @@ export function AppFrame() {
     <header className="mobile-topbar">
       <Brand compact />
       <div className="mobile-top-actions">
+        <ThemeToggle className="theme-toggle-compact" />
         <button className="mobile-sync" onClick={() => void refresh()} aria-label={`Sync status: ${statusLabel}`} title={syncError ?? statusLabel}><StatusIcon size={16} />{pendingCount > 0 && <span className="mobile-pending-dot" />}</button>
         <IconButton label="Search notebook" onClick={() => setSearchOpen(true)}><Search size={19} /></IconButton>
       </div>
@@ -104,6 +110,7 @@ export function AppFrame() {
             <StatusIcon size={15} className={syncState === 'syncing' ? 'sync-spin' : ''} /><span>{statusLabel}</span>{pendingCount > 0 && <small>{pendingCount}</small>}
           </button>
           <button className="help-pill" onClick={() => setShortcutsOpen(true)} aria-label="Show keyboard shortcuts"><CircleHelp size={16} /><span>Shortcuts</span></button>
+          <ThemeToggle className="theme-toggle-topline" />
         </div>
       </div>
       {syncError && syncState !== 'local' && <div className={`sync-message sync-message-${syncState}`} role="status">

@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { AlertOctagon, Bell, CalendarDays, Check, Cloud, KeyRound, LogOut, Palette, RotateCcw, Save, Shield, SlidersHorizontal, Target, Timer, UserRound } from 'lucide-react'
+import { AlertOctagon, Bell, CalendarDays, Check, Cloud, KeyRound, LogOut, Palette, RotateCcw, Save, Shield, SlidersHorizontal, Target, Timer, Type, UserRound } from 'lucide-react'
 import { Button, Dialog, Field, NotebookCard, PageHeader, StatusBadge } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
+import { INTERFACE_FONT_OPTIONS } from '../lib/fonts'
 import { settingsFieldErrors, settingsSchema } from '../lib/settings-validation'
-import type { AppSettings, Profile, ThemeMode } from '../types'
+import type { AppSettings, InterfaceFont, Profile, ThemeMode } from '../types'
 
 export default function SettingsPage() {
   const { data, upsert } = useData()
@@ -54,7 +55,7 @@ export default function SettingsPage() {
   }
 
   const savedKeys: (keyof AppSettings)[] = [
-    'owner_name', 'main_exam_date', 'advanced_exam_date', 'target_score', 'theme',
+    'owner_name', 'main_exam_date', 'advanced_exam_date', 'target_score', 'theme', 'interface_font',
     'weak_threshold', 'strong_threshold', 'dropping_threshold', 'sound_enabled'
   ]
   const hasUnsavedChanges = savedKeys.some(key => draft[key] !== data.settings[key]) ||
@@ -79,7 +80,8 @@ export default function SettingsPage() {
     const revisionGaps = gapsText.split(',').map(value => value.trim() === '' ? Number.NaN : Number(value.trim()))
     const validated = settingsSchema.safeParse({
       owner_name: draft.owner_name, main_exam_date: draft.main_exam_date, advanced_exam_date: draft.advanced_exam_date,
-      target_score: draft.target_score, theme: draft.theme, weak_threshold: draft.weak_threshold,
+      target_score: draft.target_score, theme: draft.theme, interface_font: draft.interface_font,
+      weak_threshold: draft.weak_threshold,
       strong_threshold: draft.strong_threshold, dropping_threshold: draft.dropping_threshold,
       revision_gaps: revisionGaps, daily_study_goal_minutes: minutesAreWhole ? roundedMinutes : Number.NaN,
       sound_enabled: draft.sound_enabled
@@ -191,6 +193,8 @@ export default function SettingsPage() {
       <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Exam dates & target" note="A countdown is only useful when the date is yours to choose." /><div className="settings-section-content"><div className="form-grid three"><Field label="JEE Main date" error={errors.main_exam_date}><input type="date" value={draft.main_exam_date} onChange={event => patch('main_exam_date', event.target.value)} /></Field><Field label="JEE Advanced date" error={errors.advanced_exam_date}><input type="date" value={draft.advanced_exam_date} onChange={event => patch('advanced_exam_date', event.target.value)} /></Field><Field label="Target score" error={errors.target_score}><input type="number" min="0" max="999999.99" step="0.01" value={Number.isFinite(draft.target_score) ? draft.target_score : ''} onChange={event => patch('target_score', event.target.value === '' ? Number.NaN : Number(event.target.value))} /><span className="field-hint">Compared to a mock with all three subject totals.</span></Field></div><div className="settings-note-line"><Target size={15} /> Leave dates blank until the official dates are confirmed.</div></div></NotebookCard>
 
       <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Notebook theme" note="Choose paper, blackboard, or follow this device." /><div className="settings-section-content"><div className="theme-choice-grid" role="radiogroup" aria-label="Theme preference">{([['light','Warm paper','Light notebook paper'],['dark','Chalkboard','Dark, high-contrast study mode'],['auto','Auto','Follow your device setting']] as const).map(([value,title,desc]) => <label className={`theme-choice theme-choice-${value} ${draft.theme === value ? 'selected' : ''}`} key={value}><input type="radio" name="theme" value={value} checked={draft.theme === value} onChange={() => patch('theme', value as ThemeMode)} /><span className="theme-swatch"><i /><i /><i /></span><strong>{title}</strong><small>{desc}</small>{draft.theme === value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> {auto ? 'Auto theme follows the device appearance.' : 'Theme choice is saved with your account.'}</div></div></NotebookCard>
+
+      <NotebookCard className="settings-section"><SectionLabel icon={<Type size={18} />} title="Interface font" note="Choose the typeface Stracker writes in. Exports keep their own typography." /><div className="settings-section-content"><div className="font-choice-grid" role="radiogroup" aria-label="Interface font">{INTERFACE_FONT_OPTIONS.map(option => <label className={`font-choice ${draft.interface_font === option.value ? 'selected' : ''}`} key={option.value}><input type="radio" name="interface_font" value={option.value} checked={draft.interface_font === option.value} onChange={() => patch('interface_font', option.value as InterfaceFont)} /><span className="font-choice-sample" style={{ fontFamily: option.stack }} aria-hidden="true">Aa</span><span className="font-choice-copy"><strong style={{ fontFamily: option.stack }}>{option.label}</strong><small>{option.note}</small></span>{draft.interface_font === option.value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Type size={15} /> Applies to the whole interface — dashboard, navigation, forms, tables and dialogs. JSON, CSV, PDF and DOCX exports keep their existing typography.</div></div></NotebookCard>
 
       <NotebookCard className="settings-section"><SectionLabel icon={<Target size={18} />} title="Weak-area thresholds" note="These bands describe test results; they do not judge your preparation." /><div className="settings-section-content"><div className="form-grid three"><Field label="Weak below (%)" error={errors.weak_threshold}><input type="number" min="0" max="99.99" step="0.01" value={Number.isFinite(draft.weak_threshold) ? draft.weak_threshold : ''} onChange={event => patch('weak_threshold', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field><Field label="Strong above (%)" error={errors.strong_threshold}><input type="number" min="0.01" max="100" step="0.01" value={Number.isFinite(draft.strong_threshold) ? draft.strong_threshold : ''} onChange={event => patch('strong_threshold', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field><Field label="Dropping when down by (points)" error={errors.dropping_threshold}><input type="number" min="0" max="100" step="0.01" value={Number.isFinite(draft.dropping_threshold) ? draft.dropping_threshold : ''} onChange={event => patch('dropping_threshold', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field></div><div className="threshold-preview"><StatusBadge tone="Weak">Weak &lt; {Number.isFinite(draft.weak_threshold) ? draft.weak_threshold : '—'}%</StatusBadge><StatusBadge tone="Okay">Okay {Number.isFinite(draft.weak_threshold) ? draft.weak_threshold : '—'}–{Number.isFinite(draft.strong_threshold) ? draft.strong_threshold : '—'}%</StatusBadge><StatusBadge tone="Strong">Strong &gt; {Number.isFinite(draft.strong_threshold) ? draft.strong_threshold : '—'}%</StatusBadge></div></div></NotebookCard>
 

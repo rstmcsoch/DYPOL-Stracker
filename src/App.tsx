@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { DataProvider, useData } from './contexts/DataContext'
+import { AppearanceProvider } from './contexts/AppearanceContext'
+import { DataProvider } from './contexts/DataContext'
 import { FocusProvider } from './contexts/FocusContext'
 import { ToastProvider } from './contexts/ToastContext'
 import { AppFrame } from './components/AppShell'
@@ -32,31 +33,16 @@ function AppLoading({ label = 'Opening your notebook…' }: { label?: string }) 
   return <div className="app-loading"><div className="loading-mark"><span>S</span><i>✳</i></div><LoaderCircle size={18} className="spin" /><span>{label}</span></div>
 }
 
-function ThemeSync() {
-  const { data } = useData()
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const apply = () => {
-      const dark = data.settings.theme === 'dark' || (data.settings.theme === 'auto' && media.matches)
-      document.documentElement.dataset.theme = dark ? 'dark' : 'light'
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#202522' : '#f7f4ec')
-    }
-    apply()
-    media.addEventListener('change', apply)
-    return () => media.removeEventListener('change', apply)
-  }, [data.settings.theme])
-  return null
-}
-
 function ProtectedApp() {
   const { user, loading } = useAuth()
   if (loading) return <AppLoading />
   if (!user) return <Navigate to="/login" replace />
   return <DataProvider key={user.id}>
-    <FocusProvider key={user.id}>
-      <ThemeSync />
-      <AppFrame />
-    </FocusProvider>
+    <AppearanceProvider>
+      <FocusProvider key={user.id}>
+        <AppFrame />
+      </FocusProvider>
+    </AppearanceProvider>
   </DataProvider>
 }
 

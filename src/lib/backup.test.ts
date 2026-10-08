@@ -121,6 +121,16 @@ describe('JSON backup', () => {
     expect(preview.invalid.map(item => item.collection)).toEqual(expect.arrayContaining(['chapters', 'revisions', 'goals']))
   })
 
+  it('imports backups written before the interface-font preference existed', () => {
+    const legacySettings = { ...defaultSettings(userId) } as Record<string, unknown>
+    delete legacySettings.interface_font
+    const backup = { ...createBackup(emptyData()), settings: legacySettings }
+
+    const preview = validateBackupText(JSON.stringify(backup), emptyData())
+    expect(preview.invalid.filter(item => item.collection === 'settings')).toHaveLength(0)
+    expect(preview.backup.settings?.interface_font).toBe('default')
+  })
+
   it('warns when an older backup points to an image that is not embedded', () => {
     const data = emptyData()
     data.chapters = [sampleChapter()]
