@@ -4,11 +4,23 @@ import { describe, expect, it } from 'vitest'
 import { INTERFACE_FONT_OPTIONS } from './fonts'
 import { INTERFACE_FONTS } from '../types'
 
-const stylesDir = fileURLToPath(new URL('../styles/', import.meta.url))
+const sourceDir = fileURLToPath(new URL('../', import.meta.url))
+const stylesDir = `${sourceDir}styles/`
 const read = (file: string) => readFileSync(`${stylesDir}${file}`, 'utf8')
+
+function sourceFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const path = `${directory}/${entry.name}`
+    return entry.isDirectory() ? sourceFiles(path) : entry.isFile() ? [path] : []
+  })
+}
 
 const base = read('base.css')
 const responsive = read('responsive.css')
+const componentStyles = readdirSync(stylesDir)
+  .filter(file => file.endsWith('.css'))
+  .map(file => read(file))
+  .join('\n')
 const entry = readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
 const report = readFileSync(new URL('./report.ts', import.meta.url), 'utf8')
 
@@ -111,24 +123,53 @@ describe('responsive layout contract', () => {
     expect(base).toContain('container: clock / inline-size;')
   })
 
-  it('defines one root font variable per selectable family, with fallbacks', () => {
-    expect(base).toContain('--font-ui:')
-    expect(base).toContain('--font-body: var(--font-ui);')
-    for (const option of INTERFACE_FONT_OPTIONS) {
-      if (option.value === 'default') continue
-      const rule = new RegExp(`:root\\[data-font='${option.value}'\\] \\{([^}]*)\\}`).exec(base)?.[1] ?? ''
-      const family = option.stack.split(',')[0]!.trim()
-      expect(rule, `${option.value} needs a data-font rule`).toContain(`--font-ui: ${family},`)
-      expect(rule).toContain('--font-body: var(--font-ui);')
-      // Handwriting headings and decorative labels are the Stracker personality and stay
-      // on their own faces in every mode; only the readable UI family is swappable.
-      expect(rule).not.toContain('--font-heading')
-      expect(rule).not.toContain('--font-label')
+  it('routes every interface typography role through the one global font token', () => {
+    expect(base).toContain('--app-font-family:')
+    expect(base).toContain('font-family: var(--app-font-family);')
+    expect(base).toContain('--font-ui: var(--app-font-family);')
+    for (const role of ['body', 'heading', 'label', 'number']) {
+      expect(base).toContain(`--font-${role}: var(--app-font-family);`)
     }
-    // The readable default and the numeric role never fall back to a handwriting face.
-    expect(base).toContain("--font-ui: 'Poppins', 'Open Sans'")
-    expect(base).toContain('--font-number: var(--font-ui);')
+    expect(base).toContain('body { min-width: 320px;')
+    expect(base).toContain('font-family: inherit;')
+    expect(base).toContain('#root { min-height: 100vh; min-height: 100dvh; font-family: inherit; }')
+    expect(base).toContain('button, input, textarea, select { font: inherit; }')
+    expect(base).toContain('option, optgroup, ::file-selector-button { font: inherit; }')
+    expect(base).toContain('::placeholder { font: inherit; }')
+    // Font selection only changes the shared token. Responsive optical sizing does not
+    // branch by font IDs, which could otherwise leave a heading or label on a stale face.
+    expect(responsive).not.toContain('data-font')
+    for (const option of INTERFACE_FONT_OPTIONS) expect(option.stack).toMatch(/system-ui, sans-serif$/)
     expect(INTERFACE_FONTS).toHaveLength(4)
+  })
+
+  it('prevents component CSS from introducing another UI font family', () => {
+    // Code samples intentionally use monospace; ordinary interface rules must use the
+    // root token or its semantic aliases instead of a family name of their own.
+    const withoutCodeSamples = componentStyles.replace(/\.ai-code-block\s*\{[^}]*\}/g, '')
+    const allowedGlobalFamily = /^(?:inherit|var\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\s*\))$/i
+    const fontFamilyDeclarations = [...withoutCodeSamples.matchAll(/(?<![-\w])font-family\s*:\s*([^;}]+)/gi)]
+    const nonGlobalFamilies = fontFamilyDeclarations
+      .map(([, value]) => value?.trim() ?? '')
+      .filter(value => !allowedGlobalFamily.test(value))
+    const fontShorthands = [...withoutCodeSamples.matchAll(/(?<![-\w])font\s*:\s*([^;}]+)/gi)]
+    const unscopedShorthands = fontShorthands
+      .map(([, value]) => value?.trim() ?? '')
+      .filter(value => !/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(value))
+      .filter(value => !/\bvar\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\b/i.test(value))
+    const inlineFontAssignments = sourceFiles(sourceDir)
+      .filter(file => /\.tsx?$/.test(file))
+      .flatMap(file => [...readFileSync(file, 'utf8').matchAll(/\bfontFamily\s*:\s*([^,}\]]+)/g)])
+      .map(([, value]) => value?.trim() ?? '')
+    const unapprovedInlineFamilies = inlineFontAssignments.filter(value =>
+      value !== 'option.stack' &&
+      !/^['"]var\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\s*\)['"]$/i.test(value))
+
+    expect(nonGlobalFamilies).toEqual([])
+    expect(unscopedShorthands).toEqual([])
+    expect(unapprovedInlineFamilies).toEqual([])
+    // Only font samples preview candidates; other inline families must use the global token.
+    expect(inlineFontAssignments.filter(value => value === 'option.stack')).toHaveLength(2)
   })
 
   it('keeps exported documents decoupled from the interface font preference', () => {

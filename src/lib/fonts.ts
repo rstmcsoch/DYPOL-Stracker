@@ -1,12 +1,13 @@
 import { INTERFACE_FONTS, type InterfaceFont } from '../types/index.js'
 
 /**
- * Interface font registry.
+ * Registry for the one application-wide interface font.
  *
- * Stracker ships one default cut of each supported family (see the @fontsource imports in
- * main.tsx). The `stack` mirrors the CSS custom property applied through
- * `:root[data-font='…']`, so the Settings preview and the painted UI always agree.
- * Keep this list in step with `INTERFACE_FONTS` and with `src/styles/base.css`.
+ * `stack` is the canonical mapping from the persisted preference to
+ * `--app-font-family`. AppearanceContext applies it once to `<html>`; every semantic
+ * typography token in base.css aliases that variable, so components inherit the same
+ * family instead of maintaining their own choices. Families are bundled locally in
+ * main.tsx with font-display: swap and each stack ends in a system fallback.
  */
 export interface InterfaceFontOption {
   value: InterfaceFont
@@ -19,7 +20,7 @@ export interface InterfaceFontOption {
 const FALLBACK_STACK = "'Trebuchet MS', system-ui, sans-serif"
 
 export const INTERFACE_FONT_OPTIONS: readonly InterfaceFontOption[] = [
-  { value: 'default', label: 'Default', note: 'Poppins text · handwriting headings', stack: `'Poppins', 'Open Sans', ${FALLBACK_STACK}` },
+  { value: 'default', label: 'Default', note: 'Balanced and familiar sans', stack: `'Poppins', 'Open Sans', ${FALLBACK_STACK}` },
   { value: 'poppins', label: 'Poppins', note: 'Rounded geometric sans', stack: `'Poppins', ${FALLBACK_STACK}` },
   { value: 'sora', label: 'Sora', note: 'Compact technical sans', stack: `'Sora', ${FALLBACK_STACK}` },
   { value: 'open-sans', label: 'Open Sans', note: 'Neutral and highly readable', stack: `'Open Sans', ${FALLBACK_STACK}` }
@@ -38,4 +39,10 @@ export function normalizeInterfaceFont(value: unknown): InterfaceFont {
 
 export function interfaceFontOption(font: InterfaceFont): InterfaceFontOption {
   return INTERFACE_FONT_OPTIONS.find(option => option.value === font) ?? INTERFACE_FONT_OPTIONS[0]!
+}
+
+/** Apply the selected stack at the document boundary, never on individual components. */
+export function applyInterfaceFont(root: HTMLElement, font: InterfaceFont): void {
+  const option = interfaceFontOption(font)
+  root.style.setProperty('--app-font-family', option.stack)
 }

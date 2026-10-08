@@ -207,7 +207,6 @@ export function AppFrame() {
     {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     {quickTaskOpen && <QuickTaskDialog data={data} onClose={() => setQuickTaskOpen(false)} />}
     {undoAvailable && <div className="undo-toast" role="status"><Check size={15} /><span>Deleted</span><button onClick={() => void undoDelete().then(() => notify('Deletion undone.')).catch(error => notify(error instanceof Error ? error.message : 'Could not undo deletion.', 'error'))}>Undo</button><IconButton label="Dismiss" onClick={dismissUndo}><X size={14} /></IconButton></div>}
-    <PwaUpdatePrompt />
     <AIExperience />
   </div>
 }
@@ -327,26 +326,6 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
     <div className="shortcut-list">{shortcuts.map(([key, action]) => <div className="shortcut-row" key={key}><span>{action}</span><kbd>{key}</kbd></div>)}</div>
     <div className="dialog-actions"><Button onClick={onClose}>Got it</Button></div>
   </Dialog>
-}
-
-function PwaUpdatePrompt() {
-  const [visible, setVisible] = useState(false)
-  const [update, setUpdate] = useState<(() => Promise<void>) | null>(null)
-  useEffect(() => {
-    let live = true
-    void import('virtual:pwa-register').then(({ registerSW }) => {
-      if (!live) return
-      const applyUpdate = registerSW({
-        immediate: true,
-        onNeedRefresh() { if (live) setVisible(true) },
-        onOfflineReady() { /* the shell is cached; no noisy toast needed */ }
-      })
-      setUpdate(() => async () => applyUpdate(true))
-    }).catch(() => undefined)
-    return () => { live = false }
-  }, [])
-  if (!visible) return null
-  return <div className="update-banner" role="status"><Sparkles size={16} /><span>A fresh page is ready.</span><button onClick={() => void update?.()}>Update</button><IconButton label="Dismiss update" onClick={() => setVisible(false)}><X size={14} /></IconButton></div>
 }
 
 // Retained as a no-op import target for the lazy shell boundary to warm the most-used page.

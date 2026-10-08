@@ -5,6 +5,7 @@ import { AlertOctagon, Bell, CalendarDays, Check, Cloud, Database, KeyRound, Log
 import { Button, Dialog, Field, NotebookCard, PageHeader, StatusBadge } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
+import { useAppearance } from '../contexts/AppearanceContext'
 import { useToast } from '../contexts/ToastContext'
 import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
@@ -14,7 +15,7 @@ import { passwordLengthError } from '../lib/auth-rules'
 import { AISettingsSection } from '../components/ai/AISettingsSection'
 import { ExamTracksSection, ReminderSettingsSection } from '../components/jee/SettingsSections'
 import { ListChecks } from 'lucide-react'
-import type { AppSettings, InterfaceFont, Profile, ThemeMode } from '../types'
+import type { AppSettings, Profile, ThemeMode } from '../types'
 
 type SettingsTab = 'account' | 'exam' | 'appearance' | 'rhythm' | 'data'
 
@@ -36,6 +37,7 @@ const TAB_FIELDS: Record<Exclude<SettingsTab, 'data'>, (keyof AppSettings)[]> = 
 
 export default function SettingsPage() {
   const { data, upsert } = useData()
+  const { setInterfaceFont } = useAppearance()
   const { user, signOut } = useAuth()
   const { notify } = useToast()
   const queryClient = useQueryClient()
@@ -349,7 +351,21 @@ export default function SettingsPage() {
           <fieldset className="settings-form-fields" disabled={savingTab === 'appearance'}>
             <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Notebook theme" note="Choose paper, blackboard, or follow this device." /><div className="settings-section-content"><div className="theme-choice-grid" role="radiogroup" aria-label="Theme preference">{([['light','Warm paper','Light notebook paper'],['dark','Chalkboard','Dark, high-contrast study mode'],['auto','Auto','Follow your device setting']] as const).map(([value,title,desc]) => <label className={`theme-choice theme-choice-${value} ${draft.theme === value ? 'selected' : ''}`} key={value}><input type="radio" name="theme" value={value} checked={draft.theme === value} onChange={() => patch('theme', value as ThemeMode)} /><span className="theme-swatch"><i /><i /><i /></span><strong>{title}</strong><small>{desc}</small>{draft.theme === value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> {auto ? 'Auto theme follows the device appearance.' : 'Theme choice is saved with your account.'}</div></div></NotebookCard>
 
-            <NotebookCard className="settings-section"><SectionLabel icon={<Type size={18} />} title="Reading font" note="The typeface Stracker uses for text and numbers. Headings keep the handwriting personality." /><div className="settings-section-content"><div className="font-choice-grid" role="radiogroup" aria-label="Interface font">{INTERFACE_FONT_OPTIONS.map(option => <label className={`font-choice ${draft.interface_font === option.value ? 'selected' : ''}`} key={option.value}><input type="radio" name="interface_font" value={option.value} checked={draft.interface_font === option.value} onChange={() => patch('interface_font', option.value as InterfaceFont)} /><span className="font-choice-sample" style={{ fontFamily: option.stack }} aria-hidden="true">Aa</span><span className="font-choice-copy"><strong style={{ fontFamily: option.stack }}>{option.label}</strong><small>{option.note}</small></span>{draft.interface_font === option.value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Type size={15} /> Applies to the readable interface — dashboard, navigation, forms, tables and dialogs. Handwriting stays on headings and decorative labels. JSON, CSV, PDF and DOCX exports keep their own typography.</div></div></NotebookCard>
+            <NotebookCard className="settings-section">
+              <SectionLabel icon={<Type size={18} />} title="Interface font" note="One font across the entire app, including headings, navigation and controls." />
+              <div className="settings-section-content">
+                <div className="font-choice-grid" role="radiogroup" aria-label="Interface font">
+                  {INTERFACE_FONT_OPTIONS.map(option => <label className={`font-choice ${draft.interface_font === option.value ? 'selected' : ''}`} key={option.value}>
+                    <input type="radio" name="interface_font" value={option.value} checked={draft.interface_font === option.value} onChange={() => { patch('interface_font', option.value); setInterfaceFont(option.value) }} />
+                    {/* These two samples intentionally preview each option; the rest of the UI inherits the global token. */}
+                    <span className="font-choice-sample" style={{ fontFamily: option.stack }} aria-hidden="true">Aa</span>
+                    <span className="font-choice-copy"><strong style={{ fontFamily: option.stack }}>{option.label}</strong><small>{option.note}</small></span>
+                    {draft.interface_font === option.value && <span className="theme-check"><Check size={13} /></span>}
+                  </label>)}
+                </div>
+                <div className="settings-note-line"><Type size={15} /> Applies immediately to every page, heading, sidebar, button, form, dialog, chart label and notification. JSON, CSV, PDF and DOCX exports keep their own typography.</div>
+              </div>
+            </NotebookCard>
           </fieldset>
           <TabActions tab="appearance" dirty={isTabDirty('appearance')} saving={savingTab === 'appearance'} savedTick={savedTabTick === 'appearance'} onDiscard={() => discardTabChanges('appearance')} />
         </form>

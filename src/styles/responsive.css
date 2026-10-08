@@ -177,8 +177,7 @@ body.modal-open .quick-action-area { display: none; }
   .mobile-nav-item { min-height: 44px; }
   .quick-action-area { bottom: calc(64px + var(--safe-bottom)); }
   .quick-action-fab { width: 46px; height: 46px; border-radius: 15px; }
-  .undo-toast,
-  .update-banner { bottom: calc(64px + var(--safe-bottom)); }
+  .undo-toast { bottom: calc(64px + var(--safe-bottom)); }
   .toast-stack { top: 6px; }
 }
 
@@ -285,19 +284,17 @@ body.modal-open .quick-action-area { display: none; }
 .theme-toggle-compact .theme-toggle-track { width: 44px; height: 26px; }
 .theme-toggle-compact.theme-toggle-dark .theme-toggle-thumb { transform: translateX(20px); }
 
-/* Typographic rebalancing for the sans selections. A few display sizes carry tracking
-   drawn for the handwriting faces — very tight big numerals, an airy timer — and the
-   geometric sans families need a lighter touch so the hierarchy still reads as designed
-   rather than cramped or loose. The default selection is untouched. */
-:root:is([data-font='poppins'], [data-font='sora'], [data-font='open-sans']) :is(.brand-type, .page-header h1, .auth-intro h1) {
+/* Shared display tracking for every bundled sans family. The family itself comes only
+   from --app-font-family; these neutral optical adjustments do not branch by selection. */
+:root :is(.brand-type, .page-header h1, .auth-intro h1) {
   letter-spacing: -.2px;
 }
 
-:root:is([data-font='poppins'], [data-font='sora'], [data-font='open-sans']) .countdown-number {
+:root .countdown-number {
   letter-spacing: -1.5px;
 }
 
-:root:is([data-font='poppins'], [data-font='sora'], [data-font='open-sans']) .focus-clock {
+:root .focus-clock {
   letter-spacing: .5px;
 }
 
