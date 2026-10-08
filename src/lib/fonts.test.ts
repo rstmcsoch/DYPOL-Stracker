@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { INTERFACE_FONT_OPTIONS, interfaceFontOption, normalizeInterfaceFont } from './fonts'
+import { applyInterfaceFont, INTERFACE_FONT_OPTIONS, interfaceFontOption, normalizeInterfaceFont } from './fonts'
 import { INTERFACE_FONTS } from '../types'
 
 describe('interface font registry', () => {
@@ -8,11 +10,30 @@ describe('interface font registry', () => {
     expect(INTERFACE_FONT_OPTIONS.map(option => option.value)).toEqual([...INTERFACE_FONTS])
   })
 
+  it('keeps the CSS boot default synchronized with the canonical default stack', () => {
+    const baseStyles = readFileSync(`${process.cwd()}/src/styles/base.css`, 'utf8')
+    expect(baseStyles).toContain(`--app-font-family: ${interfaceFontOption('default').stack};`)
+  })
+
   it('keeps a readable sans in front of every fallback chain', () => {
     expect(interfaceFontOption('default').stack.startsWith("'Poppins'")).toBe(true)
     expect(interfaceFontOption('poppins').stack.startsWith("'Poppins'")).toBe(true)
     expect(interfaceFontOption('sora').stack.startsWith("'Sora'")).toBe(true)
     expect(interfaceFontOption('open-sans').stack.startsWith("'Open Sans'")).toBe(true)
+  })
+
+  it('routes the Settings picker through the global appearance setter', () => {
+    const settingsPage = readFileSync(`${process.cwd()}/src/pages/SettingsPage.tsx`, 'utf8')
+    expect(settingsPage).toContain('setInterfaceFont(option.value)')
+  })
+
+  it('applies every selected family through the single document-level CSS token', () => {
+    const root = document.createElement('html')
+
+    for (const option of INTERFACE_FONT_OPTIONS) {
+      applyInterfaceFont(root, option.value)
+      expect(root.style.getPropertyValue('--app-font-family')).toBe(option.stack)
+    }
   })
 
   it('falls back to the default font for legacy rows, unknown values, and injected CSS', () => {

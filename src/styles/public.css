@@ -528,7 +528,7 @@
   font-size: 11px;
 }
 .hero-sheet-foot > span { display: inline-flex; align-items: center; gap: 5px; }
-.hero-sheet-sign { font: 600 17px var(--font-label) !important; color: #9a8b6b; }
+.hero-sheet-sign { font: 600 17px var(--font-label); color: #9a8b6b; }
 :root[data-theme='dark'] .hero-sheet-sign { color: #b7a888; }
 :root[data-theme='dark'] .hero-tape,
 :root[data-theme='dark'] .final-tape { background: rgba(206, 190, 140, .22); }

@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
+      // New workers activate immediately. The client registration intentionally does not
+      // reload an open session; online page navigations are handled by NetworkFirst below.
+      registerType: 'autoUpdate',
       includeAssets: ['icons/favicon-32.png', 'icons/icon-192.png', 'icons/icon-maskable-512.png'],
       manifest: {
         name: 'Stracker — JEE 2027 Study Notebook',
@@ -26,11 +28,24 @@ export default defineConfig({
         ]
       },
       workbox: {
-        navigateFallback: '/index.html',
+        // Do not let Workbox's default cache-first navigation fallback mask a deployment.
+        // SPA rewrites return index.html online; the precache is only the offline fallback.
+        navigateFallback: null,
+        directoryIndex: null,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: []
-      },
-      devOptions: { enabled: true }
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'stracker-navigation',
+              // No network timeout: when online, the navigation response from the active
+              // Vercel deployment must win. The precached shell is used only on failure.
+              precacheFallback: { fallbackURL: '/index.html' }
+            }
+          }
+        ]
+      }
     })
   ],
   server: { host: '0.0.0.0', allowedHosts: true },

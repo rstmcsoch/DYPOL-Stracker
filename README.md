@@ -13,10 +13,10 @@
 - **Analytics:** subject and chapter signals, test trends, study time, streaks, mistake summaries, weak areas, and rule-based study prompts. Up to three favourite charts can be pinned to the top of the page (a per-browser preference), and a clearly-labelled example preview stands in until the first real test is logged. The weak-areas page keeps untested chapters in a collapsible section of tappable chips that jump straight to pre-filled test logging. Empty or incomplete data is shown as such rather than invented.
 - **Exports and backups:** re-importable JSON notebook backup, UTF-8 test-history CSV, and selectable/date-ranged PDF and DOCX reports. Backup import validates records and relationships, previews the merge, and requires confirmation.
 - **Privacy and offline support:** Supabase Auth, user-scoped PostgreSQL tables with RLS, a private image bucket, browser-local IndexedDB caching, and an owner-scoped sync queue for offline changes.
-- **Appearance controls:** a light/night switch in the top-right corner (desktop header and mobile top bar) that stays in step with the theme choice in Settings, plus an interface-font preference — Default (the Stracker notebook hand), Poppins, Sora, or Open Sans.
+- **Appearance controls:** a light/night switch in the top-right corner (desktop header and mobile top bar) that stays in step with the theme choice in Settings, plus one application-wide font preference — Default (Poppins), Poppins, Sora, or Open Sans.
 - **Public homepage and separate authentication:** a marketing-free product homepage on `/` for visitors, dedicated `/login` and `/signup` pages, and password recovery on `/reset-password`. Signed-in visitors go straight to the notebook instead.
 - **JEE preparation system:** a Practice / DPP log per chapter (attempted, correct, incorrect, accuracy, source, optional time) kept separate from tests; a PYQ tracker for JEE Main and Advanced by year, with bulk actions and configurable year range; five independent chapter stages (Theory → Notes → PYQs → Revised → Tested) that accept real evidence from revisions, tests and PYQ records; a Backlog for skipped lectures, unsolved DPPs and come-back topics with snooze, due dates and grouping; weighted syllabus progress shown beside the raw count; study time split into Lecture, Practice and Revision, with a streak rule stated in the UI; mock deep-dive with time and attempts per subject, lost-mark classification and derived "fix before your next mock" insights; formula and flashcard decks on the R1 → R7 → R30 ladder; exam tracks (Main Session 1 and 2, Advanced, Boards) over one shared syllabus with Exam Mode in the final 30 days; a deterministic “What should I study now?” engine that explains every ranking; a weekly report that only compares weeks with real data; and in-app plus browser-notification reminders.
-- **Installable PWA:** application manifest, service worker, app icons, and offline-cached application shell.
+- **Installable PWA:** application manifest, service worker and app icons. The online navigation strategy is network-first; the precached shell is used only when the network is unavailable, so a deployment never waits behind a cached page or an update prompt.
 
 The seeded syllabus is an editable topic grouping, not a claim that an official JEE 2027 notification has been published. Check the current NTA/JEE bulletin when it is released and adjust the list in the notebook if the official syllabus changes.
 
@@ -78,16 +78,16 @@ Settings is organised into five tabs — **Account, Exam, Appearance, Study rhyt
 
 The header switch and *Settings → Appearance → Notebook theme* edit the same value, so they never disagree: switching to `Auto` in Settings follows the device, and the next press of the header switch pins an explicit light or night choice.
 
-*Settings → Appearance → Interface font* selects the family the whole interface uses — dashboard, navigation, forms, tables, dialogs, and empty states:
+*Settings → Appearance → Interface font* selects the single family used across the entire interface — content, headings, navigation, forms, tables, dialogs, notifications, and dynamically mounted UI:
 
 | Choice | Family |
 | --- | --- |
-| Default | Patrick Hand (the Stracker notebook hand, bundled locally) |
+| Default | Poppins (balanced default) |
 | Poppins | Poppins |
 | Sora | Sora |
 | Open Sans | Open Sans |
 
-Only the default cut of each family is loaded (latin subset, regular to bold) and each family falls back to a system sans if it cannot be fetched, so the app stays usable offline or behind a blocked font host. The preference is stored in `app_settings.interface_font` and restores with the rest of your settings. Exports are intentionally separate: JSON, CSV, PDF, and DOCX keep their own typography and are never re-rendered in the interface font.
+Each selectable family is bundled locally (latin subset, regular through bold) with `font-display: swap` and a system-sans fallback. Appearance settings update the root `--app-font-family` token, and body copy, headings, labels, numbers, native controls, portals and overlays all inherit that one value. The preference is stored in `app_settings.interface_font` and restores with the rest of your settings. Exports are intentionally separate: JSON, CSV, PDF, and DOCX keep their own typography and are never re-rendered in the interface font.
 
 ## Supabase setup (per-account, private by default)
 
@@ -161,7 +161,7 @@ Both included deployment configs support client-side route fallback:
 - **Netlify:** connect the repository, use `npm run build` and publish `dist`. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as build environment variables.
 - **Vercel:** import the repository; Vite's production output is `dist`. Add the two public `VITE_SUPABASE_*` variables for the browser. To enable Stracker AI, also follow [Stracker AI (BYOK)](#stracker-ai-byok) for server-only environment variables, database migrations, and function duration.
 
-Serve the production app over HTTPS so browser authentication, IndexedDB, and service-worker installation work as intended. After deployment, add the exact production URL and `/reset-password` redirect URL to Supabase Auth settings. Do not add the service-role key to either host's client-side environment variables.
+Serve the production app over HTTPS so browser authentication, IndexedDB, and service-worker installation work as intended. Vercel sends the SPA entry HTML and other routes with browser- and CDN-level `no-store` headers; Vite's content-hashed `/assets/*` files are immutable at both layers. The PWA worker fetches online navigations from the active deployment first and only falls back to the precached shell offline; it does not show an update prompt or force-reload an open session. After deployment, add the exact production URL and `/reset-password` redirect URL to Supabase Auth settings. Do not add the service-role key to either host's client-side environment variables.
 
 ## Project commands
 
