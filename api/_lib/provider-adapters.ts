@@ -1,7 +1,7 @@
-import type { AIProtocol, AIProviderId, ProviderConfigRow } from './registry'
-import { endpointFor, providerBaseUrl, validateCustomBaseUrl } from './registry'
-import { ApiError } from './http'
-import { fetchCustomProvider } from './secure-fetch'
+import type { AIProtocol, AIProviderId, ProviderConfigRow } from './registry.js'
+import { endpointFor, providerBaseUrl, validateCustomBaseUrl } from './registry.js'
+import { ApiError } from './http.js'
+import { fetchCustomProvider } from './secure-fetch.js'
 
 export interface AgentMessage {
   role: 'user' | 'assistant' | 'tool'

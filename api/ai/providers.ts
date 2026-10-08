@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import type { ApiRequest, ApiResponse } from '../_lib/http'
-import { ApiError, readJson, sendJson } from '../_lib/http'
-import { withAuthenticatedRequest } from '../_lib/handler'
-import { encryptCredential, maskedCredential } from '../_lib/secrets'
-import { normalizeProviderSetup, safeProviderConfig, type ProviderConfigRow } from '../_lib/registry'
+import type { ApiRequest, ApiResponse } from '../_lib/http.js'
+import { ApiError, readJson, sendJson } from '../_lib/http.js'
+import { withAuthenticatedRequest } from '../_lib/handler.js'
+import { encryptCredential, maskedCredential } from '../_lib/secrets.js'
+import { normalizeProviderSetup, safeProviderConfig, type ProviderConfigRow } from '../_lib/registry.js'
 
 const providerWriteSchema = z.object({
   id: z.uuid().optional(),

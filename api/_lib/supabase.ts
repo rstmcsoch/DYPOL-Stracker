@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
-import type { ApiRequest } from './http'
-import { ApiError } from './http'
+import type { ApiRequest } from './http.js'
+import { ApiError } from './http.js'
 
 export interface AuthenticatedRequestContext {
   userId: string

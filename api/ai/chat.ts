@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import type { ApiRequest, ApiResponse } from '../_lib/http'
+import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { ApiError, readJson, publicError, sendJson } from '../_lib/http'
-import { authenticateRequest } from '../_lib/supabase'
-import { redactPotentialSecrets } from '../_lib/secrets'
-import { runAssistant } from '../_lib/agent'
+import { ApiError, readJson, publicError, sendJson } from '../_lib/http.js'
+import { authenticateRequest } from '../_lib/supabase.js'
+import { redactPotentialSecrets } from '../_lib/secrets.js'
+import { runAssistant } from '../_lib/agent.js'
 
 const requestSchema = z.object({
   conversationId: z.uuid().nullable().optional(),

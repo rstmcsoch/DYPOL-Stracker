@@ -1,6 +1,6 @@
-import type { ApiRequest, ApiResponse } from '../_lib/http'
-import { ApiError, sendJson } from '../_lib/http'
-import { withAuthenticatedRequest } from '../_lib/handler'
+import type { ApiRequest, ApiResponse } from '../_lib/http.js'
+import { ApiError, sendJson } from '../_lib/http.js'
+import { withAuthenticatedRequest } from '../_lib/handler.js'
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   await withAuthenticatedRequest(req, res, ['GET'], async ({ userId, adminClient }) => {

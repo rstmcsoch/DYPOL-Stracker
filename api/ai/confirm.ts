@@ -1,8 +1,8 @@
 import { z } from 'zod'
-import type { ApiRequest, ApiResponse } from '../_lib/http'
-import { ApiError, readJson, sendJson } from '../_lib/http'
-import { withAuthenticatedRequest } from '../_lib/handler'
-import { confirmPendingAction } from '../_lib/tools'
+import type { ApiRequest, ApiResponse } from '../_lib/http.js'
+import { ApiError, readJson, sendJson } from '../_lib/http.js'
+import { withAuthenticatedRequest } from '../_lib/handler.js'
+import { confirmPendingAction } from '../_lib/tools.js'
 
 const requestSchema = z.object({ actionId:z.uuid(), approved:z.boolean() }).strict()
 

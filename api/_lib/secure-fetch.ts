@@ -1,7 +1,7 @@
 import { request as httpsRequest } from 'node:https'
 import { Readable } from 'node:stream'
-import { ApiError } from './http'
-import { resolveCustomBaseUrl } from './registry'
+import { ApiError } from './http.js'
+import { resolveCustomBaseUrl } from './registry.js'
 
 /**
  * Fetch a user-supplied HTTPS provider URL only after resolving it to a public

@@ -1,6 +1,6 @@
-import { plusDays } from './date'
-import { createId } from './id'
-import type { Chapter, Revision } from '../types'
+import { plusDays } from './date.js'
+import { createId } from './id.js'
+import type { Chapter, Revision } from '../types/index.js'
 
 const completingRevisions = new Set<string>()
 

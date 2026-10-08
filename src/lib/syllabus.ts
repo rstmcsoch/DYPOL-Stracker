@@ -1,4 +1,4 @@
-import type { Subject } from '../types'
+import type { Subject } from '../types/index.js'
 
 export const SYLLABUS: Record<Subject, string[]> = {
   Physics: [

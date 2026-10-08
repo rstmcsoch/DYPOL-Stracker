@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { INTERFACE_FONTS } from '../types'
+import { INTERFACE_FONTS } from '../types/index.js'
 
 const dateValue = z.iso.date()
 const timestampValue = z.iso.datetime({ offset: true })

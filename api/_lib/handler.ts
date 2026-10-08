@@ -1,6 +1,6 @@
-import type { ApiRequest, ApiResponse } from './http'
-import { methodNotAllowed, publicError, sendJson } from './http'
-import { authenticateRequest, type AuthenticatedRequestContext } from './supabase'
+import type { ApiRequest, ApiResponse } from './http.js'
+import { methodNotAllowed, publicError, sendJson } from './http.js'
+import { authenticateRequest, type AuthenticatedRequestContext } from './supabase.js'
 
 export async function withAuthenticatedRequest(
   req: ApiRequest,

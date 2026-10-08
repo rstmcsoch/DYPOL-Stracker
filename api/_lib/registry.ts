@@ -1,7 +1,7 @@
 import { lookup } from 'node:dns/promises'
 import type { LookupAddress } from 'node:dns'
-import { AI_PROVIDER_IDS, type AIProviderId, type AIProtocol, type AICapabilities, type AIModelOption } from '../../src/lib/ai/catalog'
-import { ApiError } from './http'
+import { AI_PROVIDER_IDS, type AIProviderId, type AIProtocol, type AICapabilities, type AIModelOption } from '../../src/lib/ai/catalog.js'
+import { ApiError } from './http.js'
 
 export type { AIProviderId, AIProtocol, AICapabilities, AIModelOption }
 export interface ProviderSetup {

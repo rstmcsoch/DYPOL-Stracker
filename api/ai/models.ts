@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import type { ApiRequest, ApiResponse } from '../_lib/http'
-import { ApiError, readJson, sendJson } from '../_lib/http'
-import { withAuthenticatedRequest } from '../_lib/handler'
-import { decryptCredential } from '../_lib/secrets'
-import { discoverProviderModels } from '../_lib/models'
-import { normalizeProviderSetup, type ProviderConfigRow } from '../_lib/registry'
+import type { ApiRequest, ApiResponse } from '../_lib/http.js'
+import { ApiError, readJson, sendJson } from '../_lib/http.js'
+import { withAuthenticatedRequest } from '../_lib/handler.js'
+import { decryptCredential } from '../_lib/secrets.js'
+import { discoverProviderModels } from '../_lib/models.js'
+import { normalizeProviderSetup, type ProviderConfigRow } from '../_lib/registry.js'
 
 const requestSchema = z.object({
   configId: z.uuid().optional(),

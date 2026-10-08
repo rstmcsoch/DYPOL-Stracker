@@ -1,7 +1,7 @@
-import { SYLLABUS } from './syllabus'
-import { createId, stableId } from './id'
-import { indiaToday } from './date'
-import type { AppSettings, Chapter, Subject } from '../types'
+import { SYLLABUS } from './syllabus.js'
+import { createId, stableId } from './id.js'
+import { indiaToday } from './date.js'
+import type { AppSettings, Chapter, Subject } from '../types/index.js'
 
 export function defaultSettings(userId: string, ownerName = ''): AppSettings {
   const now = new Date().toISOString()

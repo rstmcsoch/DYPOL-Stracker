@@ -1,8 +1,8 @@
-import type { ProviderSetup } from './registry'
-import { endpointFor, modelOptionsFromApi, providerBaseUrl, validateCustomBaseUrl } from './registry'
-import { ApiError } from './http'
-import { fetchCustomProvider } from './secure-fetch'
-import type { AIModelOption } from './registry'
+import type { ProviderSetup } from './registry.js'
+import { endpointFor, modelOptionsFromApi, providerBaseUrl, validateCustomBaseUrl } from './registry.js'
+import { ApiError } from './http.js'
+import { fetchCustomProvider } from './secure-fetch.js'
+import type { AIModelOption } from './registry.js'
 
 export interface ModelDiscoveryResult {
   models: AIModelOption[]

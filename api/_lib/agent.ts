@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { inferCapabilities, runtimeHealth, type ProviderConfigRow, type AIProviderId } from './registry'
-import { decryptCredential, redactPotentialSecrets } from './secrets'
-import { completeWithProvider, providerCallFromConfig, safeProviderError, ProviderFailure, type AgentMessage } from './provider-adapters'
-import { ApiError } from './http'
-import { MODEL_TOOLS, prepareToolCall, toolProgress, type ActionPreview } from './tools'
+import { inferCapabilities, runtimeHealth, type ProviderConfigRow, type AIProviderId } from './registry.js'
+import { decryptCredential, redactPotentialSecrets } from './secrets.js'
+import { completeWithProvider, providerCallFromConfig, safeProviderError, ProviderFailure, type AgentMessage } from './provider-adapters.js'
+import { ApiError } from './http.js'
+import { MODEL_TOOLS, prepareToolCall, toolProgress, type ActionPreview } from './tools.js'
 
 export interface AgentEventSink {
   (event: string, data: Record<string, unknown>): void
