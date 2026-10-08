@@ -1,8 +1,10 @@
 /* STRACKER · warm paper, pencil lines, quiet colour */
 :root {
-  /* The only interface font family. AppearanceContext updates this token from the
-     persisted Settings preference; every element (including portals) inherits it. */
-  --app-font-family: 'Poppins', 'Open Sans', 'Trebuchet MS', system-ui, sans-serif;
+  /* The only interface font family. The boot script in index.html sets this token
+     from the cached preference before first paint; AppearanceContext then keeps it
+     in sync with the persisted Settings preference. Every element (including
+     portals) inherits it. The boot value is the Default cut: the device's own font. */
+  --app-font-family: system-ui, sans-serif;
   /* Backwards-compatible semantic aliases control typography roles, not font choices.
      Keep them pointed at the global token so existing/new component rules cannot split
      headings, labels, numbers, or body copy onto separate families. */

@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultSettings } from '../lib/defaults'
-import { INTERFACE_FONT_OPTIONS } from '../lib/fonts'
+import { INTERFACE_FONT_OPTIONS, INTERFACE_FONT_STORAGE_KEY } from '../lib/fonts'
 import type { AppSettings } from '../types'
 
 const mocks = vi.hoisted(() => ({ useData: vi.fn(), notify: vi.fn() }))
@@ -46,6 +46,7 @@ beforeEach(() => {
   })
   mocks.useData.mockReset()
   mocks.notify.mockReset()
+  localStorage.clear()
 })
 
 afterEach(() => {
@@ -70,6 +71,8 @@ describe('AppearanceProvider interface font lifecycle', () => {
 
     expect(document.documentElement.style.getPropertyValue('--app-font-family'))
       .toBe(INTERFACE_FONT_OPTIONS.find(option => option.value === 'sora')?.stack)
+    // The device cache the boot script reads on the next load mirrors the new choice.
+    expect(localStorage.getItem(INTERFACE_FONT_STORAGE_KEY)).toBe('sora')
     await waitFor(() => expect(upsert).toHaveBeenCalledWith('app_settings', expect.objectContaining({
       user_id: 'user-one',
       interface_font: 'sora'
@@ -88,5 +91,15 @@ describe('AppearanceProvider interface font lifecycle', () => {
     mountAppearance(settingsFor('user-two', 'open-sans'))
     expect(document.documentElement.style.getPropertyValue('--app-font-family'))
       .toBe(INTERFACE_FONT_OPTIONS.find(option => option.value === 'open-sans')?.stack)
+  })
+
+  it('mirrors the resolved font into the boot cache and clears it on logout', () => {
+    const session = mountAppearance(settingsFor('user-one', 'sora'))
+    expect(localStorage.getItem(INTERFACE_FONT_STORAGE_KEY)).toBe('sora')
+
+    session.unmount()
+    expect(localStorage.getItem(INTERFACE_FONT_STORAGE_KEY)).toBeNull()
+    expect(document.documentElement.style.getPropertyValue('--app-font-family'))
+      .toBe(INTERFACE_FONT_OPTIONS.find(option => option.value === 'default')?.stack)
   })
 })

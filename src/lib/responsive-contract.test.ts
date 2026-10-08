@@ -144,9 +144,11 @@ describe('responsive layout contract', () => {
   })
 
   it('prevents component CSS from introducing another UI font family', () => {
-    // Code samples intentionally use monospace; ordinary interface rules must use the
-    // root token or its semantic aliases instead of a family name of their own.
-    const withoutCodeSamples = componentStyles.replace(/\.ai-code-block\s*\{[^}]*\}/g, '')
+    // @font-face rules are the one sanctioned place that names a family (fonts.css
+    // declares the self-hosted faces); code samples intentionally use monospace.
+    // Ordinary interface rules must use the root token or its semantic aliases.
+    const withoutFontFaces = componentStyles.replace(/@font-face\s*\{[^}]*\}/g, '')
+    const withoutCodeSamples = withoutFontFaces.replace(/\.ai-code-block\s*\{[^}]*\}/g, '')
     const allowedGlobalFamily = /^(?:inherit|var\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\s*\))$/i
     const fontFamilyDeclarations = [...withoutCodeSamples.matchAll(/(?<![-\w])font-family\s*:\s*([^;}]+)/gi)]
     const nonGlobalFamilies = fontFamilyDeclarations

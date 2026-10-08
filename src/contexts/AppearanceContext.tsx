@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useData } from './DataContext'
 import { useToast } from './ToastContext'
-import { applyInterfaceFont, normalizeInterfaceFont } from '../lib/fonts'
+import { applyInterfaceFont, cacheInterfaceFont, clearInterfaceFontCache, normalizeInterfaceFont } from '../lib/fonts'
 import type { AppSettings, InterfaceFont, ThemeMode } from '../types'
 
 export type ResolvedTheme = 'light' | 'dark'
@@ -71,6 +71,9 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     applyInterfaceFont(document.documentElement, interfaceFont)
+    // Mirror the resolved font into the device cache the boot script in index.html
+    // reads on the next load, so the first paint already uses the saved family.
+    cacheInterfaceFont(interfaceFont)
   }, [interfaceFont])
 
   // A committed settings row becomes the persisted source of truth. If its write fails
@@ -85,6 +88,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   // across logout into the next signed-out screen; login reapplies the account setting.
   useEffect(() => () => {
     applyInterfaceFont(document.documentElement, 'default')
+    clearInterfaceFontCache()
   }, [])
 
   const persist = useCallback((patch: Partial<Pick<AppSettings, 'theme' | 'interface_font'>>) => {
