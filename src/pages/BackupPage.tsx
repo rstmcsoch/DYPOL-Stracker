@@ -29,7 +29,7 @@ const defaultSections: ReportSections = { summary: true, performance: true, chap
 const reportSchema = z.object({ from: z.string(), to: z.string() }).refine(value => !value.from || !value.to || value.from <= value.to, { message: 'Start date must be before end date.' })
 
 export default function BackupPage() {
-  const { data, upsert, mergeImportedData, saveImage } = useData()
+  const { data, updateSettings, mergeImportedData, saveImage } = useData()
   const { user } = useAuth()
   const { notify } = useToast()
   const queryClient = useQueryClient()
@@ -70,8 +70,9 @@ export default function BackupPage() {
         throw new Error(`Could not include ${new Set([...imageFailures, ...missingImages.map(mistake => mistake.id)]).size} stored image(s). The backup was not downloaded; check your connection and storage access, then retry.`)
       }
       triggerDownload(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8' }), `stracker-backup-${indiaToday()}.json`)
-      const settings: AppSettings = { ...data.settings, last_backup_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-      await upsert('app_settings', settings)
+      const backedUpAt = new Date().toISOString()
+      // Stamp the latest committed settings row, never a render snapshot that could revert a newer edit.
+      await updateSettings(current => ({ ...current, last_backup_at: backedUpAt }))
       notify('Complete JSON backup downloaded. Keep a copy somewhere private.')
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not create backup. Retry.', 'error') }
     finally { setExporting(null) }

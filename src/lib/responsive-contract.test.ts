@@ -144,19 +144,27 @@ describe('responsive layout contract', () => {
   })
 
   it('prevents component CSS from introducing another UI font family', () => {
-    // Code samples intentionally use monospace; ordinary interface rules must use the
-    // root token or its semantic aliases instead of a family name of their own.
-    const withoutCodeSamples = componentStyles.replace(/\.ai-code-block\s*\{[^}]*\}/g, '')
+    // Typography contract (base.css): ordinary interface rules use the root token, a semantic role
+    // alias, or inherit. The single non-UI exception is --font-code, used only by the AI code block.
+    const rules = [...componentStyles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .map(([, selector = '', body = '']) => ({ selector: selector.trim(), body }))
     const allowedGlobalFamily = /^(?:inherit|var\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\s*\))$/i
-    const fontFamilyDeclarations = [...withoutCodeSamples.matchAll(/(?<![-\w])font-family\s*:\s*([^;}]+)/gi)]
+    const fontFamilyDeclarations = rules.flatMap(({ selector, body }) =>
+      [...body.matchAll(/(?<![-\w])font-family\s*:\s*([^;}]+)/gi)].map(([, value]) => ({ selector, value: value?.trim() ?? '' })))
     const nonGlobalFamilies = fontFamilyDeclarations
-      .map(([, value]) => value?.trim() ?? '')
-      .filter(value => !allowedGlobalFamily.test(value))
-    const fontShorthands = [...withoutCodeSamples.matchAll(/(?<![-\w])font\s*:\s*([^;}]+)/gi)]
+      .filter(({ value }) => !allowedGlobalFamily.test(value))
+      .map(({ selector, value }) => `${selector} { font-family: ${value} }`)
+    const fontShorthands = rules.flatMap(({ selector, body }) =>
+      [...body.matchAll(/(?<![-\w])font\s*:\s*([^;}]+)/gi)].map(([, value]) => ({ selector, value: value?.trim() ?? '' })))
     const unscopedShorthands = fontShorthands
-      .map(([, value]) => value?.trim() ?? '')
-      .filter(value => !/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(value))
-      .filter(value => !/\bvar\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\b/i.test(value))
+      .filter(({ value }) => !/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(value))
+      .filter(({ value }) => !/\bvar\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\b/i.test(value))
+      .filter(({ selector, value }) => !(selector === '.ai-code-block' && /\bvar\(\s*--font-code\s*\)/.test(value)))
+      .map(({ selector, value }) => `${selector} { font: ${value} }`)
+    const literalMonospace = [...fontFamilyDeclarations, ...fontShorthands]
+      .filter(({ value }) => /\b(?:ui-monospace|SFMono-Regular|Menlo|Consolas|Courier(?: New)?|monospace)\b/i.test(value))
+    const codeTokenRules = rules.filter(({ body }) => /var\(\s*--font-code\s*\)/.test(body)).map(({ selector }) => selector)
+    const importantFonts = [...componentStyles.matchAll(/(?<![-\w])font(?:-family)?\s*:[^;}]*!important/gi)].map(([match]) => match)
     const inlineFontAssignments = sourceFiles(sourceDir)
       .filter(file => /\.tsx?$/.test(file))
       .flatMap(file => [...readFileSync(file, 'utf8').matchAll(/\bfontFamily\s*:\s*([^,}\]]+)/g)])
@@ -167,6 +175,13 @@ describe('responsive layout contract', () => {
 
     expect(nonGlobalFamilies).toEqual([])
     expect(unscopedShorthands).toEqual([])
+    expect(literalMonospace).toEqual([])
+    expect(importantFonts).toEqual([])
+    // The monospace token is reachable from exactly one rule, the AI code block, and that block's <code>
+    // inherits it instead of falling back to the browser's own monospace face.
+    expect(codeTokenRules).toEqual(['.ai-code-block'])
+    expect(componentStyles).toMatch(/\.ai-code-block code\s*\{\s*font:\s*inherit;?\s*\}/)
+    expect(base).toContain('--font-code: ui-monospace, SFMono-Regular, Menlo, monospace;')
     expect(unapprovedInlineFamilies).toEqual([])
     // Only font samples preview candidates; other inline families must use the global token.
     expect(inlineFontAssignments.filter(value => value === 'option.stack')).toHaveLength(2)

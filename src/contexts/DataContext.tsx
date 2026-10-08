@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { Table } from 'dexie'
 import { defaultExamTracks, defaultSettings, normalizeSettings, seedChapters } from '../lib/defaults'
 import { assetKey, localDb } from '../lib/database'
 import { createId } from '../lib/id'
@@ -27,6 +28,8 @@ interface DataContextValue {
   refresh: () => Promise<void>
   upsert: <T extends TableName>(table: T, record: RecordFor<T>) => Promise<void>
   upsertMany: <T extends TableName>(table: T, records: RecordFor<T>[]) => Promise<void>
+  /** The only read-modify-write path for the account's app_settings row. Resolves to the saved row. */
+  updateSettings: (mutate: (current: AppSettings) => AppSettings) => Promise<AppSettings>
   mergeImportedData: (collections: ImportCollections) => Promise<void>
   remove: <T extends TableName>(table: T, record: RecordFor<T>, options?: { undo?: boolean }) => Promise<void>
   undoDelete: () => Promise<void>
@@ -167,6 +170,13 @@ function withOwner(table: TableName, row: Record<string, unknown>, userId: strin
   if (table === 'profiles' || table === 'app_settings') record.id = userId
   if (!record.created_at) record.created_at = now
   return record
+}
+
+/** Insert a row only if none exists yet, so an older snapshot never replaces a row a newer write has changed. */
+async function putIfMissing<T extends { id: string }>(table: Table<T, string>, row: T): Promise<void> {
+  await localDb.transaction('rw', table, async () => {
+    if (!(await table.get(row.id))) await table.put(row)
+  })
 }
 
 async function uploadPendingImage(record: Record<string, unknown>, userId: string): Promise<Record<string, unknown>> {
@@ -394,12 +404,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const settings = cached.settings ?? defaultSettings(userId, profile.display_name)
         const chapters = cached.chapters.length ? cached.chapters : seedChapters(userId)
         const examTracks = cached.examTracks.length ? cached.examTracks : defaultExamTracks(userId)
+        // This snapshot can be older than writes that land while the load is in flight (a Settings save,
+        // the header theme switch). Fill in only the rows that are missing, and merge into the latest
+        // cache, so the load can never write an old settings or profile row back over a newer one.
         await Promise.all([
-          localDb.profiles.put(profile), localDb.app_settings.put(settings),
+          putIfMissing(localDb.profiles, profile), putIfMissing(localDb.app_settings, settings),
           cached.chapters.length ? Promise.resolve() : localDb.chapters.bulkPut(chapters),
           cached.examTracks.length ? Promise.resolve() : localDb.user_exam_tracks.bulkPut(examTracks)
         ])
-        queryClient.setQueryData<AppData>(['stracker-data', userId], { ...cached, profile, settings, chapters, examTracks })
+        queryClient.setQueryData<AppData>(['stracker-data', userId], current => {
+          const base = current ?? cached
+          return {
+            ...base,
+            profile: base.profile ?? profile,
+            settings: base.settings ?? settings,
+            chapters: base.chapters.length ? base.chapters : chapters,
+            examTracks: base.examTracks.length ? base.examTracks : examTracks
+          }
+        })
         setSyncState('local')
       } else void refresh()
     }
@@ -471,6 +493,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [userId, user, setData, queueChanges, updatePending])
 
   const upsert = useCallback(async <T extends TableName>(table: T, record: RecordFor<T>) => upsertMany(table, [record]), [upsertMany])
+
+  // Every app_settings write (Settings saves and the header theme switch) runs through this queue.
+  // Each mutation is built from the row as the previous write committed, not from a render
+  // snapshot, so two writers can never overwrite each other's fields with a stale copy.
+  const settingsWrites = useRef<Promise<unknown>>(Promise.resolve())
+  const updateSettings = useCallback((mutate: (current: AppSettings) => AppSettings): Promise<AppSettings> => {
+    if (!userId) return Promise.reject(new Error('Sign in to save settings.'))
+    const key = ['stracker-data', userId] as const
+    const write = settingsWrites.current.then(async () => {
+      // Wait for this account's snapshot. ensureQueryData returns the cache once it is loaded and otherwise
+      // joins the load already in flight, so a mutation is never built from defaults while the saved row
+      // is still on its way from IndexedDB.
+      const loaded = await queryClient.ensureQueryData<AppData>({ queryKey: key, queryFn: () => readLocal(userId), staleTime: Infinity })
+      await upsertMany('app_settings', [mutate(loaded.settings)])
+      // upsertMany commits the row to the query cache before any cloud round trip, so this is the saved row.
+      return queryClient.getQueryData<AppData>(key)?.settings ?? loaded.settings
+    })
+    settingsWrites.current = write.catch(() => undefined)
+    return write
+  }, [queryClient, userId, upsertMany])
 
   const mergeImportedData = useCallback(async (collections: ImportCollections) => {
     if (!userId) throw new Error('Sign in to import a backup.')
@@ -670,8 +712,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const data = queryData ?? emptyData(userId)
   const value = useMemo<DataContextValue>(() => ({
     data, loading: query.isLoading, syncState, pendingCount, syncError, refresh,
-    upsert, upsertMany, mergeImportedData, remove, undoDelete, undoAvailable, dismissUndo, saveImage
-  }), [data, query.isLoading, syncState, pendingCount, syncError, refresh, upsert, upsertMany, mergeImportedData, remove, undoDelete, undoAvailable, dismissUndo, saveImage])
+    upsert, upsertMany, updateSettings, mergeImportedData, remove, undoDelete, undoAvailable, dismissUndo, saveImage
+  }), [data, query.isLoading, syncState, pendingCount, syncError, refresh, upsert, upsertMany, updateSettings, mergeImportedData, remove, undoDelete, undoAvailable, dismissUndo, saveImage])
   if (!user) return <>{children}</>
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }
