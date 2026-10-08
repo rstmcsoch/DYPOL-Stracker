@@ -98,6 +98,26 @@ Stracker AI is an optional, authenticated Vercel Node API that calls **your own*
 
 Conversation history, task status, and pending confirmations are stored in the signed-in account’s AI tables. Clearing an AI conversation does not alter study data. AI tool access is limited to canonical Stracker analytics and validated app actions—no user-provided SQL. The Vercel API uses the server-only Supabase service-role key only after verifying a user session; normal study-data operations use the authenticated user client and existing row ownership checks.
 
+#### Troubleshooting: “The secure AI backend is not configured for this deployment yet.”
+
+This message comes **only** from the deployed `/api/ai/*` functions (`api/_lib/supabase.ts` → `api/_lib/server-config.ts`) and means the serverless function environment is missing a server-only variable. It is **not** about your provider API key: a missing or invalid user key produces a different message (“`<Provider>` rejected the saved API key…”), and no provider configured at all produces “Connect and test an AI provider in Settings → AI Assistant…”.
+
+The functions require exactly four deployment-level variables (never per-user provider keys, never `VITE_`-prefixed secrets):
+
+- `SUPABASE_URL` (falls back to `VITE_SUPABASE_URL`)
+- `SUPABASE_ANON_KEY` (falls back to `VITE_SUPABASE_ANON_KEY`)
+- `SUPABASE_SERVICE_ROLE_KEY` — server-only; no fallback by design
+- `AI_CREDENTIALS_ENCRYPTION_KEY` — `openssl rand -hex 32`; encrypts stored provider keys at rest
+
+Diagnose the deployed backend directly — no guessing required:
+
+```
+GET https://YOUR_DEPLOYMENT/api/ai/health
+{"service":"stracker-ai","configured":false,"checks":{"supabaseServerConfig":false,"credentialEncryption":false},"reason":"supabase_server_config_missing","missing":["SUPABASE_URL","SUPABASE_ANON_KEY","SUPABASE_SERVICE_ROLE_KEY","AI_CREDENTIALS_ENCRYPTION_KEY"],"invalid":[]}
+```
+
+The response contains booleans, a normalized `reason` code, and the **names** of missing or malformed variables — never secret values. The same check runs automatically in Settings → AI Assistant, which shows a distinct banner when the backend is misconfigured, and a different one when no `/api/ai/*` functions answer at all (for example a Netlify-only static deploy or `npm run dev`). The function log also records a structured warning naming the missing variables. After adding or fixing variables, **redeploy**: Vercel functions only pick up environment-variable changes on a new deployment. When healthy, the endpoint returns `{"configured":true,...}`.
+
 ### Data and offline behavior
 
 Application records are keyed to the signed-in Supabase user and protected by row-level security. Mistake images are stored privately beneath that user's UUID path. The browser keeps an IndexedDB cache for responsive use and offline access; offline edits are queued and reconciled when connectivity returns. When the server has a newer `updated_at` value, the latest cloud version wins for that record. A local preview is a separate device-only mode, not a cloud backup.

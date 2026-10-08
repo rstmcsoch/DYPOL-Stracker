@@ -14,11 +14,14 @@ export interface ApiResponse extends ServerResponse {
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
-  constructor(status: number, code: string, message: string) {
+  /** Optional safe, normalized reason code (never a secret) exposed to the client. */
+  readonly reason?: string
+  constructor(status: number, code: string, message: string, options: { reason?: string } = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.reason = options.reason
   }
 }
 
@@ -59,11 +62,12 @@ export function methodNotAllowed(res: ApiResponse, allowed: string[]): void {
   sendJson(res, 405, { error: 'method_not_allowed', message: 'That AI request method is not supported.' })
 }
 
-export interface PublicErrorBody { error: string; message: string; reference?: string; code?: string; provider?: string | null; retryable?: boolean; fallbackEligible?: boolean }
+export interface PublicErrorBody { error: string; message: string; reference?: string; code?: string; provider?: string | null; retryable?: boolean; fallbackEligible?: boolean; reason?: string }
 
 export function publicError(error: unknown): { status: number; body: PublicErrorBody } {
   if (error instanceof ApiError) {
     const body: PublicErrorBody = { error: error.code, message: error.message }
+    if (error.reason) body.reason = error.reason
     // AI-specific details are added by AIError (see ai-errors.ts) without exposing provider payloads.
     const details = error as unknown as { aiCode?: string; provider?: string | null; retryable?: boolean; fallbackEligible?: boolean }
     if (details.aiCode) Object.assign(body, { code: details.aiCode, provider: details.provider ?? null, retryable: details.retryable ?? false, fallbackEligible: details.fallbackEligible ?? false })

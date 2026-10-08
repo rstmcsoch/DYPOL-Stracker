@@ -1,6 +1,8 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
 import type { ApiRequest } from './http.js'
 import { ApiError } from './http.js'
+import { supabaseServerConfig, type SupabaseServerConfig } from './server-config.js'
+import { logAIEvent } from './diagnostics.js'
 
 export interface AuthenticatedRequestContext {
   userId: string
@@ -9,14 +11,24 @@ export interface AuthenticatedRequestContext {
   adminClient: SupabaseClient
 }
 
-function supabaseEnvironment() {
-  const url = process.env.SUPABASE_URL?.trim() || process.env.VITE_SUPABASE_URL?.trim()
-  const anonKey = process.env.SUPABASE_ANON_KEY?.trim() || process.env.VITE_SUPABASE_ANON_KEY?.trim()
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
-  if (!url || !anonKey || !serviceRoleKey) {
-    throw new ApiError(503, 'backend_not_configured', 'The secure AI backend is not configured for this deployment yet.')
+/**
+ * Resolve the server-only Supabase configuration. This fails closed: when any server-only
+ * variable is missing or malformed, every AI function answers 503 backend_not_configured with
+ * the same safe public message. The precise missing variable NAMES are written to the server
+ * log (never values), and /api/ai/health reports the same diagnosis, so the administrator can
+ * see exactly what the deployment is missing without guessing.
+ */
+function supabaseEnvironment(): SupabaseServerConfig {
+  const resolved = supabaseServerConfig()
+  if (!resolved.ok) {
+    logAIEvent('warn', 'ai_backend_not_configured', {
+      reason: resolved.reason,
+      missing: resolved.missing.join(','),
+      invalid: resolved.invalid.join(',')
+    })
+    throw new ApiError(503, 'backend_not_configured', 'The secure AI backend is not configured for this deployment yet.', { reason: resolved.reason })
   }
-  return { url, anonKey, serviceRoleKey }
+  return resolved.config
 }
 
 export async function authenticateRequest(req: ApiRequest): Promise<AuthenticatedRequestContext> {
