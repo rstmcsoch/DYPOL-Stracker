@@ -1,37 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { z } from 'zod'
 import { ArrowDownWideNarrow, ArrowUpWideNarrow, CalendarDays, ChartNoAxesCombined, Eye, Filter, ListFilter, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, EmptyState, Field, NotebookCard, PageHeader, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
-import { testPercentage, getAccuracy, getAttemptRate } from '../lib/analytics'
+import { testPercentage, subjectPercentage, getAccuracy, getAttemptRate } from '../lib/analytics'
 import { fmtNumber } from '../lib/format'
 import { prettyDate, indiaToday } from '../lib/date'
 import { createId } from '../lib/id'
+import { MAX_MARKS_OBTAINED, MAX_NEGATIVE_MARKS, MAX_TOTAL_MARKS, POSTGRES_INTEGER_MAX, nullableNumberInput, subjectScoreInputSchema, testFormSchema } from '../lib/test-validation'
 import type { Subject, TestRecord, TestType, TestSubjectScore, TestChapterLink } from '../types'
 import { SUBJECTS } from '../types'
 
 const TEST_TYPES: TestType[] = ['Chapter Test', 'Subject Test', 'Full Mock', 'PYQ Practice']
-const testFormSchema = z.object({
-  title: z.string().trim().min(1, 'Test title is required.').max(160),
-  test_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a valid date.'),
-  test_type: z.enum(['Chapter Test', 'Subject Test', 'Full Mock', 'PYQ Practice']),
-  marks_obtained: z.number().nullable(),
-  total_marks: z.number().nullable(),
-  correct: z.number().int().nullable(),
-  wrong: z.number().int().nullable(),
-  skipped: z.number().int().nullable(),
-  negative_marks: z.number().nullable(),
-  time_minutes: z.number().int().nullable()
-}).superRefine((value, context) => {
-  if (value.marks_obtained != null && value.marks_obtained < 0) context.addIssue({ code: 'custom', path: ['marks_obtained'], message: 'Marks cannot be negative.' })
-  if (value.total_marks != null && value.total_marks <= 0) context.addIssue({ code: 'custom', path: ['total_marks'], message: 'Total marks must be greater than zero.' })
-  if (value.marks_obtained != null && value.total_marks == null) context.addIssue({ code: 'custom', path: ['total_marks'], message: 'Add a total to record a score.' })
-  if (value.marks_obtained != null && value.total_marks != null && value.marks_obtained > value.total_marks) context.addIssue({ code: 'custom', path: ['marks_obtained'], message: 'Marks obtained cannot exceed the total.' })
-  if (['correct','wrong','skipped','negative_marks','time_minutes'].some(key => Number(value[key as keyof typeof value]) < 0)) context.addIssue({ code: 'custom', message: 'Counts, time, and negative marks must be zero or more.' })
-})
-
 type SortKey = 'date' | 'score' | 'title'
 type TestFormValues = {
   title: string; test_date: string; test_type: TestType; subject: Subject | ''; chapter_id: string;
@@ -43,12 +24,6 @@ const blankValues = (): TestFormValues => ({
   correct: '', wrong: '', skipped: '', negative: '', time: '', notes: '',
   mockScores: { Physics: { marks: '', total: '' }, Chemistry: { marks: '', total: '' }, Maths: { marks: '', total: '' } }
 })
-
-function toNullableNumber(value: string): number | null {
-  if (value.trim() === '') return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 export default function TestsPage() {
   const { data, upsert, upsertMany, remove } = useData()
@@ -102,38 +77,83 @@ export default function TestsPage() {
   const saveTest = async (values: TestFormValues, current?: TestRecord) => {
     const parsed = testFormSchema.safeParse({
       title: values.title, test_date: values.test_date, test_type: values.test_type,
-      marks_obtained: toNullableNumber(values.marks), total_marks: toNullableNumber(values.total),
-      correct: toNullableNumber(values.correct), wrong: toNullableNumber(values.wrong), skipped: toNullableNumber(values.skipped),
-      negative_marks: toNullableNumber(values.negative), time_minutes: toNullableNumber(values.time)
+      marks_obtained: values.test_type === 'Full Mock' ? null : nullableNumberInput(values.marks),
+      total_marks: values.test_type === 'Full Mock' ? null : nullableNumberInput(values.total),
+      correct: nullableNumberInput(values.correct), wrong: nullableNumberInput(values.wrong), skipped: nullableNumberInput(values.skipped),
+      negative_marks: nullableNumberInput(values.negative), time_minutes: nullableNumberInput(values.time), notes: values.notes.trim()
     })
     if (!parsed.success) { notify(parsed.error.issues[0]?.message ?? 'Check the test fields.', 'error'); return }
-    if (values.test_type !== 'Full Mock' && (values.marks.trim() && !values.total.trim())) { notify('Add the total marks before recording a score.', 'error'); return }
+
+    const selectedChapter = values.chapter_id ? data.chapters.find(item => item.id === values.chapter_id) : null
+    if (values.chapter_id && (!selectedChapter || (values.subject && selectedChapter.subject !== values.subject))) {
+      notify('Choose a chapter that belongs to the selected subject.', 'error')
+      return
+    }
+
     const now = new Date().toISOString()
+    const oldScores = current ? data.testSubjectScores.filter(score => score.test_id === current.id) : []
+    const subjectScores: TestSubjectScore[] = []
+    if (values.test_type === 'Full Mock') {
+      for (const subject of SUBJECTS) {
+        const part = values.mockScores[subject]
+        const result = subjectScoreInputSchema.safeParse({
+          marks_obtained: nullableNumberInput(part.marks), total_marks: nullableNumberInput(part.total)
+        })
+        if (!result.success) {
+          notify(`${subject}: ${result.error.issues[0]?.message ?? 'Check the score and total.'}`, 'error')
+          return
+        }
+        const { marks_obtained, total_marks } = result.data
+        if (marks_obtained !== null || total_marks !== null) {
+          const existing = oldScores.find(score => score.subject === subject)
+          subjectScores.push({
+            id: existing?.id ?? createId(), test_id: current?.id ?? '', subject, marks_obtained, total_marks,
+            created_at: existing?.created_at ?? now, updated_at: now
+          })
+        }
+      }
+    }
+
+    const completeMock = values.test_type === 'Full Mock' && SUBJECTS.every(subject => {
+      const score = subjectScores.find(item => item.subject === subject)
+      return score?.marks_obtained != null && score.total_marks != null
+    })
+    const hasAnyMockScore = subjectScores.length > 0 || oldScores.length > 0
+    const retainLegacyMockScore = values.test_type === 'Full Mock' && current?.test_type === 'Full Mock' && !hasAnyMockScore
+    const mockMarks = completeMock ? subjectScores.reduce((sum, score) => sum + (score.marks_obtained ?? 0), 0) : null
+    const mockTotal = completeMock ? subjectScores.reduce((sum, score) => sum + (score.total_marks ?? 0), 0) : null
+    if (completeMock && mockMarks !== null && mockTotal !== null && (mockMarks > MAX_MARKS_OBTAINED || mockTotal > MAX_TOTAL_MARKS)) {
+      notify('Combined Full Mock marks exceed the supported total. Lower the subject totals before saving.', 'error')
+      return
+    }
     const test: TestRecord = {
-      id: current?.id ?? createId(), title: values.title.trim(), test_date: values.test_date, test_type: values.test_type,
-      subject: values.subject || null, chapter_id: values.chapter_id || null,
-      marks_obtained: toNullableNumber(values.marks), total_marks: toNullableNumber(values.total),
-      correct: toNullableNumber(values.correct), wrong: toNullableNumber(values.wrong), skipped: toNullableNumber(values.skipped),
-      negative_marks: toNullableNumber(values.negative), time_minutes: toNullableNumber(values.time), notes: values.notes.trim(),
+      id: current?.id ?? createId(), title: parsed.data.title, test_date: parsed.data.test_date, test_type: parsed.data.test_type,
+      subject: values.subject || selectedChapter?.subject || null, chapter_id: values.chapter_id || null,
+      marks_obtained: completeMock ? mockMarks : retainLegacyMockScore ? current?.marks_obtained ?? null : parsed.data.marks_obtained,
+      total_marks: completeMock ? mockTotal : retainLegacyMockScore ? current?.total_marks ?? null : parsed.data.total_marks,
+      correct: parsed.data.correct, wrong: parsed.data.wrong, skipped: parsed.data.skipped,
+      negative_marks: parsed.data.negative_marks, time_minutes: parsed.data.time_minutes, notes: parsed.data.notes,
       created_at: current?.created_at ?? now, updated_at: now
     }
+
+    const oldLinks = current ? data.testChapterLinks.filter(link => link.test_id === current.id) : []
+    const matchingLink = oldLinks.find(link => link.chapter_id === test.chapter_id)
+    const chapterLink: TestChapterLink | null = test.chapter_id ? {
+      id: matchingLink?.id ?? createId(), test_id: test.id, chapter_id: test.chapter_id,
+      marks_obtained: test.marks_obtained, total_marks: test.total_marks,
+      created_at: matchingLink?.created_at ?? now, updated_at: now
+    } : null
+
     try {
       await upsert('tests', test)
-      const oldScores = data.testSubjectScores.filter(score => score.test_id === test.id)
-      for (const score of oldScores) await remove('test_subject_scores', score)
-      const scores: TestSubjectScore[] = SUBJECTS.map(subject => {
-        const part = values.mockScores[subject]
-        return { id: createId(), test_id: test.id, subject, marks_obtained: toNullableNumber(part.marks), total_marks: toNullableNumber(part.total), created_at: now, updated_at: now }
-      }).filter(score => score.marks_obtained !== null || score.total_marks !== null)
-      if (scores.some(score => score.marks_obtained !== null && (!score.total_marks || score.total_marks <= 0 || score.marks_obtained > score.total_marks))) {
-        notify('Each mock subject score needs a positive total, and marks cannot exceed that total.', 'error'); return
+      const nextScores = subjectScores.map(score => ({ ...score, test_id: test.id }))
+      if (nextScores.length) await upsertMany('test_subject_scores', nextScores)
+      for (const score of oldScores) {
+        if (!nextScores.some(next => next.subject === score.subject)) await remove('test_subject_scores', score, { undo: false })
       }
-      if (scores.length) await upsertMany('test_subject_scores', scores)
-      const oldLinks = data.testChapterLinks.filter(link => link.test_id === test.id)
-      for (const link of oldLinks) await remove('test_chapter_links', link)
-      if (values.chapter_id) {
-        const link: TestChapterLink = { id: createId(), test_id: test.id, chapter_id: values.chapter_id, marks_obtained: test.marks_obtained, total_marks: test.total_marks, created_at: now, updated_at: now }
-        await upsert('test_chapter_links', link)
+      if (chapterLink) await upsert('test_chapter_links', chapterLink)
+      for (const link of oldLinks) {
+        if (link.id !== chapterLink?.id) await remove('test_chapter_links', link, { undo: false })
       }
       notify(current ? 'Test details updated.' : 'Test saved. Your history starts here.')
       setCreating(false); setEditing(null)
@@ -188,7 +208,7 @@ function TestRow({ test, onView, onEdit, onDelete }: { test: TestRecord; onView:
     <td data-label="Date"><span className="test-date-cell">{prettyDate(test.test_date, { day: 'numeric', month: 'short', year: '2-digit' })}</span></td>
     <td data-label="Test"><button className="test-title-button" onClick={onView}><strong>{test.title}</strong><span>{(chapter?.name ?? test.notes) || 'Open test details'}</span></button></td>
     <td data-label="Type / subject"><span className="test-type-label">{test.test_type}</span><SubjectBadge subject={test.subject} /></td>
-    <td data-label="Score"><div className="score-cell"><strong>{test.marks_obtained == null ? '—' : `${fmtNumber(test.marks_obtained, 1)} / ${fmtNumber(test.total_marks, 1)}`}</strong>{score !== null && <StatusBadge tone={score < 60 ? 'Weak' : score < 80 ? 'Okay' : 'Strong'}>{Math.round(score)}%</StatusBadge>}</div></td>
+    <td data-label="Score"><div className="score-cell"><strong>{test.marks_obtained == null ? '—' : `${fmtNumber(test.marks_obtained, 1)} / ${fmtNumber(test.total_marks, 1)}`}</strong>{score !== null && <StatusBadge tone={score < data.settings.weak_threshold ? 'Weak' : score <= data.settings.strong_threshold ? 'Okay' : 'Strong'}>{Math.round(score)}%</StatusBadge>}</div></td>
     <td data-label="Accuracy">{accuracy === null ? <span className="muted-dash">—</span> : `${accuracy}%`}<small>{test.correct ?? '—'} correct · {test.wrong ?? '—'} wrong</small></td>
     <td data-label="Actions"><div className="table-actions"><button onClick={onView} aria-label={`View ${test.title}`}><Eye size={15} /></button><button onClick={onEdit} aria-label={`Edit ${test.title}`}>Edit</button><button onClick={onDelete} aria-label={`Delete ${test.title}`}><Trash2 size={15} /></button></div></td>
   </tr>
@@ -212,15 +232,15 @@ function TestDialog({ initial, data, onClose, onSave }: { initial: TestRecord | 
   const patch = <K extends keyof TestFormValues>(key: K, value: TestFormValues[K]) => setValues(prev => ({ ...prev, [key]: value }))
   const patchScore = (subject: Subject, key: 'marks' | 'total', value: string) => setValues(prev => ({ ...prev, mockScores: { ...prev.mockScores, [subject]: { ...prev.mockScores[subject], [key]: value } } }))
   const chapterOptions = data.chapters.filter(chapter => !values.subject || chapter.subject === values.subject)
-  const handleSubmit = async (event: FormEvent) => { event.preventDefault(); setSaving(true); try { await onSave(values) } finally { setSaving(false) } }
+  const handleSubmit = async (event: FormEvent) => { event.preventDefault(); if (saving) return; setSaving(true); try { await onSave(values) } finally { setSaving(false) } }
   return <Dialog title={initial ? 'Edit test record' : 'Log a test'} subtitle="Record only what you know. Leave unknown values blank." onClose={onClose} className="test-dialog">
     <form className="form-stack" onSubmit={handleSubmit}>
       <div className="form-grid two"><Field label="Test title" required><input autoFocus required maxLength={160} value={values.title} onChange={event => patch('title', event.target.value)} placeholder="e.g. Electrostatics weekly test" /></Field><Field label="Date" required><input type="date" required value={values.test_date} onChange={event => patch('test_date', event.target.value)} /></Field></div>
       <div className="form-grid two"><Field label="Test type"><select value={values.test_type} onChange={event => patch('test_type', event.target.value as TestType)}>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field><Field label="Subject"><select value={values.subject} onChange={event => { patch('subject', event.target.value as Subject | ''); patch('chapter_id', '') }}><option value="">— choose subject —</option>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
       <Field label="Chapter (optional)"><select value={values.chapter_id} onChange={event => patch('chapter_id', event.target.value)}><option value="">— choose chapter —</option>{chapterOptions.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field>
-      {values.test_type === 'Full Mock' ? <div className="mock-score-section"><span className="field-label">Subject scores <small>(enter each result that you have)</small></span><div className="mock-score-grid">{SUBJECTS.map(subject => <div className={`mock-score-entry mock-${subject.toLowerCase()}`} key={subject}><SubjectBadge subject={subject} /><div><input type="number" min="0" step="0.5" aria-label={`${subject} marks`} placeholder="Marks" value={values.mockScores[subject].marks} onChange={event => patchScore(subject, 'marks', event.target.value)} /><span>/</span><input type="number" min="0.01" step="0.5" aria-label={`${subject} total marks`} placeholder="Total" value={values.mockScores[subject].total} onChange={event => patchScore(subject, 'total', event.target.value)} /></div></div>)}</div></div> : <div className="form-grid two"><Field label="Marks obtained"><input type="number" min="0" step="0.5" value={values.marks} onChange={event => patch('marks', event.target.value)} placeholder="Leave blank if unknown" /></Field><Field label="Total marks"><input type="number" min="0.01" step="0.5" value={values.total} onChange={event => patch('total', event.target.value)} placeholder="e.g. 120" /></Field></div>}
-      <div className="form-grid three"><Field label="Correct"><input type="number" min="0" step="1" value={values.correct} onChange={event => patch('correct', event.target.value)} placeholder="—" /></Field><Field label="Wrong"><input type="number" min="0" step="1" value={values.wrong} onChange={event => patch('wrong', event.target.value)} placeholder="—" /></Field><Field label="Skipped"><input type="number" min="0" step="1" value={values.skipped} onChange={event => patch('skipped', event.target.value)} placeholder="—" /></Field></div>
-      <div className="form-grid two"><Field label="Negative marks"><input type="number" min="0" step="0.25" value={values.negative} onChange={event => patch('negative', event.target.value)} placeholder="No estimate" /></Field><Field label="Time taken (minutes)"><input type="number" min="0" step="1" value={values.time} onChange={event => patch('time', event.target.value)} placeholder="Optional" /></Field></div>
+      {values.test_type === 'Full Mock' ? <div className="mock-score-section"><span className="field-label">Subject scores <small>(enter each result that you have)</small></span><div className="mock-score-grid">{SUBJECTS.map(subject => <div className={`mock-score-entry mock-${subject.toLowerCase()}`} key={subject}><SubjectBadge subject={subject} /><div><input type="number" min="0" max={values.mockScores[subject].total ? Math.min(MAX_MARKS_OBTAINED, Number(values.mockScores[subject].total) * 2) : MAX_MARKS_OBTAINED} step="0.5" aria-label={`${subject} marks`} placeholder="Marks" value={values.mockScores[subject].marks} onChange={event => patchScore(subject, 'marks', event.target.value)} /><span>/</span><input type="number" min="1" max={MAX_TOTAL_MARKS} step="1" aria-label={`${subject} total marks`} placeholder="Total" value={values.mockScores[subject].total} onChange={event => patchScore(subject, 'total', event.target.value)} /></div></div>)}</div></div> : <div className="form-grid two"><Field label="Marks obtained"><input type="number" min="0" max={values.total ? Math.min(MAX_MARKS_OBTAINED, Number(values.total) * 2) : MAX_MARKS_OBTAINED} step="0.5" value={values.marks} onChange={event => patch('marks', event.target.value)} placeholder="Leave blank if unknown" /></Field><Field label="Total marks"><input type="number" min="1" max={MAX_TOTAL_MARKS} step="1" value={values.total} onChange={event => patch('total', event.target.value)} placeholder="e.g. 120" /></Field></div>}
+      <div className="form-grid three"><Field label="Correct"><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.correct} onChange={event => patch('correct', event.target.value)} placeholder="—" /></Field><Field label="Wrong"><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.wrong} onChange={event => patch('wrong', event.target.value)} placeholder="—" /></Field><Field label="Skipped"><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.skipped} onChange={event => patch('skipped', event.target.value)} placeholder="—" /></Field></div>
+      <div className="form-grid two"><Field label="Negative marks"><input type="number" min="0" max={MAX_NEGATIVE_MARKS} step="0.25" value={values.negative} onChange={event => patch('negative', event.target.value)} placeholder="No estimate" /></Field><Field label="Time taken (minutes)"><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.time} onChange={event => patch('time', event.target.value)} placeholder="Optional" /></Field></div>
       <Field label="Notes"><textarea rows={3} maxLength={10000} value={values.notes} onChange={event => patch('notes', event.target.value)} placeholder="What felt easy? What deserves another look?" /></Field>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>{initial ? 'Save changes' : 'Save test'}</Button></div>
     </form>
@@ -233,7 +253,7 @@ function TestDetails({ test, onClose, onEdit }: { test: TestRecord; onClose: () 
   const scores = data.testSubjectScores.filter(score => score.test_id === test.id)
   return <Dialog title={test.title} subtitle={`${test.test_type} · ${prettyDate(test.test_date)}`} onClose={onClose}>
     <div className="test-detail-content"><div className="test-detail-badges"><SubjectBadge subject={test.subject} /><StatusBadge>{test.test_type}</StatusBadge>{chapter && <StatusBadge tone="muted">{chapter.name}</StatusBadge>}</div>
-      {scores.length > 0 ? <div className="mock-detail-grid">{scores.map(score => <div key={score.id}><SubjectBadge subject={score.subject} /><strong>{score.marks_obtained == null ? '—' : `${fmtNumber(score.marks_obtained, 1)} / ${fmtNumber(score.total_marks, 1)}`}</strong>{score.total_marks && score.marks_obtained != null && <small>{Math.round(score.marks_obtained / score.total_marks * 100)}%</small>}</div>)}</div> : <div className="detail-score-box"><strong>{test.marks_obtained == null ? 'Score not recorded' : `${fmtNumber(test.marks_obtained, 1)} / ${fmtNumber(test.total_marks, 1)}`}</strong><span>{testPercentage(test) == null ? 'No score percentage available' : `${Math.round(testPercentage(test) ?? 0)}% of total marks`}</span></div>}
+      {scores.length > 0 ? <div className="mock-detail-grid">{scores.map(score => <div key={score.id}><SubjectBadge subject={score.subject} /><strong>{score.marks_obtained == null ? '—' : `${fmtNumber(score.marks_obtained, 1)} / ${fmtNumber(score.total_marks, 1)}`}</strong>{subjectPercentage(score) !== null && <small>{Math.round(subjectPercentage(score) ?? 0)}%</small>}</div>)}</div> : <div className="detail-score-box"><strong>{test.marks_obtained == null ? 'Score not recorded' : `${fmtNumber(test.marks_obtained, 1)} / ${fmtNumber(test.total_marks, 1)}`}</strong><span>{testPercentage(test) == null ? 'No score percentage available' : `${Math.round(testPercentage(test) ?? 0)}% of total marks`}</span></div>}
       <div className="test-detail-facts">{[['Correct', test.correct], ['Wrong', test.wrong], ['Skipped', test.skipped], ['Negative marks', test.negative_marks], ['Time taken', test.time_minutes == null ? null : `${test.time_minutes} min`]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value ?? '—'}</strong></div>)}</div>
       {test.notes && <div className="test-detail-notes"><span className="eyebrow">AFTER-TEST NOTES</span><p>{test.notes}</p></div>}
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Close</Button><Button onClick={onEdit}>Edit record</Button></div>

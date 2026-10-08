@@ -47,26 +47,34 @@ export default function SyllabusPage() {
 
   const clearFilters = () => { setSearch(''); setSubjectFilter('all'); setStatusFilter('all'); setPriorityFilter('all'); setStrengthFilter('all'); setTestedFilter('all') }
 
+  const persistChapterStatus = async (next: Chapter, previous?: Chapter) => {
+    await upsert('chapters', next)
+    const wasComplete = previous?.status === 'Done' || previous?.status === 'Revised'
+    const isComplete = next.status === 'Done' || next.status === 'Revised'
+    const chapterRevisions = data.revisions.filter(revision => revision.chapter_id === next.id)
+    if (isComplete && (!wasComplete || chapterRevisions.length === 0)) {
+      const firstNumber = chapterRevisions.reduce((max, revision) => Math.max(max, revision.revision_number), 0) + 1
+      const now = new Date().toISOString()
+      await upsertMany('chapter_revisions', data.settings.revision_gaps.map((gap, index) => ({
+        id: createId(), chapter_id: next.id, revision_number: firstNumber + index,
+        due_on: plusDays(next.completed_on ?? indiaToday(), Math.max(1, gap)), completed_at: null, created_at: now, updated_at: now
+      })))
+    } else if (wasComplete && !isComplete) {
+      const pending = data.revisions.filter(revision => revision.chapter_id === next.id && !revision.completed_at)
+      for (const revision of pending) await remove('chapter_revisions', revision, { undo: false })
+    }
+  }
+
   const changeStatus = async (chapter: Chapter, status: ChapterStatus) => {
-    if (status === chapter.status) return
+    if (status === chapter.status || busy) return
     const now = new Date().toISOString()
     setBusy(chapter.id)
     try {
       const next: Chapter = { ...chapter, status, completed_on: status === 'Done' || status === 'Revised' ? chapter.completed_on ?? indiaToday() : null, updated_at: now }
-      await upsert('chapters', next)
-      if (status === 'Done' && chapter.status !== 'Done' && chapter.status !== 'Revised') {
-        const revisions = data.settings.revision_gaps.map((gap, index) => ({
-          id: createId(), chapter_id: chapter.id, revision_number: index + 1,
-          due_on: plusDays(indiaToday(), Math.max(1, gap)), completed_at: null,
-          created_at: now, updated_at: now
-        }))
-        await upsertMany('chapter_revisions', revisions)
-        notify(`${chapter.name} marked done. Your revision dates are in the diary.`)
-      } else if ((chapter.status === 'Done' || chapter.status === 'Revised') && status === 'Studying') {
-        const pending = data.revisions.filter(revision => revision.chapter_id === chapter.id && !revision.completed_at)
-        for (const revision of pending) await remove('chapter_revisions', revision)
-        notify(`${chapter.name} is back in progress.`)
-      } else notify(`Status updated for ${chapter.name}.`)
+      await persistChapterStatus(next, chapter)
+      if (status === 'Done' || status === 'Revised') notify(`${chapter.name} marked complete. Your revision dates are in the diary.`)
+      else if (chapter.status === 'Done' || chapter.status === 'Revised') notify(`${chapter.name} is back in progress.`)
+      else notify(`Status updated for ${chapter.name}.`)
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not update chapter. Retry.', 'error') }
     finally { setBusy(null) }
   }
@@ -104,17 +112,11 @@ export default function SyllabusPage() {
     if (!chapter.name.trim()) { notify('Chapter name is required.', 'error'); return }
     const sameName = data.chapters.some(item => item.id !== chapter.id && item.subject === chapter.subject && item.name.trim().toLowerCase() === chapter.name.trim().toLowerCase())
     if (sameName) { notify('That chapter already exists in this subject.', 'error'); return }
-    const position = chapter.position || data.chapters.filter(item => item.subject === chapter.subject).length
-    const next = { ...chapter, name: chapter.name.trim(), position, updated_at: new Date().toISOString() }
+    const previous = data.chapters.find(item => item.id === chapter.id)
+    const position = previous ? previous.position : data.chapters.filter(item => item.subject === chapter.subject).length
+    const next = { ...chapter, name: chapter.name.trim(), position, completed_on: chapter.status === 'Done' || chapter.status === 'Revised' ? chapter.completed_on ?? indiaToday() : null, updated_at: new Date().toISOString() }
     try {
-      await upsert('chapters', next)
-      if (chapter.status === 'Done' && !data.revisions.some(item => item.chapter_id === chapter.id)) {
-        const now = new Date().toISOString()
-        await upsertMany('chapter_revisions', data.settings.revision_gaps.map((gap, index) => ({
-          id: createId(), chapter_id: chapter.id, revision_number: index + 1,
-          due_on: plusDays(chapter.completed_on ?? indiaToday(), Math.max(1, gap)), completed_at: null, created_at: now, updated_at: now
-        })))
-      }
+      await persistChapterStatus(next, previous)
       notify('Chapter saved to your syllabus.')
       setEditing(null); setCreateSubject(null)
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not save chapter. Retry.', 'error') }

@@ -11,7 +11,7 @@ import { useToast } from '../contexts/ToastContext'
 import { getSmartTip, getStudyStreak, getTodayStudyMinutes } from '../lib/analytics'
 import { fmtDuration } from '../lib/format'
 import { indiaToday, prettyDate } from '../lib/date'
-import { SYLLABUS } from '../lib/syllabus'
+import { completeRevision as completeRevisionAction } from '../lib/revision-actions'
 import type { AppData, DailyTask, Revision, Subject } from '../types'
 
 export default function HomePage() {
@@ -28,7 +28,7 @@ export default function HomePage() {
   const progress = data.settings.daily_study_goal_minutes > 0 ? Math.min(100, todayMinutes / data.settings.daily_study_goal_minutes * 100) : 0
   const tip = getSmartTip(data)
   const completedChapters = data.chapters.filter(chapter => chapter.status === 'Done' || chapter.status === 'Revised').length
-  const totalChapters = Object.values(SYLLABUS).reduce((sum, names) => sum + names.length, 0)
+  const totalChapters = data.chapters.length
   const examDays = daysUntil(data.settings.advanced_exam_date)
   const mainDays = daysUntil(data.settings.main_exam_date)
 
@@ -43,10 +43,10 @@ export default function HomePage() {
     if (reordering) return
     const nextIndex = index + direction
     if (nextIndex < 0 || nextIndex >= todayTasks.length) return
-    setReordering(true)
     const first = todayTasks[index]
     const second = todayTasks[nextIndex]
     if (!first || !second) return
+    setReordering(true)
     const firstPosition = first.position
     try {
       await upsertMany('daily_tasks', [
@@ -110,11 +110,15 @@ export default function HomePage() {
           <div className="section-card-head"><div className="card-kicker"><span className="icon-tile green"><AlarmClock size={16} /></span> REVISION DESK</div><button className="text-link" onClick={() => navigate('/revision')}>Open <ArrowUpRight size={14} /></button></div>
           <div className="revision-summary"><strong>{dayRevisions.length}</strong><span>due now</span>{dayRevisions.length > 0 && <span className="revision-dot-mark">•</span>}</div>
           {dayRevisions.length === 0 ? <p className="revision-empty">Nothing due today. Keep that momentum going.</p> : <div className="revision-peek-list">{dayRevisions.slice(0, 3).map(revision => <RevisionPeek key={revision.id} revision={revision} data={data} onDone={async () => {
+            const chapter = data.chapters.find(item => item.id === revision.chapter_id)
             try {
-              await upsert('chapter_revisions', { ...revision, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-              const chapter = data.chapters.find(item => item.id === revision.chapter_id)
-              if (chapter && chapter.status === 'Done') await upsert('chapters', { ...chapter, status: 'Revised', updated_at: new Date().toISOString() })
-              notify('Revision marked complete. Well remembered.')
+              const completed = await completeRevisionAction(
+                revision, chapter,
+                records => upsertMany('chapter_revisions', records),
+                record => upsert('chapters', record),
+                { revisions: data.revisions, gaps: data.settings.revision_gaps, today }
+              )
+              if (completed) notify('Revision marked complete. Well remembered.')
             } catch (error) { notify(error instanceof Error ? error.message : 'Could not mark revision complete.', 'error') }
           }} />)}</div>}
         </NotebookCard>

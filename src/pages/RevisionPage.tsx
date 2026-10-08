@@ -3,11 +3,12 @@ import { AlarmClock, ArrowRight, CalendarClock, Check, CheckCheck, Clock3, Spark
 import { Button, EmptyState, NotebookCard, PageHeader, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
-import { indiaToday, plusDays, prettyDate } from '../lib/date'
+import { indiaDate, indiaToday, plusDays, prettyDate } from '../lib/date'
+import { completeRevision as completeRevisionAction } from '../lib/revision-actions'
 import type { Revision } from '../types'
 
 export default function RevisionPage() {
-  const { data, upsert } = useData()
+  const { data, upsert, upsertMany } = useData()
   const { notify } = useToast()
   const [showCompleted, setShowCompleted] = useState(false)
   const today = indiaToday()
@@ -20,16 +21,15 @@ export default function RevisionPage() {
 
   const complete = async (revision: Revision) => {
     const now = new Date().toISOString()
+    const chapter = data.chapters.find(item => item.id === revision.chapter_id)
     try {
-      await upsert('chapter_revisions', { ...revision, completed_at: now, updated_at: now })
-      const chapter = data.chapters.find(item => item.id === revision.chapter_id)
-      if (chapter && chapter.status === 'Done') await upsert('chapters', { ...chapter, status: 'Revised', updated_at: now })
-      const nextNo = revision.revision_number + 1
-      if (nextNo <= data.settings.revision_gaps.length && !data.revisions.some(item => item.chapter_id === revision.chapter_id && item.revision_number === nextNo)) {
-        const next: Revision = { id: crypto.randomUUID(), chapter_id: revision.chapter_id, revision_number: nextNo, due_on: plusDays(today, Math.max(1, data.settings.revision_gaps[nextNo - 1] ?? 7)), completed_at: null, created_at: now, updated_at: now }
-        await upsert('chapter_revisions', next)
-      }
-      notify('Revision done. Your memory just got a little stronger.')
+      const completed = await completeRevisionAction(
+        revision, chapter,
+        records => upsertMany('chapter_revisions', records),
+        record => upsert('chapters', record),
+        { revisions: data.revisions, gaps: data.settings.revision_gaps, today, now }
+      )
+      if (completed) notify('Revision done. Your memory just got a little stronger.')
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not mark revision complete.', 'error') }
   }
 
@@ -65,6 +65,6 @@ function RevisionRow({ revision, data, overdue = false, completed = false }: { r
   const chapter = data.chapters.find(item => item.id === revision.chapter_id)
   if (!chapter) return null
   return <div className={`revision-row-main ${overdue ? 'is-overdue' : ''} ${completed ? 'is-completed' : ''}`}>
-    <div className="revision-number-mark">{completed ? <Check size={16} /> : `R${revision.revision_number}`}</div><div className="revision-chapter-copy"><strong>{chapter.name}</strong><div><SubjectBadge subject={chapter.subject} /><span>{completed ? `Completed ${prettyDate(revision.completed_at?.slice(0, 10))}` : `Due ${prettyDate(revision.due_on)}`}</span>{overdue && <StatusBadge tone="weak">Overdue</StatusBadge>}</div></div>
+    <div className="revision-number-mark">{completed ? <Check size={16} /> : `R${revision.revision_number}`}</div><div className="revision-chapter-copy"><strong>{chapter.name}</strong><div><SubjectBadge subject={chapter.subject} /><span>{completed ? `Completed ${prettyDate(revision.completed_at ? indiaDate(revision.completed_at) : '')}` : `Due ${prettyDate(revision.due_on)}`}</span>{overdue && <StatusBadge tone="weak">Overdue</StatusBadge>}</div></div>
   </div>
 }

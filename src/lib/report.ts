@@ -2,8 +2,9 @@ import { format, parseISO } from 'date-fns'
 import { Document, Footer, HeadingLevel, ImageRun, PageBreak, PageNumber, Paragraph, Packer, Table, TableCell, TableRow, TextRun, WidthType, BorderStyle, AlignmentType } from 'docx'
 import { jsPDF } from 'jspdf'
 import { getChapterPerformance, getMistakeCounts, getSmartTip, getStudyStreak, getSubjectPerformance, testPercentage } from './analytics'
-import { indiaToday, prettyDate } from './date'
-import { fmtDuration, fmtNumber } from './format'
+import { indiaDate, indiaToday, prettyDate } from './date'
+import { makeStudyBars } from './study-aggregation'
+import { fmtDuration, fmtNumber, percent } from './format'
 import type { AppData, TestRecord } from '../types'
 import { SUBJECTS } from '../types'
 import { triggerDownload } from './backup'
@@ -23,20 +24,16 @@ function scopedData(data: AppData, from: string, to: string): AppData {
   const between = (date: string) => (!from || date >= from) && (!to || date <= to)
   const tests = data.tests.filter(test => between(test.test_date))
   const testIds = new Set(tests.map(test => test.id))
-  const mistakeIds = new Set(data.mistakes.filter(mistake => between(mistake.created_at.slice(0, 10))).map(mistake => mistake.id))
-  const sessions = data.sessions.filter(session => between(toIndiaDate(session.started_at)))
+  const mistakeIds = new Set(data.mistakes.filter(mistake => between(indiaDate(mistake.created_at))).map(mistake => mistake.id))
+  const sessions = data.sessions.filter(session => between(indiaDate(session.started_at)))
   return {
     ...data, tests, testSubjectScores: data.testSubjectScores.filter(item => testIds.has(item.test_id)),
     testChapterLinks: data.testChapterLinks.filter(item => testIds.has(item.test_id)),
     mistakes: data.mistakes.filter(item => mistakeIds.has(item.id)), sessions,
-    revisions: data.revisions.filter(item => (item.completed_at && between(toIndiaDate(item.completed_at))) || between(item.due_on))
+    revisions: data.revisions.filter(item => (item.completed_at && between(indiaDate(item.completed_at))) || between(item.due_on))
   }
 }
 
-function toIndiaDate(timestamp: string): string {
-  try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(timestamp)) }
-  catch { return timestamp.slice(0, 10) }
-}
 
 function overallTestPercent(test: TestRecord, data: AppData): number | null {
   const direct = testPercentage(test)
@@ -46,7 +43,7 @@ function overallTestPercent(test: TestRecord, data: AppData): number | null {
   if (scores.length !== 3 || !SUBJECTS.every(subject => scores.some(row => row.subject === subject && row.total_marks && row.marks_obtained != null))) return null
   const marks = scores.reduce((sum, score) => sum + (score.marks_obtained ?? 0), 0)
   const total = scores.reduce((sum, score) => sum + (score.total_marks ?? 0), 0)
-  return total > 0 ? marks / total * 100 : null
+  return percent(marks, total)
 }
 
 function overallTestMarks(test: TestRecord, data: AppData): { marks: number; total: number } | null {
@@ -81,13 +78,7 @@ function chartSvg(data: AppData, kind: 'trend' | 'hours', hoursEndDate = indiaTo
       plot = `<polyline points="${xy.map(point => `${point.x},${point.y}`).join(' ')}" fill="none" stroke="#5571a0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>${xy.map(point => `<circle cx="${point.x}" cy="${point.y}" r="9" fill="#f7f4ec" stroke="#5571a0" stroke-width="6"/><text x="${point.x}" y="${height - 27}" text-anchor="middle" font-size="16" fill="#736f63" font-family="Arial">${xml(point.date)}</text>`).join('')}`
     }
   } else {
-    const today = hoursEndDate
-    const bins: { date: string; hours: number }[] = []
-    for (let index = 13; index >= 0; index -= 1) {
-      const date = format(new Date(parseISO(`${today}T12:00:00`).getTime() - index * 86_400_000), 'yyyy-MM-dd')
-      const minutes = data.sessions.filter(session => toIndiaDate(session.started_at) === date).reduce((sum, session) => sum + session.duration_minutes, 0)
-      bins.push({ date, hours: minutes / 60 })
-    }
+    const bins = makeStudyBars(data.sessions, 'day', hoursEndDate)
     plot = bins.map((bin, index) => {
       const x = pad.left + index * (chartW / bins.length) + 7
       const barW = chartW / bins.length - 14

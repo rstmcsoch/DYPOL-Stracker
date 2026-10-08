@@ -13,7 +13,7 @@ import { useToast } from '../contexts/ToastContext'
 import { createBackup, testsToCsv, triggerDownload, validateBackupText, type ValidatedImport } from '../lib/backup'
 import { createDocxReport, createPdfReport, type ReportOptions, type ReportSections } from '../lib/report'
 import { supabase } from '../lib/supabase'
-import { prettyDate, indiaToday } from '../lib/date'
+import { indiaDate, prettyDate, indiaToday } from '../lib/date'
 import type { AppSettings, Mistake, Profile } from '../types'
 
 const sectionOptions: { key: keyof ReportSections; label: string; note: string }[] = [
@@ -29,7 +29,7 @@ const defaultSections: ReportSections = { summary: true, performance: true, chap
 const reportSchema = z.object({ from: z.string(), to: z.string() }).refine(value => !value.from || !value.to || value.from <= value.to, { message: 'Start date must be before end date.' })
 
 export default function BackupPage() {
-  const { data, upsert, upsertMany, saveImage } = useData()
+  const { data, upsert, mergeImportedData, saveImage } = useData()
   const { user } = useAuth()
   const { notify } = useToast()
   const queryClient = useQueryClient()
@@ -115,48 +115,49 @@ export default function BackupPage() {
   }
 
   const importBackup = async () => {
-    if (!importPreview?.backup || !confirmMerge) return
+    if (!importPreview?.backup || !confirmMerge || importing) return
     setImporting(true)
     const backup = importPreview.backup
     try {
-      if (backup.settings) {
-        const importedSettings = { ...(backup.settings as AppSettings), id: user?.id ?? data.settings.id, user_id: user?.id ?? data.settings.id, updated_at: new Date().toISOString() }
-        await upsert('app_settings', importedSettings)
-      }
-      if (backup.profile && user) {
-        const importedProfile: Profile = { ...(backup.profile as Profile), id: user.id, user_id: user.id, email: user.email, updated_at: new Date().toISOString() }
-        await upsert('profiles', importedProfile)
-      }
-      if (backup.chapters?.length) await upsertMany('chapters', backup.chapters as NonNullable<typeof backup.chapters>)
-      if (backup.tests?.length) await upsertMany('tests', backup.tests as NonNullable<typeof backup.tests>)
-      if (backup.revisions?.length) await upsertMany('chapter_revisions', backup.revisions as NonNullable<typeof backup.revisions>)
-      if (backup.testSubjectScores?.length) await upsertMany('test_subject_scores', backup.testSubjectScores as NonNullable<typeof backup.testSubjectScores>)
-      if (backup.testChapterLinks?.length) await upsertMany('test_chapter_links', backup.testChapterLinks as NonNullable<typeof backup.testChapterLinks>)
-      if (backup.tasks?.length) await upsertMany('daily_tasks', backup.tasks as NonNullable<typeof backup.tasks>)
-      if (backup.goals?.length) await upsertMany('weekly_goals', backup.goals as NonNullable<typeof backup.goals>)
-      if (backup.sessions?.length) await upsertMany('study_sessions', backup.sessions as NonNullable<typeof backup.sessions>)
-      if (backup.mistakes?.length) {
-        const restored: Mistake[] = []
-        for (const source of backup.mistakes as NonNullable<typeof backup.mistakes>) {
-          const mistake: Mistake = { ...source, image_path: null, image_preview: null, image_pending: false }
-          if (source.image_data?.startsWith('data:image/')) {
-            const image = dataUrlToFile(source.image_data, `${source.id}.webp`)
-            const uploaded = await saveImage(image)
-            mistake.image_path = uploaded.path
-            mistake.image_data = uploaded.dataUrl
-            mistake.image_preview = uploaded.dataUrl
-            mistake.image_pending = !uploaded.path && !user?.isLocal
-          }
-          restored.push(mistake)
+      const restored: Mistake[] = []
+      for (const source of backup.mistakes ?? []) {
+        const mistake: Mistake = { ...source, image_path: null, image_preview: null, image_pending: false }
+        if (source.image_data?.startsWith('data:image/')) {
+          const image = dataUrlToFile(source.image_data, `${source.id}.webp`)
+          const prepared = await saveImage(image)
+          mistake.image_path = prepared.path
+          mistake.image_data = prepared.dataUrl
+          mistake.image_preview = prepared.dataUrl
+          mistake.image_pending = !prepared.path && !user?.isLocal
         }
-        await upsertMany('mistakes', restored)
+        restored.push(mistake)
       }
+
+      const now = new Date().toISOString()
+      const ownerId = user?.id ?? data.settings.id
+      const importedSettings = backup.settings ? { ...(backup.settings as AppSettings), id: ownerId, user_id: ownerId, updated_at: now } : null
+      const importedProfile: Profile | null = backup.profile && user ? {
+        ...(backup.profile as Profile), id: user.id, user_id: user.id, email: user.email, updated_at: now
+      } : null
+
+      await mergeImportedData({
+        app_settings: importedSettings ? [importedSettings] : [],
+        profiles: importedProfile ? [importedProfile] : [],
+        chapters: backup.chapters ?? [], tests: backup.tests ?? [],
+        chapter_revisions: backup.revisions ?? [],
+        test_subject_scores: backup.testSubjectScores ?? [],
+        test_chapter_links: backup.testChapterLinks ?? [], mistakes: restored,
+        daily_tasks: backup.tasks ?? [], weekly_goals: backup.goals ?? [], study_sessions: backup.sessions ?? []
+      })
       queryClient.invalidateQueries({ queryKey: ['stracker-data'] })
-      notify(`Backup merged. ${Object.values(importPreview.counts).reduce((sum, count) => sum + count, 0)} valid records imported; ${importPreview.invalid.length} skipped.`)
+      const validCount = Object.values(importPreview.counts).reduce((sum, count) => sum + count, 0)
+      const syncNote = supabase && user && !user.isLocal ? ' Cloud sync is queued and will retry automatically.' : ''
+      notify(`Backup merged locally. ${validCount} valid records imported; ${importPreview.invalid.length} skipped.${syncNote}`)
       setImportPreview(null); setConfirmMerge(false); setImportFileName('')
-    } catch (error) { notify(error instanceof Error ? error.message : 'Import stopped before completion. Review the backup and try again.', 'error') }
+    } catch (error) { notify(error instanceof Error ? error.message : 'Could not finish the import. Check your notebook and sync status before retrying.', 'error') }
     finally { setImporting(false) }
   }
+
 
   const toggleSection = (key: keyof ReportSections) => setSections(current => ({ ...current, [key]: !current[key] }))
   const backupCount = Object.values(data).reduce((count, value) => count + (Array.isArray(value) ? value.length : 0), 0)
@@ -165,7 +166,7 @@ export default function BackupPage() {
     <PageHeader eyebrow="YOUR WORK, YOURS TO KEEP" title="Export & backup" subtitle="Portable copies for your data, report-ready summaries for your next review." doodle={<Archive size={19} />} />
     {reminderDue && <div className="backup-reminder" role="status"><span className="backup-reminder-icon"><ShieldCheck size={18} /></span><div><strong>{backupAge === null ? 'You haven’t made a backup yet.' : `Your last backup was ${backupAge} days ago.`}</strong><p>Export a private JSON backup to keep your study history safe.</p></div><Button size="sm" onClick={() => void exportJson()} loading={exporting === 'json'}><ArrowDownToLine size={15} /> Backup now</Button></div>}
 
-    <section className="backup-export-grid" aria-label="Data exports"><NotebookCard className="backup-export-card json-export-card"><div className="export-card-icon json-icon"><FileArchive size={20} /></div><StatusBadge tone="Strong">FULL BACKUP</StatusBadge><h2>JSON notebook backup</h2><p>Settings, syllabus, notes, tests, mistakes, revisions, tasks, goals, sessions and compressed images.</p><ul><li><CheckCircle2 size={14} /> All owner data in one file</li><li><CheckCircle2 size={14} /> Re-importable and relationship-aware</li><li><LockKeyhole size={14} /> Owner-scoped; no server secret included</li></ul><Button onClick={() => void exportJson()} loading={exporting === 'json'}><CloudDownload size={16} /> Download JSON backup</Button><span className="export-last-date">{data.settings.last_backup_at ? `Last JSON backup: ${prettyDate(data.settings.last_backup_at.slice(0,10))}` : 'No JSON backup recorded yet'}</span></NotebookCard>
+    <section className="backup-export-grid" aria-label="Data exports"><NotebookCard className="backup-export-card json-export-card"><div className="export-card-icon json-icon"><FileArchive size={20} /></div><StatusBadge tone="Strong">FULL BACKUP</StatusBadge><h2>JSON notebook backup</h2><p>Settings, syllabus, notes, tests, mistakes, revisions, tasks, goals, sessions and compressed images.</p><ul><li><CheckCircle2 size={14} /> All owner data in one file</li><li><CheckCircle2 size={14} /> Re-importable and relationship-aware</li><li><LockKeyhole size={14} /> Owner-scoped; no server secret included</li></ul><Button onClick={() => void exportJson()} loading={exporting === 'json'}><CloudDownload size={16} /> Download JSON backup</Button><span className="export-last-date">{data.settings.last_backup_at ? `Last JSON backup: ${prettyDate(indiaDate(data.settings.last_backup_at))}` : 'No JSON backup recorded yet'}</span></NotebookCard>
       <NotebookCard className="backup-export-card csv-export-card"><div className="export-card-icon csv-icon"><FileSpreadsheet size={20} /></div><StatusBadge tone="Okay">SPREADSHEET READY</StatusBadge><h2>Test history CSV</h2><p>A clean, UTF-8 CSV for Excel or Google Sheets, including score, accuracy fields, notes and mock subject marks.</p><ul><li><CheckCircle2 size={14} /> Excel-friendly UTF-8 BOM</li><li><CheckCircle2 size={14} /> Optional date range</li><li><CheckCircle2 size={14} /> No invented percentages</li></ul><Button variant="secondary" onClick={exportCsv} loading={exporting === 'csv'}><ArrowDownToLine size={16} /> Export test CSV</Button><span className="export-last-date">{data.tests.length} test record{data.tests.length === 1 ? '' : 's'} in this notebook</span></NotebookCard></section>
 
     <NotebookCard className="report-builder-card"><div className="report-builder-header"><div className="report-builder-icon"><Printer size={20} /></div><div><span className="eyebrow">A POLISHED REVIEW, ON PAPER</span><h2>Build a study report</h2><p>Choose the time window and sections. Charts are rendered at high resolution from saved data.</p></div><span className="report-pencil" aria-hidden="true">✎</span></div>

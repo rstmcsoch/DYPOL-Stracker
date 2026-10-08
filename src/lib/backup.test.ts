@@ -70,6 +70,25 @@ describe('JSON backup', () => {
     expect(preview.invalid[0]?.collection).toBe('revisions')
   })
 
+  it('filters imported subject and chapter scores that violate paired-score and bonus-point rules', () => {
+    const backup = createBackup(emptyData())
+    backup.chapters = [sampleChapter()]
+    backup.tests = [sampleTest()]
+    backup.testSubjectScores = [{
+      id: '70000000-0000-4000-8000-000000000001', created_at: now, updated_at: now,
+      test_id: testId, subject: 'Physics', marks_obtained: 10, total_marks: null
+    }]
+    backup.testChapterLinks = [{
+      id: '80000000-0000-4000-8000-000000000001', created_at: now, updated_at: now,
+      test_id: testId, chapter_id: chapterId, marks_obtained: 41, total_marks: 20
+    }]
+
+    const preview = validateBackupText(JSON.stringify(backup), emptyData())
+    expect(preview.backup.testSubjectScores).toHaveLength(0)
+    expect(preview.backup.testChapterLinks).toHaveLength(0)
+    expect(preview.invalid.map(item => item.collection)).toEqual(expect.arrayContaining(['testSubjectScores', 'testChapterLinks']))
+  })
+
   it('skips a test whose linked chapter is absent and keeps preview counts accurate', () => {
     const backup = createBackup(emptyData())
     backup.tests = [{ ...sampleTest(), chapter_id: '70000000-0000-4000-8000-000000000001' }]
@@ -77,6 +96,29 @@ describe('JSON backup', () => {
     expect(preview.backup.tests).toHaveLength(0)
     expect(preview.counts.tests).toBe(0)
     expect(preview.invalid[0]?.collection).toBe('tests')
+  })
+
+  it('preflights unique composite relationships and rejects fractional count goals', () => {
+    const current = emptyData()
+    current.chapters = [{ ...sampleChapter(), id: '10000000-0000-4000-8000-000000000002' }]
+    const backup = createBackup(emptyData())
+    backup.chapters = [sampleChapter()]
+    const revision: Revision = {
+      id: '50000000-0000-4000-8000-000000000001', created_at: now, updated_at: now,
+      chapter_id: current.chapters[0]!.id, revision_number: 1, due_on: '2026-10-08', completed_at: null
+    }
+    backup.revisions = [revision, { ...revision, id: '50000000-0000-4000-8000-000000000002' }]
+    backup.goals = [{
+      id: '80000000-0000-4000-8000-000000000001', created_at: now, updated_at: now,
+      goal_type: 'tests', title: 'Practice tests', target: 2.5, progress_value: 0,
+      week_start: '2026-10-05', unit: 'tests'
+    }]
+
+    const preview = validateBackupText(JSON.stringify(backup), current)
+    expect(preview.backup.chapters).toHaveLength(0)
+    expect(preview.backup.revisions).toHaveLength(1)
+    expect(preview.backup.goals).toHaveLength(0)
+    expect(preview.invalid.map(item => item.collection)).toEqual(expect.arrayContaining(['chapters', 'revisions', 'goals']))
   })
 
   it('warns when an older backup points to an image that is not embedded', () => {

@@ -2,11 +2,19 @@ import { addDays, format, parseISO } from 'date-fns'
 
 export const INDIA_TIME_ZONE = 'Asia/Kolkata'
 
-export function indiaToday(): string {
-  return new Intl.DateTimeFormat('en-CA', {
+export function indiaDate(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return typeof value === 'string' ? value.slice(0, 10) : ''
+  const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: INDIA_TIME_ZONE,
     year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(new Date())
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+export function indiaToday(): string {
+  return indiaDate(new Date())
 }
 
 export function dateOnly(value: Date | string): string {

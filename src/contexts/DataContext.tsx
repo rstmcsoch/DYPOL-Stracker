@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { defaultSettings, seedChapters } from '../lib/defaults'
 import { assetKey, localDb } from '../lib/database'
 import { createId } from '../lib/id'
+import { relatedRowsForRemoval } from '../lib/data-relations'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type {
@@ -12,7 +13,9 @@ import type {
 } from '../types'
 
 export type SyncState = 'loading' | 'syncing' | 'synced' | 'offline' | 'local' | 'error'
-interface UndoEntry { table: TableName; record: Record<string, unknown>; expiresAt: number }
+type ImportCollections = Partial<{ [T in TableName]: RecordFor<T>[] }>
+interface RelatedUndoEntry { table: TableName; record: Record<string, unknown>; remove: boolean }
+interface UndoEntry { table: TableName; record: Record<string, unknown>; related: RelatedUndoEntry[]; expiresAt: number }
 interface DataContextValue {
   data: AppData
   loading: boolean
@@ -22,7 +25,8 @@ interface DataContextValue {
   refresh: () => Promise<void>
   upsert: <T extends TableName>(table: T, record: RecordFor<T>) => Promise<void>
   upsertMany: <T extends TableName>(table: T, records: RecordFor<T>[]) => Promise<void>
-  remove: <T extends TableName>(table: T, record: RecordFor<T>) => Promise<void>
+  mergeImportedData: (collections: ImportCollections) => Promise<void>
+  remove: <T extends TableName>(table: T, record: RecordFor<T>, options?: { undo?: boolean }) => Promise<void>
   undoDelete: () => Promise<void>
   undoAvailable: boolean
   dismissUndo: () => void
@@ -77,6 +81,8 @@ function updateOne(data: AppData, table: TableName, row: Record<string, unknown>
   return replaceRows(data, table, [...current, row])
 }
 
+
+
 async function readLocal(userId: string): Promise<AppData> {
   const byUser = async (table: TableName) => (await localDb.table(table).where('user_id').equals(userId).toArray()) as Record<string, unknown>[]
   const [chapters, revisions, tests, subjectScores, chapterLinks, mistakes, tasks, goals, sessions, settings, profiles, assets] = await Promise.all([
@@ -108,8 +114,7 @@ function isNetworkError(error: unknown): boolean {
 }
 
 async function clearQueuedChange(userId: string, table: TableName, id: string): Promise<void> {
-  const queued = await localDb.sync_queue.where('[user_id+table+id]').equals([userId, table, id]).first()
-  if (queued?.queueId !== undefined) await localDb.sync_queue.delete(queued.queueId)
+  await localDb.sync_queue.where('[user_id+table+id]').equals([userId, table, id]).delete()
 }
 
 function cleanForCloud(row: Record<string, unknown>): Record<string, unknown> {
@@ -171,15 +176,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const queryDataRef = useRef(queryData)
   useEffect(() => { queryDataRef.current = queryData }, [queryData])
   const setData = useCallback((updater: (data: AppData) => AppData) => {
-    queryClient.setQueryData<AppData>(['stracker-data', userId], current => updater(current ?? emptyData(userId)))
+    const key = ['stracker-data', userId] as const
+    const next = updater(queryClient.getQueryData<AppData>(key) ?? emptyData(userId))
+    queryDataRef.current = next
+    queryClient.setQueryData<AppData>(key, next)
   }, [queryClient, userId])
   const updatePending = useCallback(async () => {
     if (userId) setPendingCount(await localDb.sync_queue.where('user_id').equals(userId).count())
   }, [userId])
-  const saveLocal = useCallback(async (table: TableName, record: Record<string, unknown>) => {
-    await localDb.table(table).put(record as object)
-    setData(current => updateOne(current, table, record))
-  }, [setData])
   const queueChanges = useCallback(async (changes: Omit<QueuedChange, 'queueId'>[]) => {
     for (const change of changes) {
       await clearQueuedChange(userId, change.table, change.id)
@@ -317,17 +321,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [userId, user, flushQueue, queryClient, updatePending])
 
   const finalizeDeleted = useCallback(async (entry: UndoEntry) => {
-    if (entry.table !== 'mistakes') return
-    const id = String(entry.record.id)
-    await localDb.assets.delete(assetKey(userId, id))
-    const path = typeof entry.record.image_path === 'string' ? entry.record.image_path : ''
-    if (!path || !supabase || user?.isLocal) return
-    try {
-      await queueChanges([{ user_id: userId, table: 'mistakes', operation: 'delete', id, record: { id, user_id: userId, image_path: path, image_previous_path: entry.record.image_previous_path }, queued_at: new Date().toISOString() }])
-      void refresh()
-    } catch {
-      setSyncState('error')
-      setSyncError('The mistake image could not be queued for cleanup. Retry sync when ready.')
+    const removedMistakes = [
+      ...(entry.table === 'mistakes' ? [entry.record] : []),
+      ...entry.related.filter(item => item.table === 'mistakes' && item.remove).map(item => item.record)
+    ]
+    if (!removedMistakes.length) return
+    const cleanup: Omit<QueuedChange, 'queueId'>[] = []
+    for (const mistake of removedMistakes) {
+      const id = String(mistake.id)
+      await localDb.assets.delete(assetKey(userId, id))
+      const paths = [mistake.image_path, mistake.image_previous_path].filter((path): path is string => typeof path === 'string' && path.length > 0)
+      if (paths.length && supabase && !user?.isLocal) cleanup.push({
+        user_id: userId, table: 'mistakes', operation: 'delete', id,
+        record: { id, user_id: userId, image_path: paths[0], image_previous_path: paths[1] }, queued_at: new Date().toISOString()
+      })
+    }
+    if (cleanup.length) {
+      try { await queueChanges(cleanup); void refresh() }
+      catch {
+        setSyncState('error')
+        setSyncError('A deleted mistake image could not be queued for cleanup. Retry sync when ready.')
+      }
     }
   }, [userId, user, queueChanges, refresh])
 
@@ -419,19 +433,97 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const upsert = useCallback(async <T extends TableName>(table: T, record: RecordFor<T>) => upsertMany(table, [record]), [upsertMany])
 
-  const remove = useCallback(async <T extends TableName>(table: T, input: RecordFor<T>) => {
+  const mergeImportedData = useCallback(async (collections: ImportCollections) => {
+    if (!userId) throw new Error('Sign in to import a backup.')
+    const recordsByTable = new Map<TableName, Record<string, unknown>[]>()
+    let sequence = 0
+    for (const table of TABLES) {
+      const inputs = collections[table] as RecordFor<typeof table>[] | undefined
+      if (!inputs?.length) continue
+      recordsByTable.set(table, inputs.map(input => withOwner(table, input as unknown as Record<string, unknown>, userId)))
+    }
+    const tables = TABLES.filter(table => recordsByTable.has(table))
+    const stores = [...tables.map(table => localDb.table(table)), localDb.sync_queue, localDb.assets]
+    await localDb.transaction('rw', stores, async () => {
+      for (const table of tables) {
+        const records = recordsByTable.get(table) ?? []
+        await localDb.table(table).bulkPut(records as object[])
+        if (table === 'mistakes') {
+          for (const record of records) {
+            const id = String(record.id)
+            if (typeof record.image_data === 'string' && record.image_data.startsWith('data:image/')) {
+              await localDb.assets.put({ id: assetKey(userId, id), mistake_id: id, user_id: userId, data_url: record.image_data, updated_at: new Date().toISOString() })
+            } else if (!record.image_path && !record.image_data) await localDb.assets.delete(assetKey(userId, id))
+          }
+        }
+        if (supabase && !user?.isLocal) {
+          for (const record of records) {
+            const id = String(record.id)
+            await clearQueuedChange(userId, table, id)
+            await localDb.sync_queue.add({
+              user_id: userId, table, operation: 'upsert', id, record,
+              queued_at: new Date(Date.now() + sequence++).toISOString()
+            })
+          }
+        }
+      }
+    })
+    setData(current => {
+      let next = current
+      for (const table of tables) {
+        next = (recordsByTable.get(table) ?? []).reduce((value, row) => updateOne(value, table, row), next)
+      }
+      return next
+    })
+    if (supabase && !user?.isLocal) {
+      if (navigator.onLine) { setSyncState('syncing'); setSyncError(null); void refresh() }
+      else { setSyncState('offline'); setSyncError('Imported records are safe on this device and will sync when you reconnect.') }
+    } else setSyncState('local')
+    await updatePending()
+  }, [userId, user, setData, refresh, updatePending])
+
+  const remove = useCallback(async <T extends TableName>(table: T, input: RecordFor<T>, options: { undo?: boolean } = {}) => {
     if (!userId) throw new Error('Sign in to remove records.')
     const record: Record<string, unknown> = { ...(input as unknown as Record<string, unknown>), user_id: userId }
     const id = String(record.id)
-    const previousUndo = undoRef.current
-    if (previousUndo) void finalizeDeleted(previousUndo)
-    undoRef.current = { table, record, expiresAt: Date.now() + 8000 }
-    setUndoVersion(version => version + 1)
-    setUndoAvailable(true)
-    await localDb.table(table).delete(id)
-    await clearQueuedChange(userId, table, id)
-    setData(current => replaceRows(current, table, rowsFor(current, table).filter(row => row.id !== id)))
-    const imageQueueRecord = table === 'mistakes' ? { id, user_id: userId, image_path: record.image_path, image_previous_path: record.image_previous_path } : undefined
+    const previousData = queryDataRef.current ?? emptyData(userId)
+    const relatedChanges = relatedRowsForRemoval(previousData, table, id)
+    const entry: UndoEntry = {
+      table, record,
+      related: relatedChanges.map(change => ({ table: change.table, record: change.record, remove: change.next === null })),
+      expiresAt: Date.now() + 8000
+    }
+    const localTables = [...new Set([localDb.table(table), ...relatedChanges.map(change => localDb.table(change.table)), localDb.sync_queue])]
+    await localDb.transaction('rw', localTables, async () => {
+      await localDb.table(table).delete(id)
+      for (const change of relatedChanges) {
+        await clearQueuedChange(userId, change.table, String(change.record.id))
+        if (change.next) await localDb.table(change.table).put(change.next as object)
+        else await localDb.table(change.table).delete(String(change.record.id))
+      }
+      await clearQueuedChange(userId, table, id)
+    })
+    setData(current => {
+      let next = replaceRows(current, table, rowsFor(current, table).filter(row => row.id !== id))
+      for (const change of relatedChanges) {
+        if (change.next) next = updateOne(next, change.table, change.next)
+        else next = replaceRows(next, change.table, rowsFor(next, change.table).filter(row => row.id !== change.record.id))
+      }
+      return next
+    })
+
+    if (options.undo !== false) {
+      const previousUndo = undoRef.current
+      if (previousUndo) void finalizeDeleted(previousUndo)
+      if (undoTimeout.current) clearTimeout(undoTimeout.current)
+      undoRef.current = entry
+      setUndoVersion(version => version + 1)
+      setUndoAvailable(true)
+    }
+
+    const imageQueueRecord = table === 'mistakes' ? {
+      id, user_id: userId, image_path: record.image_path, image_previous_path: record.image_previous_path
+    } : undefined
     if (supabase && !user?.isLocal && navigator.onLine) {
       const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', userId)
       if (error) {
@@ -443,6 +535,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       await queueChanges([{ user_id: userId, table, operation: 'delete', id, record: imageQueueRecord, queued_at: new Date().toISOString() }])
       setSyncState('offline')
     } else setSyncState('local')
+
+    if (options.undo === false) await finalizeDeleted(entry)
     await updatePending()
   }, [userId, user, setData, queueChanges, updatePending, finalizeDeleted])
 
@@ -450,17 +544,68 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const entry = undoRef.current
     if (!entry || Date.now() > entry.expiresAt) return
     if (undoTimeout.current) clearTimeout(undoTimeout.current)
-    await clearQueuedChange(userId, entry.table, String(entry.record.id))
-    const row: Record<string, unknown> = { ...entry.record, updated_at: new Date().toISOString() }
-    await saveLocal(entry.table, row)
-    if (supabase && !user?.isLocal && navigator.onLine) {
-      const { error } = await supabase.from(entry.table).upsert(cleanForCloud(row))
-      if (error) await queueChanges([{ user_id: userId, table: entry.table, operation: 'upsert', id: String(row.id), record: row, queued_at: new Date().toISOString() }])
-    } else if (supabase && !user?.isLocal) {
-      await queueChanges([{ user_id: userId, table: entry.table, operation: 'upsert', id: String(row.id), record: row, queued_at: new Date().toISOString() }])
+    undoTimeout.current = null
+    undoRef.current = null
+
+    const now = new Date().toISOString()
+    const restores: { table: TableName; record: Record<string, unknown> }[] = [
+      { table: entry.table, record: { ...entry.record, updated_at: now } },
+      ...entry.related.map(item => ({ table: item.table, record: { ...item.record, updated_at: now } }))
+    ]
+    const localTables = [...new Set([...restores.map(item => localDb.table(item.table)), localDb.sync_queue])]
+    try {
+      await localDb.transaction('rw', localTables, async () => {
+        for (const restore of restores) {
+          await clearQueuedChange(userId, restore.table, String(restore.record.id))
+          await localDb.table(restore.table).put(restore.record as object)
+        }
+      })
+    } catch (error) {
+      entry.expiresAt = Date.now() + 8000
+      undoRef.current = entry
+      setUndoVersion(version => version + 1)
+      setUndoAvailable(true)
+      throw error
     }
-    undoRef.current = null; setUndoAvailable(false); await updatePending()
-  }, [user, userId, saveLocal, queueChanges, updatePending])
+    setData(current => restores.reduce((next, restore) => updateOne(next, restore.table, restore.record), current))
+    setUndoAvailable(false)
+
+    for (const restore of restores) {
+      const id = String(restore.record.id)
+      if (!supabase || user?.isLocal) continue
+      let prepared = restore.record
+      if (navigator.onLine) {
+        try {
+          if (restore.table === 'mistakes') {
+            prepared = await uploadPendingImage(prepared, userId)
+            if (prepared !== restore.record) {
+              await localDb.mistakes.put(prepared as unknown as Mistake)
+              setData(current => updateOne(current, 'mistakes', prepared))
+            }
+          }
+          const { error } = await supabase.from(restore.table).upsert(cleanForCloud(prepared))
+          if (error) throw error
+          if (restore.table === 'mistakes' && 'image_previous_path' in prepared) {
+            const cleaned = await retirePreviousMistakeImage(prepared)
+            await localDb.mistakes.put(cleaned as unknown as Mistake)
+            setData(current => updateOne(current, 'mistakes', cleaned))
+          }
+        } catch (error) {
+          try {
+            await queueChanges([{ user_id: userId, table: restore.table, operation: 'upsert', id, record: prepared, queued_at: new Date().toISOString() }])
+            setSyncState(isNetworkError(error) ? 'offline' : 'error')
+            setSyncError('Undo is restored on this device; cloud sync is queued for retry.')
+          } catch {
+            setSyncState('error')
+            setSyncError('The undo is restored on this device, but could not be queued for cloud sync.')
+          }
+        }
+      } else {
+        await queueChanges([{ user_id: userId, table: restore.table, operation: 'upsert', id, record: prepared, queued_at: new Date().toISOString() }])
+      }
+    }
+    await updatePending()
+  }, [user, userId, setData, queueChanges, updatePending])
 
   const dismissUndo = useCallback(() => {
     if (undoTimeout.current) clearTimeout(undoTimeout.current)
@@ -479,8 +624,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const data = queryData ?? emptyData(userId)
   const value = useMemo<DataContextValue>(() => ({
     data, loading: query.isLoading, syncState, pendingCount, syncError, refresh,
-    upsert, upsertMany, remove, undoDelete, undoAvailable, dismissUndo, saveImage
-  }), [data, query.isLoading, syncState, pendingCount, syncError, refresh, upsert, upsertMany, remove, undoDelete, undoAvailable, dismissUndo, saveImage])
+    upsert, upsertMany, mergeImportedData, remove, undoDelete, undoAvailable, dismissUndo, saveImage
+  }), [data, query.isLoading, syncState, pendingCount, syncError, refresh, upsert, upsertMany, mergeImportedData, remove, undoDelete, undoAvailable, dismissUndo, saveImage])
   if (!user) return <>{children}</>
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

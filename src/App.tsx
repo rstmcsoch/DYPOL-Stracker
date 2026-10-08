@@ -52,8 +52,8 @@ function ProtectedApp() {
   const { user, loading } = useAuth()
   if (loading) return <AppLoading />
   if (!user) return <Navigate to="/login" replace />
-  return <DataProvider>
-    <FocusProvider>
+  return <DataProvider key={user.id}>
+    <FocusProvider key={user.id}>
       <ThemeSync />
       <AppFrame />
     </FocusProvider>
