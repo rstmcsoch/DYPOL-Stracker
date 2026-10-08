@@ -1,5 +1,6 @@
-import { Children, cloneElement, isValidElement, useEffect, useId, useRef, type FormEvent, type ReactElement, type ReactNode } from 'react'
-import { ArrowUpRight, Check, LoaderCircle, Sparkles, X } from 'lucide-react'
+import { Children, cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { ArrowUpRight, Check, LoaderCircle, MoreHorizontal, Sparkles, X } from 'lucide-react'
 import type { Subject } from '../types'
 
 export function Button({
@@ -150,6 +151,95 @@ export function ConfirmDialog({ title, message, confirmLabel = 'Delete', danger 
 
 export function SectionHeading({ title, note, action }: { title: string; note?: string; action?: ReactNode }) {
   return <div className="section-heading"><div><h2>{title}</h2>{note && <p>{note}</p>}</div>{action}</div>
+}
+
+export interface OverflowMenuItem {
+  id: string
+  label: string
+  icon?: ReactNode
+  danger?: boolean
+  disabled?: boolean
+  onSelect: () => void
+}
+
+/**
+ * Compact ⋯ overflow menu for row actions. Rendered in a portal with fixed
+ * coordinates so it is never clipped by a card, table, or the viewport edge, and it
+ * closes on outside taps, Escape, scroll, and after every action.
+ */
+export function OverflowMenu({ label, items, menuWidth = 216 }: { label: string; items: OverflowMenuItem[]; menuWidth?: number }) {
+  const [open, setOpen] = useState(false)
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    if (!open || !buttonRef.current) return
+    const rect = buttonRef.current.getBoundingClientRect()
+    const margin = 8
+    const estimatedHeight = items.length * 44 + 14
+    let top = rect.bottom + 6
+    // Flip above the trigger when there is no room below but there is above.
+    if (top + estimatedHeight > window.innerHeight - margin && rect.top - estimatedHeight - 6 > margin) {
+      top = Math.max(margin, rect.top - estimatedHeight - 6)
+    }
+    let left = rect.right - menuWidth
+    left = Math.min(Math.max(margin, left), window.innerWidth - menuWidth - margin)
+    setCoords({ top, left })
+  }, [open, items.length, menuWidth])
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as Node) || buttonRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { setOpen(false); buttonRef.current?.focus() } }
+    const onScrollOrResize = () => setOpen(false)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    const focusTimer = window.setTimeout(() => menuRef.current?.querySelector<HTMLElement>('button:not([disabled])')?.focus(), 20)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+      clearTimeout(focusTimer)
+    }
+  }, [open])
+
+  const runItem = (item: OverflowMenuItem) => {
+    setOpen(false)
+    buttonRef.current?.focus()
+    item.onSelect()
+  }
+
+  return <>
+    <button
+      ref={buttonRef}
+      type="button"
+      className={`overflow-trigger ${open ? 'open' : ''}`}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      aria-label={label}
+      title={label}
+      onClick={() => setOpen(value => !value)}
+    >
+      <MoreHorizontal size={18} strokeWidth={2.1} aria-hidden="true" />
+    </button>
+    {open && coords && createPortal(
+      <div ref={menuRef} className="overflow-menu" role="menu" aria-label={label} style={{ top: coords.top, left: coords.left, width: menuWidth }}>
+        {items.map(item => (
+          <button key={item.id} type="button" role="menuitem" className={item.danger ? 'overflow-danger' : ''} disabled={item.disabled} onClick={() => runItem(item)}>
+            {item.icon}<span>{item.label}</span>
+          </button>
+        ))}
+      </div>,
+      document.body
+    )}
+  </>
 }
 
 export function IllustrationNote({ children }: { children: ReactNode }) {

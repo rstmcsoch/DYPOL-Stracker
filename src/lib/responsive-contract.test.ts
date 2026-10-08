@@ -82,7 +82,7 @@ describe('responsive layout contract', () => {
       '.mistake-card-grid', '.backup-export-grid', '.report-section-grid', '.import-count-grid',
       '.theme-choice-grid', '.syllabus-progress-strip', '.mock-score-grid', '.mock-detail-grid',
       '.test-detail-facts', '.form-grid.two', '.form-grid.three', '.settings-owner-fields',
-      '.revision-two-column', '.untested-grid', '.focus-context-fields', '.skeleton-card-grid'
+      '.revision-two-column', '.untested-chip-row', '.focus-context-fields', '.skeleton-card-grid'
     ]
     for (const selector of intrinsic) {
       const escaped = selector.replace(/[.[\]>+]/g, character => `\\${character}`)
@@ -120,9 +120,14 @@ describe('responsive layout contract', () => {
       const family = option.stack.split(',')[0]!.trim()
       expect(rule, `${option.value} needs a data-font rule`).toContain(`--font-ui: ${family},`)
       expect(rule).toContain('--font-body: var(--font-ui);')
-      expect(rule).toContain('--font-heading: var(--font-ui);')
-      expect(rule).toContain('--font-label: var(--font-ui);')
+      // Handwriting headings and decorative labels are the Stracker personality and stay
+      // on their own faces in every mode; only the readable UI family is swappable.
+      expect(rule).not.toContain('--font-heading')
+      expect(rule).not.toContain('--font-label')
     }
+    // The readable default and the numeric role never fall back to a handwriting face.
+    expect(base).toContain("--font-ui: 'Poppins', 'Open Sans'")
+    expect(base).toContain('--font-number: var(--font-ui);')
     expect(INTERFACE_FONTS).toHaveLength(4)
   })
 

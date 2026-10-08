@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, ChevronDown, CircleDot, Edit3, Filter, GripVertical, Plus, Search, Trash2, X } from 'lucide-react'
-import { Button, ConfirmDialog, Dialog, EmptyState, Field, NotebookCard, PageHeader, ProgressBar, StatusBadge, SubjectBadge } from '../components/ui'
+import { Button, ConfirmDialog, Dialog, EmptyState, Field, NotebookCard, OverflowMenu, PageHeader, ProgressBar, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { getChapterPerformance } from '../lib/analytics'
@@ -29,8 +29,20 @@ export default function SyllabusPage() {
   const [deleteTarget, setDeleteTarget] = useState<Chapter | null>(null)
   const [deletingChapter, setDeletingChapter] = useState(false)
   const deletingChapterRef = useRef(false)
-  const [draggedId, setDraggedId] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  // Pointer-based drag reordering (touch and mouse), driven from the row's grip handle.
+  const [dragActiveId, setDragActiveId] = useState<string | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  const dropTargetRef = useRef<string | null>(null)
+  const dragRef = useRef<{ chapterId: string; pointerId: number; active: boolean; startX: number; startY: number } | null>(null)
+  const lastPointer = useRef({ x: 0, y: 0 })
+  const autoScrollRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    dropTargetRef.current = dropTargetId
+  }, [dropTargetId])
+
+  useEffect(() => () => { if (autoScrollRef.current !== null) cancelAnimationFrame(autoScrollRef.current) }, [])
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -96,10 +108,12 @@ export default function SyllabusPage() {
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not reorder chapter.', 'error') }
   }
 
-  const dropChapter = async (target: Chapter) => {
-    if (!draggedId || draggedId === target.id) return
+  /** Persist a new order for one subject: `draggedId` lands at `targetId`'s slot. */
+  const reorderChapters = useCallback(async (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return
     const dragged = data.chapters.find(item => item.id === draggedId)
-    if (!dragged || dragged.subject !== target.subject) { setDraggedId(null); return }
+    const target = data.chapters.find(item => item.id === targetId)
+    if (!dragged || !target || dragged.subject !== target.subject) return
     const ordered = data.chapters.filter(item => item.subject === target.subject).sort((a, b) => a.position - b.position)
     const from = ordered.findIndex(item => item.id === dragged.id)
     const to = ordered.findIndex(item => item.id === target.id)
@@ -107,7 +121,73 @@ export default function SyllabusPage() {
     if (moved) ordered.splice(to, 0, moved)
     try { await upsertMany('chapters', ordered.map((item, position) => ({ ...item, position, updated_at: new Date().toISOString() }))) }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not reorder chapter.', 'error') }
-    setDraggedId(null)
+  }, [data.chapters, notify, upsertMany])
+
+  const updateDropTarget = useCallback((x: number, y: number) => {
+    const state = dragRef.current
+    if (!state?.active) return
+    const element = document.elementFromPoint(x, y)?.closest('[data-chapter-row]')
+    const id = element?.getAttribute('data-chapter-row')
+    const target = id ? data.chapters.find(item => item.id === id) ?? null : null
+    const dragged = data.chapters.find(item => item.id === state.chapterId)
+    const valid = target && dragged && target.subject === dragged.subject && target.id !== dragged.id
+    setDropTargetId(valid ? target.id : null)
+  }, [data.chapters])
+
+  const beginChapterDrag = (event: React.PointerEvent, chapter: Chapter) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    dragRef.current = { chapterId: chapter.id, pointerId: event.pointerId, active: false, startX: event.clientX, startY: event.clientY }
+    lastPointer.current = { x: event.clientX, y: event.clientY }
+    try { (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId) } catch { /* capture is best-effort */ }
+  }
+
+  const moveChapterDrag = (event: React.PointerEvent) => {
+    const state = dragRef.current
+    if (!state || state.pointerId !== event.pointerId) return
+    lastPointer.current = { x: event.clientX, y: event.clientY }
+    if (!state.active) {
+      const moved = Math.abs(event.clientX - state.startX) > 6 || Math.abs(event.clientY - state.startY) > 6
+      if (!moved) return
+      state.active = true
+      setDragActiveId(state.chapterId)
+      try { navigator.vibrate?.(8) } catch { /* haptics are optional */ }
+      if (autoScrollRef.current === null) {
+        const step = () => {
+          autoScrollRef.current = requestAnimationFrame(step)
+          if (!dragRef.current?.active) return
+          const edge = 72
+          const y = lastPointer.current.y
+          if (y < edge) window.scrollBy(0, -Math.min(14, (edge - y) / 4 + 4))
+          else if (y > window.innerHeight - edge) window.scrollBy(0, Math.min(14, (y - (window.innerHeight - edge)) / 4 + 4))
+          updateDropTarget(lastPointer.current.x, lastPointer.current.y)
+        }
+        autoScrollRef.current = requestAnimationFrame(step)
+      }
+    }
+    event.preventDefault()
+    updateDropTarget(event.clientX, event.clientY)
+  }
+
+  const endChapterDrag = (event: React.PointerEvent) => {
+    const state = dragRef.current
+    if (!state || state.pointerId !== event.pointerId) return
+    dragRef.current = null
+    if (autoScrollRef.current !== null) { cancelAnimationFrame(autoScrollRef.current); autoScrollRef.current = null }
+    if (state.active) {
+      const targetId = dropTargetRef.current
+      setDragActiveId(null)
+      setDropTargetId(null)
+      if (targetId) void reorderChapters(state.chapterId, targetId)
+    }
+    setDragActiveId(null)
+    setDropTargetId(null)
+  }
+
+  const cancelChapterDrag = () => {
+    dragRef.current = null
+    if (autoScrollRef.current !== null) { cancelAnimationFrame(autoScrollRef.current); autoScrollRef.current = null }
+    setDragActiveId(null)
+    setDropTargetId(null)
   }
 
   const saveChapter = async (chapter: Chapter) => {
@@ -156,10 +236,30 @@ export default function SyllabusPage() {
       </div>
       <div className="syllabus-table-head"><span>CHAPTER / SUBJECT</span><span>STATUS</span><span>PRIORITY</span><span>TEST SIGNAL</span><span>ORDER</span></div>
       <div className="chapter-list">
-        {filtered.map(item => <ChapterRow key={item.chapter.id} item={item} dragged={draggedId === item.chapter.id} busy={busy === item.chapter.id} onEdit={() => setEditing(item.chapter)} onDelete={() => setDeleteTarget(item.chapter)} onStatus={status => void changeStatus(item.chapter, status)} onMove={direction => void moveChapter(item.chapter, direction)} onDragStart={() => setDraggedId(item.chapter.id)} onDragEnd={() => setDraggedId(null)} onDrop={() => void dropChapter(item.chapter)} />)}
+        {filtered.map(item => {
+          const subjectGroup = data.chapters.filter(chapter => chapter.subject === item.chapter.subject).sort((a, b) => a.position - b.position)
+          const index = subjectGroup.findIndex(chapter => chapter.id === item.chapter.id)
+          return <ChapterRow
+            key={item.chapter.id}
+            item={item}
+            dragged={dragActiveId === item.chapter.id}
+            dropTarget={dropTargetId === item.chapter.id}
+            busy={busy === item.chapter.id}
+            canMoveUp={index > 0}
+            canMoveDown={index >= 0 && index < subjectGroup.length - 1}
+            onEdit={() => setEditing(item.chapter)}
+            onDelete={() => setDeleteTarget(item.chapter)}
+            onStatus={status => void changeStatus(item.chapter, status)}
+            onMove={direction => void moveChapter(item.chapter, direction)}
+            onDragBegin={event => beginChapterDrag(event, item.chapter)}
+            onDragMove={moveChapterDrag}
+            onDragEnd={endChapterDrag}
+            onDragCancel={cancelChapterDrag}
+          />
+        })}
         {filtered.length === 0 && <EmptyState icon={<Search size={24} />} title="No chapters found." description="Try a different search or loosen one of the filters." action={<Button variant="secondary" size="sm" onClick={clearFilters}>Clear filters</Button>} />}
       </div>
-      <div className="syllabus-board-footer"><span><GripVertical size={15} /> Drag rows to reorder within a subject</span><span>{filtered.length} showing</span></div>
+      <div className="syllabus-board-footer"><span><GripVertical size={15} /> Drag the grip to reorder within a subject — or use ⋯ → Move up / Move down</span><span>{filtered.length} showing</span></div>
     </NotebookCard>
     {editing && <ChapterDialog chapter={editing} onClose={() => setEditing(null)} onSave={saveChapter} />}
     {createSubject && <ChapterDialog chapter={{ id: createId(), user_id: data.profile?.user_id, subject: createSubject, name: '', position: data.chapters.filter(item => item.subject === createSubject).length, status: 'Not Started', priority: 'Medium', weightage: null, notes: '', formula_notes: '', completed_on: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }} onClose={() => setCreateSubject(null)} onSave={saveChapter} isNew />}
@@ -167,17 +267,49 @@ export default function SyllabusPage() {
   </div>
 }
 
-function ChapterRow({ item, dragged, busy, onEdit, onDelete, onStatus, onMove, onDragStart, onDragEnd, onDrop }: {
-  item: ReturnType<typeof getChapterPerformance>[number]; dragged: boolean; busy: boolean; onEdit: () => void; onDelete: () => void;
-  onStatus: (status: ChapterStatus) => void; onMove: (direction: -1 | 1) => void; onDragStart: () => void; onDragEnd: () => void; onDrop: () => void
+function ChapterRow({ item, dragged, dropTarget, busy, canMoveUp, canMoveDown, onEdit, onDelete, onStatus, onMove, onDragBegin, onDragMove, onDragEnd, onDragCancel }: {
+  item: ReturnType<typeof getChapterPerformance>[number]; dragged: boolean; dropTarget: boolean; busy: boolean; canMoveUp: boolean; canMoveDown: boolean;
+  onEdit: () => void; onDelete: () => void; onStatus: (status: ChapterStatus) => void; onMove: (direction: -1 | 1) => void;
+  onDragBegin: (event: React.PointerEvent) => void; onDragMove: (event: React.PointerEvent) => void; onDragEnd: (event: React.PointerEvent) => void; onDragCancel: () => void
 }) {
   const { chapter, classification, results, dropping, average } = item
-  return <article className={`chapter-row ${dragged ? 'chapter-dragging' : ''} subject-row-${chapter.subject.toLowerCase()}`} draggable onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); onDrop() }}>
-    <div className="chapter-main"><span className="chapter-grip" aria-hidden="true"><GripVertical size={15} /></span><span className="chapter-subject-mark" aria-hidden="true" /><div className="chapter-title-group"><strong>{chapter.name}</strong><div className="chapter-inline-meta"><SubjectBadge subject={chapter.subject} /><span className={`priority-label label-${chapter.priority.toLowerCase()}`}>{chapter.priority} priority</span>{chapter.weightage && <span className="weightage-label">{chapter.weightage}</span>}</div></div></div>
+  return <article
+    data-chapter-row={chapter.id}
+    className={`chapter-row ${dragged ? 'chapter-dragging' : ''} ${dropTarget ? 'chapter-drop-target' : ''} subject-row-${chapter.subject.toLowerCase()}`}
+  >
+    <div className="chapter-main">
+      <span
+        className="chapter-grip"
+        role="button"
+        tabIndex={0}
+        aria-label={`Reorder ${chapter.name} by dragging`}
+        title={`Drag to reorder ${chapter.name}`}
+        onPointerDown={onDragBegin}
+        onPointerMove={onDragMove}
+        onPointerUp={onDragEnd}
+        onPointerCancel={onDragCancel}
+        onKeyDown={event => {
+          if (event.key === 'ArrowUp' && canMoveUp) { event.preventDefault(); onMove(-1) }
+          if (event.key === 'ArrowDown' && canMoveDown) { event.preventDefault(); onMove(1) }
+        }}
+      ><GripVertical size={15} /></span>
+      <span className="chapter-subject-mark" aria-hidden="true" />
+      <div className="chapter-title-group"><strong>{chapter.name}</strong><div className="chapter-inline-meta"><SubjectBadge subject={chapter.subject} /><span className={`priority-label label-${chapter.priority.toLowerCase()}`}>{chapter.priority} priority</span>{chapter.weightage && <span className="weightage-label">{chapter.weightage}</span>}</div></div>
+    </div>
     <div className="chapter-status-cell"><select aria-label={`Status for ${chapter.name}`} value={chapter.status} disabled={busy} onChange={event => onStatus(event.target.value as ChapterStatus)}>{STATUSES.map(status => <option key={status}>{status}</option>)}</select></div>
     <div className="chapter-priority-cell"><span className={`priority-indicator priority-${chapter.priority.toLowerCase()}`}><CircleDot size={13} />{chapter.priority}</span></div>
     <div className="chapter-test-cell">{classification === 'Untested' ? <StatusBadge tone="muted">Untested</StatusBadge> : <StatusBadge tone={classification}>{classification} · {Math.round(average ?? 0)}%</StatusBadge>}{dropping && <StatusBadge tone="dropping">Dropping</StatusBadge>}<small>{results.length ? `${results.length} test${results.length === 1 ? '' : 's'}` : 'No usable score'}</small></div>
-    <div className="chapter-actions"><button onClick={() => onMove(-1)} aria-label={`Move ${chapter.name} earlier`}><ArrowUp size={14} /></button><button onClick={() => onMove(1)} aria-label={`Move ${chapter.name} later`}><ArrowDown size={14} /></button><button onClick={onEdit} aria-label={`Edit ${chapter.name}`}><Edit3 size={14} /></button><button onClick={onDelete} aria-label={`Delete ${chapter.name}`}><Trash2 size={14} /></button></div>
+    <div className="chapter-actions">
+      <OverflowMenu
+        label={`Actions for ${chapter.name}`}
+        items={[
+          { id: 'edit', label: 'Edit notes', icon: <Edit3 size={15} />, onSelect: onEdit },
+          { id: 'up', label: 'Move up', icon: <ArrowUp size={15} />, disabled: !canMoveUp, onSelect: () => onMove(-1) },
+          { id: 'down', label: 'Move down', icon: <ArrowDown size={15} />, disabled: !canMoveDown, onSelect: () => onMove(1) },
+          { id: 'delete', label: 'Delete chapter', icon: <Trash2 size={15} />, danger: true, onSelect: onDelete }
+        ]}
+      />
+    </div>
   </article>
 }
 

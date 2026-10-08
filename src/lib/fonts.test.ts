@@ -8,8 +8,8 @@ describe('interface font registry', () => {
     expect(INTERFACE_FONT_OPTIONS.map(option => option.value)).toEqual([...INTERFACE_FONTS])
   })
 
-  it('keeps the Stracker default cut in front of every fallback chain', () => {
-    expect(interfaceFontOption('default').stack.startsWith("'Patrick Hand'")).toBe(true)
+  it('keeps a readable sans in front of every fallback chain', () => {
+    expect(interfaceFontOption('default').stack.startsWith("'Poppins'")).toBe(true)
     expect(interfaceFontOption('poppins').stack.startsWith("'Poppins'")).toBe(true)
     expect(interfaceFontOption('sora').stack.startsWith("'Sora'")).toBe(true)
     expect(interfaceFontOption('open-sans').stack.startsWith("'Open Sans'")).toBe(true)
