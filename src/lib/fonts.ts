@@ -19,7 +19,7 @@ export interface InterfaceFontOption {
 const FALLBACK_STACK = "'Trebuchet MS', system-ui, sans-serif"
 
 export const INTERFACE_FONT_OPTIONS: readonly InterfaceFontOption[] = [
-  { value: 'default', label: 'Default', note: 'Patrick Hand — the notebook hand', stack: `'Patrick Hand', ${FALLBACK_STACK}` },
+  { value: 'default', label: 'Default', note: 'Poppins text · handwriting headings', stack: `'Poppins', 'Open Sans', ${FALLBACK_STACK}` },
   { value: 'poppins', label: 'Poppins', note: 'Rounded geometric sans', stack: `'Poppins', ${FALLBACK_STACK}` },
   { value: 'sora', label: 'Sora', note: 'Compact technical sans', stack: `'Sora', ${FALLBACK_STACK}` },
   { value: 'open-sans', label: 'Open Sans', note: 'Neutral and highly readable', stack: `'Open Sans', ${FALLBACK_STACK}` }

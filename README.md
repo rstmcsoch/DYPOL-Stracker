@@ -4,13 +4,13 @@
 
 ## What is included
 
-- **Syllabus notebook:** Physics, Chemistry, and Maths topic lists; progress states, priorities, notes, formula notes, search, and reorder controls.
+- **Syllabus notebook:** Physics, Chemistry, and Maths topic lists; progress states, priorities, notes, formula notes, search, and reordering — drag a row's grip handle (mouse or touch) or open its ⋯ menu for *Move up / Move down*, notes, and delete.
 - **Test journal:** chapter tests, subject tests, full mocks and PYQ practice; marks, correct/wrong/skipped counts, mock subject scores, chapter-level results, filters, and edits.
 - **Mistake and retry notebooks:** typed mistake records, optional compressed question images, solution notes, and a dedicated retry workflow.
 - **Revision planner:** configurable revision intervals, due/overdue lists, completion tracking, and chapter links.
 - **Daily planner and weekly goals:** dated tasks, drag or button-based reordering, completion states, and derived or manually adjustable goal progress.
-- **Focus timer:** Pomodoro, short break, long break, and custom blocks; timer state survives navigation and refresh, with optional locally generated sound and logged study sessions.
-- **Analytics:** subject and chapter signals, test trends, study time, streaks, mistake summaries, weak areas, and rule-based study prompts. Empty or incomplete data is shown as such rather than invented.
+- **Focus timer:** Pomodoro, short break, long break, and custom blocks; timer state survives navigation and refresh, with optional locally generated sound and logged study sessions. Each block can be grounded to a subject, a chapter chosen from a searchable picker (the whole NTA-scale list filters as you type), and one of today's planner tasks.
+- **Analytics:** subject and chapter signals, test trends, study time, streaks, mistake summaries, weak areas, and rule-based study prompts. Up to three favourite charts can be pinned to the top of the page (a per-browser preference), and a clearly-labelled example preview stands in until the first real test is logged. The weak-areas page keeps untested chapters in a collapsible section of tappable chips that jump straight to pre-filled test logging. Empty or incomplete data is shown as such rather than invented.
 - **Exports and backups:** re-importable JSON notebook backup, UTF-8 test-history CSV, and selectable/date-ranged PDF and DOCX reports. Backup import validates records and relationships, previews the merge, and requires confirmation.
 - **Privacy and offline support:** Supabase Auth, user-scoped PostgreSQL tables with RLS, a private image bucket, browser-local IndexedDB caching, and an owner-scoped sync queue for offline changes.
 - **Appearance controls:** a light/night switch in the top-right corner (desktop header and mobile top bar) that stays in step with the theme choice in Settings, plus an interface-font preference — Default (the Stracker notebook hand), Poppins, Sora, or Open Sans.
@@ -63,9 +63,11 @@ npm audit
 
 ## Appearance and typography
 
-The header switch and *Settings → Notebook theme* edit the same value, so they never disagree: switching to `Auto` in Settings follows the device, and the next press of the header switch pins an explicit light or night choice.
+Settings is organised into five tabs — **Account, Exam, Appearance, Study rhythm, and Data** — so long forms stay scannable. Each tab keeps its own draft, shows a dot while it has unsaved edits, and saves independently; the arrow keys move between tabs. Data resets and sign-out live in the Data and Account tabs behind their own confirmation dialogs, never behind a plain Save.
 
-*Settings → Interface font* selects the family the whole interface uses — dashboard, navigation, forms, tables, dialogs, and empty states:
+The header switch and *Settings → Appearance → Notebook theme* edit the same value, so they never disagree: switching to `Auto` in Settings follows the device, and the next press of the header switch pins an explicit light or night choice.
+
+*Settings → Appearance → Interface font* selects the family the whole interface uses — dashboard, navigation, forms, tables, dialogs, and empty states:
 
 | Choice | Family |
 | --- | --- |
@@ -109,7 +111,7 @@ Stracker AI is an optional, authenticated Vercel Node API that calls **your own*
 
    The browser still uses only `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. The AI function authenticates the user’s Supabase bearer token, scopes reads and writes to that owner, and stores provider keys only as authenticated AES-256-GCM ciphertext. Raw provider keys are never returned; settings display a masked status and provide test, disable, and remove controls.
 3. Redeploy the Vercel project after migrations and server environment variables are ready. The chat function is configured for up to 60 seconds; the Vercel plan must permit that duration. `/api/ai/*` is implemented as Vercel Node functions, so a Netlify-only static deploy keeps the existing notebook but does not provide Stracker AI.
-4. Sign in, open **Settings → AI Assistant**, connect a provider with your own API key, choose a model, and test it. Only enabled, configured providers are eligible for capability-aware fallback. Model/tool support varies by provider; unsupported analytics tools are not simulated. Writes—including deletes—are previewed and require your explicit confirmation; the UI reports success only after the owner-scoped write returns successfully.
+4. Sign in, open **Settings → Account → AI Assistant**, connect a provider with your own API key, choose a model, and test it. Only enabled, configured providers are eligible for capability-aware fallback. Model/tool support varies by provider; unsupported analytics tools are not simulated. Writes—including deletes—are previewed and require your explicit confirmation; the UI reports success only after the owner-scoped write returns successfully.
 
 Conversation history, task status, and pending confirmations are stored in the signed-in account’s AI tables. Clearing an AI conversation does not alter study data. AI tool access is limited to canonical Stracker analytics and validated app actions—no user-provided SQL. The Vercel API uses the server-only Supabase service-role key only after verifying a user session; normal study-data operations use the authenticated user client and existing row ownership checks.
 

@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Activity, AlarmClock, AlertTriangle, ArrowDownToLine, BookOpen, CalendarDays, Check,
   ChevronRight, CircleHelp, Cloud, CloudOff, Focus, Home, ListChecks, MoreHorizontal,
-  NotebookPen, Search, Settings, ShieldCheck, Sparkles, Timer, X, Zap, LogOut, type LucideIcon
+  NotebookPen, RotateCcw, Search, Settings, ShieldCheck, Sparkles, Timer, X, Zap, LogOut, type LucideIcon
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
@@ -16,21 +16,31 @@ import { createId } from '../lib/id'
 import { taskInputSchema } from '../lib/task-validation'
 import type { AppData, DailyTask, Priority, Subject } from '../types'
 
-interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
+interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean; loopStep?: number }
 const mainNav: NavigationItem[] = [
   { to: '/', label: 'Home', icon: Home, exact: true },
   { to: '/syllabus', label: 'Syllabus', icon: BookOpen },
-  { to: '/tests', label: 'Tests', icon: ListChecks },
-  { to: '/mistakes', label: 'Mistake notebook', icon: NotebookPen },
   { to: '/planner', label: 'Planner', icon: CalendarDays }
 ]
+/**
+ * The five-step study loop: log a test, note the mistakes, retry them, revise on
+ * schedule, then focus on the next block. Every step has its own page, so the
+ * navigation shows the whole workflow in order.
+ */
+const loopNav: NavigationItem[] = [
+  { to: '/tests', label: 'Tests', icon: ListChecks, loopStep: 1 },
+  { to: '/mistakes', label: 'Mistake notebook', icon: NotebookPen, loopStep: 2 },
+  { to: '/retry', label: 'Retry', icon: RotateCcw, loopStep: 3 },
+  { to: '/revision', label: 'Revision', icon: AlarmClock, loopStep: 4 },
+  { to: '/focus', label: 'Focus', icon: Focus, loopStep: 5 }
+]
 const moreNav: NavigationItem[] = [
-  { to: '/revision', label: 'Revision', icon: AlarmClock },
   { to: '/analytics', label: 'Analytics', icon: Activity },
   { to: '/weak-areas', label: 'Weak areas', icon: AlertTriangle },
   { to: '/backup', label: 'Export & backup', icon: ArrowDownToLine },
   { to: '/settings', label: 'Settings', icon: Settings }
 ]
+const allNav: NavigationItem[] = [...mainNav, ...loopNav, ...moreNav]
 
 export function AppFrame() {
   const { user, signOut } = useAuth()
@@ -78,6 +88,10 @@ export function AppFrame() {
         <nav className="nav-list" aria-label="Study sections">
           {mainNav.map(item => <NavItem key={item.to} {...item} />)}
         </nav>
+        <div className="nav-divider"><span>THE STUDY LOOP</span><span className="hand-line" /></div>
+        <nav className="nav-list" aria-label="The five-step study loop: test, mistakes, retry, revision, focus">
+          {loopNav.map(item => <NavItem key={item.to} {...item} />)}
+        </nav>
         <div className="nav-divider"><span>KEEP GOING</span><span className="hand-line" /></div>
         <nav className="nav-list" aria-label="More study tools">
           {moreNav.map(item => <NavItem key={item.to} {...item} />)}
@@ -104,7 +118,7 @@ export function AppFrame() {
 
     <main className="main-area">
       <div className="topline">
-        <div className="breadcrumb"><span>JEE 2027</span><ChevronRight size={13} /><strong>{[...mainNav, ...moreNav].find(item => item.to === location.pathname)?.label ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
+        <div className="breadcrumb"><span>JEE 2027</span><ChevronRight size={13} /><strong>{allNav.find(item => item.to === location.pathname)?.label ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
         <div className="topline-right">
           {user?.isLocal && <span className="preview-pill"><span />Local preview — not synced</span>}
           <button className={`sync-pill sync-${syncState}`} onClick={() => void refresh()} title={syncError ?? 'Click to sync now'}>
@@ -122,7 +136,8 @@ export function AppFrame() {
     </main>
 
     <nav className="mobile-nav" aria-label="Mobile navigation">
-      {mainNav.slice(0, 4).map(item => <MobileNavItem key={item.to} item={item} />)}
+      <MobileNavItem item={mainNav[0]!} />
+      {loopNav.slice(0, 3).map(item => <MobileNavItem key={item.to} item={item} />)}
       <button className={`mobile-nav-item ${activeMore || mobileMore ? 'active' : ''}`} onClick={() => setMobileMore(true)} aria-expanded={mobileMore}>
         <MoreHorizontal size={20} /><span>More</span>
       </button>
@@ -130,7 +145,13 @@ export function AppFrame() {
     {mobileMore && <div className="mobile-sheet-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setMobileMore(false) }}>
       <div className="mobile-sheet" role="dialog" aria-modal="true" aria-label="More navigation">
         <div className="sheet-handle" /><div className="sheet-head"><div><span className="eyebrow">STUDY TOOLS</span><h2>More to explore</h2></div><IconButton label="Close navigation" onClick={() => setMobileMore(false)}><X size={19} /></IconButton></div>
-        <nav className="sheet-nav">{moreNav.map(item => <NavItem key={item.to} {...item} onClick={() => setMobileMore(false)} />)}
+        <nav className="sheet-nav">
+          <div className="sheet-nav-caption">Your notebook</div>
+          {[mainNav[1]!, mainNav[2]!].map(item => <NavItem key={item.to} {...item} onClick={() => setMobileMore(false)} />)}
+          <div className="sheet-nav-caption">The study loop</div>
+          {loopNav.map(item => <NavItem key={item.to} {...item} onClick={() => setMobileMore(false)} />)}
+          <div className="sheet-nav-caption">Keep going</div>
+          {moreNav.map(item => <NavItem key={item.to} {...item} onClick={() => setMobileMore(false)} />)}
           <button className="nav-link sheet-help" onClick={() => { setMobileMore(false); setShortcutsOpen(true) }}><CircleHelp size={18} /><span>Keyboard shortcuts</span></button>
           <button className="nav-link sheet-help" onClick={() => { setMobileMore(false); void signOut() }}><LogOut size={18} /><span>Sign out</span></button>
         </nav>
@@ -158,9 +179,10 @@ export function AppFrame() {
   </div>
 }
 
-function NavItem({ to, label, icon: Icon, exact, onClick }: NavigationItem & { onClick?: () => void }) {
+function NavItem({ to, label, icon: Icon, exact, loopStep, onClick }: NavigationItem & { onClick?: () => void }) {
   return <NavLink to={to} end={exact} onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-    <Icon size={18} strokeWidth={1.8} /><span>{label}</span>{label === 'Revision' && <span className="nav-pencil-mark" aria-hidden="true">↗</span>}
+    <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
+    {loopStep && <span className="nav-loop-step" aria-hidden="true">{loopStep}</span>}
   </NavLink>
 }
 

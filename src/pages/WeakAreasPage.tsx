@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronUp, Minus, Target, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronUp, Minus, Plus, Target, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react'
 import { Button, EmptyState, NotebookCard, PageHeader, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { getChapterPerformance } from '../lib/analytics'
@@ -14,7 +14,7 @@ export default function WeakAreasPage() {
   const navigate = useNavigate()
   const [subject, setSubject] = useState<'all' | Subject>('all')
   const [showAllTestedMobile, setShowAllTestedMobile] = useState(false)
-  const [showAllUntestedMobile, setShowAllUntestedMobile] = useState(false)
+  const [showUntested, setShowUntested] = useState(false)
   const performance = useMemo(() => getChapterPerformance(data), [data])
   const chapters = performance.filter(item => subject === 'all' || item.chapter.subject === subject)
   const untested = chapters.filter(item => item.classification === 'Untested').sort((a, b) => a.chapter.subject.localeCompare(b.chapter.subject) || a.chapter.position - b.chapter.position)
@@ -22,10 +22,10 @@ export default function WeakAreasPage() {
   const weak = tested.filter(item => item.classification === 'Weak')
   const strong = tested.filter(item => item.classification === 'Strong')
   const dropCount = tested.filter(item => item.dropping).length
-  const pageClass = `content-page weak-page${showAllTestedMobile ? ' mobile-tested-expanded' : ''}${showAllUntestedMobile ? ' mobile-untested-expanded' : ''}`
+  const pageClass = `content-page weak-page${showAllTestedMobile ? ' mobile-tested-expanded' : ''}`
 
   return <div className={pageClass}>
-    <PageHeader eyebrow="SCORE THE CHAPTER, NOT THE FEELING" title="Weak areas" subtitle="Chapter averages use the last three usable results. Untested stays unclassified." doodle={<Target size={19} />} action={<label className="weak-subject-select"><span>Subject</span><select value={subject} onChange={event => { setSubject(event.target.value as 'all' | Subject); setShowAllTestedMobile(false); setShowAllUntestedMobile(false) }}><option value="all">All subjects</option>{SUBJECTS.map(item => <option key={item}>{item}</option>)}</select></label>} />
+    <PageHeader eyebrow="SCORE THE CHAPTER, NOT THE FEELING" title="Weak areas" subtitle="Chapter averages use the last three usable results. Untested stays unclassified." doodle={<Target size={19} />} action={<label className="weak-subject-select"><span>Subject</span><select value={subject} onChange={event => { setSubject(event.target.value as 'all' | Subject); setShowAllTestedMobile(false); setShowUntested(false) }}><option value="all">All subjects</option>{SUBJECTS.map(item => <option key={item}>{item}</option>)}</select></label>} />
     <div className="weak-rule-banner"><span className="rule-pencil">✎</span><p>Current bands: <strong>Weak &lt; {data.settings.weak_threshold}%</strong><span>·</span><strong>Okay {data.settings.weak_threshold}–{data.settings.strong_threshold}%</strong><span>·</span><strong>Strong &gt; {data.settings.strong_threshold}%</strong></p><button onClick={() => navigate('/settings')}>Adjust in Settings ↗</button></div>
     <div className="weak-overview-grid"><NotebookCard className="weak-overview-item weak-tint"><div><span className="weak-overview-icon"><TriangleAlert size={17} /></span><span className="eyebrow">NEEDS ANOTHER LOOK</span></div><strong>{weak.length}</strong><small>chapter{weak.length === 1 ? '' : 's'} below the weak-area threshold</small></NotebookCard><NotebookCard className="weak-overview-item dropping-tint"><div><span className="weak-overview-icon"><TrendingDown size={17} /></span><span className="eyebrow">DROPPING</span></div><strong>{dropCount}</strong><small>latest result fell by {data.settings.dropping_threshold} points or more</small></NotebookCard><NotebookCard className="weak-overview-item untested-tint"><div><span className="weak-overview-icon"><Target size={17} /></span><span className="eyebrow">NO BASELINE YET</span></div><strong>{untested.length}</strong><small>untested · not classified as weak</small></NotebookCard><NotebookCard className="weak-overview-item strong-tint"><div><span className="weak-overview-icon"><TrendingUp size={17} /></span><span className="eyebrow">FEELING STEADY</span></div><strong>{strong.length}</strong><small>chapter{strong.length === 1 ? '' : 's'} at or above the strong threshold</small></NotebookCard></div>
 
@@ -43,10 +43,30 @@ export default function WeakAreasPage() {
       </NotebookCard>
     </section>
 
-    <section className="weak-section untested-section"><SectionHeading title="Untested chapters" note="A baseline is missing — not a reason to assume weakness." action={<StatusBadge tone="muted">{untested.length} untested</StatusBadge>} />
-      <NotebookCard className="untested-board">{untested.length === 0 ? <EmptyState icon={<Target size={23} />} title="Every chapter has a recorded result." description="Keep adding real chapter-level scores as you practice." /> : <div className="untested-grid" id="weak-untested-list">{untested.map((item, index) => <div className={`untested-chapter ${index >= MOBILE_VISIBLE_LIMIT ? 'untested-mobile-extra' : ''}`} key={item.chapter.id}><div><SubjectBadge subject={item.chapter.subject} /><span>{item.chapter.name}</span></div><StatusBadge tone="muted">Untested</StatusBadge><button onClick={() => navigate('/tests?add=1')} aria-label={`Add test for ${item.chapter.name}`} title="Log a test">+</button></div>)}</div>}
-        {untested.length > MOBILE_VISIBLE_LIMIT && <div className="weak-mobile-disclosure"><button type="button" aria-expanded={showAllUntestedMobile} aria-controls="weak-untested-list" onClick={() => setShowAllUntestedMobile(value => !value)}>{showAllUntestedMobile ? <><ChevronUp size={15} /> Show fewer untested chapters</> : <><ChevronDown size={15} /> Show all {untested.length} untested chapters</>}</button></div>}
-      </NotebookCard>
+    <section className="weak-section untested-section" aria-labelledby="untested-heading"><SectionHeading title="Untested chapters" note="A baseline is missing — not a reason to assume weakness." action={<StatusBadge tone="muted">{untested.length} untested</StatusBadge>} />
+      {untested.length === 0 ? <NotebookCard className="untested-board"><EmptyState icon={<Target size={23} />} title="Every chapter has a recorded result." description="Keep adding real chapter-level scores as you practice." /></NotebookCard> : <NotebookCard className="untested-board">
+        <div className="untested-toggle-row">
+          <p id="untested-heading">These chapters have no usable score yet. They are not classified as weak — give one a first test to start its baseline.</p>
+          <button type="button" className={`untested-toggle ${showUntested ? 'open' : ''}`} aria-expanded={showUntested} aria-controls="untested-chapter-groups" onClick={() => setShowUntested(value => !value)}>
+            {showUntested ? <><ChevronUp size={15} /> Hide untested</> : <><ChevronDown size={15} /> Show untested ({untested.length})</>}
+          </button>
+        </div>
+        {showUntested && <div className="untested-groups" id="untested-chapter-groups">
+          {SUBJECTS.map(subject => {
+            const chapters = untested.filter(item => item.chapter.subject === subject)
+            if (!chapters.length) return null
+            return <div className="untested-group" key={subject}>
+              <div className="untested-group-head"><SubjectBadge subject={subject} /><span>{chapters.length} chapter{chapters.length === 1 ? '' : 's'} without a score</span></div>
+              <div className="untested-chip-row">{chapters.map(item => (
+                <button key={item.chapter.id} className={`untested-chip chip-${subject.toLowerCase()}`} onClick={() => navigate(`/tests?add=1&chapter=${item.chapter.id}`)} title={`Log a test for ${item.chapter.name}`} aria-label={`Log a test for ${item.chapter.name} (${subject})`}>
+                  <span className="untested-chip-name">{item.chapter.name}</span><Plus size={13} aria-hidden="true" />
+                </button>
+              ))}</div>
+            </div>
+          })}
+          <p className="untested-groups-foot">Tap a chapter to log its first test — the test form opens with that chapter already selected.</p>
+        </div>}
+      </NotebookCard>}
     </section>
 
     <div className="weak-classification-footer"><div><span>✳</span><p>Weak = below the adjustable threshold. Okay = between thresholds. Strong = above. <strong>No usable score means Untested.</strong></p></div><button onClick={() => navigate('/analytics')}>See full analytics <ArrowUpRight size={15} /></button></div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowDownWideNarrow, ArrowUpWideNarrow, CalendarDays, ChartNoAxesCombined, Eye, Filter, ListFilter, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowUpWideNarrow, BookOpen, CalendarDays, ChartNoAxesCombined, Eye, Filter, ListFilter, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, EmptyState, Field, NotebookCard, PageHeader, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
@@ -59,6 +59,7 @@ export default function TestsPage() {
   const [ascending, setAscending] = useState(false)
   const [editing, setEditing] = useState<TestRecord | null>(null)
   const [creating, setCreating] = useState(false)
+  const [presetChapterId, setPresetChapterId] = useState<string | null>(null)
   const [viewing, setViewing] = useState<TestRecord | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TestRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -66,9 +67,13 @@ export default function TestsPage() {
 
   useEffect(() => {
     if (searchParams.get('add') === '1') {
+      // A chapter preselect (e.g. from Weak areas) opens the same dialog with that
+      // chapter already chosen, so the user never has to pick it twice.
+      setPresetChapterId(searchParams.get('chapter'))
       setCreating(true)
       const params = new URLSearchParams(searchParams)
       params.delete('add')
+      params.delete('chapter')
       setSearchParams(params, { replace: true })
     }
   }, [searchParams, setSearchParams])
@@ -222,7 +227,7 @@ export default function TestsPage() {
   }
 
   return <div className="content-page tests-page">
-    <PageHeader eyebrow="PRACTICE, THEN NOTICE" title="Test history" subtitle="A score is one signal. The pattern is the useful part." doodle={<ChartNoAxesCombined size={20} />} action={<Button onClick={() => { setEditing(null); setCreating(true) }}><Plus size={17} /> Add test</Button>} />
+    <PageHeader eyebrow="PRACTICE, THEN NOTICE" title="Test history" subtitle="A score is one signal. The pattern is the useful part." doodle={<ChartNoAxesCombined size={20} />} action={<Button onClick={() => { setEditing(null); setPresetChapterId(null); setCreating(true) }}><Plus size={17} /> Add test</Button>} />
     <div className="test-summary-grid"><NotebookCard className="test-summary-card"><span>TESTS LOGGED</span><strong>{data.tests.length}</strong><small>Across every practice type</small></NotebookCard><NotebookCard className="test-summary-card"><span>AVERAGE SCORE</span><strong>{averageScore === null ? '—' : `${Math.round(averageScore)}%`}</strong><small>{average.count ? `Mean of ${average.count} usable test result${average.count === 1 ? '' : 's'}; one test counts once` : 'No usable scores in this view'}</small></NotebookCard><NotebookCard className="test-summary-card"><span>ACCURACY</span><strong>{accuracy.rate === null ? '—' : `${Math.round(accuracy.rate)}%`}</strong><small>{accuracy.correct}/{accuracy.attempted || '—'} correct / attempted</small></NotebookCard><NotebookCard className="test-summary-card"><span>ATTEMPT RATE</span><strong>{attempt.rate === null ? '—' : `${Math.round(attempt.rate)}%`}</strong><small>{attempt.attempted}/{attempt.total || '—'} attempted / total</small></NotebookCard></div>
     <NotebookCard className="test-history-board">
       <div className="test-board-top"><div><span className="handwriting-label">Every attempt matters</span><p>{sortedTests.length} test{sortedTests.length === 1 ? '' : 's'} in view</p></div><div className="test-board-doodle" aria-hidden="true">∿✦</div></div>
@@ -240,7 +245,7 @@ export default function TestsPage() {
       </div>
       <div className="test-board-footer"><span><Filter size={14} /> Full Mocks match every subject filter and show one combined result; percentages compare different totals fairly.</span><button onClick={() => navigate('/backup')}>Export options are in Backup <ArrowRightIcon /></button></div>
     </NotebookCard>
-    {creating && <TestDialog key={editing?.id ?? 'new-test'} initial={editing} data={data} onClose={() => { setCreating(false); setEditing(null) }} onSave={(values, stableId) => saveTest(values, editing ?? undefined, stableId)} />}
+    {creating && <TestDialog key={editing?.id ?? presetChapterId ?? 'new-test'} initial={editing} presetChapterId={presetChapterId} data={data} onClose={() => { setCreating(false); setEditing(null); setPresetChapterId(null) }} onSave={(values, stableId) => saveTest(values, editing ?? undefined, stableId)} />}
     {viewing && <TestDetails test={viewing} onClose={() => setViewing(null)} onEdit={() => { setEditing(viewing); setViewing(null); setCreating(true) }} />}
     {deleteTarget && <ConfirmDialog title={`Delete “${deleteTarget.title}”?`} message="This test and its related subject scores will be removed. You can undo for a few seconds." onCancel={() => setDeleteTarget(null)} onConfirm={() => void deleteTest()} loading={deleting} />}
   </div>
@@ -269,13 +274,18 @@ function TestRow({ test, onView, onEdit, onDelete }: { test: TestRecord; onView:
   </tr>
 }
 
-function TestDialog({ initial, data, onClose, onSave }: { initial: TestRecord | null; data: ReturnType<typeof useData>['data']; onClose: () => void; onSave: (values: TestFormValues, stableId: string) => Promise<TestFieldErrors | null> }) {
+function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initial: TestRecord | null; presetChapterId?: string | null; data: ReturnType<typeof useData>['data']; onClose: () => void; onSave: (values: TestFormValues, stableId: string) => Promise<TestFieldErrors | null> }) {
   const { notify } = useToast()
   const [stableId] = useState(() => initial?.id ?? createId())
   const oldScores = initial ? data.testSubjectScores.filter(score => score.test_id === initial.id) : []
+  const presetChapter = !initial && presetChapterId ? data.chapters.find(chapter => chapter.id === presetChapterId) ?? null : null
   const [values, setValues] = useState<TestFormValues>(() => {
     const base = blankValues()
-    if (!initial) return base
+    if (!initial) {
+      // Opened from a chapter chip: the chapter (and its subject) arrive preselected.
+      if (presetChapter) return { ...base, subject: presetChapter.subject, chapter_id: presetChapter.id }
+      return base
+    }
     const scores = { ...base.mockScores }
     for (const score of oldScores) scores[score.subject] = { marks: score.marks_obtained?.toString() ?? '', total: score.total_marks?.toString() ?? '' }
     return {
@@ -314,8 +324,9 @@ function TestDialog({ initial, data, onClose, onSave }: { initial: TestRecord | 
   return <Dialog title={initial ? 'Edit test record' : 'Log a test'} subtitle="Record only what you know. Leave unknown values blank." onClose={onClose} className="test-dialog">
     <form className="form-stack" noValidate onSubmit={handleSubmit}>
       {errors._form && <div className="form-error" role="alert">{errors._form}</div>}
-      <div className="form-grid two"><Field label="Test title" required error={errors.title}><input autoFocus required maxLength={160} value={values.title} onChange={event => patch('title', event.target.value)} placeholder="e.g. Electrostatics weekly test" /></Field><Field label="Date" required error={errors.test_date}><input type="date" required value={values.test_date} onChange={event => patch('test_date', event.target.value)} /></Field></div>
+      <div className="form-grid two"><Field label="Test title" required error={errors.title} hint={values.title.length >= 120 ? `${values.title.length}/160 characters — long titles are trimmed with an ellipsis in lists` : undefined}><input autoFocus required maxLength={160} value={values.title} onChange={event => patch('title', event.target.value)} placeholder="e.g. Electrostatics weekly test" /></Field><Field label="Date" required error={errors.test_date}><input type="date" required value={values.test_date} onChange={event => patch('test_date', event.target.value)} /></Field></div>
       <div className="form-grid two"><Field label="Test type"><select value={values.test_type} onChange={event => patch('test_type', event.target.value as TestType)}>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field><Field label="Subject"><select value={values.subject} onChange={event => { patch('subject', event.target.value as Subject | ''); patch('chapter_id', '') }}><option value="">— choose subject —</option>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
+      {presetChapter && <div className="preset-chapter-note" role="status"><BookOpen size={15} aria-hidden="true" /><span>Chapter preselected from Weak areas: <strong>{presetChapter.name}</strong><SubjectBadge subject={presetChapter.subject} /></span></div>}
       <Field label="Chapter (optional)" error={errors.chapter_id}><select value={values.chapter_id} onChange={event => patch('chapter_id', event.target.value)}><option value="">— choose chapter —</option>{chapterOptions.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field>
       {values.test_type === 'Full Mock' ? <div className="mock-score-section"><div><span className="field-label">Subject scores <small>(enter each result that you have)</small></span><span className="field-hint">The overall result sums all three subjects. Each subject score is checked against its own total; leave unknown scores blank.</span></div><div className="mock-score-grid">{SUBJECTS.map(subject => {
         const marksError = errors[`${subject}.marks`]
