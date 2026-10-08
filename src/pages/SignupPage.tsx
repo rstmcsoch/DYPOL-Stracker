@@ -8,7 +8,7 @@ import { useToast } from '../contexts/ToastContext'
 import { localPreviewEnabled, supabaseConfigured } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
 
-const MIN_PASSWORD_LENGTH = 8
+import { MIN_PASSWORD_LENGTH } from '../lib/auth-rules'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 const PERKS = [

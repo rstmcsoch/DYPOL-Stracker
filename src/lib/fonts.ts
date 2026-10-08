@@ -1,4 +1,4 @@
-import { INTERFACE_FONTS, type InterfaceFont } from '../types'
+import { INTERFACE_FONTS, type InterfaceFont } from '../types/index.js'
 
 /**
  * Interface font registry.

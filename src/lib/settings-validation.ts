@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { INTERFACE_FONTS } from '../types/index.js'
+import { EXAM_MODES, INTERFACE_FONTS, REMINDER_KINDS, TRACK_IDS } from '../types/index.js'
 
 const dateValue = z.iso.date()
 const timestampValue = z.iso.datetime({ offset: true })
@@ -19,10 +19,24 @@ export const settingsSchema = z.object({
   dropping_threshold: z.number().finite().min(0).max(100).multipleOf(0.01),
   revision_gaps: z.array(z.number().finite().int().positive().max(POSTGRES_INTEGER_MAX)).min(1).max(12),
   daily_study_goal_minutes: z.number().finite().int().min(0).max(1440),
-  sound_enabled: z.boolean()
+  sound_enabled: z.boolean(),
+  // --- JEE preparation extensions (all defaulted for backward compatibility) ---
+  weight_high: z.number().finite().min(0.1).max(10).multipleOf(0.01).default(2),
+  weight_medium: z.number().finite().min(0.1).max(10).multipleOf(0.01).default(1),
+  weight_low: z.number().finite().min(0.1).max(10).multipleOf(0.01).default(0.5),
+  pyq_from_year: z.number().finite().int().min(1990).max(2100).default(2019),
+  pyq_to_year: z.number().finite().int().min(1990).max(2100).default(2026),
+  active_track: z.enum(TRACK_IDS).default('main1'),
+  exam_mode: z.enum(EXAM_MODES).default('auto'),
+  reminders_enabled: z.boolean().default(false),
+  reminder_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Choose a reminder time like 08:00.').default('08:00'),
+  reminder_types: z.array(z.enum(REMINDER_KINDS)).max(REMINDER_KINDS.length).default(['revision', 'backlog'])
 }).refine(value => value.weak_threshold < value.strong_threshold, {
   path: ['strong_threshold'],
   message: 'Strong above must be greater than Weak below.'
+}).refine(value => value.pyq_from_year <= value.pyq_to_year, {
+  path: ['pyq_to_year'],
+  message: 'The PYQ year range must start before it ends.'
 })
 
 export type SettingsFieldErrors = Record<string, string>
@@ -46,6 +60,10 @@ export function settingsFieldErrors(error: z.ZodError): SettingsFieldErrors {
       case 'owner_name': fieldErrors[field] = 'Name must be 100 characters or fewer.'; break
       case 'main_exam_date': fieldErrors[field] = 'Choose a valid calendar date or leave it blank.'; break
       case 'advanced_exam_date': fieldErrors[field] = 'Choose a valid calendar date or leave it blank.'; break
+      case 'weight_high': case 'weight_medium': case 'weight_low': fieldErrors[field] = 'Use a weight from 0.1 to 10 (up to two decimal places).'; break
+      case 'pyq_from_year': case 'pyq_to_year': fieldErrors[field] = issue.code === 'custom' ? issue.message : 'Use a year between 1990 and 2100.'; break
+      case 'reminder_time': fieldErrors[field] = 'Choose a reminder time like 08:00.'; break
+      case 'reminder_types': fieldErrors[field] = 'Pick at least one reminder type or turn reminders off.'; break
       default: fieldErrors[field] = issue.message
     }
   }

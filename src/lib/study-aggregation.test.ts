@@ -5,7 +5,7 @@ import type { StudySession } from '../types'
 function session(id: string, started_at: string, duration_minutes: number): StudySession {
   return {
     id, created_at: started_at, updated_at: started_at, subject: 'Physics', chapter_id: null,
-    started_at, ended_at: null, duration_minutes, completion_state: 'completed', mode: 'Pomodoro'
+    started_at, ended_at: null, duration_minutes, completion_state: 'completed', mode: 'Pomodoro', activity: 'Practice'
   }
 }
 

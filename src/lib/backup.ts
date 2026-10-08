@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import {
+  backlogItemSchema, chapterStageSchema, practiceSessionSchema, pyqRecordSchema, studyCardSchema,
+  testErrorLogSchema, testTimeEntrySchema, userExamTrackSchema
+} from './jee-record-schemas'
+import { STUDY_ACTIVITIES } from '../types/index.js'
 import { getOverallTestPercentage, getOverallTestScore } from './analytics'
 import type { AppData, ExportBackup } from '../types'
 import { settingsSchema as appSettingsSchema } from './settings-validation'
@@ -9,7 +14,7 @@ const dateValue = z.iso.date()
 const timestampValue = z.iso.datetime({ offset: true })
 const optionalDateValue = dateValue.nullable()
 const baseFields = { id: z.string().uuid(), created_at: timestampValue, updated_at: timestampValue, user_id: z.string().uuid().optional() }
-const chapterSchema = z.object({ ...baseFields, subject: z.enum(['Physics','Chemistry','Maths']), name: z.string().min(1).max(140), position: z.number().finite().int().min(0).max(POSTGRES_INTEGER_MAX), status: z.enum(['Not Started','Studying','Done','Revised']), priority: z.enum(['High','Medium','Low']), weightage: z.string().max(80).nullable(), notes: z.string().max(20000), formula_notes: z.string().max(20000), completed_on: optionalDateValue })
+const chapterSchema = z.object({ ...baseFields, subject: z.enum(['Physics','Chemistry','Maths']), name: z.string().min(1).max(140), position: z.number().finite().int().min(0).max(POSTGRES_INTEGER_MAX), status: z.enum(['Not Started','Studying','Done','Revised']), priority: z.enum(['High','Medium','Low']), importance: z.enum(['high','medium','low']).default('medium'), weightage: z.string().max(80).nullable(), notes: z.string().max(20000), formula_notes: z.string().max(20000), completed_on: optionalDateValue })
 const revisionSchema = z.object({ ...baseFields, chapter_id: z.string().uuid(), revision_number: z.number().finite().int().positive().max(POSTGRES_INTEGER_MAX), due_on: dateValue, completed_at: timestampValue.nullable() })
 const testSchema = z.object({ ...baseFields, ...testFormSchema.shape, subject: z.enum(['Physics','Chemistry','Maths']).nullable(), chapter_id: z.string().uuid().nullable() }).superRefine((value, context) => {
   const result = testFormSchema.safeParse(value)
@@ -29,14 +34,19 @@ const goalSchema = z.preprocess(value => {
   if (value && typeof value === 'object' && !Array.isArray(value) && !('progress_value' in value)) return { ...value, progress_value: 0 }
   return value
 }, appGoalSchema.extend(baseFields))
-const sessionSchema = z.object({ ...baseFields, subject: z.enum(['Physics','Chemistry','Maths']).nullable(), chapter_id: z.string().uuid().nullable(), started_at: timestampValue, ended_at: timestampValue.nullable(), duration_minutes: z.number().finite().int().nonnegative().max(1440), completion_state: z.enum(['completed','interrupted']), mode: z.enum(['Pomodoro','Short Break','Long Break','Custom']) })
+const sessionSchema = z.object({ ...baseFields, subject: z.enum(['Physics','Chemistry','Maths']).nullable(), chapter_id: z.string().uuid().nullable(), started_at: timestampValue, ended_at: timestampValue.nullable(), duration_minutes: z.number().finite().int().nonnegative().max(1440), completion_state: z.enum(['completed','interrupted']), mode: z.enum(['Pomodoro','Short Break','Long Break','Custom']), activity: z.enum(STUDY_ACTIVITIES).default('Practice') })
 const settingsSchema = appSettingsSchema.extend({ ...baseFields, last_backup_at: timestampValue.nullable() })
 const profileSchema = z.object({ ...baseFields, display_name: z.string().max(100), email: z.string().max(320) })
 const envelopeSchema = z.object({
   app: z.literal('Stracker'), version: z.literal(1), exported_at: timestampValue, settings: z.unknown(), profile: z.unknown().nullable(),
   chapters: z.array(z.unknown()), revisions: z.array(z.unknown()), tests: z.array(z.unknown()),
   testSubjectScores: z.array(z.unknown()), testChapterLinks: z.array(z.unknown()), mistakes: z.array(z.unknown()),
-  tasks: z.array(z.unknown()), goals: z.array(z.unknown()), sessions: z.array(z.unknown())
+  tasks: z.array(z.unknown()), goals: z.array(z.unknown()), sessions: z.array(z.unknown()),
+  // Collections added with the JEE-preparation release. Older backups omit them.
+  practiceSessions: z.array(z.unknown()).default([]), pyqRecords: z.array(z.unknown()).default([]),
+  chapterStages: z.array(z.unknown()).default([]), backlogItems: z.array(z.unknown()).default([]),
+  studyCards: z.array(z.unknown()).default([]), testErrorLogs: z.array(z.unknown()).default([]),
+  testTimeEntries: z.array(z.unknown()).default([]), examTracks: z.array(z.unknown()).default([])
 })
 
 export interface InvalidImportRow { collection: string; index: number; reason: string }
@@ -59,7 +69,10 @@ export function createBackup(data: AppData): ExportBackup {
       delete (saved as typeof saved & { image_previous_path?: string }).image_previous_path
       return saved
     }),
-    tasks: data.tasks, goals: data.goals, sessions: data.sessions
+    tasks: data.tasks, goals: data.goals, sessions: data.sessions,
+    practiceSessions: data.practiceSessions, pyqRecords: data.pyqRecords, chapterStages: data.chapterStages,
+    backlogItems: data.backlogItems, studyCards: data.studyCards, testErrorLogs: data.testErrorLogs,
+    testTimeEntries: data.testTimeEntries, examTracks: data.examTracks
   }
 }
 
@@ -164,6 +177,35 @@ export function validateBackupText(text: string, current: AppData): ValidatedImp
   valid.tasks = validTasks as ExportBackup['tasks']
   valid.sessions = validSessions as ExportBackup['sessions']
   valid.goals = goals as ExportBackup['goals']
+  const chapterIdSet = new Set([...current.chapters.map(row => row.id), ...chapters.map(row => row.id)])
+  const testIdSet = new Set([...current.tests.map(row => row.id), ...validTests.map(row => row.id)])
+  const keepChapterRef = <T extends { chapter_id?: string | null }>(items: T[], collection: string): T[] => items.filter((item, index) => {
+    if (!item.chapter_id || chapterIdSet.has(item.chapter_id)) return true
+    invalid.push({ collection, index: index + 1, reason: 'Linked chapter was not found in the backup or current notebook.' })
+    return false
+  })
+  const keepTestRef = <T extends { test_id: string }>(items: T[], collection: string): T[] => items.filter((item, index) => {
+    if (testIdSet.has(item.test_id)) return true
+    invalid.push({ collection, index: index + 1, reason: 'Linked test was not found in the backup or current notebook.' })
+    return false
+  })
+  const practiceRows = keepChapterRef(parseRows('practiceSessions', envelope.data.practiceSessions, practiceSessionSchema) as { chapter_id: string }[], 'practiceSessions')
+  const pyqRows = filterCompositeConflicts(keepChapterRef(parseRows('pyqRecords', envelope.data.pyqRecords, pyqRecordSchema) as { chapter_id: string }[], 'pyqRecords') as (z.infer<typeof pyqRecordSchema>)[], current.pyqRecords, 'pyqRecords', row => `${row.chapter_id}\u0000${row.exam}\u0000${row.year}`, invalid)
+  const stageRows = filterCompositeConflicts(keepChapterRef(parseRows('chapterStages', envelope.data.chapterStages, chapterStageSchema) as { chapter_id: string }[], 'chapterStages') as (z.infer<typeof chapterStageSchema>)[], current.chapterStages, 'chapterStages', row => `${row.chapter_id}\u0000${row.stage}`, invalid)
+  const backlogRows = keepChapterRef(parseRows('backlogItems', envelope.data.backlogItems, backlogItemSchema) as { chapter_id: string | null }[], 'backlogItems')
+  const cardRows = keepChapterRef(parseRows('studyCards', envelope.data.studyCards, studyCardSchema) as { chapter_id: string }[], 'studyCards')
+  const errorRows = keepTestRef(parseRows('testErrorLogs', envelope.data.testErrorLogs, testErrorLogSchema) as { test_id: string }[], 'testErrorLogs')
+  const timeRows = keepTestRef(parseRows('testTimeEntries', envelope.data.testTimeEntries, testTimeEntrySchema) as { test_id: string }[], 'testTimeEntries')
+  const trackRows = filterCompositeConflicts(parseRows('examTracks', envelope.data.examTracks, userExamTrackSchema), current.examTracks, 'examTracks', row => row.track, invalid)
+  valid.practiceSessions = practiceRows as unknown as ExportBackup['practiceSessions']
+  valid.pyqRecords = pyqRows as unknown as ExportBackup['pyqRecords']
+  valid.chapterStages = stageRows as unknown as ExportBackup['chapterStages']
+  valid.backlogItems = backlogRows as unknown as ExportBackup['backlogItems']
+  valid.studyCards = cardRows as unknown as ExportBackup['studyCards']
+  valid.testErrorLogs = errorRows as unknown as ExportBackup['testErrorLogs']
+  valid.testTimeEntries = timeRows as unknown as ExportBackup['testTimeEntries']
+  valid.examTracks = trackRows as unknown as ExportBackup['examTracks']
+  for (const [key, rows] of Object.entries({ practiceSessions: practiceRows, pyqRecords: pyqRows, chapterStages: stageRows, backlogItems: backlogRows, studyCards: cardRows, testErrorLogs: errorRows, testTimeEntries: timeRows, examTracks: trackRows })) counts[key] = rows.length
 
   return { backup: valid, invalid, counts, warnings }
 }

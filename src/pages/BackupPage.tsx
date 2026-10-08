@@ -147,7 +147,11 @@ export default function BackupPage() {
         chapter_revisions: backup.revisions ?? [],
         test_subject_scores: backup.testSubjectScores ?? [],
         test_chapter_links: backup.testChapterLinks ?? [], mistakes: restored,
-        daily_tasks: backup.tasks ?? [], weekly_goals: backup.goals ?? [], study_sessions: backup.sessions ?? []
+        daily_tasks: backup.tasks ?? [], weekly_goals: backup.goals ?? [], study_sessions: backup.sessions ?? [],
+        practice_sessions: backup.practiceSessions ?? [], pyq_records: backup.pyqRecords ?? [],
+        chapter_stages: backup.chapterStages ?? [], backlog_items: backup.backlogItems ?? [],
+        study_cards: backup.studyCards ?? [], test_error_logs: backup.testErrorLogs ?? [],
+        test_time_entries: backup.testTimeEntries ?? [], user_exam_tracks: backup.examTracks ?? []
       })
       queryClient.invalidateQueries({ queryKey: ['stracker-data'] })
       const validCount = Object.values(importPreview.counts).reduce((sum, count) => sum + count, 0)

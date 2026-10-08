@@ -4,7 +4,7 @@ import { useData } from './DataContext'
 import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 import { createId } from '../lib/id'
-import type { StudySession, Subject } from '../types'
+import type { StudyActivity, StudySession, Subject } from '../types'
 import { defaultTimerState as defaults, safeCustomMinutes, sanitizeTimerState, type FocusMode, type TimerState } from '../lib/focus-timer'
 export type { FocusMode } from '../lib/focus-timer'
 
@@ -16,6 +16,7 @@ interface FocusContextValue extends TimerState {
   switchMode: (mode: FocusMode) => void
   setSubject: (subject: Subject | null) => void
   setChapter: (chapterId: string | null) => void
+  setActivity: (activity: StudyActivity) => void
   setTask: (taskId: string | null) => void
   setCustomMinutes: (minutes: number) => void
   focusMinutes: number
@@ -55,7 +56,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       id: createId(), subject: state.subject, chapter_id: state.chapterId,
       started_at: state.focusStartedAt ?? new Date(endedAt - elapsed * 1000).toISOString(), ended_at: now,
       duration_minutes: Math.max(0, Math.round(elapsed / 60)), completion_state: completed ? 'completed' : 'interrupted',
-      mode: state.mode, created_at: now, updated_at: now
+      mode: state.mode, activity: state.activity ?? 'Practice', created_at: now, updated_at: now
     }
     try { await upsert('study_sessions', session) }
     catch (error) { notify(error instanceof Error ? error.message : 'Session saved on this device but could not sync.', 'error') }
@@ -139,6 +140,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
   const setSubject = useCallback((subject: Subject | null) => setTimer(current => ({ ...current, subject })), [])
   const setChapter = useCallback((chapterId: string | null) => setTimer(current => ({ ...current, chapterId })), [])
+  const setActivity = useCallback((activity: StudyActivity) => setTimer(current => ({ ...current, activity })), [])
   const setTask = useCallback((taskId: string | null) => setTimer(current => ({ ...current, taskId })), [])
   const setCustomMinutes = useCallback((minutes: number) => {
     const safeMinutes = safeCustomMinutes(minutes)
@@ -148,8 +150,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<FocusContextValue>(() => ({
     ...timer, progress: focusMinutes > 0 ? Math.min(100, Math.max(0, (1 - timer.remainingSeconds / (focusMinutes * 60)) * 100)) : 0,
-    start, pause, reset, switchMode, setSubject, setChapter, setTask, setCustomMinutes, focusMinutes
-  }), [timer, focusMinutes, start, pause, reset, switchMode, setSubject, setChapter, setTask, setCustomMinutes])
+    start, pause, reset, switchMode, setSubject, setChapter, setActivity, setTask, setCustomMinutes, focusMinutes
+  }), [timer, focusMinutes, start, pause, reset, switchMode, setSubject, setChapter, setActivity, setTask, setCustomMinutes])
   return <FocusContext.Provider value={value}>{children}</FocusContext.Provider>
 }
 

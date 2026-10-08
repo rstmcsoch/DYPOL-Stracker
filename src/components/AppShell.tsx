@@ -2,8 +2,8 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Activity, AlarmClock, AlertTriangle, ArrowDownToLine, BookOpen, CalendarDays, Check,
-  ChevronRight, CircleHelp, Cloud, CloudOff, Focus, Home, ListChecks, MoreHorizontal,
-  NotebookPen, RotateCcw, Search, Settings, ShieldCheck, Sparkles, Timer, X, Zap, LogOut, type LucideIcon
+  ChevronRight, CircleHelp, Cloud, CloudOff, Compass, Focus, Home, Inbox, Layers, Library, ListChecks, Microscope, MoreHorizontal,
+  NotebookPen, RotateCcw, Search, Settings, ShieldCheck, Sparkles, Timer, X, Zap, LogOut, ClipboardList, type LucideIcon
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
@@ -13,34 +13,59 @@ import { Button, Dialog, Field, IconButton } from './ui'
 import { ThemeToggle } from './ThemeToggle'
 import { indiaToday } from '../lib/date'
 import { createId } from '../lib/id'
+import { computeReminders, shouldFireToday } from '../lib/jee/reminders'
 import { taskInputSchema } from '../lib/task-validation'
 import type { AppData, DailyTask, Priority, Subject } from '../types'
 
-interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean; loopStep?: number }
-const mainNav: NavigationItem[] = [
-  { to: '/', label: 'Home', icon: Home, exact: true },
-  { to: '/syllabus', label: 'Syllabus', icon: BookOpen },
-  { to: '/planner', label: 'Planner', icon: CalendarDays }
-]
+interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
+interface NavigationGroup { caption: string; items: NavigationItem[] }
+
 /**
- * The five-step study loop: log a test, note the mistakes, retry them, revise on
- * schedule, then focus on the next block. Every step has its own page, so the
- * navigation shows the whole workflow in order.
+ * Information architecture: a handful of task-shaped groups instead of a long flat list.
+ * Study = daily doing, Syllabus = what is covered, Tests = measuring and diagnosing,
+ * Revision = remembering, Planning = deciding what comes next. Routes are unchanged.
  */
-const loopNav: NavigationItem[] = [
-  { to: '/tests', label: 'Tests', icon: ListChecks, loopStep: 1 },
-  { to: '/mistakes', label: 'Mistake notebook', icon: NotebookPen, loopStep: 2 },
-  { to: '/retry', label: 'Retry', icon: RotateCcw, loopStep: 3 },
-  { to: '/revision', label: 'Revision', icon: AlarmClock, loopStep: 4 },
-  { to: '/focus', label: 'Focus', icon: Focus, loopStep: 5 }
+const navGroups: NavigationGroup[] = [
+  { caption: 'STUDY', items: [
+    { to: '/', label: 'Home', icon: Home, exact: true },
+    { to: '/focus', label: 'Focus', icon: Focus },
+    { to: '/backlog', label: 'Backlog', icon: Inbox },
+    { to: '/practice', label: 'Practice', icon: ClipboardList }
+  ] },
+  { caption: 'SYLLABUS', items: [
+    { to: '/syllabus', label: 'Syllabus', icon: BookOpen },
+    { to: '/weak-areas', label: 'Weak areas', icon: AlertTriangle },
+    { to: '/pyqs', label: 'PYQs', icon: Library }
+  ] },
+  { caption: 'TESTS', items: [
+    { to: '/tests', label: 'Tests & mocks', icon: ListChecks },
+    { to: '/mock-analysis', label: 'Mock analysis', icon: Microscope },
+    { to: '/mistakes', label: 'Mistake notebook', icon: NotebookPen },
+    { to: '/retry', label: 'Retry', icon: RotateCcw },
+    { to: '/analytics', label: 'Analytics', icon: Activity }
+  ] },
+  { caption: 'REVISION', items: [
+    { to: '/revision', label: 'Revisions', icon: AlarmClock },
+    { to: '/decks', label: 'Formulas & flashcards', icon: Layers }
+  ] },
+  { caption: 'PLANNING', items: [
+    { to: '/study-now', label: 'Study now', icon: Compass },
+    { to: '/planner', label: 'Study plan', icon: CalendarDays }
+  ] },
+  { caption: 'KEEP GOING', items: [
+    { to: '/backup', label: 'Export & backup', icon: ArrowDownToLine },
+    { to: '/settings', label: 'Settings', icon: Settings }
+  ] }
 ]
-const moreNav: NavigationItem[] = [
-  { to: '/analytics', label: 'Analytics', icon: Activity },
-  { to: '/weak-areas', label: 'Weak areas', icon: AlertTriangle },
-  { to: '/backup', label: 'Export & backup', icon: ArrowDownToLine },
-  { to: '/settings', label: 'Settings', icon: Settings }
+/** Bottom bar on phones: the four daily destinations, with everything else under More. */
+const mobileBar: NavigationItem[] = [
+  { to: '/', label: 'Home', icon: Home, exact: true },
+  { to: '/practice', label: 'Practice', icon: ClipboardList },
+  { to: '/tests', label: 'Tests', icon: ListChecks },
+  { to: '/revision', label: 'Revision', icon: AlarmClock }
 ]
-const allNav: NavigationItem[] = [...mainNav, ...loopNav, ...moreNav]
+const allNav: NavigationItem[] = navGroups.flatMap(group => group.items)
+const moreRoutes = new Set(allNav.map(item => item.to).filter(to => !mobileBar.some(item => item.to === to)))
 
 export function AppFrame() {
   const { user, signOut } = useAuth()
@@ -55,6 +80,22 @@ export function AppFrame() {
   const [quickActionsOpen, setQuickActionsOpen] = useState(false)
 
   useEffect(() => { setMobileMore(false) }, [location.pathname])
+
+  // Reminders: checked while the app is open. Fires at most once per IST day, and only when
+  // there is a real item to mention and the browser has granted notification permission.
+  useEffect(() => {
+    if (!data.settings.reminders_enabled || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    const check = () => {
+      const items = computeReminders(data, indiaToday())
+      if (!items.length || !shouldFireToday(data.settings.reminder_time, new Date())) return
+      try {
+        new Notification('Stracker', { body: items.map(item => item.title).join(' · '), tag: 'stracker-daily' })
+      } catch { /* Some mobile browsers only allow notifications from a service worker; the in-app card still shows. */ }
+    }
+    check()
+    const timer = window.setInterval(check, 60_000)
+    return () => window.clearInterval(timer)
+  }, [data])
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
@@ -73,7 +114,7 @@ export function AppFrame() {
   }, [navigate])
 
   const name = data.settings.owner_name || data.profile?.display_name || user?.displayName || 'Your notebook'
-  const activeMore = moreNav.some(item => location.pathname === item.to)
+  const activeMore = [...moreRoutes].some(to => location.pathname === to)
   const statusLabel = syncState === 'syncing' ? 'Syncing' : syncState === 'offline' ? 'Offline' : syncState === 'error' ? 'Sync issue' : syncState === 'local' ? 'On this device' : pendingCount ? `${pendingCount} pending` : 'Synced'
   const StatusIcon = syncState === 'offline' || syncState === 'error' ? CloudOff : syncState === 'local' ? ShieldCheck : Cloud
 
@@ -84,18 +125,12 @@ export function AppFrame() {
         <div className="sidebar-date"><span className="date-dot" />{new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date())}</div>
       </div>
       <div className="sidebar-scroll">
-        <div className="nav-caption">YOUR NOTEBOOK</div>
-        <nav className="nav-list" aria-label="Study sections">
-          {mainNav.map(item => <NavItem key={item.to} {...item} />)}
-        </nav>
-        <div className="nav-divider"><span>THE STUDY LOOP</span><span className="hand-line" /></div>
-        <nav className="nav-list" aria-label="The five-step study loop: test, mistakes, retry, revision, focus">
-          {loopNav.map(item => <NavItem key={item.to} {...item} />)}
-        </nav>
-        <div className="nav-divider"><span>KEEP GOING</span><span className="hand-line" /></div>
-        <nav className="nav-list" aria-label="More study tools">
-          {moreNav.map(item => <NavItem key={item.to} {...item} />)}
-        </nav>
+        {navGroups.map(group => <div key={group.caption} className="nav-group">
+          <div className="nav-caption">{group.caption}</div>
+          <nav className="nav-list" aria-label={`${group.caption.toLowerCase()} sections`}>
+            {group.items.map(item => <NavItem key={item.to} {...item} />)}
+          </nav>
+        </div>)}
       </div>
       <div className="sidebar-bottom">
         <button className="sidebar-search" onClick={() => setSearchOpen(true)}><Search size={16} /><span>Search your notebook</span><kbd>⌘ K</kbd></button>
@@ -136,8 +171,7 @@ export function AppFrame() {
     </main>
 
     <nav className="mobile-nav" aria-label="Mobile navigation">
-      <MobileNavItem item={mainNav[0]!} />
-      {loopNav.slice(0, 3).map(item => <MobileNavItem key={item.to} item={item} />)}
+      {mobileBar.map(item => <MobileNavItem key={item.to} item={item} />)}
       <button className={`mobile-nav-item ${activeMore || mobileMore ? 'active' : ''}`} onClick={() => setMobileMore(true)} aria-expanded={mobileMore}>
         <MoreHorizontal size={20} /><span>More</span>
       </button>
@@ -146,12 +180,10 @@ export function AppFrame() {
       <div className="mobile-sheet" role="dialog" aria-modal="true" aria-label="More navigation">
         <div className="sheet-handle" /><div className="sheet-head"><div><span className="eyebrow">STUDY TOOLS</span><h2>More to explore</h2></div><IconButton label="Close navigation" onClick={() => setMobileMore(false)}><X size={19} /></IconButton></div>
         <nav className="sheet-nav">
-          <div className="sheet-nav-caption">Your notebook</div>
-          {[mainNav[1]!, mainNav[2]!].map(item => <NavItem key={item.to} {...item} onClick={() => setMobileMore(false)} />)}
-          <div className="sheet-nav-caption">The study loop</div>
-          {loopNav.map(item => <NavItem key={item.to} {...item} onClick={() => setMobileMore(false)} />)}
-          <div className="sheet-nav-caption">Keep going</div>
-          {moreNav.map(item => <NavItem key={item.to} {...item} onClick={() => setMobileMore(false)} />)}
+          {navGroups.map(group => <div key={group.caption}>
+            <div className="sheet-nav-caption">{group.caption.charAt(0) + group.caption.slice(1).toLowerCase()}</div>
+            {group.items.filter(item => !mobileBar.some(bar => bar.to === item.to)).map(item => <NavItem key={item.to} {...item} onClick={() => setMobileMore(false)} />)}
+          </div>)}
           <button className="nav-link sheet-help" onClick={() => { setMobileMore(false); setShortcutsOpen(true) }}><CircleHelp size={18} /><span>Keyboard shortcuts</span></button>
           <button className="nav-link sheet-help" onClick={() => { setMobileMore(false); void signOut() }}><LogOut size={18} /><span>Sign out</span></button>
         </nav>
@@ -163,6 +195,7 @@ export function AppFrame() {
       {quickActionsOpen && <div className="quick-action-menu" aria-label="Quick actions">
         <button onClick={() => { setQuickActionsOpen(false); setQuickTaskOpen(true) }}><ListChecks size={17} /><span>Plan a task</span><kbd>N</kbd></button>
         <button onClick={() => { setQuickActionsOpen(false); navigate('/tests?add=1') }}><NotebookPen size={17} /><span>Add a test</span><kbd>T</kbd></button>
+        <button onClick={() => { setQuickActionsOpen(false); navigate('/practice?add=1') }}><ClipboardList size={17} /><span>Log practice</span></button>
         <button onClick={() => { setQuickActionsOpen(false); navigate('/focus') }}><Focus size={17} /><span>Focus session</span><Timer size={15} /></button>
       </div>}
       <button className={`quick-action-fab ${quickActionsOpen ? 'fab-open' : ''}`} onClick={() => setQuickActionsOpen(open => !open)} aria-label={quickActionsOpen ? 'Close quick actions' : 'Open quick actions'} aria-expanded={quickActionsOpen}>
@@ -179,10 +212,9 @@ export function AppFrame() {
   </div>
 }
 
-function NavItem({ to, label, icon: Icon, exact, loopStep, onClick }: NavigationItem & { onClick?: () => void }) {
+function NavItem({ to, label, icon: Icon, exact, onClick }: NavigationItem & { onClick?: () => void }) {
   return <NavLink to={to} end={exact} onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
     <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
-    {loopStep && <span className="nav-loop-step" aria-hidden="true">{loopStep}</span>}
   </NavLink>
 }
 

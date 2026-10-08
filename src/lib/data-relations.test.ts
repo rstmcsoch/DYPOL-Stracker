@@ -11,7 +11,7 @@ const now = '2026-10-08T12:00:00.000Z'
 function dataWithRelations(): AppData {
   const chapter: Chapter = {
     id: chapterId, created_at: now, updated_at: now, subject: 'Physics', name: 'Kinematics', position: 0,
-    status: 'Done', priority: 'Medium', weightage: null, notes: '', formula_notes: '', completed_on: '2026-10-01'
+    status: 'Done', priority: 'Medium', importance: 'medium', weightage: null, notes: '', formula_notes: '', completed_on: '2026-10-01'
   }
   const test: TestRecord = {
     id: testId, created_at: now, updated_at: now, title: 'Mock', test_date: '2026-10-08', test_type: 'Full Mock',
@@ -33,7 +33,7 @@ function dataWithRelations(): AppData {
   }
   const session: StudySession = {
     id: '60000000-0000-4000-8000-000000000001', created_at: now, updated_at: now, subject: 'Physics',
-    chapter_id: chapterId, started_at: now, ended_at: now, duration_minutes: 25, completion_state: 'completed', mode: 'Pomodoro'
+    chapter_id: chapterId, started_at: now, ended_at: now, duration_minutes: 25, completion_state: 'completed', mode: 'Pomodoro', activity: 'Practice'
   }
   const score: TestSubjectScore = {
     id: '70000000-0000-4000-8000-000000000001', created_at: now, updated_at: now,
@@ -45,7 +45,7 @@ function dataWithRelations(): AppData {
   }
   return {
     chapters: [chapter], revisions: [revision], tests: [test], testSubjectScores: [score], testChapterLinks: [link],
-    mistakes: [mistake], tasks: [task], goals: [], sessions: [session], settings: defaultSettings(userId), profile: null
+    mistakes: [mistake], tasks: [task], goals: [], sessions: [session], practiceSessions: [], pyqRecords: [], chapterStages: [], backlogItems: [], studyCards: [], testErrorLogs: [], testTimeEntries: [], examTracks: [], settings: defaultSettings(userId), profile: null
   }
 }
 

@@ -25,6 +25,12 @@ const WeakAreasPage = lazy(() => import('./pages/WeakAreasPage'))
 const BackupPage = lazy(() => import('./pages/BackupPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const FocusPage = lazy(() => import('./pages/FocusPage'))
+const PracticePage = lazy(() => import('./pages/PracticePage'))
+const PyqPage = lazy(() => import('./pages/PyqPage'))
+const BacklogPage = lazy(() => import('./pages/BacklogPage'))
+const MockAnalysisPage = lazy(() => import('./pages/MockAnalysisPage'))
+const DecksPage = lazy(() => import('./pages/DecksPage'))
+const StudyNowPage = lazy(() => import('./pages/StudyNowPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -100,6 +106,12 @@ function AppRoutes() {
           <Route path="backup" element={<BackupPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="focus" element={<FocusPage />} />
+          <Route path="practice" element={<PracticePage />} />
+          <Route path="pyqs" element={<PyqPage />} />
+          <Route path="backlog" element={<BacklogPage />} />
+          <Route path="mock-analysis" element={<MockAnalysisPage />} />
+          <Route path="decks" element={<DecksPage />} />
+          <Route path="study-now" element={<StudyNowPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Route>

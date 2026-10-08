@@ -1,17 +1,17 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { defaultSettings, seedChapters } from '../lib/defaults'
+import { defaultExamTracks, defaultSettings, normalizeSettings, seedChapters } from '../lib/defaults'
 import { assetKey, localDb } from '../lib/database'
 import { createId } from '../lib/id'
-import { normalizeInterfaceFont } from '../lib/fonts'
 import { relatedRowsForRemoval } from '../lib/data-relations'
 import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type {
-  AppData, AppSettings, Chapter, DailyTask, Mistake, Profile, QueuedChange, RecordFor,
-  Revision, StudySession, TableName, TestChapterLink, TestRecord, TestSubjectScore, WeeklyGoal
+  AppData, AppSettings, BacklogItem, Chapter, ChapterStage, DailyTask, Mistake, PracticeSession,
+  Profile, PyqRecord, QueuedChange, RecordFor, Revision, StudyCard, StudySession, TableName,
+  TestChapterLink, TestErrorLog, TestRecord, TestSubjectScore, TestTimeEntry, UserExamTrack, WeeklyGoal
 } from '../types'
 
 export type SyncState = 'loading' | 'syncing' | 'synced' | 'offline' | 'local' | 'error'
@@ -38,12 +38,16 @@ interface DataContextValue {
 const DataContext = createContext<DataContextValue | null>(null)
 const TABLES: TableName[] = [
   'profiles', 'app_settings', 'chapters', 'chapter_revisions', 'tests', 'test_subject_scores',
-  'test_chapter_links', 'mistakes', 'daily_tasks', 'weekly_goals', 'study_sessions'
+  'test_chapter_links', 'mistakes', 'daily_tasks', 'weekly_goals', 'study_sessions',
+  'practice_sessions', 'pyq_records', 'chapter_stages', 'backlog_items', 'study_cards',
+  'test_error_logs', 'test_time_entries', 'user_exam_tracks'
 ]
 
 const emptyData = (userId: string): AppData => ({
   chapters: [], revisions: [], tests: [], testSubjectScores: [], testChapterLinks: [], mistakes: [],
-  tasks: [], goals: [], sessions: [], settings: defaultSettings(userId), profile: null
+  tasks: [], goals: [], sessions: [], practiceSessions: [], pyqRecords: [], chapterStages: [],
+  backlogItems: [], studyCards: [], testErrorLogs: [], testTimeEntries: [], examTracks: [],
+  settings: defaultSettings(userId), profile: null
 })
 
 function rowsFor(data: AppData, table: TableName): Record<string, unknown>[] {
@@ -59,6 +63,14 @@ function rowsFor(data: AppData, table: TableName): Record<string, unknown>[] {
     case 'daily_tasks': return data.tasks as unknown as Record<string, unknown>[]
     case 'weekly_goals': return data.goals as unknown as Record<string, unknown>[]
     case 'study_sessions': return data.sessions as unknown as Record<string, unknown>[]
+    case 'practice_sessions': return data.practiceSessions as unknown as Record<string, unknown>[]
+    case 'pyq_records': return data.pyqRecords as unknown as Record<string, unknown>[]
+    case 'chapter_stages': return data.chapterStages as unknown as Record<string, unknown>[]
+    case 'backlog_items': return data.backlogItems as unknown as Record<string, unknown>[]
+    case 'study_cards': return data.studyCards as unknown as Record<string, unknown>[]
+    case 'test_error_logs': return data.testErrorLogs as unknown as Record<string, unknown>[]
+    case 'test_time_entries': return data.testTimeEntries as unknown as Record<string, unknown>[]
+    case 'user_exam_tracks': return data.examTracks as unknown as Record<string, unknown>[]
   }
 }
 
@@ -75,6 +87,14 @@ function replaceRows(data: AppData, table: TableName, rows: Record<string, unkno
     case 'daily_tasks': return { ...data, tasks: rows as unknown as DailyTask[] }
     case 'weekly_goals': return { ...data, goals: rows as unknown as WeeklyGoal[] }
     case 'study_sessions': return { ...data, sessions: rows as unknown as StudySession[] }
+    case 'practice_sessions': return { ...data, practiceSessions: rows as unknown as PracticeSession[] }
+    case 'pyq_records': return { ...data, pyqRecords: rows as unknown as PyqRecord[] }
+    case 'chapter_stages': return { ...data, chapterStages: rows as unknown as ChapterStage[] }
+    case 'backlog_items': return { ...data, backlogItems: rows as unknown as BacklogItem[] }
+    case 'study_cards': return { ...data, studyCards: rows as unknown as StudyCard[] }
+    case 'test_error_logs': return { ...data, testErrorLogs: rows as unknown as TestErrorLog[] }
+    case 'test_time_entries': return { ...data, testTimeEntries: rows as unknown as TestTimeEntry[] }
+    case 'user_exam_tracks': return { ...data, examTracks: rows as unknown as UserExamTrack[] }
   }
 }
 
@@ -87,10 +107,17 @@ function updateOne(data: AppData, table: TableName, row: Record<string, unknown>
 
 async function readLocal(userId: string): Promise<AppData> {
   const byUser = async (table: TableName) => (await localDb.table(table).where('user_id').equals(userId).toArray()) as Record<string, unknown>[]
-  const [chapters, revisions, tests, subjectScores, chapterLinks, mistakes, tasks, goals, sessions, settings, profiles, assets] = await Promise.all([
+  const [
+    chapters, revisions, tests, subjectScores, chapterLinks, mistakes, tasks, goals, sessions,
+    practiceSessions, pyqRecords, chapterStages, backlogItems, studyCards, testErrorLogs,
+    testTimeEntries, examTracks, settings, profiles, assets
+  ] = await Promise.all([
     byUser('chapters'), byUser('chapter_revisions'), byUser('tests'), byUser('test_subject_scores'),
     byUser('test_chapter_links'), byUser('mistakes'), byUser('daily_tasks'), byUser('weekly_goals'),
-    byUser('study_sessions'), byUser('app_settings'), byUser('profiles'), localDb.assets.where('user_id').equals(userId).toArray()
+    byUser('study_sessions'), byUser('practice_sessions'), byUser('pyq_records'), byUser('chapter_stages'),
+    byUser('backlog_items'), byUser('study_cards'), byUser('test_error_logs'), byUser('test_time_entries'),
+    byUser('user_exam_tracks'), byUser('app_settings'), byUser('profiles'),
+    localDb.assets.where('user_id').equals(userId).toArray()
   ])
   const localSettings = settings[0] as unknown as AppSettings | undefined
   const enrichedMistakes = mistakes.map(row => {
@@ -102,12 +129,12 @@ async function readLocal(userId: string): Promise<AppData> {
     chapters: chapters as unknown as Chapter[], revisions: revisions as unknown as Revision[], tests: tests as unknown as TestRecord[],
     testSubjectScores: subjectScores as unknown as TestSubjectScore[], testChapterLinks: chapterLinks as unknown as TestChapterLink[],
     mistakes: enrichedMistakes as unknown as Mistake[], tasks: tasks as unknown as DailyTask[], goals: goals as unknown as WeeklyGoal[],
-    sessions: sessions as unknown as StudySession[], settings: localSettings ? ({
-      ...localSettings,
-      main_exam_date: localSettings.main_exam_date ?? '',
-      advanced_exam_date: localSettings.advanced_exam_date ?? '',
-      interface_font: normalizeInterfaceFont(localSettings.interface_font)
-    }) : defaultSettings(userId),
+    sessions: sessions as unknown as StudySession[], practiceSessions: practiceSessions as unknown as PracticeSession[],
+    pyqRecords: pyqRecords as unknown as PyqRecord[], chapterStages: chapterStages as unknown as ChapterStage[],
+    backlogItems: backlogItems as unknown as BacklogItem[], studyCards: studyCards as unknown as StudyCard[],
+    testErrorLogs: testErrorLogs as unknown as TestErrorLog[], testTimeEntries: testTimeEntries as unknown as TestTimeEntry[],
+    examTracks: examTracks as unknown as UserExamTrack[],
+    settings: localSettings ? normalizeSettings(localSettings as unknown as Record<string, unknown>, userId) : defaultSettings(userId),
     profile: (profiles[0] as unknown as Profile | undefined) ?? null
   }
 }
@@ -126,6 +153,7 @@ function cleanForCloud(row: Record<string, unknown>): Record<string, unknown> {
   const clean = { ...row }
   if (clean.main_exam_date === '') clean.main_exam_date = null
   if (clean.advanced_exam_date === '') clean.advanced_exam_date = null
+  if (clean.exam_date === '') clean.exam_date = null
   delete clean.image_data
   delete clean.image_preview
   delete clean.image_pending
@@ -221,12 +249,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           const localTime = String(change.record.updated_at ?? change.queued_at)
           const remoteTime = typeof remote?.updated_at === 'string' ? remote.updated_at : ''
           if (remote && remoteTime > localTime) {
-            const normalized = change.table === 'app_settings' ? {
-              ...remote,
-              main_exam_date: remote.main_exam_date ?? '',
-              advanced_exam_date: remote.advanced_exam_date ?? '',
-              interface_font: normalizeInterfaceFont(remote.interface_font)
-            } : remote
+            const normalized = change.table === 'app_settings' ? normalizeSettings(remote, userId) : remote
             await localDb.table(change.table).put(normalized as object)
             setData(current => updateOne(current, change.table, normalized as Record<string, unknown>))
           } else {
@@ -279,12 +302,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }))
       const next = emptyData(userId)
       for (const [table, rawRows] of fetched) {
-        let rows = table === 'app_settings' ? rawRows.map(row => ({
-          ...row,
-          main_exam_date: row.main_exam_date ?? '',
-          advanced_exam_date: row.advanced_exam_date ?? '',
-          interface_font: normalizeInterfaceFont(row.interface_font)
-        })) : rawRows
+        let rows = table === 'app_settings' ? rawRows.map(row => normalizeSettings(row, userId) as unknown as Record<string, unknown>) : rawRows
         if (table === 'mistakes') {
           rows = await Promise.all(rawRows.map(async row => {
             const cached = queryDataRef.current?.mistakes.find(item => item.id === row.id)
@@ -320,6 +338,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (error) throw error
         await localDb.chapters.bulkPut(initial)
         next.chapters = initial
+      }
+      if (next.examTracks.length === 0) {
+        const tracks = defaultExamTracks(userId)
+        const { error } = await cloud.from('user_exam_tracks').upsert(tracks)
+        if (error) throw error
+        await localDb.user_exam_tracks.bulkPut(tracks)
+        next.examTracks = tracks
       }
       queryClient.setQueryData<AppData>(['stracker-data', userId], next)
       await updatePending()
@@ -368,11 +393,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const profile = cached.profile ?? { id: userId, user_id: userId, display_name: user?.displayName ?? 'Study notebook', email: user?.email ?? '', created_at: now, updated_at: now }
         const settings = cached.settings ?? defaultSettings(userId, profile.display_name)
         const chapters = cached.chapters.length ? cached.chapters : seedChapters(userId)
+        const examTracks = cached.examTracks.length ? cached.examTracks : defaultExamTracks(userId)
         await Promise.all([
           localDb.profiles.put(profile), localDb.app_settings.put(settings),
-          cached.chapters.length ? Promise.resolve() : localDb.chapters.bulkPut(chapters)
+          cached.chapters.length ? Promise.resolve() : localDb.chapters.bulkPut(chapters),
+          cached.examTracks.length ? Promise.resolve() : localDb.user_exam_tracks.bulkPut(examTracks)
         ])
-        queryClient.setQueryData<AppData>(['stracker-data', userId], { ...cached, profile, settings, chapters })
+        queryClient.setQueryData<AppData>(['stracker-data', userId], { ...cached, profile, settings, chapters, examTracks })
         setSyncState('local')
       } else void refresh()
     }

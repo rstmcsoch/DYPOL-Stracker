@@ -15,6 +15,7 @@
 - **Privacy and offline support:** Supabase Auth, user-scoped PostgreSQL tables with RLS, a private image bucket, browser-local IndexedDB caching, and an owner-scoped sync queue for offline changes.
 - **Appearance controls:** a light/night switch in the top-right corner (desktop header and mobile top bar) that stays in step with the theme choice in Settings, plus an interface-font preference — Default (the Stracker notebook hand), Poppins, Sora, or Open Sans.
 - **Public homepage and separate authentication:** a marketing-free product homepage on `/` for visitors, dedicated `/login` and `/signup` pages, and password recovery on `/reset-password`. Signed-in visitors go straight to the notebook instead.
+- **JEE preparation system:** a Practice / DPP log per chapter (attempted, correct, incorrect, accuracy, source, optional time) kept separate from tests; a PYQ tracker for JEE Main and Advanced by year, with bulk actions and configurable year range; five independent chapter stages (Theory → Notes → PYQs → Revised → Tested) that accept real evidence from revisions, tests and PYQ records; a Backlog for skipped lectures, unsolved DPPs and come-back topics with snooze, due dates and grouping; weighted syllabus progress shown beside the raw count; study time split into Lecture, Practice and Revision, with a streak rule stated in the UI; mock deep-dive with time and attempts per subject, lost-mark classification and derived "fix before your next mock" insights; formula and flashcard decks on the R1 → R7 → R30 ladder; exam tracks (Main Session 1 and 2, Advanced, Boards) over one shared syllabus with Exam Mode in the final 30 days; a deterministic “What should I study now?” engine that explains every ranking; a weekly report that only compares weeks with real data; and in-app plus browser-notification reminders.
 - **Installable PWA:** application manifest, service worker, app icons, and offline-cached application shell.
 
 The seeded syllabus is an editable topic grouping, not a claim that an official JEE 2027 notification has been published. Check the current NTA/JEE bulletin when it is released and adjust the list in the notebook if the official syllabus changes.
@@ -27,7 +28,7 @@ The seeded syllabus is an editable topic grouping, not a claim that an official 
 | `/login` | Log-in page | Redirected to `/` |
 | `/signup` | Sign-up page (real Supabase account) | Redirected to `/` |
 | `/reset-password` | Request a reset link, or set a new password from the emailed link | Same page; the recovery link needs this route, so it is never redirected away |
-| `/syllabus`, `/tests`, `/mistakes`, `/retry`, `/planner`, `/revision`, `/analytics`, `/weak-areas`, `/backup`, `/settings`, `/focus` | Redirected to `/login` | The notebook |
+| `/syllabus`, `/tests`, `/mistakes`, `/retry`, `/planner`, `/revision`, `/analytics`, `/weak-areas`, `/backup`, `/settings`, `/focus`, `/practice`, `/pyqs`, `/backlog`, `/mock-analysis`, `/decks`, `/study-now` | Redirected to `/login` | The notebook |
 
 The guard is a single check on the restored session, so there is no redirect loop: while the session is being restored nothing else renders, and the installed PWA (`start_url: "/"`) opens the homepage for visitors and the notebook for signed-in users. A signed-out deep link such as `/syllabus` is remembered and replayed after a successful log-in.
 
@@ -61,6 +62,16 @@ npm test
 npm audit
 ```
 
+## JEE preparation: how the numbers are defined
+
+- **Practice accuracy** = correct ÷ attempted for the blocks in view. Correct + incorrect may not exceed attempted. Practice blocks never count as tests. A chapter is flagged “Practice weak” only with at least 20 questions.
+- **Minutes on a practice block** are mirrored into study time under the Practice activity, using a stable ID. Editing or deleting the block updates or removes that time, and Undo restores both.
+- **Raw syllabus completion** = chapters marked Done or Revised ÷ all chapters. **Weighted** uses each chapter’s importance (High / Medium / Low), multiplied by the weights in Settings → Exam. Every chapter starts at Medium, so the two numbers match until you change something. No JEE weightage is assumed anywhere.
+- **Streak day**: 15+ minutes of recorded study, a practice log with questions attempted, a completed revision, or a logged test. Opening pages never counts.
+- **Exam Mode** turns on automatically in the 30 days before the active track’s date, or by hand. It stops suggesting new theory and boosts revision, PYQs, mocks and weak-area fixes. Auto mode needs a date.
+- **Study now** ranks candidates from overdue and due revisions, due backlog, due flashcards, mistakes awaiting retry, weak practice or test chapters, pending PYQs and mock losses, scaled by importance. Every result lists the reasons behind it.
+- **Reminders** are checked while Stracker is open, at most once per day, and only for types that have something real to report. They are not background push notifications.
+
 ## Appearance and typography
 
 Settings is organised into five tabs — **Account, Exam, Appearance, Study rhythm, and Data** — so long forms stay scannable. Each tab keeps its own draft, shows a dot while it has unsaved edits, and saves independently; the arrow keys move between tabs. Data resets and sign-out live in the Data and Account tabs behind their own confirmation dialogs, never behind a plain Save.
@@ -82,6 +93,8 @@ Only the default cut of each family is loaded (latin subset, regular to bold) an
 
 1. Create a Supabase project and keep its URL and **publishable/anon key** available for the browser app.
 2. Apply the migrations in [`supabase/migrations/`](supabase/migrations) in filename order (starting with `202610070001_init.sql`) from the Supabase SQL Editor or with the Supabase CLI. It creates the application tables, owner-only RLS policies, timestamp triggers, a private `mistake-images` bucket, storage ownership policies, and the `handle_new_user` profile trigger.
+2a. **Also apply `20261008180000_jee_prep_features.sql`** after the migrations above. It is additive only: it adds columns with safe defaults to `study_sessions`, `chapters` and `app_settings`, and creates the owner-scoped tables for practice, PYQs, chapter stages, backlog, flashcards, mock error logs and time entries, and exam tracks. Existing rows are not changed. Deploy this migration before the app that uses it: the sync layer reads the new tables on every refresh, so an unmigrated project will report a sync error.
+
 3. In **Authentication → Sign In / Providers → Email**, enable **Allow new users to sign up** so the public `/signup` page can create accounts, and decide whether email confirmation is required. Every account gets its own RLS-scoped notebook: chapters, tests, mistakes, revisions, plans and sessions are readable only by the account that wrote them, so an open sign-up never exposes another student's records. Turning sign-ups off again also works — `/signup` then reports that this deployment does not accept new accounts, and existing users keep signing in.
 4. In **Authentication → URL Configuration**, add the deployed app URL, its `/signup` route as a redirect target for confirmation emails, and its `/reset-password` route to the allowed redirect URLs. Configure the email provider and password-reset delivery to suit your project.
 5. Copy `.env.example` to `.env.local` and set:
