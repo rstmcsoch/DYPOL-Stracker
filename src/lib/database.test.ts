@@ -21,7 +21,7 @@ describe('local database ownership indexes', () => {
     await localDb.open()
     const chapter = (id: string, user_id: string) => ({
       id, user_id, subject: 'Physics' as const, name: `Chapter ${user_id}`, position: 0,
-      status: 'Not Started' as const, priority: 'Medium' as const, weightage: null,
+      status: 'Not Started' as const, priority: 'Medium' as const, importance: 'medium' as const, weightage: null,
       notes: '', formula_notes: '', completed_on: null, created_at: 'now', updated_at: 'now'
     })
     await localDb.chapters.bulkPut([chapter(`${sharedRecordId}-a`, ownerA), chapter(`${sharedRecordId}-b`, ownerB)])

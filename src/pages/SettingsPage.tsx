@@ -10,7 +10,10 @@ import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
 import { INTERFACE_FONT_OPTIONS } from '../lib/fonts'
 import { settingsFieldErrors, settingsSchema } from '../lib/settings-validation'
+import { passwordLengthError } from '../lib/auth-rules'
 import { AISettingsSection } from '../components/ai/AISettingsSection'
+import { ExamTracksSection, ReminderSettingsSection } from '../components/jee/SettingsSections'
+import { ListChecks } from 'lucide-react'
 import type { AppSettings, InterfaceFont, Profile, ThemeMode } from '../types'
 
 type SettingsTab = 'account' | 'exam' | 'appearance' | 'rhythm' | 'data'
@@ -26,9 +29,9 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
 /** Which persisted settings each tab owns. Saving a tab writes only its own fields. */
 const TAB_FIELDS: Record<Exclude<SettingsTab, 'data'>, (keyof AppSettings)[]> = {
   account: ['owner_name'],
-  exam: ['main_exam_date', 'advanced_exam_date', 'target_score'],
+  exam: ['main_exam_date', 'advanced_exam_date', 'target_score', 'active_track', 'exam_mode', 'weight_high', 'weight_medium', 'weight_low', 'pyq_from_year', 'pyq_to_year'],
   appearance: ['theme', 'interface_font'],
-  rhythm: ['weak_threshold', 'strong_threshold', 'dropping_threshold', 'revision_gaps', 'daily_study_goal_minutes', 'sound_enabled']
+  rhythm: ['weak_threshold', 'strong_threshold', 'dropping_threshold', 'revision_gaps', 'daily_study_goal_minutes', 'sound_enabled', 'reminders_enabled', 'reminder_time', 'reminder_types']
 }
 
 export default function SettingsPage() {
@@ -318,6 +321,24 @@ export default function SettingsPage() {
               <Field label="JEE Advanced date" error={errors.advanced_exam_date}><input type="date" value={draft.advanced_exam_date} onChange={event => patch('advanced_exam_date', event.target.value)} /></Field>
               <Field label="Target score" error={errors.target_score}><input type="number" min="0" max="999999.99" step="0.01" value={Number.isFinite(draft.target_score) ? draft.target_score : ''} onChange={event => patch('target_score', event.target.value === '' ? Number.NaN : Number(event.target.value))} /><span className="field-hint">Compared to a mock with all three subject totals.</span></Field>
             </div><div className="settings-note-line"><Target size={15} /> Leave dates blank until the official dates are confirmed.</div></div></NotebookCard>
+
+            <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Active track & Exam Mode" note="Tracks share one syllabus. The active track sets the countdown and when Exam Mode turns on." /><div className="settings-section-content"><div className="form-grid three">
+              <Field label="Active track" error={errors.active_track}><select value={draft.active_track} onChange={event => patch('active_track', event.target.value as AppSettings['active_track'])}><option value="main1">JEE Main — Session 1</option><option value="main2">JEE Main — Session 2</option><option value="advanced">JEE Advanced</option><option value="boards">Boards</option></select></Field>
+              <Field label="Exam Mode" error={errors.exam_mode}><select value={draft.exam_mode} onChange={event => patch('exam_mode', event.target.value as AppSettings['exam_mode'])}><option value="auto">Automatic (final 30 days)</option><option value="on">Always on</option><option value="off">Off</option></select></Field>
+            </div><p className="jee-small jee-muted">Automatic Exam Mode needs a date for the active track. It favours revision, PYQs, mocks and weak-area fixes, and stops suggesting new theory.</p></div></NotebookCard>
+
+            <NotebookCard className="settings-section"><SectionLabel icon={<Target size={18} />} title="Weighted progress" note="Chapter importance multiplies into weighted completion. These numbers are yours to set — no JEE weightage is assumed." /><div className="settings-section-content"><div className="form-grid three">
+              <Field label="High importance ×" error={errors.weight_high}><input type="number" min="0.1" max="10" step="0.01" value={Number.isFinite(draft.weight_high) ? draft.weight_high : ''} onChange={event => patch('weight_high', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
+              <Field label="Medium importance ×" error={errors.weight_medium}><input type="number" min="0.1" max="10" step="0.01" value={Number.isFinite(draft.weight_medium) ? draft.weight_medium : ''} onChange={event => patch('weight_medium', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
+              <Field label="Low importance ×" error={errors.weight_low}><input type="number" min="0.1" max="10" step="0.01" value={Number.isFinite(draft.weight_low) ? draft.weight_low : ''} onChange={event => patch('weight_low', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
+            </div></div></NotebookCard>
+
+            <NotebookCard className="settings-section"><SectionLabel icon={<ListChecks size={18} />} title="PYQ year range" note="Years shown as tappable chips for each chapter in the PYQ tracker." /><div className="settings-section-content"><div className="form-grid two">
+              <Field label="First year" error={errors.pyq_from_year}><input type="number" min="1990" max="2100" step="1" value={Number.isFinite(draft.pyq_from_year) ? draft.pyq_from_year : ''} onChange={event => patch('pyq_from_year', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
+              <Field label="Last year" error={errors.pyq_to_year}><input type="number" min="1990" max="2100" step="1" value={Number.isFinite(draft.pyq_to_year) ? draft.pyq_to_year : ''} onChange={event => patch('pyq_to_year', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
+            </div></div></NotebookCard>
+
+            <ExamTracksSection />
           </fieldset>
           <TabActions tab="exam" dirty={isTabDirty('exam')} saving={savingTab === 'exam'} savedTick={savedTabTick === 'exam'} onDiscard={() => discardTabChanges('exam')} />
         </form>
@@ -340,6 +361,8 @@ export default function SettingsPage() {
             <NotebookCard className="settings-section"><SectionLabel icon={<RotateCcw size={18} />} title="Revision rhythm" note="When a chapter is first marked Done, these gaps create its revision schedule." /><div className="settings-section-content"><Field label="Days between revisions" error={errors.revision_gaps}><input value={gapsText} onChange={event => { setGapsText(event.target.value); setErrors(current => { const next = { ...current }; delete next.revision_gaps; return next }) }} placeholder="1, 7, 30" /><span className="field-hint">Comma-separated positive days, sorted automatically. Existing revisions are not moved.</span></Field><div className="revision-gap-preview">{gapsText.split(',').map(value => Number(value.trim())).filter(value => Number.isFinite(value) && value > 0).map((value, index) => <span key={`${value}-${index}`}>R{index + 1}<strong>{value}d</strong></span>)}</div></div></NotebookCard>
 
             <NotebookCard className="settings-section"><SectionLabel icon={<Timer size={18} />} title="Daily goal & focus" note="A gentle baseline for the timer and study heatmap." /><div className="settings-section-content"><div className="form-grid two"><Field label="Daily study goal (hours)" error={errors.daily_study_goal_minutes}><input type="number" min="0" max="24" step="any" value={dailyGoalText} onChange={event => { setDailyGoalText(event.target.value); setErrors(current => { const next = { ...current }; delete next.daily_study_goal_minutes; return next }) }} /><span className="field-hint">Use whole-minute increments (for example, 1.5 hours).</span></Field><label className="sound-toggle"><input type="checkbox" checked={draft.sound_enabled} onChange={event => patch('sound_enabled', event.target.checked)} /><span className="toggle-visual" /><span><strong>Focus timer sound</strong><small>Play a soft tone when a focus session ends.</small></span></label></div><div className="settings-note-line"><Bell size={15} /> Sound is generated locally in your browser; no audio is sent to a service.{draft.sound_enabled && <button className="text-button" type="button" onClick={playTestTone}>{soundTested ? 'Test tone played' : 'Try a tone'}</button>}</div></div></NotebookCard>
+
+            <ReminderSettingsSection draft={draft} patch={patch} errors={errors} />
 
             <NotebookCard className="settings-section"><SectionLabel icon={<Target size={18} />} title="Weak-area thresholds" note="These bands describe test results; they do not judge your preparation." /><div className="settings-section-content"><div className="form-grid three">
               <Field label="Weak below (%)" error={errors.weak_threshold}><input type="number" min="0" max="99.99" step="0.01" value={Number.isFinite(draft.weak_threshold) ? draft.weak_threshold : ''} onChange={event => patch('weak_threshold', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
@@ -395,7 +418,8 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
     event.preventDefault()
     if (savingRef.current) return
     const nextErrors: { password?: string; confirmation?: string } = {}
-    if (password.length < 8) nextErrors.password = 'Use at least 8 characters.'
+    const lengthError = passwordLengthError(password)
+    if (lengthError) nextErrors.password = lengthError
     if (password !== confirmation) nextErrors.confirmation = 'The passwords do not match.'
     if (Object.keys(nextErrors).length) { setErrors(nextErrors); return }
 

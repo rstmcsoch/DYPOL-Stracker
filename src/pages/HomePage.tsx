@@ -8,7 +8,11 @@ import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { Button, EmptyState, NotebookCard, PageHeader, ProgressBar, ProgressRing, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
-import { getSmartTip, getStudyStreak, getTodayStudyMinutes } from '../lib/analytics'
+import { getSmartTip, getTodayStudyMinutes } from '../lib/analytics'
+import { computeStreaks } from '../lib/jee/study-time'
+import { StudyNowCard } from '../components/jee/StudyNowCard'
+import { HomeSnapshot } from '../components/jee/HomeSnapshot'
+import { currentExamMode } from '../lib/jee/exam'
 import { fmtDuration } from '../lib/format'
 import { indiaToday, prettyDate } from '../lib/date'
 import { completeRevision as completeRevisionAction } from '../lib/revision-actions'
@@ -24,7 +28,8 @@ export default function HomePage() {
   const doneTasks = todayTasks.filter(task => task.is_completed).length
   const dayRevisions = data.revisions.filter(revision => !revision.completed_at && revision.due_on <= today).sort((a, b) => a.due_on.localeCompare(b.due_on))
   const todayMinutes = getTodayStudyMinutes(data)
-  const streak = getStudyStreak(data)
+  const streak = computeStreaks(data, today)
+  const examMode = currentExamMode(data, today)
   const progress = data.settings.daily_study_goal_minutes > 0 ? Math.min(100, todayMinutes / data.settings.daily_study_goal_minutes * 100) : 0
   const tip = getSmartTip(data)
   const completedChapters = data.chapters.filter(chapter => chapter.status === 'Done' || chapter.status === 'Revised').length
@@ -71,10 +76,15 @@ export default function HomePage() {
         <div className="card-kicker"><span className="icon-tile orange"><Flame size={17} /></span> YOUR RHYTHM <span className="tiny-star">✦</span></div>
         <div className="streak-number">{streak.current}<span>day{streak.current === 1 ? '' : 's'}</span></div>
         <p className="streak-subtitle">current study streak</p>
-        <div className="streak-bottom"><span><strong>{streak.longest}</strong> longest</span><span className="streak-separator" /><span><strong>{streak.daysThisMonth}</strong> study days this month</span></div>
+        <div className="streak-bottom"><span><strong>{streak.longest}</strong> longest</span><span className="streak-separator" /><span><strong>{streak.weeklyConsistency}/7</strong> active this week</span></div>
+        <p className="jee-small jee-muted streak-rule">{streak.qualifyingToday ? 'Today counts.' : 'A day counts after 15+ min of study, a practice log, a completed revision, or a test.'}</p>
         <div className="streak-sun" aria-hidden="true">☼</div>
       </NotebookCard>
     </section>
+
+    {examMode.active && <div className="exam-mode-banner" role="status"><span className="exam-mode-days">{examMode.daysLeft}</span><div><strong>Exam Mode · {examMode.label}</strong><p>{examMode.reason} Revision, PYQs, mocks and weak-area fixes come first.</p></div></div>}
+    <StudyNowCard />
+    <HomeSnapshot />
 
     <div className="dashboard-grid">
       <section className="today-plan-block">

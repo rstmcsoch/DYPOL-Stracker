@@ -9,6 +9,8 @@ import {
   Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis
 } from 'recharts'
 import { Button, NotebookCard, PageHeader, ProgressBar, ProgressRing, StatusBadge, SubjectBadge } from '../components/ui'
+import { WeeklyReportCard } from '../components/jee/WeeklyReportCard'
+import { LearningPipelineCard } from '../components/jee/LearningPipelineCard'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
@@ -119,6 +121,8 @@ export default function AnalyticsPage() {
 
   return <div className="content-page analytics-page">
     <PageHeader eyebrow="NOT A SCOREBOARD. A COMPASS." title="Analytics" subtitle="Real patterns from your real work. Nothing here is filled in for you." doodle={<Activity size={20} />} action={<Button variant="secondary" onClick={downloadChartCsv}><BarChart3 size={16} /> Export trend CSV</Button>} />
+    <WeeklyReportCard />
+    <LearningPipelineCard />
     <div className="analytics-kpi-grid"><NotebookCard className="analytics-kpi"><span><Activity size={15} /> TESTS LOGGED</span><strong>{data.tests.length}</strong><small>{overallAverage.count} with usable test results</small></NotebookCard><NotebookCard className="analytics-kpi"><span><BookOpen size={15} /> SYLLABUS</span><strong>{totalChapters ? `${doneChapters}/${totalChapters}` : '—'}</strong><small>{totalChapters ? `${Math.round(doneChapters / totalChapters * 100)}% chapters completed` : 'No chapters saved'}</small></NotebookCard><NotebookCard className="analytics-kpi"><span><Clock3 size={15} /> STUDY HOURS</span><strong>{fmtNumber(data.sessions.reduce((sum, session) => sum + session.duration_minutes, 0) / 60, 1)}</strong><small>{data.sessions.length} logged focus session{data.sessions.length === 1 ? '' : 's'}</small></NotebookCard><NotebookCard className="analytics-kpi"><span><Target size={15} /> TEST AVERAGE</span><strong>{averageScore === null ? '—' : `${Math.round(averageScore)}%`}</strong><small>{overallAverage.count ? `Mean of ${overallAverage.count} usable test result${overallAverage.count === 1 ? '' : 's'}; one test counts once` : 'Add a scored test to begin'}</small></NotebookCard></div>
 
     {data.tests.length === 0 && <SamplePreviewCard onAddTest={() => navigate('/tests?add=1')} />}

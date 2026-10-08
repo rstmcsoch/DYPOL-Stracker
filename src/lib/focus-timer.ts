@@ -1,4 +1,4 @@
-import type { Subject } from '../types'
+import type { StudyActivity, Subject } from '../types'
 
 export type FocusMode = 'Pomodoro' | 'Short Break' | 'Long Break' | 'Custom'
 export interface TimerState {
@@ -14,16 +14,19 @@ export interface TimerState {
   chapterId: string | null
   taskId: string | null
   finished: boolean
+  /** What kind of studying this block is. Recorded on the study session. */
+  activity: StudyActivity
 }
 
 export const defaultTimerState: TimerState = {
   mode: 'Pomodoro', durations: { Pomodoro: 25, 'Short Break': 5, 'Long Break': 15, Custom: 40 },
   remainingSeconds: 25 * 60, running: false, endsAt: null, segmentStartedAt: null,
-  focusStartedAt: null, elapsedSeconds: 0, subject: null, chapterId: null, taskId: null, finished: false
+  focusStartedAt: null, elapsedSeconds: 0, subject: null, chapterId: null, taskId: null, finished: false, activity: 'Practice'
 }
 
 const FOCUS_MODES: FocusMode[] = ['Pomodoro', 'Short Break', 'Long Break', 'Custom']
 const SUBJECTS: Subject[] = ['Physics', 'Chemistry', 'Maths']
+const FOCUS_ACTIVITIES: StudyActivity[] = ['Lecture', 'Practice', 'Revision', 'Mock/Test', 'PYQ practice']
 const MAX_TIMER_MINUTES = 180
 
 /** Reject malformed custom times before applying the timer's existing 1–180 minute range. */
@@ -60,7 +63,8 @@ export function sanitizeTimerState(input: unknown, now = Date.now()): TimerState
     subject: SUBJECTS.includes(parsed.subject as Subject) ? parsed.subject as Subject : null,
     chapterId: typeof parsed.chapterId === 'string' ? parsed.chapterId : null,
     taskId: typeof parsed.taskId === 'string' ? parsed.taskId : null,
-    finished: parsed.finished === true
+    finished: parsed.finished === true,
+    activity: FOCUS_ACTIVITIES.includes(parsed.activity as StudyActivity) ? parsed.activity as StudyActivity : defaultTimerState.activity
   }
   if (restored.running && restored.endsAt !== null) restored.remainingSeconds = Math.max(0, Math.min(maxRemaining, Math.ceil((restored.endsAt - now) / 1000)))
   return restored

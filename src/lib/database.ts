@@ -1,7 +1,8 @@
 import Dexie, { type Table } from 'dexie'
 import type {
-  AppSettings, Chapter, DailyTask, Mistake, Profile, QueuedChange, Revision,
-  StudySession, TestChapterLink, TestRecord, TestSubjectScore, WeeklyGoal
+  AppSettings, BacklogItem, Chapter, ChapterStage, DailyTask, Mistake, PracticeSession, Profile,
+  PyqRecord, QueuedChange, Revision, StudyCard, StudySession, TestChapterLink, TestErrorLog,
+  TestRecord, TestSubjectScore, TestTimeEntry, UserExamTrack, WeeklyGoal
 } from '../types'
 
 export interface CachedAsset {
@@ -22,6 +23,14 @@ class StrackerDatabase extends Dexie {
   daily_tasks!: Table<DailyTask, string>
   weekly_goals!: Table<WeeklyGoal, string>
   study_sessions!: Table<StudySession, string>
+  practice_sessions!: Table<PracticeSession, string>
+  pyq_records!: Table<PyqRecord, string>
+  chapter_stages!: Table<ChapterStage, string>
+  backlog_items!: Table<BacklogItem, string>
+  study_cards!: Table<StudyCard, string>
+  test_error_logs!: Table<TestErrorLog, string>
+  test_time_entries!: Table<TestTimeEntry, string>
+  user_exam_tracks!: Table<UserExamTrack, string>
   app_settings!: Table<AppSettings, string>
   profiles!: Table<Profile, string>
   sync_queue!: Table<QueuedChange, number>
@@ -66,6 +75,16 @@ class StrackerDatabase extends Dexie {
         ...asset, mistake_id: asset.mistake_id ?? asset.id, id: assetKey(asset.user_id, asset.mistake_id ?? asset.id)
       })))
     })
+    this.version(3).stores({
+      practice_sessions: '&id, user_id, chapter_id, practice_date, source',
+      pyq_records: '&id, user_id, chapter_id, exam, year, status',
+      chapter_stages: '&id, user_id, chapter_id, stage',
+      backlog_items: '&id, user_id, status, chapter_id, type, due_on',
+      study_cards: '&id, user_id, chapter_id, kind, next_review_at',
+      test_error_logs: '&id, user_id, test_id, chapter_id, category',
+      test_time_entries: '&id, user_id, test_id, subject',
+      user_exam_tracks: '&id, user_id, track'
+    })
   }
 }
 
@@ -75,7 +94,9 @@ export async function clearLocalUserData(userId: string): Promise<void> {
   const tables = [
     localDb.chapters, localDb.chapter_revisions, localDb.tests, localDb.test_subject_scores,
     localDb.test_chapter_links, localDb.mistakes, localDb.daily_tasks, localDb.weekly_goals,
-    localDb.study_sessions, localDb.app_settings, localDb.profiles
+    localDb.study_sessions, localDb.practice_sessions, localDb.pyq_records, localDb.chapter_stages,
+    localDb.backlog_items, localDb.study_cards, localDb.test_error_logs, localDb.test_time_entries,
+    localDb.user_exam_tracks, localDb.app_settings, localDb.profiles
   ]
   await localDb.transaction('rw', [...tables, localDb.sync_queue, localDb.assets], async () => {
     for (const table of tables) {

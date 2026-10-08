@@ -9,7 +9,7 @@ const revision: Revision = {
 }
 const chapter: Chapter = {
   id: revision.chapter_id, created_at: now, updated_at: now, subject: 'Physics', name: 'Kinematics', position: 0,
-  status: 'Done', priority: 'Medium', weightage: null, notes: '', formula_notes: '', completed_on: '2026-10-01'
+  status: 'Done', priority: 'Medium', importance: 'medium', weightage: null, notes: '', formula_notes: '', completed_on: '2026-10-01'
 }
 
 describe('revision completion', () => {

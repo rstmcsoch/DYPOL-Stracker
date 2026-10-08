@@ -6,7 +6,8 @@ import { useToast } from '../contexts/ToastContext'
 import { getChapterPerformance } from '../lib/analytics'
 import { createId } from '../lib/id'
 import { indiaToday, plusDays } from '../lib/date'
-import type { Chapter, ChapterStatus, Priority, Subject } from '../types'
+import type { Chapter, ChapterImportance, ChapterStatus, Priority, Subject } from '../types'
+import { ChapterStageEditor } from '../components/jee/ChapterStageEditor'
 import { SUBJECTS } from '../types'
 
 const STATUSES: ChapterStatus[] = ['Not Started', 'Studying', 'Done', 'Revised']
@@ -262,7 +263,7 @@ export default function SyllabusPage() {
       <div className="syllabus-board-footer"><span><GripVertical size={15} /> Drag the grip to reorder within a subject — or use ⋯ → Move up / Move down</span><span>{filtered.length} showing</span></div>
     </NotebookCard>
     {editing && <ChapterDialog chapter={editing} onClose={() => setEditing(null)} onSave={saveChapter} />}
-    {createSubject && <ChapterDialog chapter={{ id: createId(), user_id: data.profile?.user_id, subject: createSubject, name: '', position: data.chapters.filter(item => item.subject === createSubject).length, status: 'Not Started', priority: 'Medium', weightage: null, notes: '', formula_notes: '', completed_on: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }} onClose={() => setCreateSubject(null)} onSave={saveChapter} isNew />}
+    {createSubject && <ChapterDialog chapter={{ id: createId(), user_id: data.profile?.user_id, subject: createSubject, name: '', position: data.chapters.filter(item => item.subject === createSubject).length, status: 'Not Started', priority: 'Medium', importance: 'medium', weightage: null, notes: '', formula_notes: '', completed_on: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }} onClose={() => setCreateSubject(null)} onSave={saveChapter} isNew />}
     {deleteTarget && <ConfirmDialog title={`Remove “${deleteTarget.name}”?`} message="Its revision schedule will also be removed; linked notes may be affected. You can undo the removal briefly." onCancel={() => setDeleteTarget(null)} onConfirm={() => void deleteChapter()} loading={deletingChapter} />}
   </div>
 }
@@ -329,8 +330,10 @@ function ChapterDialog({ chapter: initial, onClose, onSave, isNew = false }: { c
     <div className="form-stack">
       <div className="form-grid two"><Field label="Chapter name" required><input autoFocus maxLength={140} value={chapter.name} onChange={event => set('name', event.target.value)} placeholder="e.g. Centre of Mass" /></Field><Field label="Subject"><select value={chapter.subject} onChange={event => set('subject', event.target.value as Subject)}>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
       <div className="form-grid three"><Field label="Status"><select value={chapter.status} onChange={event => set('status', event.target.value as ChapterStatus)}>{STATUSES.map(status => <option key={status}>{status}</option>)}</select></Field><Field label="Priority"><select value={chapter.priority} onChange={event => set('priority', event.target.value as Priority)}>{PRIORITIES.map(priority => <option key={priority}>{priority}</option>)}</select></Field><Field label="Weightage (optional)"><input maxLength={80} value={chapter.weightage ?? ''} onChange={event => set('weightage', event.target.value || null)} placeholder="e.g. 4–6 questions" /></Field></div>
+      <Field label="Importance (drives weighted progress)" hint="Set in Settings → Exam → Weighted progress. Medium is the default for every chapter."><select value={chapter.importance ?? 'medium'} onChange={event => set('importance', event.target.value as ChapterImportance)}><option value="high">High importance</option><option value="medium">Medium importance</option><option value="low">Low importance</option></select></Field>
       <Field label="Study notes"><textarea rows={3} maxLength={20000} value={chapter.notes} onChange={event => set('notes', event.target.value)} placeholder="What do you want to remember about this chapter?" /></Field>
       <Field label="Formulas & shortcuts"><textarea rows={3} maxLength={20000} value={chapter.formula_notes} onChange={event => set('formula_notes', event.target.value)} placeholder="Useful formulas, conditions, shortcuts…" /></Field>
+      {!isNew && <ChapterStageEditor chapter={chapter} />}
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button><Button loading={saving} onClick={() => void save()}>{saving ? 'Saving…' : isNew ? 'Add chapter' : 'Save notes'} <Check size={16} /></Button></div>
     </div>
   </Dialog>

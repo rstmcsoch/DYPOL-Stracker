@@ -202,6 +202,9 @@ async function analyticsData(client: SupabaseClient, userId: string, includeChap
   ])
   return {
     chapters, revisions, tests, testSubjectScores, testChapterLinks, mistakes, tasks, goals, sessions,
+    // Practice/PYQ/backlog collections are not exposed to the AI analytics tools yet.
+    practiceSessions: [], pyqRecords: [], chapterStages: [], backlogItems: [], studyCards: [],
+    testErrorLogs: [], testTimeEntries: [], examTracks: [],
     settings: settingsRows[0] ?? defaultSettings(userId), profile: null
   }
 }

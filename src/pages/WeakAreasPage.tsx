@@ -4,7 +4,9 @@ import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronUp, Minus, Plus, Targ
 import { Button, EmptyState, NotebookCard, PageHeader, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { getChapterPerformance } from '../lib/analytics'
-import type { Subject } from '../types'
+import { practiceByChapter, PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL, type PracticeAggregate } from '../lib/jee/progress'
+import { Meter, Pct } from '../components/jee/shared'
+import type { Chapter, Subject } from '../types'
 import { SUBJECTS } from '../types'
 
 const MOBILE_VISIBLE_LIMIT = 8
@@ -22,6 +24,14 @@ export default function WeakAreasPage() {
   const weak = tested.filter(item => item.classification === 'Weak')
   const strong = tested.filter(item => item.classification === 'Strong')
   const dropCount = tested.filter(item => item.dropping).length
+  const practice = useMemo(() => practiceByChapter(data), [data])
+  // Practice is a second, independent signal: low accuracy on a meaningful number of questions, or many misses.
+  const practiceWeak = data.chapters
+    .filter(chapter => subject === 'all' || chapter.subject === subject)
+    .map(chapter => ({ chapter, agg: practice.get(chapter.id) }))
+    .filter((item): item is { chapter: Chapter; agg: PracticeAggregate } => Boolean(item.agg))
+    .filter(item => item.agg.attempted >= PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL && item.agg.accuracy !== null && (item.agg.accuracy < data.settings.weak_threshold || item.agg.incorrect >= 40))
+    .sort((a, b) => (a.agg.accuracy ?? 0) - (b.agg.accuracy ?? 0))
   const pageClass = `content-page weak-page${showAllTestedMobile ? ' mobile-tested-expanded' : ''}`
 
   return <div className={pageClass}>
@@ -29,6 +39,12 @@ export default function WeakAreasPage() {
     <div className="weak-rule-banner"><span className="rule-pencil">✎</span><p>Current bands: <strong>Weak &lt; {data.settings.weak_threshold}%</strong><span>·</span><strong>Okay {data.settings.weak_threshold}–{data.settings.strong_threshold}%</strong><span>·</span><strong>Strong &gt; {data.settings.strong_threshold}%</strong></p><button onClick={() => navigate('/settings')}>Adjust in Settings ↗</button></div>
     <div className="weak-overview-grid"><NotebookCard className="weak-overview-item weak-tint"><div><span className="weak-overview-icon"><TriangleAlert size={17} /></span><span className="eyebrow">NEEDS ANOTHER LOOK</span></div><strong>{weak.length}</strong><small>chapter{weak.length === 1 ? '' : 's'} below the weak-area threshold</small></NotebookCard><NotebookCard className="weak-overview-item dropping-tint"><div><span className="weak-overview-icon"><TrendingDown size={17} /></span><span className="eyebrow">DROPPING</span></div><strong>{dropCount}</strong><small>latest result fell by {data.settings.dropping_threshold} points or more</small></NotebookCard><NotebookCard className="weak-overview-item untested-tint"><div><span className="weak-overview-icon"><Target size={17} /></span><span className="eyebrow">NO BASELINE YET</span></div><strong>{untested.length}</strong><small>untested · not classified as weak</small></NotebookCard><NotebookCard className="weak-overview-item strong-tint"><div><span className="weak-overview-icon"><TrendingUp size={17} /></span><span className="eyebrow">FEELING STEADY</span></div><strong>{strong.length}</strong><small>chapter{strong.length === 1 ? '' : 's'} at or above the strong threshold</small></NotebookCard></div>
 
+    {practiceWeak.length > 0 && <section className="weak-section" aria-label="Practice signal"><SectionHeading title="Practice is flagging these" note="From your DPP and module log. Needs 20+ questions per chapter." />
+      <NotebookCard className="practice-signal-board">{practiceWeak.map(({ chapter, agg }) => <div key={chapter.id} className="practice-signal-row">
+        <div><strong>{chapter.name}</strong><small>{agg.attempted} questions · {agg.incorrect} incorrect · recent <Pct value={agg.recentAccuracy} /></small></div>
+        <div className="practice-signal-meter"><Meter value={agg.accuracy} label={`${chapter.name} practice accuracy`} tone="orange" /><b><Pct value={agg.accuracy} /></b></div>
+        <button type="button" className="weak-chapter-link" onClick={() => navigate(`/practice?chapter=${chapter.id}&add=1`)}>Log practice ↗</button>
+      </div>)}</NotebookCard></section>}
     {dropCount > 0 && <NotebookCard className="dropping-alert"><span className="dropping-mark"><ArrowDownRight size={18} /></span><div><strong>A dip worth checking</strong><p>{tested.filter(item => item.dropping).map(item => `${item.chapter.name} (${Math.round(item.results[1]?.percentage ?? 0)}% → ${Math.round(item.latest ?? 0)}%)`).join(' · ')}</p></div><span>Compare the paper, not just the score.</span></NotebookCard>}
 
     <section className="weak-section"><SectionHeading title="Tested chapters" note={`${tested.length} chapter${tested.length === 1 ? '' : 's'} with usable scores`} />

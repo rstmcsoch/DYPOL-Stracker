@@ -11,14 +11,14 @@ const now = '2026-10-07T12:00:00.000Z'
 function emptyData(): AppData {
   return {
     chapters: [], revisions: [], tests: [], testSubjectScores: [], testChapterLinks: [], mistakes: [],
-    tasks: [], goals: [], sessions: [], settings: defaultSettings(userId), profile: null
+    tasks: [], goals: [], sessions: [], practiceSessions: [], pyqRecords: [], chapterStages: [], backlogItems: [], studyCards: [], testErrorLogs: [], testTimeEntries: [], examTracks: [], settings: defaultSettings(userId), profile: null
   }
 }
 
 function sampleChapter(): Chapter {
   return {
     id: chapterId, created_at: now, updated_at: now, subject: 'Physics', name: 'Kinematics', position: 0,
-    status: 'Studying', priority: 'Medium', weightage: null, notes: '', formula_notes: '', completed_on: null
+    status: 'Studying', priority: 'Medium', importance: 'medium', weightage: null, notes: '', formula_notes: '', completed_on: null
   }
 }
 

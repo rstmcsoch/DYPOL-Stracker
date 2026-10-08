@@ -13,7 +13,7 @@ const chapterId = '10000000-0000-4000-8000-000000000001'
 function emptyData(): AppData {
   return {
     chapters: [], revisions: [], tests: [], testSubjectScores: [], testChapterLinks: [], mistakes: [],
-    tasks: [], goals: [], sessions: [], settings: defaultSettings(userId), profile: null
+    tasks: [], goals: [], sessions: [], practiceSessions: [], pyqRecords: [], chapterStages: [], backlogItems: [], studyCards: [], testErrorLogs: [], testTimeEntries: [], examTracks: [], settings: defaultSettings(userId), profile: null
   }
 }
 
@@ -32,7 +32,7 @@ function score(testId: string, id: string, subject: TestSubjectScore['subject'],
 function chapter(): Chapter {
   return {
     id: chapterId, created_at: now, updated_at: now, subject: 'Physics', name: 'Kinematics', position: 0,
-    status: 'Studying', priority: 'Medium', weightage: null, notes: '', formula_notes: '', completed_on: null
+    status: 'Studying', priority: 'Medium', importance: 'medium', weightage: null, notes: '', formula_notes: '', completed_on: null
   }
 }
 
