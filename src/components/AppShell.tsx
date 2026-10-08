@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Activity, AlarmClock, AlertTriangle, ArrowDownToLine, BookOpen, CalendarDays, Check,
@@ -175,41 +175,53 @@ function PageLoading() {
 function QuickTaskDialog({ data, onClose }: { data: AppData; onClose: () => void }) {
   const { upsert } = useData()
   const { notify } = useToast()
+  const [taskId] = useState(() => createId())
   const [title, setTitle] = useState('')
   const [subject, setSubject] = useState<Subject | ''>('')
   const [chapterId, setChapterId] = useState('')
-  const [minutes, setMinutes] = useState(30)
+  const [minutes, setMinutes] = useState('30')
   const [priority, setPriority] = useState<Priority>('Medium')
   const [loading, setLoading] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const loadingRef = useRef(false)
   const chapters = data.chapters.filter(chapter => !subject || chapter.subject === subject)
   const save = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (loading) return
+    if (loadingRef.current) return
     const taskDate = indiaToday()
-    const now = new Date().toISOString()
-    const task: DailyTask = {
-      id: createId(), title: title.trim(), subject: subject || null, chapter_id: chapterId || null,
-      estimated_minutes: Number(minutes), priority, is_completed: false,
-      task_date: taskDate, position: data.tasks.filter(item => item.task_date === taskDate).length,
-      created_at: now, updated_at: now
+    const parsed = taskInputSchema.safeParse({
+      title: title.trim(), estimated_minutes: minutes.trim() === '' ? null : Number(minutes), task_date: taskDate
+    })
+    if (!parsed.success) {
+      const nextErrors: Record<string, string> = {}
+      for (const issue of parsed.error.issues) nextErrors[String(issue.path[0] ?? 'form')] ??= issue.message
+      setFieldErrors(nextErrors)
+      notify('Please correct the highlighted task fields.', 'error')
+      return
     }
-    const parsed = taskInputSchema.safeParse(task)
-    if (!parsed.success) { notify(parsed.error.issues[0]?.message ?? 'Check the task details.', 'error'); return }
     if (chapterId) {
       const chapter = data.chapters.find(item => item.id === chapterId)
       if (!chapter || (subject && chapter.subject !== subject)) { notify('Choose a chapter that belongs to the selected subject.', 'error'); return }
     }
+    loadingRef.current = true
     setLoading(true)
+    const now = new Date().toISOString()
+    const task: DailyTask = {
+      id: taskId, title: parsed.data.title, subject: subject || null, chapter_id: chapterId || null,
+      estimated_minutes: parsed.data.estimated_minutes, priority, is_completed: false,
+      task_date: taskDate, position: data.tasks.filter(item => item.task_date === taskDate).length,
+      created_at: now, updated_at: now
+    }
     try { await upsert('daily_tasks', task); notify('Task added to today.'); onClose() }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save task. Retry.', 'error') }
-    finally { setLoading(false) }
+    finally { loadingRef.current = false; setLoading(false) }
   }
   return <Dialog title="A small step for today" subtitle="Add a task to your study plan." onClose={onClose}>
-    <form className="form-stack" onSubmit={save}>
-      <Field label="What do you want to do?" required><input autoFocus required maxLength={200} placeholder="e.g. Revise Kirchhoff's laws" value={title} onChange={event => setTitle(event.target.value)} /></Field>
+    <form className="form-stack" noValidate onSubmit={save}>
+      <Field label="What do you want to do?" required error={fieldErrors.title}><input autoFocus required maxLength={200} placeholder="e.g. Revise Kirchhoff's laws" value={title} onChange={event => { setTitle(event.target.value); setFieldErrors(current => { const next = { ...current }; delete next.title; return next }) }} /></Field>
       <div className="form-grid two"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option><option>Physics</option><option>Chemistry</option><option>Maths</option></select></Field>
         <Field label="Chapter"><select value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="">Choose chapter</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field></div>
-      <div className="form-grid two"><Field label="Estimated time (min)"><input type="number" min="0" max="1440" value={minutes} onChange={event => setMinutes(Number(event.target.value))} /></Field>
+      <div className="form-grid two"><Field label="Estimated time (min)" error={fieldErrors.estimated_minutes}><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => { setMinutes(event.target.value); setFieldErrors(current => { const next = { ...current }; delete next.estimated_minutes; return next }) }} /></Field>
         <Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={loading}>Add to today <Check size={16} /></Button></div>
     </form>

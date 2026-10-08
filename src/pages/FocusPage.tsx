@@ -53,7 +53,7 @@ export default function FocusPage() {
       <h1>{timer.mode === 'Pomodoro' || timer.mode === 'Custom' ? 'One thing at a time.' : 'Take the pause.'}</h1>
       <p className="focus-subtitle">{subtitle}</p>
       <div className="focus-mode-selector" role="group" aria-label="Timer mode">{MODES.map(mode => <button key={mode.name} className={timer.mode === mode.name ? 'selected' : ''} onClick={() => timer.switchMode(mode.name)} disabled={timer.running} aria-pressed={timer.mode === mode.name}>{mode.icon}<span>{mode.label}</span>{mode.name !== 'Custom' && <small>{timer.durations[mode.name]}m</small>}</button>)}</div>
-      {timer.mode === 'Custom' && <label className="custom-time-control">Custom focus minutes <input type="number" min="1" max="180" step="1" value={timer.durations.Custom} disabled={timer.running} onChange={event => timer.setCustomMinutes(Number(event.target.value) || 1)} /></label>}
+      {timer.mode === 'Custom' && <label className="custom-time-control">Custom focus minutes <input type="number" min="1" max="180" step="1" value={timer.durations.Custom} disabled={timer.running} onChange={event => { const minutes = event.currentTarget.valueAsNumber; if (Number.isFinite(minutes) && Number.isInteger(minutes)) timer.setCustomMinutes(minutes) }} /></label>}
       <div className={`focus-clock-wrap ${timer.running ? 'is-running' : ''} ${timer.finished ? 'is-finished' : ''}`}>
         <span className="focus-clock-orbit orbit-one" aria-hidden="true" /><span className="focus-clock-orbit orbit-two" aria-hidden="true" />
         <ProgressRing value={timer.progress} size={332} color="var(--focus-accent)" label={<span className="focus-clock" aria-live="off">{clock}</span>} />

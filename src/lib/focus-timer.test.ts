@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { defaultTimerState, sanitizeTimerState } from './focus-timer'
+import { defaultTimerState, safeCustomMinutes, sanitizeTimerState } from './focus-timer'
+
+describe('custom focus minutes', () => {
+  it('rejects non-finite and fractional values without creating invalid timer state', () => {
+    expect(safeCustomMinutes(Number.NaN)).toBeNull()
+    expect(safeCustomMinutes(Number.POSITIVE_INFINITY)).toBeNull()
+    expect(safeCustomMinutes(1.5)).toBeNull()
+  })
+
+  it('preserves the existing whole-minute range', () => {
+    expect(safeCustomMinutes(25)).toBe(25)
+    expect(safeCustomMinutes(0)).toBe(1)
+    expect(safeCustomMinutes(200)).toBe(180)
+  })
+})
 
 describe('restored focus timer state', () => {
   it('falls back to safe defaults for malformed values and unsupported timer settings', () => {

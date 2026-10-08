@@ -5,7 +5,7 @@ import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 import { createId } from '../lib/id'
 import type { StudySession, Subject } from '../types'
-import { defaultTimerState as defaults, sanitizeTimerState, type FocusMode, type TimerState } from '../lib/focus-timer'
+import { defaultTimerState as defaults, safeCustomMinutes, sanitizeTimerState, type FocusMode, type TimerState } from '../lib/focus-timer'
 export type { FocusMode } from '../lib/focus-timer'
 
 interface FocusContextValue extends TimerState {
@@ -140,7 +140,11 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   const setSubject = useCallback((subject: Subject | null) => setTimer(current => ({ ...current, subject })), [])
   const setChapter = useCallback((chapterId: string | null) => setTimer(current => ({ ...current, chapterId })), [])
   const setTask = useCallback((taskId: string | null) => setTimer(current => ({ ...current, taskId })), [])
-  const setCustomMinutes = useCallback((minutes: number) => setTimer(current => current.running ? current : ({ ...current, durations: { ...current.durations, Custom: Math.max(1, Math.min(180, minutes)) }, remainingSeconds: current.mode === 'Custom' ? Math.max(1, Math.min(180, minutes)) * 60 : current.remainingSeconds })), [])
+  const setCustomMinutes = useCallback((minutes: number) => {
+    const safeMinutes = safeCustomMinutes(minutes)
+    if (safeMinutes === null) return
+    setTimer(current => current.running ? current : ({ ...current, durations: { ...current.durations, Custom: safeMinutes }, remainingSeconds: current.mode === 'Custom' ? safeMinutes * 60 : current.remainingSeconds }))
+  }, [])
 
   const value = useMemo<FocusContextValue>(() => ({
     ...timer, progress: focusMinutes > 0 ? Math.min(100, Math.max(0, (1 - timer.remainingSeconds / (focusMinutes * 60)) * 100)) : 0,

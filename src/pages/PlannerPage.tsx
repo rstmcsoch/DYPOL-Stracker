@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { addDays, endOfWeek, format, parseISO, startOfWeek } from 'date-fns'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CalendarDays, Check, ChevronDown, Clock3, Copy, GripVertical, Plus, Target, Trash2 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
@@ -30,7 +30,11 @@ export default function PlannerPage() {
   const [taskDialog, setTaskDialog] = useState(false)
   const [editingTask, setEditingTask] = useState<DailyTask | null>(null)
   const [goalDialog, setGoalDialog] = useState(false)
+  const [busyGoalIds, setBusyGoalIds] = useState<Set<string>>(() => new Set())
+  const busyGoalIdsRef = useRef(new Set<string>())
   const [deleteTarget, setDeleteTarget] = useState<DailyTask | null>(null)
+  const [deletingTask, setDeletingTask] = useState(false)
+  const deletingTaskRef = useRef(false)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const days = useMemo(() => weekDays(weekStart), [weekStart])
   const tasks = data.tasks.filter(task => task.task_date === selectedDate).sort((a, b) => a.position - b.position)
@@ -62,10 +66,12 @@ export default function PlannerPage() {
     catch (error) { notify(error instanceof Error ? error.message : 'Could not duplicate task.', 'error') }
   }
   const deleteTask = async () => {
-    if (!deleteTarget) return
-    try { await remove('daily_tasks', deleteTarget); notify('Task deleted.') }
+    if (!deleteTarget || deletingTaskRef.current) return
+    deletingTaskRef.current = true
+    setDeletingTask(true)
+    try { await remove('daily_tasks', deleteTarget); notify('Task deleted.'); setDeleteTarget(null) }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not delete task.', 'error') }
-    setDeleteTarget(null)
+    finally { deletingTaskRef.current = false; setDeletingTask(false) }
   }
   const reorderTask = async (task: DailyTask, target: DailyTask) => {
     if (task.id === target.id) return
@@ -80,10 +86,20 @@ export default function PlannerPage() {
   }
 
   const saveGoal = async (goal: WeeklyGoal) => {
-    const parsed = goalSchema.safeParse(goal)
-    if (!parsed.success) { notify(parsed.error.issues[0]?.message ?? 'Check the weekly goal.', 'error'); return }
-    try { await upsert('weekly_goals', { ...goal, title: parsed.data.title, updated_at: new Date().toISOString() }); notify('Weekly goal saved.'); setGoalDialog(false) }
-    catch (error) { notify(error instanceof Error ? error.message : 'Could not save goal.', 'error') }
+    if (busyGoalIdsRef.current.has(goal.id)) return
+    busyGoalIdsRef.current.add(goal.id)
+    setBusyGoalIds(new Set(busyGoalIdsRef.current))
+    try {
+      const parsed = goalSchema.safeParse(goal)
+      if (!parsed.success) { notify(parsed.error.issues[0]?.message ?? 'Check the weekly goal.', 'error'); return }
+      await upsert('weekly_goals', { ...goal, title: parsed.data.title, updated_at: new Date().toISOString() })
+      notify('Weekly goal saved.')
+      setGoalDialog(false)
+    } catch (error) { notify(error instanceof Error ? error.message : 'Could not save goal.', 'error') }
+    finally {
+      busyGoalIdsRef.current.delete(goal.id)
+      setBusyGoalIds(new Set(busyGoalIdsRef.current))
+    }
   }
 
   const todayTotal = tasks.length
@@ -115,7 +131,7 @@ export default function PlannerPage() {
           {goals.length === 0 ? <div className="goals-empty"><span className="goal-sticker">✦</span><p>No goals set for this week.<br />Choose a target that feels useful, not punishing.</p><Button variant="secondary" size="sm" onClick={() => setGoalDialog(true)}><Plus size={15} /> Add a goal</Button></div> : <div className="weekly-goal-list">{goals.map(goal => {
             const current = getGoalProgress(goal, data)
             const pct = Math.min(100, current / goal.target * 100)
-            return <div className="weekly-goal-item" key={goal.id}><div className="goal-title-row"><strong>{goal.title}</strong><button aria-label={`Delete ${goal.title} goal`} onClick={() => void remove('weekly_goals', goal).then(() => notify('Goal deleted.')).catch(() => notify('Could not delete goal.', 'error'))}><Trash2 size={14} /></button></div><div className="goal-numbers"><span>{fmtNumber(current, 1)} <small>{goal.unit}</small></span><span>of {fmtNumber(goal.target, 1)} {goal.unit}</span></div><ProgressBar value={pct} color="var(--accent)" /><div className="goal-progress-actions"><span>{Math.round(pct)}% of target</span>{goal.goal_type === 'custom' && <div><button onClick={() => void saveGoal({ ...goal, progress_value: Math.max(0, goal.progress_value - 1) })}>−</button><button onClick={() => void saveGoal({ ...goal, progress_value: goal.progress_value + 1 })}>+</button></div>}</div></div>
+            return <div className="weekly-goal-item" key={goal.id}><div className="goal-title-row"><strong>{goal.title}</strong><button aria-label={`Delete ${goal.title} goal`} onClick={() => void remove('weekly_goals', goal).then(() => notify('Goal deleted.')).catch(() => notify('Could not delete goal.', 'error'))}><Trash2 size={14} /></button></div><div className="goal-numbers"><span>{fmtNumber(current, 1)} <small>{goal.unit}</small></span><span>of {fmtNumber(goal.target, 1)} {goal.unit}</span></div><ProgressBar value={pct} color="var(--accent)" /><div className="goal-progress-actions"><span>{Math.round(pct)}% of target</span>{goal.goal_type === 'custom' && <div><button disabled={busyGoalIds.has(goal.id)} onClick={() => void saveGoal({ ...goal, progress_value: Math.max(0, goal.progress_value - 1) })} aria-label={`Decrease ${goal.title} progress`}>−</button><button disabled={busyGoalIds.has(goal.id)} onClick={() => void saveGoal({ ...goal, progress_value: goal.progress_value + 1 })} aria-label={`Increase ${goal.title} progress`}>+</button></div>}</div></div>
           })}</div>}
           <span className="goal-doodle" aria-hidden="true">◌</span>
         </NotebookCard>
@@ -124,7 +140,7 @@ export default function PlannerPage() {
     </div>
     {taskDialog && <TaskDialog key={editingTask?.id ?? `new-${selectedDate}`} initial={editingTask} defaultDate={selectedDate} data={data} onClose={() => { setTaskDialog(false); setEditingTask(null) }} onSave={saveTask} />}
     {goalDialog && <GoalDialog weekStart={weekStart} onClose={() => setGoalDialog(false)} onSave={saveGoal} />}
-    {deleteTarget && <ConfirmDialog title="Delete this task?" message={`“${deleteTarget.title}” will be removed from your plan.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => void deleteTask()} />}
+    {deleteTarget && <ConfirmDialog title={`Delete “${deleteTarget.title}”?`} message="This task will be removed from your plan. You can undo for a few seconds." onCancel={() => setDeleteTarget(null)} onConfirm={() => void deleteTask()} loading={deletingTask} />}
   </div>
 }
 
@@ -140,45 +156,90 @@ function PlannerTaskRow({ task, chapter, dragged, onToggle, onEdit, onDuplicate,
 }
 
 function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: DailyTask | null; defaultDate: string; data: ReturnType<typeof useData>['data']; onClose: () => void; onSave: (task: DailyTask) => Promise<void> }) {
+  const { notify } = useToast()
   const now = new Date().toISOString()
+  const [taskId] = useState(() => initial?.id ?? createId())
   const [title, setTitle] = useState(initial?.title ?? '')
   const [subject, setSubject] = useState<Subject | ''>(initial?.subject ?? '')
   const [chapterId, setChapterId] = useState(initial?.chapter_id ?? '')
-  const [minutes, setMinutes] = useState(initial?.estimated_minutes ?? 30)
+  const [minutes, setMinutes] = useState(String(initial?.estimated_minutes ?? 30))
   const [priority, setPriority] = useState<Priority>(initial?.priority ?? 'Medium')
   const [date, setDate] = useState(initial?.task_date ?? defaultDate)
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const savingRef = useRef(false)
   const chapters = data.chapters.filter(chapter => !subject || chapter.subject === subject)
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); if (saving) return; setSaving(true)
+    event.preventDefault()
+    if (savingRef.current) return
+    const parsed = taskInputSchema.safeParse({ title: title.trim(), estimated_minutes: minutes.trim() === '' ? null : Number(minutes), task_date: date })
+    if (!parsed.success) {
+      const next: Record<string, string> = {}
+      for (const issue of parsed.error.issues) next[String(issue.path[0] ?? 'form')] ??= issue.message
+      setErrors(next)
+      notify('Please correct the highlighted task fields.', 'error')
+      return
+    }
+    if (chapterId) {
+      const chapter = data.chapters.find(item => item.id === chapterId)
+      if (!chapter || (subject && chapter.subject !== subject)) {
+        setErrors({ chapter_id: 'Choose a chapter that belongs to the selected subject.' })
+        notify('Please correct the highlighted task fields.', 'error')
+        return
+      }
+    }
+    savingRef.current = true
+    setSaving(true)
     const task: DailyTask = {
-      id: initial?.id ?? createId(), title: title.trim(), subject: subject || null, chapter_id: chapterId || null,
-      estimated_minutes: Number(minutes), priority, is_completed: initial?.is_completed ?? false,
-      task_date: date, position: initial?.position ?? data.tasks.filter(item => item.task_date === date).length,
+      id: taskId, title: parsed.data.title, subject: subject || null, chapter_id: chapterId || null,
+      estimated_minutes: parsed.data.estimated_minutes, priority, is_completed: initial?.is_completed ?? false,
+      task_date: parsed.data.task_date, position: initial?.position ?? data.tasks.filter(item => item.task_date === date).length,
       created_at: initial?.created_at ?? now, updated_at: now
     }
-    try { await onSave(task) } finally { setSaving(false) }
+    try { await onSave(task) } finally { savingRef.current = false; setSaving(false) }
   }
+  const clearError = (key: string) => setErrors(current => { const next = { ...current }; delete next[key]; return next })
   return <Dialog title={initial ? 'Edit your task' : 'Plan a study task'} subtitle="You can change the day later. A plan should flex with you." onClose={onClose}>
-    <form className="form-stack" onSubmit={submit}><Field label="Task" required><input autoFocus required maxLength={200} value={title} onChange={event => setTitle(event.target.value)} placeholder="e.g. Practice 15 integration problems" /></Field>
-      <div className="form-grid two"><Field label="Date"><input type="date" required value={date} onChange={event => setDate(event.target.value)} /></Field><Field label="Estimated minutes"><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => setMinutes(Number(event.target.value))} /></Field></div>
-      <div className="form-grid three"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{SUBJECTS.map(item => <option key={item}>{item}</option>)}</select></Field><Field label="Chapter"><select value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="">None</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field><Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
-      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>{initial ? 'Save task' : 'Add task'}</Button></div>
+    <form className="form-stack" noValidate onSubmit={submit}><Field label="Task" required error={errors.title}><input autoFocus required maxLength={200} value={title} onChange={event => { setTitle(event.target.value); clearError('title') }} placeholder="e.g. Practice 15 integration problems" /></Field>
+      <div className="form-grid two"><Field label="Date" error={errors.task_date}><input type="date" required value={date} onChange={event => { setDate(event.target.value); clearError('task_date') }} /></Field><Field label="Estimated minutes" error={errors.estimated_minutes}><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => { setMinutes(event.target.value); clearError('estimated_minutes') }} /></Field></div>
+      <div className="form-grid three"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{SUBJECTS.map(item => <option key={item}>{item}</option>)}</select></Field><Field label="Chapter" error={errors.chapter_id}><select value={chapterId} onChange={event => { setChapterId(event.target.value); clearError('chapter_id') }}><option value="">None</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field><Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
+      <div className="dialog-actions"><Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button><Button type="submit" loading={saving}>{initial ? 'Save task' : 'Add task'}</Button></div>
     </form>
   </Dialog>
 }
 
 function GoalDialog({ weekStart, onClose, onSave }: { weekStart: string; onClose: () => void; onSave: (goal: WeeklyGoal) => Promise<void> }) {
+  const { notify } = useToast()
+  const [goalId] = useState(() => createId())
   const [type, setType] = useState<GoalType>('study_hours')
   const [title, setTitle] = useState('Study hours')
   const [target, setTarget] = useState('10')
   const [unit, setUnit] = useState('hours')
   const [saving, setSaving] = useState(false)
-  const changeType = (next: GoalType) => { setType(next); const item = goalTypes.find(goal => goal.type === next); if (item) { setTitle(item.title); setUnit(item.unit) } }
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const savingRef = useRef(false)
+  const changeType = (next: GoalType) => { setType(next); const item = goalTypes.find(goal => goal.type === next); if (item) { setTitle(item.title); setUnit(item.unit) }; setErrors({}) }
   const studyHours = type === 'study_hours'
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (saving) return; setSaving(true); const now = new Date().toISOString(); try { await onSave({ id: createId(), goal_type: type, title, target: Number(target), progress_value: 0, week_start: weekStart, unit, created_at: now, updated_at: now }) } finally { setSaving(false) } }
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (savingRef.current) return
+    const now = new Date().toISOString()
+    const goal: WeeklyGoal = { id: goalId, goal_type: type, title, target: target.trim() === '' ? Number.NaN : Number(target), progress_value: 0, week_start: weekStart, unit, created_at: now, updated_at: now }
+    const parsed = goalSchema.safeParse(goal)
+    if (!parsed.success) {
+      const next: Record<string, string> = {}
+      for (const issue of parsed.error.issues) next[String(issue.path[0] ?? 'form')] ??= issue.message
+      setErrors(next)
+      notify('Please correct the highlighted goal fields.', 'error')
+      return
+    }
+    savingRef.current = true
+    setSaving(true)
+    try { await onSave({ ...goal, title: parsed.data.title }) }
+    finally { savingRef.current = false; setSaving(false) }
+  }
   return <Dialog title="Set a weekly goal" subtitle={`For the week of ${prettyDate(weekStart)}.`} onClose={onClose}>
-    <form className="form-stack" noValidate onSubmit={submit}><Field label="Goal type"><select value={type} onChange={event => changeType(event.target.value as GoalType)}>{goalTypes.map(item => <option key={item.type} value={item.type}>{item.title}</option>)}</select></Field><Field label="Name"><input required maxLength={120} value={title} onChange={event => setTitle(event.target.value)} /></Field><div className="form-grid two"><Field label="Target"><input type="number" min={studyHours ? 0.5 : 1} max={studyHours ? MAX_WEEKLY_STUDY_HOURS : MAX_COUNT_GOAL} step={studyHours ? 0.5 : 1} required value={target} onChange={event => setTarget(event.target.value)} /></Field><Field label="Unit"><input maxLength={30} value={unit} onChange={event => setUnit(event.target.value)} /></Field></div><p className="goal-autotrack-note">Study hours, tests, chapters and revisions update from your real activity. Custom goals can be ticked up manually.</p><div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>Save weekly goal</Button></div></form>
+    <form className="form-stack" noValidate onSubmit={submit}><Field label="Goal type"><select value={type} onChange={event => changeType(event.target.value as GoalType)}>{goalTypes.map(item => <option key={item.type} value={item.type}>{item.title}</option>)}</select></Field><Field label="Name" error={errors.title}><input required maxLength={120} value={title} onChange={event => { setTitle(event.target.value); setErrors(current => { const next = { ...current }; delete next.title; return next }) }} /></Field><div className="form-grid two"><Field label="Target" error={errors.target}><input type="number" min={studyHours ? 0.5 : 1} max={studyHours ? MAX_WEEKLY_STUDY_HOURS : MAX_COUNT_GOAL} step={studyHours ? 0.5 : 1} required value={target} onChange={event => { setTarget(event.target.value); setErrors(current => { const next = { ...current }; delete next.target; return next }) }} /></Field><Field label="Unit"><input maxLength={30} value={unit} onChange={event => setUnit(event.target.value)} /></Field></div><p className="goal-autotrack-note">Study hours, tests, chapters and revisions update from your real activity. Custom goals can be ticked up manually.</p><div className="dialog-actions"><Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button><Button type="submit" loading={saving}>Save weekly goal</Button></div></form>
   </Dialog>
 }
 

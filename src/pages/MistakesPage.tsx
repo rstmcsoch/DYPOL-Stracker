@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { AlertTriangle, ArrowUpRight, Camera, CirclePlus, ImagePlus, NotebookPen, RotateCcw, Search, Trash2, X } from 'lucide-react'
@@ -25,6 +25,8 @@ export default function MistakesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Mistake | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Mistake | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const deletingRef = useRef(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const term = search.trim().toLowerCase()
   const filtered = useMemo(() => data.mistakes.filter(mistake => {
@@ -38,20 +40,27 @@ export default function MistakesPage() {
     return true
   }).sort((a, b) => b.created_at.localeCompare(a.created_at)), [data.mistakes, data.chapters, term, subject, type, retryFilter])
 
-  const saveMistake = async (record: Mistake) => {
+  const saveMistake = async (record: Mistake): Promise<Record<string, string> | null> => {
     const checked = mistakeSchema.safeParse(record)
-    if (!checked.success) { notify(checked.error.issues[0]?.message ?? 'Check the mistake details.', 'error'); return }
-    try { await upsert('mistakes', { ...record, updated_at: new Date().toISOString() }); notify(editing ? 'Mistake note updated.' : 'Saved to your mistake notebook.'); setDialogOpen(false); setEditing(null) }
-    catch (error) { notify(error instanceof Error ? error.message : 'Could not save mistake. Retry.', 'error') }
+    if (!checked.success) {
+      const fieldErrors: Record<string, string> = {}
+      for (const issue of checked.error.issues) fieldErrors[String(issue.path[0] ?? 'form')] ??= issue.message
+      return fieldErrors
+    }
+    try { await upsert('mistakes', { ...record, updated_at: new Date().toISOString() }); notify(editing ? 'Mistake note updated.' : 'Saved to your mistake notebook.'); setDialogOpen(false); setEditing(null); return null }
+    catch (error) { notify(error instanceof Error ? error.message : 'Could not save mistake. Retry.', 'error'); return null }
   }
 
   const confirmDelete = async () => {
-    if (!deleteTarget) return
+    if (!deleteTarget || deletingRef.current) return
+    deletingRef.current = true
+    setDeleting(true)
     try {
       await remove('mistakes', deleteTarget)
       notify('Mistake entry deleted. Use Undo if needed.')
+      setDeleteTarget(null)
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not delete this entry.', 'error') }
-    setDeleteTarget(null)
+    finally { deletingRef.current = false; setDeleting(false) }
   }
 
   const setRetry = async (mistake: Mistake, next: Partial<Mistake>, message: string) => {
@@ -80,12 +89,12 @@ export default function MistakesPage() {
       <div className="mistake-board-footer"><span>{filtered.length} note{filtered.length === 1 ? '' : 's'} shown</span><button onClick={() => navigate('/retry')}>Go to retry list <ArrowUpRight size={14} /></button></div>
     </NotebookCard>
     {dialogOpen && <MistakeDialog key={editing?.id ?? 'new-mistake'} initial={editing} data={data} onClose={() => { setDialogOpen(false); setEditing(null) }} onSave={saveMistake} />}
-    {deleteTarget && <ConfirmDialog title="Delete this mistake note?" message="The note and its attached image will be removed. You can undo the note deletion for a few seconds." onCancel={() => setDeleteTarget(null)} onConfirm={() => void confirmDelete()} />}
+    {deleteTarget && <ConfirmDialog title={`Delete “${deleteTarget.question_note.slice(0, 48)}${deleteTarget.question_note.length > 48 ? '…' : ''}”?`} message="The note and its attached image will be removed. You can undo the note deletion for a few seconds." onCancel={() => setDeleteTarget(null)} onConfirm={() => void confirmDelete()} loading={deleting} />}
     {lightbox && <Dialog title="Question image" onClose={() => setLightbox(null)} className="image-lightbox"><img src={lightbox} alt="Full size question or working" /><div className="dialog-actions"><Button variant="secondary" onClick={() => setLightbox(null)}>Close image</Button></div></Dialog>}
   </div>
 }
 
-function MistakeDialog({ initial, data, onClose, onSave }: { initial: Mistake | null; data: ReturnType<typeof useData>['data']; onClose: () => void; onSave: (mistake: Mistake) => Promise<void> }) {
+function MistakeDialog({ initial, data, onClose, onSave }: { initial: Mistake | null; data: ReturnType<typeof useData>['data']; onClose: () => void; onSave: (mistake: Mistake) => Promise<Record<string, string> | null> }) {
   const { saveImage } = useData()
   const { notify } = useToast()
   const { user } = useAuth()
@@ -104,6 +113,8 @@ function MistakeDialog({ initial, data, onClose, onSave }: { initial: Mistake | 
   const [imagePreview, setImagePreview] = useState<string | null>(initialImagePreview)
   const [imagePending, setImagePending] = useState(initial?.image_pending ?? Boolean(initialImageData && !initial?.image_path && !user?.isLocal))
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [imageBusy, setImageBusy] = useState(false)
   const chapters = [...data.chapters].sort((a, b) => a.subject.localeCompare(b.subject) || a.position - b.position)
 
@@ -122,7 +133,9 @@ function MistakeDialog({ initial, data, onClose, onSave }: { initial: Mistake | 
   }
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    if (imageBusy || busy) return
+    if (imageBusy || busyRef.current) return
+    busyRef.current = true
+    setBusy(true)
     const id = entryId
     const next = {
       id, chapter_id: chapterId, test_id: testId || null, mistake_type: mistakeType,
@@ -132,17 +145,18 @@ function MistakeDialog({ initial, data, onClose, onSave }: { initial: Mistake | 
       created_at: initial?.created_at ?? now, updated_at: now,
       image_previous_path: initial?.image_path && initial.image_path !== imagePath ? initial.image_path : null
     } as Mistake
-    setBusy(true)
     try {
-      await onSave(next)
-    } finally { setBusy(false) }
+      const fieldErrors = await onSave(next)
+      setErrors(fieldErrors ?? {})
+      if (fieldErrors) notify('Please correct the highlighted mistake fields.', 'error')
+    } finally { busyRef.current = false; setBusy(false) }
   }
 
   return <Dialog title={initial ? 'Edit mistake note' : 'Save a learning moment'} subtitle="Small, specific notes are easier to revisit." onClose={onClose} className="mistake-dialog">
-    <form className="form-stack" onSubmit={submit}>
-      <div className="form-grid two"><Field label="Chapter" required><select required value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="">Choose a chapter</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.subject} · {chapter.name}</option>)}</select></Field><Field label="Mistake type"><select value={mistakeType} onChange={event => setMistakeType(event.target.value as MistakeType)}>{MISTAKE_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field></div>
-      <Field label="What was the question or mistake?" required><textarea autoFocus required maxLength={10000} rows={4} value={question} onChange={event => setQuestion(event.target.value)} placeholder="Write enough to recognize the question next time…" /></Field>
-      <Field label="Solution / what I’ll remember"><textarea maxLength={10000} rows={3} value={solution} onChange={event => setSolution(event.target.value)} placeholder="The key idea, missed condition, or check to use next time…" /></Field>
+    <form className="form-stack" noValidate onSubmit={submit}>
+      <div className="form-grid two"><Field label="Chapter" required error={errors.chapter_id}><select required value={chapterId} onChange={event => { setChapterId(event.target.value); setErrors(current => { const next = { ...current }; delete next.chapter_id; return next }) }}><option value="">Choose a chapter</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.subject} · {chapter.name}</option>)}</select></Field><Field label="Mistake type"><select value={mistakeType} onChange={event => setMistakeType(event.target.value as MistakeType)}>{MISTAKE_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field></div>
+      <Field label="What was the question or mistake?" required error={errors.question_note}><textarea autoFocus required maxLength={10000} rows={4} value={question} onChange={event => { setQuestion(event.target.value); setErrors(current => { const next = { ...current }; delete next.question_note; return next }) }} placeholder="Write enough to recognize the question next time…" /></Field>
+      <Field label="Solution / what I’ll remember" error={errors.solution_note}><textarea maxLength={10000} rows={3} value={solution} onChange={event => { setSolution(event.target.value); setErrors(current => { const next = { ...current }; delete next.solution_note; return next }) }} placeholder="The key idea, missed condition, or check to use next time…" /></Field>
       <div className="form-grid two"><Field label="Related test"><select value={testId} onChange={event => setTestId(event.target.value)}><option value="">No linked test</option>{data.tests.map(test => <option key={test.id} value={test.id}>{test.title} · {prettyDate(test.test_date)}</option>)}</select></Field><label className="retry-toggle"><input type="checkbox" checked={retryLater} onChange={event => setRetryLater(event.target.checked)} /><span className="toggle-visual" /><span><strong>Put this on my retry list</strong><small>Bring it back for another attempt.</small></span></label></div>
       <div className="field"><span className="field-label">Question image <span className="field-hint inline">(optional · compressed before saving)</span></span>{imagePreview ? <div className="upload-preview"><img src={imagePreview} alt="Selected question image preview" /><div><span>{imagePending ? 'Saved on this device' : 'Image attached'}</span><button type="button" onClick={() => void clearImage()}><Trash2 size={14} /> Remove</button></div></div> : <label className={`image-dropzone ${imageBusy ? 'is-busy' : ''}`}><input type="file" accept="image/jpeg,image/png,image/webp" onChange={event => { void chooseImage(event.target.files?.[0]); event.currentTarget.value = '' }} disabled={imageBusy} /><span className="image-upload-icon"><Camera size={19} /></span><strong>{imageBusy ? 'Preparing a small image…' : 'Add a JPG, PNG, or WebP'}</strong><small>Up to 10 MB before compression; stored privately</small></label>}</div>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={busy} disabled={imageBusy}>{initial ? 'Save note' : 'Add to notebook'}</Button></div>

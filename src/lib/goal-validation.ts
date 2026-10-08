@@ -6,8 +6,8 @@ export const MAX_WEEKLY_STUDY_HOURS = 168
 export const goalSchema = z.object({
   goal_type: z.enum(['study_hours', 'tests', 'chapters', 'revisions', 'custom']),
   title: z.string().trim().min(1, 'Give the goal a name.').max(120),
-  target: z.number().positive().max(999_999.99),
-  progress_value: z.number().nonnegative().max(999_999.99),
+  target: z.number().finite().positive().max(999_999.99).multipleOf(0.01),
+  progress_value: z.number().finite().nonnegative().max(999_999.99).multipleOf(0.01),
   week_start: z.iso.date(),
   unit: z.string().max(30)
 }).superRefine((value, context) => {

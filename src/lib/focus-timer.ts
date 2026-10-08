@@ -26,6 +26,12 @@ const FOCUS_MODES: FocusMode[] = ['Pomodoro', 'Short Break', 'Long Break', 'Cust
 const SUBJECTS: Subject[] = ['Physics', 'Chemistry', 'Maths']
 const MAX_TIMER_MINUTES = 180
 
+/** Reject malformed custom times before applying the timer's existing 1–180 minute range. */
+export function safeCustomMinutes(value: number): number | null {
+  if (!Number.isFinite(value) || !Number.isInteger(value)) return null
+  return Math.max(1, Math.min(MAX_TIMER_MINUTES, value))
+}
+
 export function sanitizeTimerState(input: unknown, now = Date.now()): TimerState {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return defaultTimerState
   const parsed = input as Partial<TimerState>

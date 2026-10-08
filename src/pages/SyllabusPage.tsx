@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, ChevronDown, CircleDot, Edit3, Filter, GripVertical, Plus, Search, Trash2, X } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, EmptyState, Field, NotebookCard, PageHeader, ProgressBar, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
@@ -27,6 +27,8 @@ export default function SyllabusPage() {
   const [editing, setEditing] = useState<Chapter | null>(null)
   const [createSubject, setCreateSubject] = useState<Subject | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Chapter | null>(null)
+  const [deletingChapter, setDeletingChapter] = useState(false)
+  const deletingChapterRef = useRef(false)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -123,10 +125,12 @@ export default function SyllabusPage() {
   }
 
   const deleteChapter = async () => {
-    if (!deleteTarget) return
-    try { await remove('chapters', deleteTarget); notify('Chapter removed. Use Undo if that was a slip.') }
+    if (!deleteTarget || deletingChapterRef.current) return
+    deletingChapterRef.current = true
+    setDeletingChapter(true)
+    try { await remove('chapters', deleteTarget); notify('Chapter removed. Use Undo if that was a slip.'); setDeleteTarget(null) }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not delete chapter.', 'error') }
-    setDeleteTarget(null)
+    finally { deletingChapterRef.current = false; setDeletingChapter(false) }
   }
 
   const subjectCounts = SUBJECTS.map(subject => {
@@ -159,7 +163,7 @@ export default function SyllabusPage() {
     </NotebookCard>
     {editing && <ChapterDialog chapter={editing} onClose={() => setEditing(null)} onSave={saveChapter} />}
     {createSubject && <ChapterDialog chapter={{ id: createId(), user_id: data.profile?.user_id, subject: createSubject, name: '', position: data.chapters.filter(item => item.subject === createSubject).length, status: 'Not Started', priority: 'Medium', weightage: null, notes: '', formula_notes: '', completed_on: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }} onClose={() => setCreateSubject(null)} onSave={saveChapter} isNew />}
-    {deleteTarget && <ConfirmDialog title="Remove this chapter?" message={`“${deleteTarget.name}” and its revision schedule will be removed. Linked mistake notes may also be affected. This action can be undone briefly.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => void deleteChapter()} />}
+    {deleteTarget && <ConfirmDialog title={`Remove “${deleteTarget.name}”?`} message="Its revision schedule will also be removed; linked notes may be affected. You can undo the removal briefly." onCancel={() => setDeleteTarget(null)} onConfirm={() => void deleteChapter()} loading={deletingChapter} />}
   </div>
 }
 
@@ -179,14 +183,23 @@ function ChapterRow({ item, dragged, busy, onEdit, onDelete, onStatus, onMove, o
 
 function ChapterDialog({ chapter: initial, onClose, onSave, isNew = false }: { chapter: Chapter; onClose: () => void; onSave: (chapter: Chapter) => Promise<void>; isNew?: boolean }) {
   const [chapter, setChapter] = useState(initial)
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
   const set = <K extends keyof Chapter>(key: K, value: Chapter[K]) => setChapter(current => ({ ...current, [key]: value }))
+  const save = async () => {
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    try { await onSave(chapter) }
+    finally { savingRef.current = false; setSaving(false) }
+  }
   return <Dialog title={isNew ? 'Add a chapter' : 'Chapter notes'} subtitle="A good study map leaves space for your own thinking." onClose={onClose} className="chapter-dialog">
     <div className="form-stack">
       <div className="form-grid two"><Field label="Chapter name" required><input autoFocus maxLength={140} value={chapter.name} onChange={event => set('name', event.target.value)} placeholder="e.g. Centre of Mass" /></Field><Field label="Subject"><select value={chapter.subject} onChange={event => set('subject', event.target.value as Subject)}>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
       <div className="form-grid three"><Field label="Status"><select value={chapter.status} onChange={event => set('status', event.target.value as ChapterStatus)}>{STATUSES.map(status => <option key={status}>{status}</option>)}</select></Field><Field label="Priority"><select value={chapter.priority} onChange={event => set('priority', event.target.value as Priority)}>{PRIORITIES.map(priority => <option key={priority}>{priority}</option>)}</select></Field><Field label="Weightage (optional)"><input maxLength={80} value={chapter.weightage ?? ''} onChange={event => set('weightage', event.target.value || null)} placeholder="e.g. 4–6 questions" /></Field></div>
       <Field label="Study notes"><textarea rows={3} maxLength={20000} value={chapter.notes} onChange={event => set('notes', event.target.value)} placeholder="What do you want to remember about this chapter?" /></Field>
       <Field label="Formulas & shortcuts"><textarea rows={3} maxLength={20000} value={chapter.formula_notes} onChange={event => set('formula_notes', event.target.value)} placeholder="Useful formulas, conditions, shortcuts…" /></Field>
-      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={() => void onSave(chapter)}>{isNew ? 'Add chapter' : 'Save notes'} <Check size={16} /></Button></div>
+      <div className="dialog-actions"><Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button><Button loading={saving} onClick={() => void save()}>{saving ? 'Saving…' : isNew ? 'Add chapter' : 'Save notes'} <Check size={16} /></Button></div>
     </div>
   </Dialog>
 }
