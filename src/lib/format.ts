@@ -11,8 +11,8 @@ export function fmtDuration(minutes: number): string {
 }
 
 export function percent(value: number | null | undefined, total: number | null | undefined): number | null {
-  if (value == null || total == null || !Number.isFinite(value) || !Number.isFinite(total) || total <= 0) return null
-  return Math.max(0, Math.min(100, (value / total) * 100))
+  if (value == null || total == null || !Number.isFinite(value) || !Number.isFinite(total) || total <= 0 || value < 0 || value > total) return null
+  return (value / total) * 100
 }
 
 export function safeLabel(value: string | null | undefined, fallback = 'Untitled'): string {

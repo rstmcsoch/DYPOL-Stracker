@@ -1,4 +1,4 @@
-import { useEffect, useRef, type FormEvent, type ReactNode } from 'react'
+import { Children, cloneElement, isValidElement, useEffect, useId, useRef, type FormEvent, type ReactElement, type ReactNode } from 'react'
 import { ArrowUpRight, Check, LoaderCircle, Sparkles, X } from 'lucide-react'
 import type { Subject } from '../types'
 
@@ -85,11 +85,25 @@ export function EmptyState({ icon, title, description, action }: { icon?: ReactN
   </div>
 }
 
-export function Field({ label, hint, required, children, className = '' }: { label: string; hint?: string; required?: boolean; children: ReactNode; className?: string }) {
-  return <label className={`field ${className}`}>
+export function Field({ label, hint, error, required, children, className = '' }: { label: string; hint?: string; error?: string; required?: boolean; children: ReactNode; className?: string }) {
+  const fieldId = useId().replaceAll(':', '')
+  const hintId = `${fieldId}-hint`
+  const errorId = `${fieldId}-error`
+  const controls = Children.map(children, child => {
+    if (!isValidElement(child) || typeof child.type !== 'string' || !['input', 'select', 'textarea'].includes(child.type)) return child
+    const element = child as ReactElement<Record<string, unknown>>
+    const describedBy = [element.props['aria-describedby'], hint ? hintId : null, error ? errorId : null]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0).join(' ')
+    return cloneElement(element, {
+      'aria-invalid': error ? true : element.props['aria-invalid'],
+      'aria-describedby': describedBy || undefined
+    })
+  })
+  return <label className={`field ${error ? 'field-invalid' : ''} ${className}`}>
     <span className="field-label">{label}{required && <span className="required-mark" aria-hidden="true"> *</span>}</span>
-    {children}
-    {hint && <span className="field-hint">{hint}</span>}
+    {controls}
+    {hint && <span className="field-hint" id={hintId}>{hint}</span>}
+    {error && <span className="field-error" id={errorId} role="alert">{error}</span>}
   </label>
 }
 
@@ -127,10 +141,10 @@ export function Dialog({ title, subtitle, onClose, children, className = '', lab
   </div>
 }
 
-export function ConfirmDialog({ title, message, confirmLabel = 'Delete', danger = true, onConfirm, onCancel }: { title: string; message: string; confirmLabel?: string; danger?: boolean; onConfirm: () => void; onCancel: () => void }) {
+export function ConfirmDialog({ title, message, confirmLabel = 'Delete', danger = true, onConfirm, onCancel, loading = false }: { title: string; message: string; confirmLabel?: string; danger?: boolean; onConfirm: () => void; onCancel: () => void; loading?: boolean }) {
   return <Dialog title={title} onClose={onCancel} className="dialog-narrow">
     <p className="confirm-copy">{message}</p>
-    <div className="dialog-actions"><Button variant="secondary" onClick={onCancel}>Keep it</Button><Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button></div>
+    <div className="dialog-actions"><Button variant="secondary" onClick={onCancel} disabled={loading}>Keep it</Button><Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>{loading ? 'Working…' : confirmLabel}</Button></div>
   </Dialog>
 }
 

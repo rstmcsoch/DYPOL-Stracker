@@ -70,17 +70,17 @@ describe('JSON backup', () => {
     expect(preview.invalid[0]?.collection).toBe('revisions')
   })
 
-  it('filters imported subject and chapter scores that violate paired-score and bonus-point rules', () => {
+  it('rejects over-total subject and chapter scores plus scores with no denominator during import', () => {
     const backup = createBackup(emptyData())
     backup.chapters = [sampleChapter()]
     backup.tests = [sampleTest()]
-    backup.testSubjectScores = [{
-      id: '70000000-0000-4000-8000-000000000001', created_at: now, updated_at: now,
-      test_id: testId, subject: 'Physics', marks_obtained: 10, total_marks: null
-    }]
+    backup.testSubjectScores = [
+      { id: '70000000-0000-4000-8000-000000000001', created_at: now, updated_at: now, test_id: testId, subject: 'Physics', marks_obtained: 101, total_marks: 100 },
+      { id: '70000000-0000-4000-8000-000000000002', created_at: now, updated_at: now, test_id: testId, subject: 'Chemistry', marks_obtained: 10, total_marks: null }
+    ]
     backup.testChapterLinks = [{
       id: '80000000-0000-4000-8000-000000000001', created_at: now, updated_at: now,
-      test_id: testId, chapter_id: chapterId, marks_obtained: 41, total_marks: 20
+      test_id: testId, chapter_id: chapterId, marks_obtained: 21, total_marks: 20
     }]
 
     const preview = validateBackupText(JSON.stringify(backup), emptyData())
@@ -144,5 +144,27 @@ describe('test CSV', () => {
     expect(csv).toContain("'=1+1")
     expect(csv).toContain('Chapter quiz')
     expect(csv).not.toContain('Older test')
+  })
+
+  it('preserves an invalid raw score for review while leaving its percentage blank', () => {
+    const data = emptyData()
+    data.tests = [{ ...sampleTest(), marks_obtained: 110, total_marks: 100 }]
+    const csv = testsToCsv(data)
+    expect(csv).toContain('"110","100",""')
+  })
+
+  it('exports the same complete Full Mock aggregate and label used by analytics', () => {
+    const data = emptyData()
+    data.tests = [{ ...sampleTest(), test_type: 'Full Mock', subject: 'Physics', chapter_id: null, marks_obtained: null, total_marks: null }]
+    data.testSubjectScores = [
+      { id: '70000000-0000-4000-8000-000000000011', created_at: now, updated_at: now, test_id: testId, subject: 'Physics', marks_obtained: 70, total_marks: 100 },
+      { id: '70000000-0000-4000-8000-000000000012', created_at: now, updated_at: now, test_id: testId, subject: 'Chemistry', marks_obtained: 95, total_marks: 100 },
+      { id: '70000000-0000-4000-8000-000000000013', created_at: now, updated_at: now, test_id: testId, subject: 'Maths', marks_obtained: 0, total_marks: 200 }
+    ]
+    const csv = testsToCsv(data)
+    expect(csv).toContain('All subjects')
+    expect(csv).toContain('165')
+    expect(csv).toContain('400')
+    expect(csv).toContain('41.3%')
   })
 })

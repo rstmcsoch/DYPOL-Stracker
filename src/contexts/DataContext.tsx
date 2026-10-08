@@ -5,6 +5,7 @@ import { defaultSettings, seedChapters } from '../lib/defaults'
 import { assetKey, localDb } from '../lib/database'
 import { createId } from '../lib/id'
 import { relatedRowsForRemoval } from '../lib/data-relations'
+import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type {
@@ -389,6 +390,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!userId) throw new Error('Sign in to save changes.')
     if (!inputs.length) return
     let records = inputs.map(input => withOwner(table, input as unknown as Record<string, unknown>, userId))
+    validatePersistedRecords(table, records)
     const localTables = table === 'mistakes' ? [localDb.table(table), localDb.assets] : [localDb.table(table)]
     await localDb.transaction('rw', localTables, async () => {
       await localDb.table(table).bulkPut(records as object[])
@@ -443,6 +445,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       recordsByTable.set(table, inputs.map(input => withOwner(table, input as unknown as Record<string, unknown>, userId)))
     }
     const tables = TABLES.filter(table => recordsByTable.has(table))
+    for (const table of tables) validatePersistedRecords(table, recordsByTable.get(table) ?? [])
     const stores = [...tables.map(table => localDb.table(table)), localDb.sync_queue, localDb.assets]
     await localDb.transaction('rw', stores, async () => {
       for (const table of tables) {
@@ -488,6 +491,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const id = String(record.id)
     const previousData = queryDataRef.current ?? emptyData(userId)
     const relatedChanges = relatedRowsForRemoval(previousData, table, id)
+    if (options.undo !== false) {
+      validateUndoRestores([
+        { table, record },
+        ...relatedChanges.map(change => ({ table: change.table, record: change.record }))
+      ])
+    }
     const entry: UndoEntry = {
       table, record,
       related: relatedChanges.map(change => ({ table: change.table, record: change.record, remove: change.next === null })),

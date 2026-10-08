@@ -1,10 +1,10 @@
 import { format, parseISO } from 'date-fns'
 import { Document, Footer, HeadingLevel, ImageRun, PageBreak, PageNumber, Paragraph, Packer, Table, TableCell, TableRow, TextRun, WidthType, BorderStyle, AlignmentType } from 'docx'
 import { jsPDF } from 'jspdf'
-import { getChapterPerformance, getMistakeCounts, getSmartTip, getStudyStreak, getSubjectPerformance, testPercentage } from './analytics'
+import { getChapterPerformance, getMeanTestPercentage, getMistakeCounts, getNegativeMarkImpact, getOverallTestPercentage, getOverallTestScore, getSmartTip, getStudyStreak, getSubjectPerformance } from './analytics'
 import { indiaDate, indiaToday, prettyDate } from './date'
 import { makeStudyBars } from './study-aggregation'
-import { fmtDuration, fmtNumber, percent } from './format'
+import { fmtDuration, fmtNumber } from './format'
 import type { AppData, TestRecord } from '../types'
 import { SUBJECTS } from '../types'
 import { triggerDownload } from './backup'
@@ -36,22 +36,32 @@ function scopedData(data: AppData, from: string, to: string): AppData {
 
 
 function overallTestPercent(test: TestRecord, data: AppData): number | null {
-  const direct = testPercentage(test)
-  if (direct !== null) return direct
-  if (test.test_type !== 'Full Mock') return null
-  const scores = data.testSubjectScores.filter(score => score.test_id === test.id)
-  if (scores.length !== 3 || !SUBJECTS.every(subject => scores.some(row => row.subject === subject && row.total_marks && row.marks_obtained != null))) return null
-  const marks = scores.reduce((sum, score) => sum + (score.marks_obtained ?? 0), 0)
-  const total = scores.reduce((sum, score) => sum + (score.total_marks ?? 0), 0)
-  return percent(marks, total)
+  return getOverallTestPercentage(test, data.testSubjectScores)
 }
 
 function overallTestMarks(test: TestRecord, data: AppData): { marks: number; total: number } | null {
-  if (test.marks_obtained != null && test.total_marks != null && test.total_marks > 0) return { marks: test.marks_obtained, total: test.total_marks }
-  if (test.test_type !== 'Full Mock') return null
-  const scores = data.testSubjectScores.filter(score => score.test_id === test.id)
-  if (scores.length !== 3 || !SUBJECTS.every(subject => scores.some(row => row.subject === subject && row.total_marks && row.marks_obtained != null))) return null
-  return { marks: scores.reduce((sum, score) => sum + (score.marks_obtained ?? 0), 0), total: scores.reduce((sum, score) => sum + (score.total_marks ?? 0), 0) }
+  return getOverallTestScore(test, data.testSubjectScores)
+}
+
+function visibleTestMarks(test: TestRecord, data: AppData): { marks: number | null; total: number | null } | null {
+  const score = overallTestMarks(test, data)
+  if (score) return score
+  const hasSubjectRows = data.testSubjectScores.some(item => item.test_id === test.id)
+  return (test.test_type !== 'Full Mock' || !hasSubjectRows) && (test.marks_obtained !== null || test.total_marks !== null)
+    ? { marks: test.marks_obtained, total: test.total_marks }
+    : null
+}
+
+function testSubjectLabel(test: TestRecord): string {
+  return test.test_type === 'Full Mock' ? 'All subjects' : test.subject ?? '—'
+}
+
+function negativeMarkSummary(data: AppData): string {
+  const metrics = getNegativeMarkImpact(data)
+  const hasRecorded = data.tests.some(test => test.negative_marks != null && Number.isFinite(test.negative_marks) && test.negative_marks >= 0)
+  const recorded = hasRecorded ? fmtNumber(metrics.totalNegativeMarks, 1) : 'none'
+  if (metrics.percentage === null) return `Recorded negative marks: ${recorded}. No comparable total marks were available for a ratio.`
+  return `Recorded negative marks: ${recorded}. Penalty ratio = comparable penalties / comparable totals = ${metrics.percentage.toFixed(1)}% across ${metrics.testsIncluded} tests.`
 }
 
 function chartSvg(data: AppData, kind: 'trend' | 'hours', hoursEndDate = indiaToday()): string {
@@ -186,7 +196,7 @@ export async function createPdfReport(data: AppData, options: ReportOptions): Pr
   if (selected.summary) {
     doc.addPage(); let y = pdfSectionTitle(doc, 'At a glance', 'A quick summary of what you have actually recorded.')
     const scores = scoped.tests.map(test => overallTestMarks(test, scoped)).filter((item): item is { marks: number; total: number } => item !== null)
-    const avg = scores.length ? scores.reduce((sum, row) => sum + row.marks / row.total * 100, 0) / scores.length : null
+    const avg = getMeanTestPercentage(scoped.tests, scoped.testSubjectScores).average
     const best = scores.length ? Math.max(...scores.map(row => row.marks / row.total * 100)) : null
     const done = data.chapters.filter(chapter => ['Done','Revised'].includes(chapter.status)).length
     const streak = getStudyStreak(data)
@@ -205,7 +215,7 @@ export async function createPdfReport(data: AppData, options: ReportOptions): Pr
       doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(47, 57, 46); doc.text(value, x + 4, top + 21)
     })
     y += 98
-    y = pdfLine(doc, `Date range: ${rangeLabel}. Scores above are percentages, so tests with different totals can be compared meaningfully.`, 18, y, 170, 10)
+    y = pdfLine(doc, `Date range: ${rangeLabel}. Average is the arithmetic mean of each usable test percentage; one test counts once.`, 18, y, 170, 10)
     pdfFooter(doc, 'SUMMARY')
   }
 
@@ -213,10 +223,9 @@ export async function createPdfReport(data: AppData, options: ReportOptions): Pr
     doc.addPage(); let y = pdfSectionTitle(doc, 'Performance', 'Percentages keep different test totals on a common scale.')
     doc.addImage(chartTrend, 'PNG', 17, y, 176, 63); y += 70
     const bySubject = getSubjectPerformance(scoped)
-    y = pdfLine(doc, 'Subject averages', 18, y, 175, 12, [45, 65, 54])
+    y = pdfLine(doc, 'Subject averages · unweighted per-result means', 18, y, 175, 12, [45, 65, 54])
     y = addPdfTable(doc, bySubject.map(item => [item.subject, item.average === null ? 'No usable scores' : `${Math.round(item.average)}%`, `${item.count}`]), 17, y, [70, 72, 34], ['Subject','Average','Results'])
-    const negatives = scoped.tests.filter(test => test.negative_marks !== null).reduce((sum, test) => sum + (test.negative_marks ?? 0), 0)
-    pdfLine(doc, `Recorded negative marks in range: ${fmtNumber(negatives, 1)}.`, 18, y + 2, 175, 9)
+    pdfLine(doc, negativeMarkSummary(scoped), 18, y + 2, 175, 9)
     pdfFooter(doc, 'PERFORMANCE')
   }
 
@@ -253,8 +262,9 @@ export async function createPdfReport(data: AppData, options: ReportOptions): Pr
     doc.addPage(); let y = pdfSectionTitle(doc, 'Test history', `${scoped.tests.length} test records · ${rangeLabel}`)
     const sorted = [...scoped.tests].sort((a, b) => b.test_date.localeCompare(a.test_date))
     const rows = sorted.map(test => {
-      const score = overallTestMarks(test, scoped)
-      return [test.test_date, test.title, test.test_type, test.subject ?? '—', score ? `${fmtNumber(score.marks, 1)} / ${fmtNumber(score.total, 1)}` : '—', score ? `${Math.round(score.marks / score.total * 100)}%` : '—']
+      const score = visibleTestMarks(test, scoped)
+      const percentage = overallTestPercent(test, scoped)
+      return [test.test_date, test.title, test.test_type, testSubjectLabel(test), score ? `${fmtNumber(score.marks, 1)} / ${fmtNumber(score.total, 1)}` : '—', percentage === null ? '—' : `${Math.round(percentage)}%`]
     })
     if (!rows.length) y = pdfLine(doc, 'No tests were recorded in this date range.', 18, y, 170, 10)
     else addPdfTable(doc, rows, 17, y, [25, 59, 34, 24, 24, 20], ['Date','Test','Type','Subject','Score','%'])
@@ -329,7 +339,7 @@ export async function createDocxReport(data: AppData, options: ReportOptions): P
   if (selected.summary) {
     content.push(docParagraph('At a glance', { heading: HeadingLevel.HEADING_1, font: 'Kalam', size: 34, color: '354432' }))
     const scores = scoped.tests.map(test => overallTestMarks(test, scoped)).filter((item): item is { marks: number; total: number } => item !== null)
-    const average = scores.length ? scores.reduce((sum, item) => sum + item.marks / item.total * 100, 0) / scores.length : null
+    const average = getMeanTestPercentage(scoped.tests, scoped.testSubjectScores).average
     const best = scores.length ? Math.max(...scores.map(item => item.marks / item.total * 100)) : null
     const streak = getStudyStreak(data)
     content.push(docTable(['Measure','Recorded value'], [
@@ -344,7 +354,9 @@ export async function createDocxReport(data: AppData, options: ReportOptions): P
   if (selected.performance) {
     content.push(docParagraph('Performance', { heading: HeadingLevel.HEADING_1, font: 'Kalam', size: 34, color: '354432' }))
     content.push(new Paragraph({ children: [new ImageRun({ data: trendImage, type: 'png', transformation: { width: 600, height: 215 } })], spacing: { after: 180 } }))
+    content.push(docParagraph('Subject averages are unweighted arithmetic means of valid per-result percentages; each subject result counts once.'))
     content.push(docTable(['Subject','Average','Results'], getSubjectPerformance(scoped).map(item => [item.subject, item.average === null ? 'No usable scores' : `${Math.round(item.average)}%`, `${item.count}`])))
+    content.push(docParagraph(negativeMarkSummary(scoped)))
     content.push(new Paragraph({ children: [new PageBreak()] }))
   }
   if (selected.chapters) {
@@ -363,8 +375,9 @@ export async function createDocxReport(data: AppData, options: ReportOptions): P
   if (selected.tests) {
     content.push(docParagraph('Test history', { heading: HeadingLevel.HEADING_1, font: 'Kalam', size: 34, color: '354432' }))
     const rows = [...scoped.tests].sort((a, b) => b.test_date.localeCompare(a.test_date)).map(test => {
-      const score = overallTestMarks(test, scoped)
-      return [test.test_date, test.title, test.test_type, test.subject ?? '—', score ? `${fmtNumber(score.marks, 1)} / ${fmtNumber(score.total, 1)}` : '—', score ? `${Math.round(score.marks / score.total * 100)}%` : '—']
+      const score = visibleTestMarks(test, scoped)
+      const percentage = overallTestPercent(test, scoped)
+      return [test.test_date, test.title, test.test_type, testSubjectLabel(test), score ? `${fmtNumber(score.marks, 1)} / ${fmtNumber(score.total, 1)}` : '—', percentage === null ? '—' : `${Math.round(percentage)}%`]
     })
     content.push(docTable(['Date','Test','Type','Subject','Score','%'], rows.length ? rows : [['—','No tests in this range','—','—','—','—']]))
     content.push(new Paragraph({ children: [new PageBreak()] }))

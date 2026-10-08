@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Check, CircleCheck, Clock3, RotateCcw, Search, Trash2, X } from 'lucide-react'
 import { Button, ConfirmDialog, EmptyState, NotebookCard, PageHeader, StatusBadge, SubjectBadge } from '../components/ui'
@@ -19,7 +19,10 @@ export default function RetryPage() {
   const [type, setType] = useState<'all' | MistakeType>('all')
   const [search, setSearch] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const deletingRef = useRef(false)
   const ready = data.mistakes.filter(item => item.retry_later && item.retry_status === 'pending')
+  const deleteTarget = data.mistakes.find(item => item.id === deleteId) ?? null
   const filtered = useMemo(() => ready.filter(mistake => {
     const chapter = data.chapters.find(item => item.id === mistake.chapter_id)
     if (subject !== 'all' && chapter?.subject !== subject) return false
@@ -43,11 +46,14 @@ export default function RetryPage() {
     catch (error) { notify(error instanceof Error ? error.message : 'Could not update retry list.', 'error') }
   }
   const deleteMistake = async () => {
+    if (!deleteId || deletingRef.current) return
     const mistake = data.mistakes.find(item => item.id === deleteId)
     if (!mistake) return
-    try { await remove('mistakes', mistake); notify('Mistake deleted.') }
+    deletingRef.current = true
+    setDeleting(true)
+    try { await remove('mistakes', mistake); notify('Mistake deleted. Use Undo if needed.'); setDeleteId(null) }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not delete mistake.', 'error') }
-    setDeleteId(null)
+    finally { deletingRef.current = false; setDeleting(false) }
   }
 
   return <div className="content-page retry-page">
@@ -65,6 +71,6 @@ export default function RetryPage() {
       })}</div>}
       <div className="retry-footer">A question marked <StatusBadge tone="Strong">Retried</StatusBadge> stays in your mistake notebook for future review.</div>
     </NotebookCard>
-    {deleteId && <ConfirmDialog title="Delete this question?" message="This mistake note will be removed from your notebook." onCancel={() => setDeleteId(null)} onConfirm={() => void deleteMistake()} />}
+    {deleteTarget && <ConfirmDialog title={`Delete “${deleteTarget.question_note.slice(0, 48)}${deleteTarget.question_note.length > 48 ? '…' : ''}”?`} message="This mistake note will be removed. You can undo for a few seconds." onCancel={() => setDeleteId(null)} onConfirm={() => void deleteMistake()} loading={deleting} />}
   </div>
 }
