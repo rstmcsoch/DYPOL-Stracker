@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { AppearanceProvider } from './contexts/AppearanceContext'
 import { DataProvider } from './contexts/DataContext'
+import { AIProvider } from './contexts/AIContext'
 import { FocusProvider } from './contexts/FocusContext'
 import { ToastProvider } from './contexts/ToastContext'
 import { AppFrame } from './components/AppShell'
@@ -38,11 +39,13 @@ function ProtectedApp() {
   if (loading) return <AppLoading />
   if (!user) return <Navigate to="/login" replace />
   return <DataProvider key={user.id}>
-    <AppearanceProvider>
-      <FocusProvider key={user.id}>
-        <AppFrame />
-      </FocusProvider>
-    </AppearanceProvider>
+    <AIProvider>
+      <AppearanceProvider>
+        <FocusProvider key={user.id}>
+          <AppFrame />
+        </FocusProvider>
+      </AppearanceProvider>
+    </AIProvider>
   </DataProvider>
 }
 

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
+import { AIExperience } from './ai/AIExperience'
 import { useToast } from '../contexts/ToastContext'
 import { Button, Dialog, Field, IconButton } from './ui'
 import { ThemeToggle } from './ThemeToggle'
@@ -153,6 +154,7 @@ export function AppFrame() {
     {quickTaskOpen && <QuickTaskDialog data={data} onClose={() => setQuickTaskOpen(false)} />}
     {undoAvailable && <div className="undo-toast" role="status"><Check size={15} /><span>Deleted</span><button onClick={() => void undoDelete().then(() => notify('Deletion undone.')).catch(error => notify(error instanceof Error ? error.message : 'Could not undo deletion.', 'error'))}>Undo</button><IconButton label="Dismiss" onClick={dismissUndo}><X size={14} /></IconButton></div>}
     <PwaUpdatePrompt />
+    <AIExperience />
   </div>
 }
 
