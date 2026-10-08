@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { format, parseISO, startOfWeek, startOfMonth } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import {
   Activity, BarChart3, BookOpen, CircleHelp, Clock3, Target, TrendingUp, TriangleAlert
 } from 'lucide-react'
@@ -15,8 +15,9 @@ import {
   getAccuracy, getAttemptRate, getChapterPerformance, getMarksTrend, getMistakeCounts,
   getSubjectPerformance, testPercentage
 } from '../lib/analytics'
-import { indiaToday, prettyDate } from '../lib/date'
+import { prettyDate } from '../lib/date'
 import { fmtDuration, fmtNumber } from '../lib/format'
+import { makeStudyBars, makeStudyHeatmap } from '../lib/study-aggregation'
 import type { Subject } from '../types'
 import { SUBJECTS } from '../types'
 
@@ -45,8 +46,8 @@ export default function AnalyticsPage() {
   }, 0)
   const negativeImpact = totalMarksKnown > 0 ? negativeTotal / totalMarksKnown * 100 : null
   const mistakeCounts = getMistakeCounts(data)
-  const studyBars = useMemo(() => makeStudyBars(data, hoursView), [data, hoursView])
-  const heatmap = useMemo(() => makeHeatmap(data), [data])
+  const studyBars = useMemo(() => makeStudyBars(data.sessions, hoursView), [data.sessions, hoursView])
+  const heatmap = useMemo(() => makeStudyHeatmap(data.sessions, data.settings.daily_study_goal_minutes), [data.sessions, data.settings.daily_study_goal_minutes])
   const totalChapters = data.chapters.length
   const doneChapters = data.chapters.filter(chapter => chapter.status === 'Done' || chapter.status === 'Revised').length
   const validTestScores = data.tests.map(testPercentage).filter((value): value is number => value !== null)
@@ -96,7 +97,7 @@ export default function AnalyticsPage() {
     </div>
 
     <NotebookCard className="heatmap-card"><div className="chart-card-head"><div><span className="eyebrow">A CALENDAR OF SHOWING UP</span><h2>Study-day rhythm</h2><p>Day intensity is compared with your current daily study goal.</p></div><div className="heatmap-legend"><span>Less</span>{['none','low','medium','high','goal'].map(level => <i key={level} className={`heat-cell heat-${level}`} title={level} />)}<span>Goal</span></div></div>
-      <div className="heatmap-month-labels">{heatmap.months.map(item => <span key={item.key} style={{ gridColumn: item.column }}>{item.label}</span>)}</div><div className="heatmap-grid" role="img" aria-label="Study activity heatmap for the last 16 weeks">{heatmap.cells.map(cell => <span key={cell.date} className={`heat-cell heat-${cell.level}`} title={`${prettyDate(cell.date)} · ${fmtDuration(cell.minutes)}`} aria-label={`${prettyDate(cell.date)}, ${fmtDuration(cell.minutes)} studied`} />)}</div>
+      <div className="heatmap-month-labels">{heatmap.months.map(item => <span key={item.key} style={{ gridColumn: item.column }}>{item.label}</span>)}</div><div className="heatmap-grid" role="img" aria-label="Study activity heatmap for the last 16 weeks">{heatmap.cells.map(cell => <span key={cell.date} className={`heat-cell heat-${cell.level}`} title={cell.future ? `${prettyDate(cell.date)} · Upcoming` : `${prettyDate(cell.date)} · ${fmtDuration(cell.minutes)}`} aria-label={cell.future ? `${prettyDate(cell.date)}, upcoming` : `${prettyDate(cell.date)}, ${fmtDuration(cell.minutes)} studied`} />)}</div>
       <div className="heatmap-caption"><span>{heatmap.daysLogged} study day{heatmap.daysLogged === 1 ? '' : 's'} shown</span><span>Consistency over intensity.</span></div>
     </NotebookCard>
 
@@ -109,63 +110,6 @@ export default function AnalyticsPage() {
 
     <div className="analytics-insight-row"><NotebookCard className="analytics-insight-card"><span className="insight-pencil">✎</span><div><span className="eyebrow">CHAPTER SIGNALS</span><p><strong>{chapterRows.filter(item => item.classification === 'Untested').length}</strong> untested · <strong>{chapterRows.filter(item => item.classification === 'Weak').length}</strong> weak · <strong>{chapterRows.filter(item => item.dropping).length}</strong> dropping</p></div><button onClick={() => navigate('/weak-areas')}>See weak areas ↗</button></NotebookCard></div>
   </div>
-}
-
-function makeStudyBars(data: ReturnType<typeof useData>['data'], view: 'day' | 'week' | 'month') {
-  const today = indiaToday()
-  const recent: { date: string; label: string; hours: number }[] = []
-  if (view === 'day') {
-    for (let index = 13; index >= 0; index -= 1) {
-      const date = format(new Date(parseISO(`${today}T12:00:00`).getTime() - index * 86_400_000), 'yyyy-MM-dd')
-      const mins = data.sessions.filter(session => sessionDate(session.started_at) === date).reduce((sum, session) => sum + session.duration_minutes, 0)
-      recent.push({ date, label: format(parseISO(`${date}T12:00:00`), 'd MMM'), hours: Math.round(mins / 60 * 10) / 10 })
-    }
-  } else if (view === 'week') {
-    for (let index = 7; index >= 0; index -= 1) {
-      const date = format(new Date(parseISO(`${today}T12:00:00`).getTime() - index * 7 * 86_400_000), 'yyyy-MM-dd')
-      const start = format(startOfWeek(parseISO(`${date}T12:00:00`), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      const mins = data.sessions.filter(session => { const day = sessionDate(session.started_at); return day >= start && day <= date }).reduce((sum, session) => sum + session.duration_minutes, 0)
-      recent.push({ date: start, label: format(parseISO(`${start}T12:00:00`), 'd MMM'), hours: Math.round(mins / 60 * 10) / 10 })
-    }
-  } else {
-    for (let index = 5; index >= 0; index -= 1) {
-      const date = format(new Date(parseISO(`${today}T12:00:00`).getTime() - index * 30 * 86_400_000), 'yyyy-MM-dd')
-      const start = format(startOfMonth(parseISO(`${date}T12:00:00`)), 'yyyy-MM-dd')
-      const mins = data.sessions.filter(session => sessionDate(session.started_at).startsWith(start.slice(0, 7))).reduce((sum, session) => sum + session.duration_minutes, 0)
-      recent.push({ date: start, label: format(parseISO(`${start}T12:00:00`), 'MMM yy'), hours: Math.round(mins / 60 * 10) / 10 })
-    }
-  }
-  return recent
-}
-
-function sessionDate(value: string): string {
-  try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(value)) }
-  catch { return value.slice(0, 10) }
-}
-
-function makeHeatmap(data: ReturnType<typeof useData>['data']) {
-  const today = indiaToday()
-  const end = parseISO(`${today}T12:00:00`)
-  const startTime = end.getTime() - (16 * 7 - 1) * 86_400_000
-  const dates = Array.from({ length: 16 * 7 }, (_, index) => format(new Date(startTime + index * 86_400_000), 'yyyy-MM-dd'))
-  const goal = Math.max(1, data.settings.daily_study_goal_minutes)
-  const minutesByDate = new Map<string, number>()
-  for (const session of data.sessions) {
-    const date = sessionDate(session.started_at)
-    minutesByDate.set(date, (minutesByDate.get(date) ?? 0) + session.duration_minutes)
-  }
-  const cells = dates.map(date => {
-    const minutes = minutesByDate.get(date) ?? 0
-    const ratio = minutes / goal
-    const level = minutes === 0 ? 'none' : ratio < 0.3 ? 'low' : ratio < 0.7 ? 'medium' : ratio < 1 ? 'high' : 'goal'
-    return { date, minutes, level }
-  })
-  const months: { key: string; label: string; column: number }[] = []
-  dates.forEach((date, index) => {
-    const day = parseISO(`${date}T12:00:00`)
-    if (day.getDate() <= 7 && !months.some(item => item.key === date.slice(0, 7))) months.push({ key: date.slice(0, 7), label: format(day, 'MMM'), column: Math.floor(index / 7) + 1 })
-  })
-  return { cells, months, daysLogged: cells.filter(item => item.minutes > 0).length }
 }
 
 function getTargetComparison(data: ReturnType<typeof useData>['data']): { score: number; gap: number; state: 'below' | 'near' | 'above' } | null {

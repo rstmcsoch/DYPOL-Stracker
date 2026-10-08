@@ -5,22 +5,9 @@ import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 import { createId } from '../lib/id'
 import type { StudySession, Subject } from '../types'
+import { defaultTimerState as defaults, sanitizeTimerState, type FocusMode, type TimerState } from '../lib/focus-timer'
+export type { FocusMode } from '../lib/focus-timer'
 
-export type FocusMode = 'Pomodoro' | 'Short Break' | 'Long Break' | 'Custom'
-interface TimerState {
-  mode: FocusMode
-  durations: { Pomodoro: number; 'Short Break': number; 'Long Break': number; Custom: number }
-  remainingSeconds: number
-  running: boolean
-  endsAt: number | null
-  segmentStartedAt: number | null
-  focusStartedAt: string | null
-  elapsedSeconds: number
-  subject: Subject | null
-  chapterId: string | null
-  taskId: string | null
-  finished: boolean
-}
 interface FocusContextValue extends TimerState {
   progress: number
   start: () => void
@@ -35,30 +22,11 @@ interface FocusContextValue extends TimerState {
 }
 
 const KEY = 'stracker-focus-state'
-const defaults: TimerState = {
-  mode: 'Pomodoro', durations: { Pomodoro: 25, 'Short Break': 5, 'Long Break': 15, Custom: 40 },
-  remainingSeconds: 25 * 60, running: false, endsAt: null, segmentStartedAt: null,
-  focusStartedAt: null, elapsedSeconds: 0, subject: null, chapterId: null, taskId: null, finished: false
-}
 const FocusContext = createContext<FocusContextValue | null>(null)
 
 function restoreTimer(key: string): TimerState {
-  try {
-    const parsed = JSON.parse(sessionStorage.getItem(key) ?? 'null') as Partial<TimerState> | null
-    if (!parsed || !parsed.durations || typeof parsed.mode !== 'string') return defaults
-    const durations = { ...defaults.durations, ...parsed.durations }
-    const mode = parsed.mode as FocusMode
-    const restored: TimerState = {
-      ...defaults, ...parsed, mode, durations,
-      remainingSeconds: Math.max(0, Number(parsed.remainingSeconds) || 0),
-      running: Boolean(parsed.running), endsAt: typeof parsed.endsAt === 'number' ? parsed.endsAt : null,
-      segmentStartedAt: typeof parsed.segmentStartedAt === 'number' ? parsed.segmentStartedAt : null,
-      elapsedSeconds: Math.max(0, Number(parsed.elapsedSeconds) || 0),
-      finished: Boolean(parsed.finished)
-    }
-    if (restored.running && restored.endsAt) restored.remainingSeconds = Math.max(0, Math.ceil((restored.endsAt - Date.now()) / 1000))
-    return restored
-  } catch { return defaults }
+  try { return sanitizeTimerState(JSON.parse(sessionStorage.getItem(key) ?? 'null')) }
+  catch { return defaults }
 }
 
 export function FocusProvider({ children }: { children: ReactNode }) {
@@ -78,8 +46,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
   const logSession = useCallback(async (state: TimerState, completed: boolean, endedAt = Date.now()) => {
     if (state.mode !== 'Pomodoro' && state.mode !== 'Custom') return
-    const tail = state.running && state.segmentStartedAt ? Math.max(0, (endedAt - state.segmentStartedAt) / 1000) : 0
-    const elapsed = state.elapsedSeconds + tail
+    const effectiveEnd = state.running && state.endsAt !== null ? Math.min(endedAt, state.endsAt) : endedAt
+    const tail = state.running && state.segmentStartedAt ? Math.max(0, (effectiveEnd - state.segmentStartedAt) / 1000) : 0
+    const elapsed = Math.min(180 * 60, state.elapsedSeconds + tail)
     if (elapsed <= 0) return
     const now = new Date(endedAt).toISOString()
     const session: StudySession = {
@@ -96,7 +65,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     if (ending.current) return
     ending.current = true
     const endedAt = snapshot.endsAt ?? Date.now()
-    setTimer(current => ({ ...current, remainingSeconds: 0, running: false, endsAt: null, segmentStartedAt: null, finished: true }))
+    timerRef.current = { ...snapshot, remainingSeconds: 0, running: false, endsAt: null, segmentStartedAt: null, focusStartedAt: null, elapsedSeconds: 0, finished: true }
+    setTimer(current => ({ ...current, remainingSeconds: 0, running: false, endsAt: null, segmentStartedAt: null, focusStartedAt: null, elapsedSeconds: 0, finished: true }))
     if (snapshot.mode === 'Pomodoro' || snapshot.mode === 'Custom') {
       void logSession(snapshot, true, endedAt)
       if (data.settings.sound_enabled) playTone()
@@ -123,14 +93,20 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   }, [timer.running, timer.endsAt, finish])
 
   const pause = useCallback(() => {
+    const snapshot = timerRef.current
+    const now = Date.now()
+    if (snapshot.running && snapshot.endsAt !== null && snapshot.endsAt <= now) {
+      finish(snapshot)
+      return
+    }
     setTimer(current => {
       if (!current.running || !current.endsAt) return current
-      const now = Date.now()
       const remainingSeconds = Math.max(0, Math.ceil((current.endsAt - now) / 1000))
-      const focusElapsed = (current.mode === 'Pomodoro' || current.mode === 'Custom') && current.segmentStartedAt ? Math.max(0, (now - current.segmentStartedAt) / 1000) : 0
-      return { ...current, running: false, endsAt: null, segmentStartedAt: null, remainingSeconds, elapsedSeconds: current.elapsedSeconds + focusElapsed }
+      const elapsedUntil = Math.min(now, current.endsAt)
+      const focusElapsed = (current.mode === 'Pomodoro' || current.mode === 'Custom') && current.segmentStartedAt ? Math.max(0, (elapsedUntil - current.segmentStartedAt) / 1000) : 0
+      return { ...current, running: false, endsAt: null, segmentStartedAt: null, remainingSeconds, elapsedSeconds: Math.min(180 * 60, current.elapsedSeconds + focusElapsed) }
     })
-  }, [])
+  }, [finish])
 
   const start = useCallback(() => {
     ending.current = false

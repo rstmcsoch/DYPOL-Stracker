@@ -4,7 +4,7 @@ import { ArrowLeft, Check, CircleCheck, Clock3, RotateCcw, Search, Trash2, X } f
 import { Button, ConfirmDialog, EmptyState, NotebookCard, PageHeader, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
-import { prettyDate } from '../lib/date'
+import { indiaDate, prettyDate } from '../lib/date'
 import type { MistakeType, Subject } from '../types'
 import { SUBJECTS } from '../types'
 
@@ -59,7 +59,7 @@ export default function RetryPage() {
         const chapter = data.chapters.find(item => item.id === mistake.chapter_id)
         const test = data.tests.find(item => item.id === mistake.test_id)
         return <article key={mistake.id} className="retry-row">
-          <div className="retry-row-index"><span>↻</span></div><div className="retry-row-main"><div className="retry-row-meta">{chapter ? <><SubjectBadge subject={chapter.subject} /> <strong>{chapter.name}</strong></> : <StatusBadge tone="weak">Chapter removed</StatusBadge>}<span className={`mistake-type-chip mistake-${mistake.mistake_type.toLowerCase()}`}>{mistake.mistake_type}</span></div><h3>{mistake.question_note}</h3><div className="retry-row-origin"><span><Clock3 size={13} /> Added {prettyDate(mistake.created_at.slice(0, 10))}</span>{test && <span>Original test: {test.title}</span>}</div>{mistake.solution_note && <details className="retry-solution"><summary>Reveal my note</summary><p>{mistake.solution_note}</p></details>}</div>
+          <div className="retry-row-index"><span>↻</span></div><div className="retry-row-main"><div className="retry-row-meta">{chapter ? <><SubjectBadge subject={chapter.subject} /> <strong>{chapter.name}</strong></> : <StatusBadge tone="weak">Chapter removed</StatusBadge>}<span className={`mistake-type-chip mistake-${mistake.mistake_type.toLowerCase()}`}>{mistake.mistake_type}</span></div><h3>{mistake.question_note}</h3><div className="retry-row-origin"><span><Clock3 size={13} /> Added {prettyDate(indiaDate(mistake.created_at))}</span>{test && <span>Original test: {test.title}</span>}</div>{mistake.solution_note && <details className="retry-solution"><summary>Reveal my note</summary><p>{mistake.solution_note}</p></details>}</div>
           <div className="retry-row-actions"><Button size="sm" onClick={() => void markRetried(mistake.id)}><Check size={15} /> Mark retried</Button><button className="text-button" onClick={() => void keepForLater(mistake.id)}>Keep for later</button><button className="icon-button retry-delete" onClick={() => setDeleteId(mistake.id)} aria-label="Delete question"><Trash2 size={15} /></button></div>
         </article>
       })}</div>}

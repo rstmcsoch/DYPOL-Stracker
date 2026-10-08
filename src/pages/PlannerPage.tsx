@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { addDays, endOfWeek, format, parseISO, startOfWeek } from 'date-fns'
-import { z } from 'zod'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CalendarDays, Check, ChevronDown, Clock3, Copy, GripVertical, Plus, Target, Trash2 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Button, ConfirmDialog, Dialog, EmptyState, Field, NotebookCard, PageHeader, ProgressBar, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { createId } from '../lib/id'
-import { indiaToday, prettyDate } from '../lib/date'
+import { goalSchema, MAX_COUNT_GOAL, MAX_WEEKLY_STUDY_HOURS } from '../lib/goal-validation'
+import { taskInputSchema } from '../lib/task-validation'
+import { indiaDate, indiaToday, prettyDate } from '../lib/date'
 import { fmtDuration, fmtNumber } from '../lib/format'
 import type { DailyTask, GoalType, Priority, Subject, WeeklyGoal } from '../types'
 import { SUBJECTS } from '../types'
 
-const taskSchema = z.object({ title: z.string().trim().min(1).max(200), estimated_minutes: z.number().int().min(0).max(1440), task_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
 const goalTypes: { type: GoalType; title: string; unit: string }[] = [
   { type: 'study_hours', title: 'Study hours', unit: 'hours' }, { type: 'tests', title: 'Tests', unit: 'tests' },
   { type: 'chapters', title: 'Chapters', unit: 'chapters' }, { type: 'revisions', title: 'Revisions', unit: 'revisions' },
@@ -47,7 +47,7 @@ export default function PlannerPage() {
   const moveWeek = (offset: number) => selectWeek(format(addDays(parseISO(`${weekStart}T12:00:00`), offset * 7), 'yyyy-MM-dd'))
 
   const saveTask = async (task: DailyTask) => {
-    const parsed = taskSchema.safeParse(task)
+    const parsed = taskInputSchema.safeParse(task)
     if (!parsed.success) { notify(parsed.error.issues[0]?.message ?? 'Check the task details.', 'error'); return }
     try { await upsert('daily_tasks', { ...task, title: task.title.trim(), updated_at: new Date().toISOString() }); notify(editingTask ? 'Task updated.' : 'Task added to your plan.'); setTaskDialog(false); setEditingTask(null) }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save task.', 'error') }
@@ -72,6 +72,7 @@ export default function PlannerPage() {
     const reordered = [...tasks]
     const from = reordered.findIndex(item => item.id === task.id)
     const to = reordered.findIndex(item => item.id === target.id)
+    if (from < 0 || to < 0) return
     const [moved] = reordered.splice(from, 1)
     if (moved) reordered.splice(to, 0, moved)
     try { await upsertMany('daily_tasks', reordered.map((item, position) => ({ ...item, position, updated_at: new Date().toISOString() }))) }
@@ -79,8 +80,9 @@ export default function PlannerPage() {
   }
 
   const saveGoal = async (goal: WeeklyGoal) => {
-    if (!goal.title.trim() || !Number.isFinite(goal.target) || goal.target <= 0) { notify('Give the goal a name and positive target.', 'error'); return }
-    try { await upsert('weekly_goals', { ...goal, title: goal.title.trim(), updated_at: new Date().toISOString() }); notify('Weekly goal saved.'); setGoalDialog(false) }
+    const parsed = goalSchema.safeParse(goal)
+    if (!parsed.success) { notify(parsed.error.issues[0]?.message ?? 'Check the weekly goal.', 'error'); return }
+    try { await upsert('weekly_goals', { ...goal, title: parsed.data.title, updated_at: new Date().toISOString() }); notify('Weekly goal saved.'); setGoalDialog(false) }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save goal.', 'error') }
   }
 
@@ -148,7 +150,7 @@ function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: 
   const [saving, setSaving] = useState(false)
   const chapters = data.chapters.filter(chapter => !subject || chapter.subject === subject)
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); setSaving(true)
+    event.preventDefault(); if (saving) return; setSaving(true)
     const task: DailyTask = {
       id: initial?.id ?? createId(), title: title.trim(), subject: subject || null, chapter_id: chapterId || null,
       estimated_minutes: Number(minutes), priority, is_completed: initial?.is_completed ?? false,
@@ -159,7 +161,7 @@ function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: 
   }
   return <Dialog title={initial ? 'Edit your task' : 'Plan a study task'} subtitle="You can change the day later. A plan should flex with you." onClose={onClose}>
     <form className="form-stack" onSubmit={submit}><Field label="Task" required><input autoFocus required maxLength={200} value={title} onChange={event => setTitle(event.target.value)} placeholder="e.g. Practice 15 integration problems" /></Field>
-      <div className="form-grid two"><Field label="Date"><input type="date" required value={date} onChange={event => setDate(event.target.value)} /></Field><Field label="Estimated minutes"><input type="number" min="0" max="1440" step="5" value={minutes} onChange={event => setMinutes(Number(event.target.value))} /></Field></div>
+      <div className="form-grid two"><Field label="Date"><input type="date" required value={date} onChange={event => setDate(event.target.value)} /></Field><Field label="Estimated minutes"><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => setMinutes(Number(event.target.value))} /></Field></div>
       <div className="form-grid three"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{SUBJECTS.map(item => <option key={item}>{item}</option>)}</select></Field><Field label="Chapter"><select value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="">None</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field><Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>{initial ? 'Save task' : 'Add task'}</Button></div>
     </form>
@@ -173,17 +175,18 @@ function GoalDialog({ weekStart, onClose, onSave }: { weekStart: string; onClose
   const [unit, setUnit] = useState('hours')
   const [saving, setSaving] = useState(false)
   const changeType = (next: GoalType) => { setType(next); const item = goalTypes.find(goal => goal.type === next); if (item) { setTitle(item.title); setUnit(item.unit) } }
-  const submit = async (event: FormEvent) => { event.preventDefault(); setSaving(true); const now = new Date().toISOString(); try { await onSave({ id: createId(), goal_type: type, title, target: Number(target), progress_value: 0, week_start: weekStart, unit, created_at: now, updated_at: now }) } finally { setSaving(false) } }
+  const studyHours = type === 'study_hours'
+  const submit = async (event: FormEvent) => { event.preventDefault(); if (saving) return; setSaving(true); const now = new Date().toISOString(); try { await onSave({ id: createId(), goal_type: type, title, target: Number(target), progress_value: 0, week_start: weekStart, unit, created_at: now, updated_at: now }) } finally { setSaving(false) } }
   return <Dialog title="Set a weekly goal" subtitle={`For the week of ${prettyDate(weekStart)}.`} onClose={onClose}>
-    <form className="form-stack" onSubmit={submit}><Field label="Goal type"><select value={type} onChange={event => changeType(event.target.value as GoalType)}>{goalTypes.map(item => <option key={item.type} value={item.type}>{item.title}</option>)}</select></Field><Field label="Name"><input required maxLength={120} value={title} onChange={event => setTitle(event.target.value)} /></Field><div className="form-grid two"><Field label="Target"><input type="number" min="0.1" step="0.5" required value={target} onChange={event => setTarget(event.target.value)} /></Field><Field label="Unit"><input maxLength={30} value={unit} onChange={event => setUnit(event.target.value)} /></Field></div><p className="goal-autotrack-note">Study hours, tests, chapters and revisions update from your real activity. Custom goals can be ticked up manually.</p><div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>Save weekly goal</Button></div></form>
+    <form className="form-stack" noValidate onSubmit={submit}><Field label="Goal type"><select value={type} onChange={event => changeType(event.target.value as GoalType)}>{goalTypes.map(item => <option key={item.type} value={item.type}>{item.title}</option>)}</select></Field><Field label="Name"><input required maxLength={120} value={title} onChange={event => setTitle(event.target.value)} /></Field><div className="form-grid two"><Field label="Target"><input type="number" min={studyHours ? 0.5 : 1} max={studyHours ? MAX_WEEKLY_STUDY_HOURS : MAX_COUNT_GOAL} step={studyHours ? 0.5 : 1} required value={target} onChange={event => setTarget(event.target.value)} /></Field><Field label="Unit"><input maxLength={30} value={unit} onChange={event => setUnit(event.target.value)} /></Field></div><p className="goal-autotrack-note">Study hours, tests, chapters and revisions update from your real activity. Custom goals can be ticked up manually.</p><div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>Save weekly goal</Button></div></form>
   </Dialog>
 }
 
 function getGoalProgress(goal: WeeklyGoal, data: ReturnType<typeof useData>['data']): number {
   const end = format(addDays(parseISO(`${goal.week_start}T12:00:00`), 6), 'yyyy-MM-dd')
-  if (goal.goal_type === 'study_hours') return data.sessions.filter(session => session.started_at.slice(0, 10) >= goal.week_start && session.started_at.slice(0, 10) <= end).reduce((sum, session) => sum + session.duration_minutes, 0) / 60
+  if (goal.goal_type === 'study_hours') return data.sessions.filter(session => indiaDate(session.started_at) >= goal.week_start && indiaDate(session.started_at) <= end).reduce((sum, session) => sum + session.duration_minutes, 0) / 60
   if (goal.goal_type === 'tests') return data.tests.filter(test => test.test_date >= goal.week_start && test.test_date <= end).length
   if (goal.goal_type === 'chapters') return data.chapters.filter(chapter => chapter.completed_on && chapter.completed_on >= goal.week_start && chapter.completed_on <= end).length
-  if (goal.goal_type === 'revisions') return data.revisions.filter(revision => revision.completed_at && revision.completed_at.slice(0, 10) >= goal.week_start && revision.completed_at.slice(0, 10) <= end).length
+  if (goal.goal_type === 'revisions') return data.revisions.filter(revision => revision.completed_at && indiaDate(revision.completed_at) >= goal.week_start && indiaDate(revision.completed_at) <= end).length
   return goal.progress_value
 }

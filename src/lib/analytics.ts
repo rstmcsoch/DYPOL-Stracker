@@ -1,5 +1,5 @@
-import { differenceInCalendarDays, parseISO, startOfWeek, format } from 'date-fns'
-import { indiaToday } from './date'
+import { addDays, differenceInCalendarDays, parseISO, startOfWeek, format } from 'date-fns'
+import { indiaDate, indiaToday } from './date'
 import { percent } from './format'
 import type {
   AppData, Chapter, MistakeType, Subject, TestChapterLink, TestRecord, TestSubjectScore
@@ -94,10 +94,7 @@ export function getAttemptRate(data: AppData): { attempted: number; total: numbe
 }
 
 export function getStudyStreak(data: AppData): { current: number; longest: number; daysThisMonth: number } {
-  const days = new Set(data.sessions.filter(s => s.duration_minutes > 0).map(s => {
-    try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(s.started_at)) }
-    catch { return s.started_at.slice(0, 10) }
-  }))
+  const days = new Set(data.sessions.filter(session => session.duration_minutes > 0).map(session => indiaDate(session.started_at)))
   const sorted = [...days].sort()
   let longest = 0
   let run = 0
@@ -108,12 +105,12 @@ export function getStudyStreak(data: AppData): { current: number; longest: numbe
     previous = day
   }
   const today = indiaToday()
-  const yesterday = format(new Date(parseISO(`${today}T12:00:00`).getTime() - 86_400_000), 'yyyy-MM-dd')
+  const yesterday = format(addDays(parseISO(`${today}T12:00:00`), -1), 'yyyy-MM-dd')
   let current = 0
   let cursor = days.has(today) ? today : days.has(yesterday) ? yesterday : ''
   while (cursor && days.has(cursor)) {
     current += 1
-    cursor = format(new Date(parseISO(`${cursor}T12:00:00`).getTime() - 86_400_000), 'yyyy-MM-dd')
+    cursor = format(addDays(parseISO(`${cursor}T12:00:00`), -1), 'yyyy-MM-dd')
   }
   const monthPrefix = today.slice(0, 7)
   return { current, longest, daysThisMonth: sorted.filter(day => day.startsWith(monthPrefix)).length }
@@ -121,10 +118,8 @@ export function getStudyStreak(data: AppData): { current: number; longest: numbe
 
 export function getTodayStudyMinutes(data: AppData): number {
   const today = indiaToday()
-  return data.sessions.filter(session => {
-    try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(session.started_at)) === today }
-    catch { return session.started_at.slice(0, 10) === today }
-  }).reduce((sum, session) => sum + session.duration_minutes, 0)
+  return data.sessions.filter(session => indiaDate(session.started_at) === today)
+    .reduce((sum, session) => sum + session.duration_minutes, 0)
 }
 
 export function getMistakeCounts(data: AppData): { type: MistakeType; count: number }[] {

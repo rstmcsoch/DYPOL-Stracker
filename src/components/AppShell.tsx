@@ -10,6 +10,8 @@ import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { Button, Dialog, Field, IconButton } from './ui'
 import { indiaToday } from '../lib/date'
+import { createId } from '../lib/id'
+import { taskInputSchema } from '../lib/task-validation'
 import type { AppData, DailyTask, Priority, Subject } from '../types'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
@@ -142,7 +144,7 @@ export function AppFrame() {
     {searchOpen && <GlobalSearch data={data} onClose={() => setSearchOpen(false)} />}
     {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     {quickTaskOpen && <QuickTaskDialog data={data} onClose={() => setQuickTaskOpen(false)} />}
-    {undoAvailable && <div className="undo-toast" role="status"><Check size={15} /><span>Deleted</span><button onClick={() => void undoDelete().then(() => notify('Deletion undone.'))}>Undo</button><IconButton label="Dismiss" onClick={dismissUndo}><X size={14} /></IconButton></div>}
+    {undoAvailable && <div className="undo-toast" role="status"><Check size={15} /><span>Deleted</span><button onClick={() => void undoDelete().then(() => notify('Deletion undone.')).catch(error => notify(error instanceof Error ? error.message : 'Could not undo deletion.', 'error'))}>Undo</button><IconButton label="Dismiss" onClick={dismissUndo}><X size={14} /></IconButton></div>}
     <PwaUpdatePrompt />
   </div>
 }
@@ -182,15 +184,22 @@ function QuickTaskDialog({ data, onClose }: { data: AppData; onClose: () => void
   const chapters = data.chapters.filter(chapter => !subject || chapter.subject === subject)
   const save = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!title.trim()) return
-    setLoading(true)
+    if (loading) return
+    const taskDate = indiaToday()
     const now = new Date().toISOString()
     const task: DailyTask = {
-      id: crypto.randomUUID(), title: title.trim(), subject: subject || null, chapter_id: chapterId || null,
-      estimated_minutes: Math.max(0, Number(minutes) || 0), priority, is_completed: false,
-      task_date: indiaToday(), position: data.tasks.filter(item => item.task_date === indiaToday()).length,
+      id: createId(), title: title.trim(), subject: subject || null, chapter_id: chapterId || null,
+      estimated_minutes: Number(minutes), priority, is_completed: false,
+      task_date: taskDate, position: data.tasks.filter(item => item.task_date === taskDate).length,
       created_at: now, updated_at: now
     }
+    const parsed = taskInputSchema.safeParse(task)
+    if (!parsed.success) { notify(parsed.error.issues[0]?.message ?? 'Check the task details.', 'error'); return }
+    if (chapterId) {
+      const chapter = data.chapters.find(item => item.id === chapterId)
+      if (!chapter || (subject && chapter.subject !== subject)) { notify('Choose a chapter that belongs to the selected subject.', 'error'); return }
+    }
+    setLoading(true)
     try { await upsert('daily_tasks', task); notify('Task added to today.'); onClose() }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save task. Retry.', 'error') }
     finally { setLoading(false) }
