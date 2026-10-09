@@ -23,9 +23,11 @@ describe('interface font registry', () => {
     expect(baseStyles).toContain(`--app-font-family: ${interfaceFontOption('default').stack};`)
   })
 
-  it('keeps Default on the native system stack, distinct from every bundled family', () => {
+  it('keeps Default on Caveat, distinct from every other bundled family', () => {
     const defaultStack = interfaceFontOption('default').stack
-    expect(defaultStack.startsWith('system-ui')).toBe(true)
+    expect(defaultStack).toContain("'Caveat'")
+    // Caveat must be the regular handwriting font, not Caveat Brush or other substitutes
+    expect(defaultStack).not.toContain('Brush')
     for (const family of ["'Poppins'", "'Sora'", "'Open Sans'"]) expect(defaultStack).not.toContain(family)
     expect(interfaceFontOption('poppins').stack.startsWith("'Poppins'")).toBe(true)
     expect(interfaceFontOption('sora').stack.startsWith("'Sora'")).toBe(true)
@@ -113,7 +115,7 @@ describe('self-hosted font faces', () => {
     // √ (U+221A), ∫ (U+222B) and ≤ (U+2264) live in the maths operators block.
     expect(openSans.some(face => face.includes('U+2216-22FF'))).toBe(true)
     // ₹ (U+20B9) is covered by the latin-ext slice of every bundled family.
-    for (const family of ["'Poppins'", "'Sora'", "'Open Sans'"]) {
+    for (const family of ["'Caveat'", "'Poppins'", "'Sora'", "'Open Sans'"]) {
       const familyFaces = faces.filter(face => face.includes(`font-family: ${family}`))
       expect(familyFaces.some(face => face.includes('U+0100-02BA'))).toBe(true)
       expect(familyFaces.some(face => face.includes('U+20AD-20C0'))).toBe(true)

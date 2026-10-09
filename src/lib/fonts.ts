@@ -18,17 +18,20 @@ export interface InterfaceFontOption {
   stack: string
 }
 
-/** The Default cut renders with the platform's own UI font: no webfont download at all. */
-const NATIVE_STACK = 'system-ui, sans-serif'
+/** The Default cut is the original Caveat handwriting font, bundled locally. */
+const CAVEAT_STACK = "'Caveat', 'Segoe Print', 'Bradley Hand', cursive"
 
 const FALLBACK_STACK = "'Trebuchet MS', system-ui, sans-serif"
 
 export const INTERFACE_FONT_OPTIONS: readonly InterfaceFontOption[] = [
-  { value: 'default', label: 'Default', note: "Your device's own font — nothing to download", stack: NATIVE_STACK },
+  { value: 'default', label: 'Default', note: 'Caveat — the original handwriting notebook font', stack: CAVEAT_STACK },
   { value: 'poppins', label: 'Poppins', note: 'Rounded geometric sans', stack: `'Poppins', ${FALLBACK_STACK}` },
   { value: 'sora', label: 'Sora', note: 'Compact technical sans', stack: `'Sora', ${FALLBACK_STACK}` },
   { value: 'open-sans', label: 'Open Sans', note: 'Neutral and readable; covers Greek letters, ₹ and maths symbols', stack: `'Open Sans', ${FALLBACK_STACK}` }
 ]
+
+/** Public site always uses Caveat — never the saved app preference. */
+export const PUBLIC_FONT_STACK = CAVEAT_STACK
 
 /**
  * Coerce anything that may arrive from IndexedDB, Supabase, or an older backup into a

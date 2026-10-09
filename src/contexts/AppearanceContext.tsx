@@ -43,9 +43,11 @@ function useSystemPrefersDark(): boolean {
  * Single runtime source of truth for appearance settings persisted in `app_settings`.
  *
  * `data-theme` drives the palette. The active font is applied once to `<html>` as
- * `--app-font-family`; all component typography roles and form controls inherit that
- * token. Font selection is optimistic so its visual change is synchronous with the
- * Settings action while the same value is saved to IndexedDB/cloud in the background.
+ * `--app-font-family`; authenticated UI inherits it via `html[data-app-font='active']`
+ * so public pages (`.pub-page`, `.auth-page-public`) stay on the dedicated
+ * `--font-public` (Caveat) token regardless of the saved preference. Font selection
+ * is optimistic so its visual change is synchronous with the Settings action while
+ * the same value is saved to IndexedDB/cloud in the background.
  */
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const { data, upsert } = useData()
@@ -70,7 +72,12 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   }, [resolvedTheme])
 
   useLayoutEffect(() => {
-    applyInterfaceFont(document.documentElement, interfaceFont)
+    const root = document.documentElement
+    // Mark the document as rendering authenticated UI so html[data-app-font='active']
+    // flips semantic aliases and font-family to the app token; public pages stay on
+    // --font-public (Caveat) even though --app-font-family may be Sora etc.
+    root.dataset.appFont = 'active'
+    applyInterfaceFont(root, interfaceFont)
     // Mirror the resolved font into the device cache the boot script in index.html
     // reads on the next load, so the first paint already uses the saved family.
     cacheInterfaceFont(interfaceFont)
@@ -86,8 +93,11 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
   // Public/auth routes do not mount this provider. Avoid carrying one account's font
   // across logout into the next signed-out screen; login reapplies the account setting.
+  // Also remove the app font scope so the homepage returns to --font-public (Caveat).
   useEffect(() => () => {
-    applyInterfaceFont(document.documentElement, 'default')
+    const root = document.documentElement
+    delete root.dataset.appFont
+    applyInterfaceFont(root, 'default')
     clearInterfaceFontCache()
   }, [])
 

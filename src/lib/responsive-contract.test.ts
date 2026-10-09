@@ -139,7 +139,10 @@ describe('responsive layout contract', () => {
     // Font selection only changes the shared token. Responsive optical sizing does not
     // branch by font IDs, which could otherwise leave a heading or label on a stale face.
     expect(responsive).not.toContain('data-font')
-    for (const option of INTERFACE_FONT_OPTIONS) expect(option.stack).toMatch(/system-ui, sans-serif$/)
+    for (const option of INTERFACE_FONT_OPTIONS) {
+      if (option.value === 'default') expect(option.stack).toMatch(/cursive$/)
+      else expect(option.stack).toMatch(/system-ui, sans-serif$/)
+    }
     expect(INTERFACE_FONTS).toHaveLength(4)
   })
 
@@ -149,7 +152,7 @@ describe('responsive layout contract', () => {
     // Ordinary interface rules must use the root token or its semantic aliases.
     const withoutFontFaces = componentStyles.replace(/@font-face\s*\{[^}]*\}/g, '')
     const withoutCodeSamples = withoutFontFaces.replace(/\.ai-code-block\s*\{[^}]*\}/g, '')
-    const allowedGlobalFamily = /^(?:inherit|var\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\s*\))$/i
+    const allowedGlobalFamily = /^(?:inherit|var\(\s*--(?:app-font-family|font-public|font-(?:ui|body|heading|label|number))\s*\))$/i
     const fontFamilyDeclarations = [...withoutCodeSamples.matchAll(/(?<![-\w])font-family\s*:\s*([^;}]+)/gi)]
     const nonGlobalFamilies = fontFamilyDeclarations
       .map(([, value]) => value?.trim() ?? '')
@@ -158,14 +161,14 @@ describe('responsive layout contract', () => {
     const unscopedShorthands = fontShorthands
       .map(([, value]) => value?.trim() ?? '')
       .filter(value => !/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(value))
-      .filter(value => !/\bvar\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\b/i.test(value))
+      .filter(value => !/\bvar\(\s*--(?:app-font-family|font-public|font-(?:ui|body|heading|label|number))\b/i.test(value))
     const inlineFontAssignments = sourceFiles(sourceDir)
       .filter(file => /\.tsx?$/.test(file))
       .flatMap(file => [...readFileSync(file, 'utf8').matchAll(/\bfontFamily\s*:\s*([^,}\]]+)/g)])
       .map(([, value]) => value?.trim() ?? '')
     const unapprovedInlineFamilies = inlineFontAssignments.filter(value =>
       value !== 'option.stack' &&
-      !/^['"]var\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\s*\)['"]$/i.test(value))
+      !/^['"]var\(\s*--(?:app-font-family|font-public|font-(?:ui|body|heading|label|number))\s*\)['"]$/i.test(value))
 
     expect(nonGlobalFamilies).toEqual([])
     expect(unscopedShorthands).toEqual([])
