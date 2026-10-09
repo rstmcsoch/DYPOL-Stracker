@@ -55,6 +55,25 @@ describe('public homepage typography isolation', () => {
   })
 })
 
+describe('homepage feature disclosure', () => {
+  it('keeps the full feature set discoverable through an accessible toggle', () => {
+    const { container } = renderLanding()
+    const toggle = screen.getByRole('button', { name: 'See all eight Stracker features' })
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.getAttribute('aria-controls')).toBe('feature-list')
+    expect(container.querySelectorAll('.feature-entry')).toHaveLength(8)
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle.textContent).toContain('Show fewer features')
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.textContent).toContain('See all features')
+  })
+})
+
 describe('homepage-only theme and footer wordmark', () => {
   it('renders the oversized Sora wordmark after the existing footer content with an isolated crop', () => {
     document.documentElement.dataset.appFont = 'active'

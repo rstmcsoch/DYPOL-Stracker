@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  AlarmClock, ArrowRight, BookOpen, CalendarCheck, Check, Compass, ListChecks, LockKeyhole,
-  NotebookPen, Repeat2, Shield, ShieldCheck, Sparkles, Target, TrendingUp, Timer
+  AlarmClock, ArrowRight, BookOpen, CalendarCheck, Check, ChevronDown, ChevronUp, Compass,
+  ListChecks, LockKeyhole, NotebookPen, Repeat2, Shield, ShieldCheck, Sparkles, Target,
+  TrendingUp, Timer
 } from 'lucide-react'
 import { SYLLABUS } from '../../lib/syllabus'
 
@@ -62,7 +63,7 @@ export function StudyLoopSection() {
   return <SectionShell
     id="why-stracker"
     eyebrow="BUILT FOR SERIOUS JEE PREPARATION"
-    title={<>Everything you need to keep your preparation <em>under control.</em></>}
+    title="A study loop built on evidence."
     lede="Stracker is organised around the loop you already study in. Each pass through it leaves a record, and that record is what the next decision is made from."
   >
     <ol className="loop-list">
@@ -90,23 +91,21 @@ const FEATURES: Feature[] = [
   {
     title: 'Syllabus Notebook',
     icon: <BookOpen size={19} />,
-    summary: 'The whole JEE 2027 topic list, kept the way a real register is kept.',
+    summary: 'The whole JEE 2027 topic list, kept like a real register.',
     points: [
-      `Physics, Chemistry and Maths chapters — seeded with an editable ${CHAPTER_COUNT}-chapter topic grouping`,
-      'Chapter status: Not Started, Studying, Done or Revised, plus priority for what to attack next',
-      'Free notes and separate formula notes attached to each chapter',
-      'Search across chapters and reorder them to match your coaching sequence'
+      `Editable Physics, Chemistry and Maths chapters from the seeded ${CHAPTER_COUNT}-chapter grouping`,
+      'Status and priority for each chapter: Not Started, Studying, Done or Revised',
+      'Chapter notes, formula notes, search and custom ordering in one place'
     ]
   },
   {
     title: 'Test Journal',
     icon: <ListChecks size={19} />,
-    summary: 'Every paper you write, recorded the day you write it.',
+    summary: 'Every paper you write, recorded while it is still fresh.',
     points: [
       'Chapter tests, subject tests, full mocks and PYQ practice in one journal',
-      'Marks and totals with correct, wrong and skipped counts',
-      'Subject-wise scores for full-length mocks, chapter-wise marks for topic tests',
-      'Filters and sorting across the whole test history'
+      'Marks with correct, wrong and skipped counts',
+      'Chapter or subject breakdowns, filters and sorting across test history'
     ]
   },
   {
@@ -114,43 +113,39 @@ const FEATURES: Feature[] = [
     icon: <NotebookPen size={19} />,
     summary: 'Where a wrong answer turns into a fixed one.',
     points: [
-      'Each mistake is filed against its chapter and typed: Concept, Silly, Calculation, Time or Guess',
-      'Solution notes written while the fix is still fresh',
-      'Optional photo of the question, kept in a private bucket and served as a signed link',
-      'A separate retry list with pending and retried states, so fixes are verified rather than assumed'
+      'File each mistake against its chapter and error type',
+      'Keep solution notes and an optional private question photo',
+      'Pending and retried states verify that the fix really stuck'
     ]
   },
   {
     title: 'Revision System',
     icon: <AlarmClock size={19} />,
-    summary: 'Spaced revision that you configure once and then simply follow.',
+    summary: 'Spaced revision that you configure once and follow.',
     points: [
-      'Configurable intervals — 1, 7 and 30 days out of the box, adjusted to whatever your memory needs',
-      'A due-and-overdue desk so a chapter cannot quietly disappear',
-      'Completing a revision advances the chapter and schedules the next interval',
-      'Every revision row stays linked to its chapter, its notes and its formula notes'
+      'Configurable intervals, with 1, 7 and 30 days ready to use',
+      'A due-and-overdue desk keeps chapters from disappearing',
+      'Completing a revision schedules the next one and keeps notes linked'
     ]
   },
   {
     title: 'Daily Planning + Goals',
     icon: <CalendarCheck size={19} />,
-    summary: 'A plan small enough to finish, connected to the syllabus underneath it.',
+    summary: 'A finishable daily plan connected to the syllabus.',
     points: [
-      'Dated tasks with subject, chapter, estimated time and priority',
-      'Reorder by drag or buttons as the day changes shape',
-      'Weekly goals for study hours, tests, chapters and revisions',
-      'Progress that fills in from the work you actually record'
+      'Dated tasks with subject, chapter, time estimate and priority',
+      'Reorder tasks as the day changes shape',
+      'Weekly goals and progress filled by the work you record'
     ]
   },
   {
     title: 'Focus Sessions',
     icon: <Timer size={19} />,
-    summary: 'A timer that keeps the sitting honest and counts towards the day.',
+    summary: 'A timer that keeps the sitting honest and counts the day.',
     points: [
-      'Pomodoro, short break, long break and custom focus blocks',
-      'The timer keeps running while you move around the notebook, and survives a refresh',
-      'Sessions logged against the subject and chapter you were working on',
-      'Optional end-of-block sound, and study time that feeds your daily goal'
+      'Pomodoro, breaks and custom focus blocks',
+      'The timer survives notebook navigation and refreshes',
+      'Sessions link to your subject and chapter and feed study-time goals'
     ]
   },
   {
@@ -159,9 +154,8 @@ const FEATURES: Feature[] = [
     summary: 'What the record says, with the working shown.',
     points: [
       'Subject signals measured against your own weak and strong thresholds',
-      'Chapter and test trends instead of a single flattering number',
-      'Study time, streaks and daily-goal progress',
-      'Mistake breakdown by type, weak chapters, and untested chapters that need a first attempt'
+      'Chapter and test trends instead of one flattering number',
+      'Study time, mistake types, weak chapters and untested chapters in view'
     ]
   },
   {
@@ -169,22 +163,23 @@ const FEATURES: Feature[] = [
     icon: <Sparkles size={19} />,
     summary: 'Optional, and always on your own provider account.',
     points: [
-      'Bring your own key: Gemini, OpenAI, Anthropic, DeepSeek, Qwen or a compatible endpoint',
-      'Questions answered from your own syllabus, tests, mistakes, revisions and analytics',
-      'Supported writes are previewed first and applied only when you confirm them',
-      'Keys stay server-side and encrypted; every other part of Stracker works with AI switched off'
+      'Bring your own key for Gemini, OpenAI, Anthropic, DeepSeek, Qwen or compatible endpoints',
+      'Ask questions grounded in your syllabus, tests, mistakes, revisions and analytics',
+      'Writes are previewed first; credentials stay server-side and AI can stay switched off'
     ]
   }
 ]
 
 export function FeatureSection() {
+  const [expanded, setExpanded] = useState(false)
+
   return <SectionShell
     id="features"
     eyebrow="INSIDE THE NOTEBOOK"
-    title={<>One notebook, <em>eight working parts.</em></>}
+    title="One notebook. Eight working parts."
     lede="Nothing here is a widget. Each part is a page you will open every week of your preparation."
   >
-    <ol className="feature-list">
+    <ol id="feature-list" className={`feature-list ${expanded ? 'is-expanded' : ''}`}>
       {FEATURES.map((feature, index) => <li className="feature-entry" key={feature.title}>
         <div className="feature-entry-head">
           <span className="feature-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
@@ -199,8 +194,19 @@ export function FeatureSection() {
         </ul>
       </li>)}
     </ol>
+    <button
+      className="feature-toggle"
+      type="button"
+      aria-controls="feature-list"
+      aria-expanded={expanded}
+      aria-label={expanded ? 'Show fewer features' : 'See all eight Stracker features'}
+      onClick={() => setExpanded(value => !value)}
+    >
+      <span>{expanded ? 'Show fewer features' : 'See all features'}</span>
+      {expanded ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
+    </button>
     <p className="feature-footnote">
-      <span aria-hidden="true">✳</span> Also in the notebook: JSON backup and restore, CSV test history, PDF and DOCX reports, a private mistake-image bucket, and an installable app that caches the shell for offline use.
+      <span aria-hidden="true">✎</span> Also in the notebook: JSON backup and restore, CSV test history, PDF and DOCX reports, a private mistake-image bucket, and an installable app that caches the shell for offline use.
     </p>
   </SectionShell>
 }
@@ -221,8 +227,8 @@ export function PrincipleSection() {
     <div className="pub-shell">
       <div className="principle-spread">
         <div className="principle-copy">
-          <p className="pub-eyebrow"><span aria-hidden="true">✦</span> WHY NOT A GENERIC APP</p>
-          <h2 id="principle-title">Stracker is not another <em>productivity app.</em></h2>
+          <p className="pub-eyebrow"><span aria-hidden="true">✎</span> WHY NOT A GENERIC APP</p>
+          <h2 id="principle-title">A JEE system, not a generic app.</h2>
           <p>A todo list has no opinion about rotation, revision intervals, or the difference between a silly mistake and a concept gap. Stracker is built around JEE preparation itself — the syllabus, the test cycle, the mistakes, and the revision that holds it together.</p>
           <p className="principle-note"><Compass size={15} aria-hidden="true" /> <span>Fewer places to look, and a clearer idea of what to do next.</span></p>
         </div>
@@ -250,7 +256,7 @@ export function HowItWorksSection() {
   return <SectionShell
     id="how-it-works"
     eyebrow="HOW IT WORKS"
-    title={<>Four steps, <em>repeated all year.</em></>}
+    title="Four steps, repeated all year."
     lede="This is the whole method. There is nothing to configure beyond your own syllabus and your own dates."
     tone="plain"
   >
@@ -274,8 +280,8 @@ export function AiSection() {
     <div className="pub-shell">
       <div className="ai-spread">
         <div className="ai-copy">
-          <p className="pub-eyebrow"><span aria-hidden="true">✳</span> STRACKER AI</p>
-          <h2 id="ai-title">Your study notebook, with an <em>optional AI layer.</em></h2>
+          <p className="pub-eyebrow"><span aria-hidden="true">✎</span> STRACKER AI</p>
+          <h2 id="ai-title">AI that reads your notebook.</h2>
           <p className="pub-lede">Stracker AI is a second pair of eyes on the data you already keep. It is optional, it runs on your own provider account, and it never changes anything without your confirmation.</p>
           <dl className="ai-facts">
             <div>
@@ -327,8 +333,8 @@ const PRIVACY_POINTS = [
 export function PrivacySection() {
   return <SectionShell
     id="privacy"
-    eyebrow="PRIVACY &amp; SECURITY"
-    title={<>Your preparation <em>stays yours.</em></>}
+    eyebrow="PRIVACY & SECURITY"
+    title="Your preparation stays yours."
     lede="Stracker keeps personal academic records, so the access boundary is boring on purpose: your account, your rows, nothing shared."
   >
     <div className="privacy-board">
@@ -351,9 +357,9 @@ export function DypolSection() {
   return <section id="dypol-labs" className="pub-section pub-section-dypol" aria-labelledby="dypol-title">
     <div className="pub-shell">
       <div className="dypol-band">
-        <div className="dypol-mark" aria-hidden="true"><span>S</span><i>✳</i></div>
+        <div className="dypol-mark" aria-hidden="true"><span>S</span><i>✎</i></div>
         <div>
-          <h2 id="dypol-title">Stracker <em>by DYPOL LABS</em></h2>
+          <h2 id="dypol-title">Stracker by DYPOL LABS</h2>
           <p>Stracker is a DYPOL LABS product. We build practical tools for serious learners — software that does one job properly, stays quiet while you work, and keeps your data where it belongs.</p>
         </div>
         <span className="dypol-tag">A DYPOL LABS STUDY TOOL</span>
@@ -370,14 +376,14 @@ export function FinalCta() {
       <div className="final-sheet">
         <span className="final-tape" aria-hidden="true" />
         <p className="pub-eyebrow"><span aria-hidden="true">✎</span> LAST PAGE, FIRST ENTRY</p>
-        <h2 id="final-title">Build a preparation system you can <em>actually follow.</em></h2>
+        <h2 id="final-title">Build a system you can <em>actually follow.</em></h2>
         <p>Start organizing your JEE preparation with Stracker. Set your exam dates, work through the syllabus, log the next test — and let the notebook keep the record from there.</p>
         <div className="pub-cta-row pub-cta-row-center">
           <Link className="button button-primary button-lg" to="/signup">Create your Stracker account <ArrowRight size={17} aria-hidden="true" /></Link>
           <Link className="button button-secondary button-lg" to="/login">I already have an account</Link>
         </div>
         <p className="final-note"><Target size={14} aria-hidden="true" /> Your notebook starts with the seeded JEE 2027 syllabus, which you can edit, reorder or replace. Set your own dates and daily goal, and the plan follows from there.</p>
-        <span className="final-doodle" aria-hidden="true">✳</span>
+        <span className="final-doodle" aria-hidden="true">✎</span>
       </div>
     </div>
   </section>
