@@ -1,18 +1,20 @@
 /* STRACKER · warm paper, pencil lines, quiet colour */
 :root {
-  /* The only interface font family. The boot script in index.html sets this token
-     from the cached preference before first paint; AppearanceContext then keeps it
-     in sync with the persisted Settings preference. Every element (including
-     portals) inherits it. The boot value is the Default cut: the device's own font. */
-  --app-font-family: system-ui, sans-serif;
-  /* Backwards-compatible semantic aliases control typography roles, not font choices.
-     Keep them pointed at the global token so existing/new component rules cannot split
-     headings, labels, numbers, or body copy onto separate families. */
-  --font-ui: var(--app-font-family);
-  --font-body: var(--app-font-family);
-  --font-heading: var(--app-font-family);
-  --font-label: var(--app-font-family);
-  --font-number: var(--app-font-family);
+  /* Public site always uses Caveat — never the saved app preference. */
+  --font-public: 'Caveat', 'Segoe Print', 'Bradley Hand', cursive;
+  /* Authenticated student application font. The boot script in index.html sets this
+     token from the cached preference before first paint; AppearanceContext then keeps it
+     in sync with the persisted Settings preference (defaulting to Caveat). Every app
+     element (including portals) inherits it when the app is active. */
+  --app-font-family: 'Caveat', 'Segoe Print', 'Bradley Hand', cursive;
+  /* Semantic aliases. By default they resolve to the public font so visiting the
+     public site never sees an app font flash. When the authenticated app mounts it
+     flips the document to app mode (html[data-app-font='active']) and aliases switch. */
+  --font-ui: var(--font-public);
+  --font-body: var(--font-public);
+  --font-heading: var(--font-public);
+  --font-label: var(--font-public);
+  --font-number: var(--font-public);
   color: #29332d;
   background: #f7f4ec;
   font-synthesis: none;
@@ -89,8 +91,56 @@
   --ring-track: #48524a;
   --focus-accent: #e1c577;
 }
+/* Typography scope: public pages always use --font-public (Caveat). The
+   authenticated app flips html[data-app-font='active'] and every semantic
+   alias to --app-font-family (Caveat by default, or the user's saved choice). */
+html[data-app-font='active'] {
+  --font-ui: var(--app-font-family);
+  --font-body: var(--app-font-family);
+  --font-heading: var(--app-font-family);
+  --font-label: var(--app-font-family);
+  --font-number: var(--app-font-family);
+  font-family: var(--app-font-family);
+}
+
+/* Public/auth pages must stay on Caveat even when the app font is different
+   (e.g. a saved Sora preference). This scoped override also protects non-portal
+   dialogs and cards rendered inside the public chrome. */
+.pub-page,
+.auth-page,
+.auth-page-public {
+  --font-ui: var(--font-public);
+  --font-body: var(--font-public);
+  --font-heading: var(--font-public);
+  --font-label: var(--font-public);
+  --font-number: var(--font-public);
+  font-family: var(--font-public);
+}
+
+/* Authenticated application shell — inherits the app font. The html switch
+   already covers portals, but scoping the shell itself avoids a flash when
+   toggling between routes. */
+.app-shell {
+  font-family: var(--app-font-family);
+}
+.app-shell {
+  --font-ui: var(--app-font-family);
+  --font-body: var(--app-font-family);
+  --font-heading: var(--app-font-family);
+  --font-label: var(--app-font-family);
+  --font-number: var(--app-font-family);
+}
+
+/* Preserve monospace only where it is semantically appropriate — code blocks
+   and API snippets. Normal UI text, including kbd shortcuts, must keep the
+   interface font and must never be forced to monospace. */
+code, pre, samp, .mono,
+.ai-code-block {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 * { box-sizing: border-box; min-width: 0; }
-html { min-width: 320px; scroll-behavior: smooth; background: var(--bg); font-family: var(--app-font-family); }
+html { min-width: 320px; scroll-behavior: smooth; background: var(--bg); font-family: var(--font-public); }
 body { min-width: 320px; margin: 0; color: var(--ink); background: var(--bg); overflow-x: hidden; font-family: inherit; font-size: 16px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
 #root { min-height: 100vh; min-height: 100dvh; font-family: inherit; }
 body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -1; opacity: .36; background-image: repeating-linear-gradient(to bottom, transparent 0 35px, rgba(148, 159, 152, .075) 36px, transparent 37px); }
