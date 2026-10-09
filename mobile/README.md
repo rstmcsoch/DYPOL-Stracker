@@ -4,8 +4,9 @@ The Android companion to the Stracker website. It is a separate Expo project in 
 replace, host, or embed the website. It talks to the same Supabase project, the same database and RLS, and the
 same authenticated `/api/ai/*` endpoints on the Vercel deployment.
 
-- **Identity:** display name *Stracker*, Android application ID `com.stracker.dypollabs`, minimum Android 7.0
-  (API 24), target and compile API 36. Four native ABIs: `armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64`.
+- **Identity:** display name *Stracker*, Android application ID `com.stracker.dypollabs`, target and compile API 36,
+  minimum API 24 (Android 7.0) *configured but not yet verified*: no Gradle build has run, so dependency minimums are
+  unconfirmed. Four native ABIs: `armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64`.
 - **Stack:** Expo SDK 57, React Native 0.86, React 19, TypeScript, expo-router, expo-sqlite (offline cache),
   expo-secure-store (Keystore-backed session), react-native-svg (charts), expo-notifications (daily reminder).
 - **Status:** source complete for every website route. Not yet built into an APK in this environment. See

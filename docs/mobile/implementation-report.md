@@ -97,6 +97,9 @@ SHA-256 fingerprint is in `release-signing.md`.
   `Asia/Kolkata` time zone. This must be confirmed on a device, because every "today" in the app depends on it.
 - **Two `expo-doctor` checks did not run:** Expo config schema validation and React Native Directory metadata both call
   Expo's servers.
+- **Android 7.0 (API 24) support is not claimed.** `minSdkVersion` 24 is configured and written into the generated
+  manifest. Whether every dependency builds and runs on API 24 has not been checked, because no Gradle build has run.
+  Treat Android 7 support as unverified until a device on API 24 has run the release APK.
 - **R8 minification is off** for release. It stays off until a device build has been run and verified, so a
   shrinking regression cannot ship unnoticed.
 - **Reminders:** the daily device notification is scheduled by the operating system with `expo-notifications`.
