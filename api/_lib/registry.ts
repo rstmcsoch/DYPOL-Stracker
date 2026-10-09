@@ -1,6 +1,7 @@
 import { lookup } from 'node:dns/promises'
 import type { LookupAddress } from 'node:dns'
 import { AI_PROVIDER_IDS, type AIProviderId, type AIProtocol, type AICapabilities, type AIModelOption } from '../../src/lib/ai/catalog.js'
+import { stripControlChars } from '../../src/lib/control-chars.js'
 import { ApiError } from './http.js'
 import { catalogModel, RETIRED_MODEL_IDS } from '../../src/lib/ai/model-catalog.js'
 
@@ -218,7 +219,7 @@ export async function normalizeProviderSetup(input: Record<string, unknown>): Pr
   const apiKey = typeof input.apiKey === 'string' && input.apiKey.trim() ? input.apiKey.trim() : undefined
   if (apiKey && (apiKey.length > 2048 || /[\r\n]/.test(apiKey))) throw new ApiError(400, 'invalid_api_key', 'The API key format is not valid.')
   const organizationId = typeof input.organizationId === 'string' && input.organizationId.trim()
-    ? input.organizationId.trim().slice(0, 160) : null
+    ? stripControlChars(input.organizationId).trim().slice(0, 160) || null : null
   return { providerId: id, displayName, modelId, apiKey, baseUrl, protocol, organizationId, region, capabilities }
 }
 
