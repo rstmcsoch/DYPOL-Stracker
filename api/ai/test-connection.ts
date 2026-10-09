@@ -7,6 +7,7 @@ import { testProviderConnection, providerCallFromConfig, safeProviderError } fro
 import { updateProviderHealth } from '../_lib/agent.js'
 import { type ProviderConfigRow } from '../_lib/registry.js'
 import { logAIEvent, newReference } from '../_lib/diagnostics.js'
+import { CONNECTION_TEST_RATE, takeRateSlot } from '../_lib/rate-limit.js'
 
 const requestSchema = z.object({ configId: z.uuid() }).strict()
 const TEST_TIMEOUT_MS = 30_000
@@ -19,6 +20,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     const { data, error } = await adminClient.from('ai_provider_configs').select('*').eq('user_id', userId).eq('id', parsed.data.configId).maybeSingle()
     if (error) throw new ApiError(503, 'provider_config_unavailable', 'The saved provider connection could not be tested. Try again.')
     if (!data) throw new ApiError(404, 'provider_not_found', 'That provider configuration is no longer available.')
+    await takeRateSlot(adminClient, userId, CONNECTION_TEST_RATE)
     const row = data as ProviderConfigRow
     const previousStatus = row.connection_status
     const previousEnabled = row.enabled
