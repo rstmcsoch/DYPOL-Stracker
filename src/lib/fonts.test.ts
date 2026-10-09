@@ -2,95 +2,59 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  applyInterfaceFont,
-  cacheInterfaceFont,
-  clearInterfaceFontCache,
-  INTERFACE_FONT_OPTIONS,
-  INTERFACE_FONT_STORAGE_KEY,
-  interfaceFontOption,
-  normalizeInterfaceFont
+  applyReadingFont,
+  clearReadingFont,
+  normalizeReadingFont,
+  PUBLIC_FONT_STACK,
+  READING_FONT_OPTIONS,
+  readingFontOption
 } from './fonts'
-import { INTERFACE_FONTS } from '../types'
+import { READING_FONTS } from '../types'
 
-describe('interface font registry', () => {
-  it('exposes exactly the four supported families, each with a single default cut', () => {
-    expect(INTERFACE_FONTS).toEqual(['default', 'poppins', 'sora', 'open-sans'])
-    expect(INTERFACE_FONT_OPTIONS.map(option => option.value)).toEqual([...INTERFACE_FONTS])
+describe('centralized typography registry', () => {
+  it('exposes only the supported Reading fonts; Patrick Hand remains an identity role', () => {
+    expect(READING_FONTS).toEqual(['default', 'poppins', 'sora', 'open-sans'])
+    expect(READING_FONT_OPTIONS.map(option => option.value)).toEqual([...READING_FONTS])
+    expect(READING_FONT_OPTIONS.map(option => option.label)).toEqual(['Lexend', 'Poppins', 'Sora', 'Open Sans'])
+    expect(READING_FONT_OPTIONS[0]?.description).toBe('Lexend — a clear, readable font for your study sessions.')
+    expect(PUBLIC_FONT_STACK).toContain("'Patrick Hand'")
+    expect(READING_FONT_OPTIONS.every(option => !option.stack.includes('Patrick Hand') && !option.stack.includes('Caveat'))).toBe(true)
   })
 
-  it('keeps the CSS boot default synchronized with the canonical default stack', () => {
-    const baseStyles = readFileSync(`${process.cwd()}/src/styles/base.css`, 'utf8')
-    expect(baseStyles).toContain(`--app-font-family: ${interfaceFontOption('default').stack};`)
+  it('maps every Reading option to its locally bundled family and optical scale', () => {
+    expect(readingFontOption('default')).toMatchObject({ stack: expect.stringContaining("'Lexend'"), scale: 1 })
+    expect(readingFontOption('poppins')).toMatchObject({ stack: expect.stringContaining("'Poppins'"), scale: 0.95 })
+    expect(readingFontOption('sora')).toMatchObject({ stack: expect.stringContaining("'Sora'"), scale: 0.97 })
+    expect(readingFontOption('open-sans')).toMatchObject({ stack: expect.stringContaining("'Open Sans'"), scale: 1 })
   })
 
-  it('keeps Default on Caveat, distinct from every other bundled family', () => {
-    const defaultStack = interfaceFontOption('default').stack
-    expect(defaultStack).toContain("'Caveat'")
-    // Caveat must be the regular handwriting font, not Caveat Brush or other substitutes
-    expect(defaultStack).not.toContain('Brush')
-    for (const family of ["'Poppins'", "'Sora'", "'Open Sans'"]) expect(defaultStack).not.toContain(family)
-    expect(interfaceFontOption('poppins').stack.startsWith("'Poppins'")).toBe(true)
-    expect(interfaceFontOption('sora').stack.startsWith("'Sora'")).toBe(true)
-    expect(interfaceFontOption('open-sans').stack.startsWith("'Open Sans'")).toBe(true)
-  })
-
-  it('saves the Settings font choice through the appearance tab instead of bypassing Save', () => {
-    const settingsPage = readFileSync(`${process.cwd()}/src/pages/SettingsPage.tsx`, 'utf8')
-    expect(settingsPage).toContain("patch('interface_font', option.value)")
-    // The radios feed the tab draft; the tab's Save action persists it and the
-    // appearance context applies the committed setting — no parallel auto-save path.
-    expect(settingsPage).not.toContain('setInterfaceFont')
-  })
-
-  it('keeps the index.html boot script synchronized with the canonical stacks and preloads', () => {
-    const html = readFileSync(`${process.cwd()}/index.html`, 'utf8')
-    expect(html).toContain(INTERFACE_FONT_STORAGE_KEY)
-    for (const option of INTERFACE_FONT_OPTIONS) {
-      if (option.value === 'default') continue
-      expect(html).toContain(option.stack)
-      expect(html).toContain(`/assets/fonts/${option.value}-latin-400-normal.woff2`)
+  it('uses safe Lexend defaults for missing, legacy, and invalid account values', () => {
+    for (const value of [undefined, null, '', 'caveat', 'Comic Sans', 'Poppins', "Poppins'; background:url(evil)", { family: 'Sora' }]) {
+      expect(normalizeReadingFont(value)).toBe('default')
     }
+    for (const value of READING_FONTS) expect(normalizeReadingFont(value)).toBe(value)
   })
 
-  it('applies every selected family through the single document-level CSS token', () => {
+  it('applies and clears only the content-family and scale tokens at the document boundary', () => {
     const root = document.createElement('html')
-
-    for (const option of INTERFACE_FONT_OPTIONS) {
-      applyInterfaceFont(root, option.value)
-      expect(root.style.getPropertyValue('--app-font-family')).toBe(option.stack)
+    for (const option of READING_FONT_OPTIONS) {
+      applyReadingFont(root, option.value)
+      expect(root.style.getPropertyValue('--reading-font-family')).toBe(option.stack)
+      expect(root.style.getPropertyValue('--body-scale')).toBe(option.scale.toFixed(2))
     }
-  })
-
-  it('falls back to the default font for legacy rows, unknown values, and injected CSS', () => {
-    expect(normalizeInterfaceFont(undefined)).toBe('default')
-    expect(normalizeInterfaceFont(null)).toBe('default')
-    expect(normalizeInterfaceFont('')).toBe('default')
-    expect(normalizeInterfaceFont('Comic Sans')).toBe('default')
-    expect(normalizeInterfaceFont('Poppins')).toBe('default')
-    expect(normalizeInterfaceFont("Poppins'; background: url(evil)")).toBe('default')
-    expect(normalizeInterfaceFont({ family: 'Poppins' })).toBe('default')
-  })
-
-  it('accepts every supported preference unchanged', () => {
-    for (const font of INTERFACE_FONTS) expect(normalizeInterfaceFont(font)).toBe(font)
-  })
-
-  it('caches the font choice for the boot script and clears the cache on demand', () => {
-    localStorage.removeItem(INTERFACE_FONT_STORAGE_KEY)
-    cacheInterfaceFont('sora')
-    expect(localStorage.getItem(INTERFACE_FONT_STORAGE_KEY)).toBe('sora')
-    clearInterfaceFontCache()
-    expect(localStorage.getItem(INTERFACE_FONT_STORAGE_KEY)).toBeNull()
+    clearReadingFont(root)
+    expect(root.style.getPropertyValue('--reading-font-family')).toBe('')
+    expect(root.style.getPropertyValue('--body-scale')).toBe('')
   })
 })
 
-describe('self-hosted font faces', () => {
+describe('locally bundled typography faces', () => {
   const fontsCss = readFileSync(`${process.cwd()}/src/styles/fonts.css`, 'utf8')
   const faces = [...fontsCss.matchAll(/@font-face\s*\{[^}]*\}/g)].map(match => match[0])
 
-  it('ships every declared face as a subset file under /assets/fonts/ and nothing else', () => {
-    expect(faces.length).toBeGreaterThan(0)
-    const declared = []
+  it('ships exactly the font subsets declared by CSS with swap and Unicode ranges', () => {
+    expect(faces.length).toBe(42)
+    const declared: string[] = []
     for (const face of faces) {
       expect(face).toContain('font-display: swap')
       expect(face).toContain('unicode-range:')
@@ -99,26 +63,117 @@ describe('self-hosted font faces', () => {
       expect(existsSync(`${process.cwd()}/public${url}`)).toBe(true)
       declared.push(url!.replace('/assets/fonts/', ''))
     }
-    const shipped = readdirSync(`${process.cwd()}/public/assets/fonts`).sort()
-    expect(declared.sort()).toEqual(shipped)
+    expect(declared.sort()).toEqual(readdirSync(`${process.cwd()}/public/assets/fonts`).sort())
   })
 
-  it('ships only the weights the UI renders (400 body, 600 labels, 700 headings)', () => {
-    const weights = faces.map(face => /font-weight:\s*(\d+)/.exec(face)?.[1])
-    expect(new Set(weights)).toEqual(new Set(['400', '600', '700']))
+  it('uses only Patrick Hand regular while bundling real content weights for each Reading option', () => {
+    const patrick = faces.filter(face => face.includes("font-family: 'Patrick Hand'"))
+    expect(patrick).toHaveLength(2)
+    expect(patrick.every(face => /font-weight:\s*400/.test(face))).toBe(true)
+    expect(patrick.some(face => /font-weight:\s*(?:500|600|700)/.test(face))).toBe(false)
+    for (const family of ["'Lexend'", "'Poppins'", "'Sora'", "'Open Sans'"]) {
+      const familyFaces = faces.filter(face => face.includes(`font-family: ${family}`))
+      expect(familyFaces.some(face => /font-weight:\s*400/.test(face))).toBe(true)
+      expect(familyFaces.some(face => /font-weight:\s*500/.test(face))).toBe(true)
+      expect(familyFaces.some(face => /font-weight:\s*600/.test(face))).toBe(true)
+    }
   })
 
-  it('covers Greek letters, currency and maths symbols for formula-heavy notes', () => {
+  it('covers extended Latin, Greek and mathematical notation in Open Sans', () => {
     const openSans = faces.filter(face => face.includes("font-family: 'Open Sans'"))
-    // θ (U+03B8), λ (U+03BB), ω (U+03C9) live in the Greek and Coptic block.
     expect(openSans.some(face => face.includes('U+03A3-03FF'))).toBe(true)
-    // √ (U+221A), ∫ (U+222B) and ≤ (U+2264) live in the maths operators block.
     expect(openSans.some(face => face.includes('U+2216-22FF'))).toBe(true)
-    // ₹ (U+20B9) is covered by the latin-ext slice of every bundled family.
-    for (const family of ["'Caveat'", "'Poppins'", "'Sora'", "'Open Sans'"]) {
+    for (const family of ["'Patrick Hand'", "'Lexend'", "'Poppins'", "'Sora'", "'Open Sans'"]) {
       const familyFaces = faces.filter(face => face.includes(`font-family: ${family}`))
       expect(familyFaces.some(face => face.includes('U+0100-02BA'))).toBe(true)
       expect(familyFaces.some(face => face.includes('U+20AD-20C0'))).toBe(true)
     }
+  })
+
+  it('keeps the public and authenticated typography layers independent of the saved preference', () => {
+    const base = readFileSync(`${process.cwd()}/src/styles/base.css`, 'utf8')
+    const typography = readFileSync(`${process.cwd()}/src/styles/typography.css`, 'utf8')
+    const settingsPage = readFileSync(`${process.cwd()}/src/pages/SettingsPage.tsx`, 'utf8')
+    const html = readFileSync(`${process.cwd()}/index.html`, 'utf8')
+
+    expect(base).toContain("--font-identity: 'Patrick Hand'")
+    expect(base).toContain("--font-default-reading: 'Lexend'")
+    expect(typography).toContain('.pub-page :where(*)')
+    expect(typography).toContain('font-family: var(--font-identity) !important;')
+    expect(typography).toContain('.auth-page-public')
+    expect(typography).toContain('.auth-page-public h1')
+    expect(typography).toContain('.auth-page-public p { font-family: var(--font-default-reading)')
+    expect(typography).toContain('.auth-page-public .auth-back')
+    expect(typography).toContain('--body-scale: 1;')
+    expect(typography).toContain('--font-default-reading')
+    expect(settingsPage).toContain('title="Reading font"')
+    expect(settingsPage).toContain('Changes body text, menus and buttons. Headings and the Stracker identity stay the same.')
+    expect(settingsPage).not.toContain('setInterfaceFont')
+    expect(html).toContain('patrick-hand-latin-400-normal.woff2')
+    expect(html).toContain('lexend-latin-400-normal.woff2')
+    expect(html).not.toContain('localStorage.getItem')
+  })
+})
+
+describe('role typography coverage', () => {
+  const typography = readFileSync(`${process.cwd()}/src/styles/typography.css`, 'utf8')
+  const base = readFileSync(`${process.cwd()}/src/styles/base.css`, 'utf8')
+  const ui = readFileSync(`${process.cwd()}/src/components/ui.tsx`, 'utf8')
+  const shell = readFileSync(`${process.cwd()}/src/components/AppShell.tsx`, 'utf8')
+    const toast = readFileSync(`${process.cwd()}/src/contexts/ToastContext.tsx`, 'utf8')
+    const authScaffold = readFileSync(`${process.cwd()}/src/components/public/AuthScaffold.tsx`, 'utf8')
+    const ai = readFileSync(`${process.cwd()}/src/styles/ai.css`, 'utf8')
+
+  it('keeps fixed identity roles separate from scaled content and readable paragraph floors', () => {
+    for (const [role, size] of Object.entries({ brand: '1.75rem', display: '2.25rem', h1: '2rem', h2: '1.5rem', h3: '1.25rem', empty: '1.25rem', metric: '2rem' })) {
+      expect(typography).toContain(`--type-${role}-size: ${size}`)
+    }
+    expect(typography).toContain('font-family: var(--font-identity) !important;')
+    expect(typography).toContain('font-weight: 400 !important;')
+    expect(typography).toContain('font-size: max(1rem, calc(1rem * var(--body-scale))) !important;')
+    expect(typography).toContain('.auth-page-public p')
+    expect(typography).toContain('.pub-page p')
+    expect(base).toContain('--text-primary: var(--ink);')
+    expect(base).toContain(":root[data-theme='dark']")
+    expect(base).toContain('--text-muted: #bdc5ba;')
+    expect(typography).toContain('@media (max-width: 640px)')
+  })
+
+  it('covers forms, navigation, dialogs, portal menus, charts, AI and notifications', () => {
+    expect(ui).toContain('type-button')
+    expect(ui).toContain('type-input')
+    expect(ui).toContain('type-caption')
+    expect(ui).toContain('type-alert')
+    expect(ui).toContain('className="type-h2"')
+    expect(ui).toContain('className="type-body"')
+    expect(ui).toContain("role=\"menu\"")
+    expect(shell).toContain('type-nav')
+    expect(authScaffold).toContain('className="type-display"')
+    expect(authScaffold).toContain('className="type-brand"')
+    expect(toast).toContain('type-alert')
+    expect(typography).toContain("html[data-app-font='active'] button")
+    expect(typography).toContain("html[data-app-font='active'] :is(input, select, textarea, option, optgroup)")
+    expect(typography).toContain('.recharts-cartesian-axis-tick text')
+    expect(typography).toContain('.app-shell .ai-message-body')
+    expect(ai).toContain('font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace')
+  })
+
+  it('keeps every ordinary stylesheet text size at or above 0.75rem', () => {
+    const tooSmall: string[] = []
+    const styleFiles = readdirSync(`${process.cwd()}/src/styles`)
+      .filter(file => file.endsWith('.css') && file !== 'fonts.css')
+    for (const fileName of styleFiles) {
+      const css = readFileSync(`${process.cwd()}/src/styles/${fileName}`, 'utf8')
+      for (const match of css.matchAll(/(?:^|[;{])\s*(font-size|font)\s*:\s*([^;{}]+)/g)) {
+        const property = match[1] ?? 'font'
+        const value = match[2]?.trim() ?? ''
+        if (/max\(\s*\.75rem/i.test(value) || /(?:ui-)?monospace/i.test(value)) continue
+        const smallPixels = [...value.matchAll(/([0-9]+(?:\.[0-9]+)?)px/g)]
+          .map(size => Number(size[1]))
+          .filter(size => size < 12)
+        if (smallPixels.length) tooSmall.push(`${fileName}: ${property}: ${value}`)
+      }
+    }
+    expect(tooSmall).toEqual([])
   })
 })

@@ -78,16 +78,16 @@ Settings is organised into five tabs — **Account, Exam, Appearance, Study rhyt
 
 The header switch and *Settings → Appearance → Notebook theme* edit the same value, so they never disagree: switching to `Auto` in Settings follows the device, and the next press of the header switch pins an explicit light or night choice.
 
-*Settings → Appearance → Interface font* selects the single family used across the entire interface — content, headings, navigation, forms, tables, dialogs, notifications, and dynamically mounted UI:
+*Settings → Appearance → Reading font* selects the content face for the authenticated notebook. Patrick Hand remains the fixed identity face for the brand, headings and metrics, regardless of this setting. The public homepage always uses Patrick Hand; public sign-in, sign-up and password-reset pages use Patrick Hand for identity and Lexend for readable content, independently of any account preference.
 
-| Choice | Family |
-| --- | --- |
-| Default | Your device's own font (`system-ui`, nothing to download) |
-| Poppins | Poppins |
-| Sora | Sora |
-| Open Sans | Open Sans (also covers Greek letters, ₹ and maths symbols) |
+| Choice | Content family | Scale |
+| --- | --- | --- |
+| Lexend | Lexend (default) | 1.00 |
+| Poppins | Poppins | 0.95 |
+| Sora | Sora | 0.97 |
+| Open Sans | Open Sans (also covers Greek letters, ₹ and maths symbols) | 1.00 |
 
-Each selectable family is self-hosted as subset WOFF2 files under `/assets/fonts/` (Poppins and Sora: latin + latin-ext; Open Sans: latin + latin-ext + greek + math) with `unicode-range` and `font-display: swap`, so a browser downloads only the slices a page renders. Only the weights the UI uses are shipped: 400, 600 and 700. Appearance settings update the root `--app-font-family` token, and body copy, headings, labels, numbers, native controls, portals and overlays all inherit that one value. The preference is stored in `app_settings.interface_font` and restores with the rest of your settings; a tiny boot script in `index.html` also applies it from a device cache before first paint and preloads the active family's regular face, so the saved font never flashes. Exports are intentionally separate: JSON, CSV, PDF, and DOCX keep their own typography and are never re-rendered in the interface font.
+The fonts are self-hosted as subset WOFF2 files under `/assets/fonts/` with `unicode-range` and `font-display: swap`; Patrick Hand is bundled at regular weight only, while reading faces include the weights used for content and controls. The Reading font changes body text, menus and buttons—not headings or the Stracker identity. It is stored in the existing account-scoped `app_settings.interface_font` field and follows the same local-first/Supabase sync path as other settings. Public pages do not read or cache that preference. Patrick Hand and Lexend regular are preloaded in `index.html`; there is no device-wide font cache. Exports are intentionally separate: JSON, CSV, PDF and DOCX keep their own typography and are never re-rendered in the interface font.
 
 ## Supabase setup (per-account, private by default)
 

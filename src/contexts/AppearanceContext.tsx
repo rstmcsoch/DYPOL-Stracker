@@ -2,8 +2,8 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useData } from './DataContext'
 import { useToast } from './ToastContext'
-import { applyInterfaceFont, cacheInterfaceFont, clearInterfaceFontCache, normalizeInterfaceFont } from '../lib/fonts'
-import type { AppSettings, InterfaceFont, ThemeMode } from '../types'
+import { applyReadingFont, clearReadingFont, normalizeReadingFont } from '../lib/fonts'
+import type { AppSettings, ReadingFont, ThemeMode } from '../types'
 
 export type ResolvedTheme = 'light' | 'dark'
 
@@ -13,11 +13,10 @@ interface AppearanceContextValue {
   /** What the UI is actually rendering right now. */
   resolvedTheme: ResolvedTheme
   isDark: boolean
-  interfaceFont: InterfaceFont
-  /** Persist a new theme through the existing app_settings row. */
+  /** The committed, account-scoped Reading font (drafts stay inside SettingsPage). */
+  readingFont: ReadingFont
+  /** Persist a theme toggle through the existing app_settings row. */
   setTheme: (theme: ThemeMode) => void
-  /** Persist a new interface font through the existing app_settings row. */
-  setInterfaceFont: (font: InterfaceFont) => void
   saving: boolean
 }
 
@@ -40,21 +39,16 @@ function useSystemPrefersDark(): boolean {
 }
 
 /**
- * Single runtime source of truth for appearance settings persisted in `app_settings`.
- *
- * `data-theme` drives the palette. The active font is applied once to `<html>` as
- * `--app-font-family`; authenticated UI inherits it via `html[data-app-font='active']`
- * so public pages (`.pub-page`, `.auth-page-public`) stay on the dedicated
- * `--font-public` (Caveat) token regardless of the saved preference. Font selection
- * is optimistic so its visual change is synchronous with the Settings action while
- * the same value is saved to IndexedDB/cloud in the background.
+ * Runtime owner of the committed account appearance. Reading-font drafts are owned
+ * solely by the Appearance tab in SettingsPage: this provider only applies a saved
+ * value and never persists a font on selection. The public site and public auth routes
+ * do not mount this provider and always use their fixed CSS typography scope.
  */
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const { data, upsert } = useData()
   const { notify } = useToast()
   const systemPrefersDark = useSystemPrefersDark()
   const [saving, setSaving] = useState(false)
-  const [pendingFont, setPendingFont] = useState<InterfaceFont | null>(null)
 
   const settings = data.settings
   const settingsRef = useRef<AppSettings>(settings)
@@ -63,7 +57,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
   const theme = settings.theme
   const resolvedTheme: ResolvedTheme = theme === 'auto' ? (systemPrefersDark ? 'dark' : 'light') : theme
-  const interfaceFont = pendingFont ?? normalizeInterfaceFont(settings.interface_font)
+  const readingFont = normalizeReadingFont(settings.interface_font)
 
   useEffect(() => {
     const root = document.documentElement
@@ -73,66 +67,48 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     const root = document.documentElement
-    // Mark the document as rendering authenticated UI so html[data-app-font='active']
-    // flips semantic aliases and font-family to the app token; public pages stay on
-    // --font-public (Caveat) even though --app-font-family may be Sora etc.
     root.dataset.appFont = 'active'
-    applyInterfaceFont(root, interfaceFont)
-    // Mirror the resolved font into the device cache the boot script in index.html
-    // reads on the next load, so the first paint already uses the saved family.
-    cacheInterfaceFont(interfaceFont)
-  }, [interfaceFont])
+    applyReadingFont(root, readingFont)
+  }, [readingFont])
 
-  // A committed settings row becomes the persisted source of truth. If its write fails
-  // before reaching IndexedDB, release the optimistic value and restore the saved font.
-  useEffect(() => {
-    if (pendingFont !== null && pendingFont === normalizeInterfaceFont(settings.interface_font)) {
-      setPendingFont(null)
-    }
-  }, [pendingFont, settings.interface_font])
-
-  // Public/auth routes do not mount this provider. Avoid carrying one account's font
-  // across logout into the next signed-out screen; login reapplies the account setting.
-  // Also remove the app font scope so the homepage returns to --font-public (Caveat).
-  useEffect(() => () => {
+  // Never carry one account's reading preference across sign-out or into public routes.
+  useLayoutEffect(() => () => {
     const root = document.documentElement
     delete root.dataset.appFont
-    applyInterfaceFont(root, 'default')
-    clearInterfaceFontCache()
+    clearReadingFont(root)
   }, [])
 
-  const persist = useCallback((patch: Partial<Pick<AppSettings, 'theme' | 'interface_font'>>) => {
-    // Queue writes so rapid taps can never land out of order in IndexedDB or the sync queue.
+  const persistTheme = useCallback((nextTheme: ThemeMode) => {
     const write = writeQueue.current.then(async () => {
       setSaving(true)
       try {
-        await upsert('app_settings', { ...settingsRef.current, ...patch, updated_at: new Date().toISOString() })
-        return true
+        await upsert('app_settings', {
+          ...settingsRef.current,
+          theme: nextTheme,
+          updated_at: new Date().toISOString()
+        })
       } catch (error) {
         notify(error instanceof Error ? error.message : 'Could not save that preference. Try again.', 'error')
-        return false
       } finally {
         setSaving(false)
       }
     })
-    writeQueue.current = write.then(() => undefined)
+    writeQueue.current = write
     return write
   }, [notify, upsert])
 
   const setTheme = useCallback((next: ThemeMode) => {
-    void persist({ theme: next })
-  }, [persist])
-  const setInterfaceFont = useCallback((next: InterfaceFont) => {
-    const font = normalizeInterfaceFont(next)
-    setPendingFont(font)
-    void persist({ interface_font: font }).then(saved => {
-      if (!saved) setPendingFont(current => current === font ? null : current)
-    })
-  }, [persist])
+    void persistTheme(next)
+  }, [persistTheme])
 
   const value = useMemo<AppearanceContextValue>(() => ({
-    theme, resolvedTheme, isDark: resolvedTheme === 'dark', interfaceFont, setTheme, setInterfaceFont, saving
-  }), [theme, resolvedTheme, interfaceFont, setTheme, setInterfaceFont, saving])
+    theme,
+    resolvedTheme,
+    isDark: resolvedTheme === 'dark',
+    readingFont,
+    setTheme,
+    saving
+  }), [theme, resolvedTheme, readingFont, setTheme, saving])
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>
 }

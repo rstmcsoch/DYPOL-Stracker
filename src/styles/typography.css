@@ -1,0 +1,406 @@
+/* STRACKER typography system
+   --------------------------------------------------------------------------
+   Identity is fixed Patrick Hand. --font-body / --body-scale are the only values
+   selected from Reading font settings. Legacy component styles may still size and
+   space elements, but family and role rules below keep them in the right layer. */
+
+:root {
+  --type-brand-size: 1.75rem;
+  --type-display-size: 2.25rem;
+  --type-h1-size: 2rem;
+  --type-h2-size: 1.5rem;
+  --type-h3-size: 1.25rem;
+  --type-empty-size: 1.25rem;
+  --type-metric-size: 2rem;
+  --type-body-size: 1rem;
+  --type-nav-size: .9375rem;
+  --type-button-size: .9375rem;
+  --type-input-size: 1rem;
+  --type-caption-size: .875rem;
+  --type-overline-size: .75rem;
+  --type-badge-size: .75rem;
+  --type-table-size: .9375rem;
+  --type-alert-size: .9375rem;
+}
+
+/* Fixed identity roles: these rules never use --body-scale or the saved font. */
+.type-brand,
+.type-display,
+.type-h1,
+.type-h2,
+.type-h3,
+.type-empty,
+.type-metric {
+  color: var(--text-primary);
+  font-family: var(--font-identity) !important;
+  font-weight: 400 !important;
+  text-wrap: pretty;
+}
+.type-brand { font-size: var(--type-brand-size) !important; line-height: .98 !important; }
+.type-display { font-size: var(--type-display-size) !important; line-height: 1.08 !important; }
+.type-h1 { font-size: var(--type-h1-size) !important; line-height: 1.08 !important; }
+.type-h2 { font-size: var(--type-h2-size) !important; line-height: 1.15 !important; }
+.type-h3 { font-size: var(--type-h3-size) !important; line-height: 1.2 !important; }
+.type-empty { font-size: var(--type-empty-size) !important; line-height: 1.2 !important; }
+.type-metric {
+  font-size: var(--type-metric-size) !important;
+  line-height: 1.1 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Account-selected content roles. Sizes use the controlled optical scale; captions
+   and badges stay above the 0.75rem minimum. */
+.type-body {
+  color: var(--text-primary);
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-body-size), calc(var(--type-body-size) * var(--body-scale))) !important;
+  font-weight: 400 !important;
+  line-height: 1.55 !important;
+}
+.type-nav {
+  color: var(--text-primary);
+  font-family: var(--font-body) !important;
+  font-size: calc(var(--type-nav-size) * var(--body-scale)) !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+  overflow-wrap: anywhere;
+}
+.type-button {
+  font-family: var(--font-body) !important;
+  font-size: calc(var(--type-button-size) * var(--body-scale)) !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  text-wrap: pretty;
+}
+.type-input {
+  color: var(--text-primary);
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-input-size), calc(var(--type-input-size) * var(--body-scale))) !important;
+  font-weight: 400 !important;
+  line-height: 1.4 !important;
+}
+.type-caption {
+  color: var(--text-muted);
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-overline-size), calc(var(--type-caption-size) * var(--body-scale))) !important;
+  font-weight: 400 !important;
+  line-height: 1.45 !important;
+}
+.type-overline {
+  color: var(--text-muted);
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-overline-size), calc(var(--type-overline-size) * var(--body-scale))) !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase;
+}
+.type-badge {
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-badge-size), calc(var(--type-badge-size) * var(--body-scale))) !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+}
+.type-table {
+  color: var(--text-primary);
+  font-family: var(--font-body) !important;
+  font-size: calc(var(--type-table-size) * var(--body-scale)) !important;
+  font-weight: 400 !important;
+  line-height: 1.45 !important;
+}
+.type-alert {
+  color: var(--text-primary);
+  font-family: var(--font-body) !important;
+  font-size: calc(var(--type-alert-size) * var(--body-scale)) !important;
+  font-weight: 500 !important;
+  line-height: 1.45 !important;
+}
+
+/* Semantic identity defaults keep every page and card heading in Patrick Hand. */
+.app-shell :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--text-primary);
+  font-family: var(--font-identity) !important;
+  font-weight: 400 !important;
+  overflow-wrap: anywhere;
+}
+.app-shell :is(h1, h2, h3, h4, h5, h6) :is(b, strong, em) {
+  font-family: var(--font-identity) !important;
+  font-weight: 400 !important;
+}
+.app-shell h1 { font-size: var(--type-h1-size) !important; line-height: 1.08 !important; }
+.app-shell h2 { font-size: var(--type-h2-size) !important; line-height: 1.15 !important; }
+.app-shell h3 { font-size: var(--type-h3-size) !important; line-height: 1.2 !important; }
+/* Explicit utility classes outrank legacy component sizes without affecting identity. */
+.app-shell .type-brand { font-size: var(--type-brand-size) !important; line-height: .98 !important; }
+.app-shell .type-display { font-size: var(--type-display-size) !important; line-height: 1.08 !important; }
+.app-shell .type-h1 { font-size: var(--type-h1-size) !important; line-height: 1.08 !important; }
+.app-shell .type-h2 { font-size: var(--type-h2-size) !important; line-height: 1.15 !important; }
+.app-shell .type-h3, .app-shell .type-empty { font-size: var(--type-h3-size) !important; line-height: 1.2 !important; }
+.app-shell .type-metric { font-size: var(--type-metric-size) !important; line-height: 1.1 !important; }
+.app-shell :is(.type-metric, .progress-ring-label, .ring-value, .jee-stat > strong) > small {
+  color: var(--text-muted);
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-caption-size), calc(var(--type-caption-size) * var(--body-scale))) !important;
+  font-weight: 400 !important;
+  line-height: 1.3 !important;
+}
+.app-shell :is(h4, h5, h6) { line-height: 1.25; }
+.app-shell .focus-main > h1 { font-size: var(--type-display-size) !important; line-height: 1.08 !important; }
+.app-shell .focus-clock { font-size: var(--type-display-size) !important; line-height: 1.08 !important; }
+.app-shell :is(.brand-type, .brand-mark > span, .loading-mark, .footer-credit, .sheet-brand-credit) {
+  color: var(--text-primary);
+  font-family: var(--font-identity) !important;
+  font-weight: 400 !important;
+}
+.app-shell :is(.stat-value, .progress-ring-label, .ring-value, .countdown-number,
+  .streak-number, .streak-number span, .streak-bottom strong, .study-time-value,
+  .test-summary-card > strong, .revision-summary strong, .jee-stat > strong,
+  .jee-track-percent, .exam-mode-days, .jee-split-item strong, .jee-streak-numbers strong,
+  .jee-mini-stats strong, .jee-countdown strong, .jee-weekly-grid strong,
+  .jee-pipeline-count strong, .jee-progress-compare strong) {
+  color: var(--text-primary);
+  font-family: var(--font-identity) !important;
+  font-size: var(--type-metric-size) !important;
+  font-weight: 400 !important;
+  line-height: 1.1 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Paragraphs are selected-family body copy and never shrink below 1rem. */
+.app-shell p {
+  color: var(--text-primary);
+  font-family: var(--font-body) !important;
+  font-size: max(1rem, calc(1rem * var(--body-scale))) !important;
+  font-weight: 400 !important;
+  line-height: 1.55 !important;
+  overflow-wrap: anywhere;
+}
+
+/* Sidebar, ordinary navigation and repeated list/table data use the content layer. */
+.app-shell :is(.nav-link, .mobile-nav-item, .nav-caption, .nav-divider,
+  .sidebar-date, .breadcrumb, .sidebar-search, .quick-action-menu button,
+  .overflow-menu button, .search-result, .search-result-text, .settings-tab,
+  .theme-choice, .font-choice, .jee-chip, .jee-toggle-row, .chart-link) {
+  font-family: var(--font-body);
+}
+.app-shell :is(.nav-link, .mobile-nav-item) {
+  font-size: calc(var(--type-nav-size) * var(--body-scale));
+  font-weight: 500;
+  line-height: 1.4;
+}
+.app-shell :is(.nav-caption, .nav-divider, .eyebrow, .card-kicker, .countdown-label,
+  .test-summary-card > span, .focus-context-head, .focus-clock-caption,
+  .ai-history-top, .ai-example-label, .pub-eyebrow, .jee-stat > span) {
+  color: var(--text-muted);
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-overline-size), calc(var(--type-overline-size) * var(--body-scale))) !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase;
+}
+.app-shell :is(.status-badge, .subject-badge, .jee-chip, .mistake-type-chip) {
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-badge-size), calc(var(--type-badge-size) * var(--body-scale))) !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+}
+.app-shell :is(table td, table th, .table-cell, .search-result-type, .search-result-text small) {
+  font-family: var(--font-body) !important;
+  font-size: calc(var(--type-table-size) * var(--body-scale)) !important;
+  font-weight: 400 !important;
+  line-height: 1.45 !important;
+}
+.app-shell :is(.recharts-cartesian-axis-tick text, .recharts-legend-item-text) {
+  font-family: var(--font-body) !important;
+  font-size: max(.75rem, calc(var(--type-table-size) * var(--body-scale))) !important;
+  font-weight: 400 !important;
+}
+.app-shell .ai-message-body {
+  color: var(--text-primary);
+  font-family: var(--font-body) !important;
+  font-size: max(1rem, calc(1rem * var(--body-scale))) !important;
+  font-weight: 400 !important;
+  line-height: 1.55 !important;
+}
+.app-shell :is(.field-hint, .field-error, .settings-note-line, .settings-unsaved-note,
+  .settings-save-state, .user-copy span, .task-meta, .progress-bar-caption,
+  .status-description, .empty-state p, .dialog-head p) {
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-overline-size), calc(var(--type-caption-size) * var(--body-scale))) !important;
+  font-weight: 400 !important;
+  line-height: 1.45 !important;
+}
+
+/* Buttons and native controls (including modal/popover portals) always use the
+   selected content family. The app attribute is applied only after authenticated
+   settings are loaded; public auth has its own fixed Lexend scope below. */
+html[data-app-font='active'] button,
+.app-shell button {
+  font-family: var(--font-body) !important;
+  font-size: calc(var(--type-button-size) * var(--body-scale)) !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+}
+html[data-app-font='active'] :is(input, select, textarea, option, optgroup),
+.app-shell :is(input, select, textarea, option, optgroup) {
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-input-size), calc(var(--type-input-size) * var(--body-scale))) !important;
+  font-weight: 400 !important;
+  line-height: 1.4 !important;
+}
+html[data-app-font='active'] ::placeholder,
+.app-shell ::placeholder {
+  color: var(--text-muted);
+  font-family: var(--font-body) !important;
+  font-size: inherit;
+  font-weight: 400 !important;
+  opacity: 1;
+}
+
+/* A readable floor for captions and other dense but ordinary content in the app. */
+html[data-app-font='active'] :is(small, kbd),
+.app-shell :is(small, kbd) {
+  line-height: 1.4;
+}
+.app-shell :is(.field-label, .field-hint, .field-error, .form-error, .form-notice,
+  .toast, .undo-toast, .sync-message, .notification, [role='alert']) {
+  font-family: var(--font-body);
+}
+.app-shell :is(.field-error, .form-error, .form-notice, .toast, .undo-toast, .sync-message, [role='alert']) {
+  font-size: calc(var(--type-alert-size) * var(--body-scale));
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* Auth routes are public: fixed Lexend content and fixed Patrick Hand identity,
+   independent of any saved Reading-font value. */
+.auth-page-public {
+  --font-body: var(--font-default-reading);
+  --font-ui: var(--font-default-reading);
+  --body-scale: 1;
+  font-family: var(--font-default-reading);
+}
+.auth-page-public :is(h1, h2, h3, .brand-type, .brand-mark > span, .auth-footer,
+  .pub-brand-text strong) {
+  color: var(--text-primary);
+  font-family: var(--font-identity) !important;
+  font-weight: 400 !important;
+}
+.auth-page-public :is(h1, h2, h3) :is(b, strong, em) {
+  font-family: var(--font-identity) !important;
+  font-weight: 400 !important;
+}
+.auth-page-public h1 { font-size: var(--type-display-size); line-height: 1.08; }
+.auth-page-public h2 { font-size: var(--type-h2-size); line-height: 1.15; }
+.auth-page-public h3 { font-size: var(--type-h3-size); line-height: 1.2; }
+.auth-page-public p { font-family: var(--font-default-reading) !important; font-size: max(1rem, calc(1rem * var(--body-scale))) !important; font-weight: 400 !important; line-height: 1.55 !important; }
+.auth-page-public :is(button, .button, .text-button) {
+  font-family: var(--font-default-reading) !important;
+  font-size: var(--type-button-size);
+  font-weight: 600 !important;
+  line-height: 1.2;
+}
+.auth-page-public :is(input, select, textarea, option, optgroup) {
+  font-family: var(--font-default-reading) !important;
+  font-size: var(--type-input-size);
+  font-weight: 400 !important;
+  line-height: 1.4;
+}
+.auth-page-public ::placeholder {
+  color: var(--text-muted);
+  font-family: var(--font-default-reading) !important;
+  font-size: inherit;
+  font-weight: 400 !important;
+  opacity: 1;
+}
+.auth-page-public .auth-back {
+  font-family: var(--font-default-reading) !important;
+  font-size: var(--type-nav-size);
+  font-weight: 500 !important;
+  line-height: 1.4;
+}
+.auth-page-public :is(.field-error, .form-error, .form-notice, [role='alert'], [role='status']) {
+  color: var(--text-primary);
+  font-family: var(--font-default-reading) !important;
+  font-size: var(--type-alert-size);
+  font-weight: 500 !important;
+  line-height: 1.45;
+}
+.auth-page-public .pub-brand-text small,
+.auth-page-public .auth-footer b {
+  font-family: var(--font-identity) !important;
+  font-weight: 400 !important;
+}
+.auth-page-public :is(p, .field-label, .field-hint, .field-error, .form-error, .form-notice,
+  .auth-private, .auth-kicker, .auth-footnote, .auth-setup-note, .auth-card-sticker,
+  .auth-doodle-note, .local-preview-box, .auth-form-links) {
+  font-family: var(--font-default-reading);
+}
+
+/* The public homepage is a deliberate exception: every visible text node and control,
+   including nested/shared UI, is always the locally bundled regular Patrick Hand face. */
+.pub-page,
+.pub-page :where(*) {
+  font-family: var(--font-identity) !important;
+  font-weight: 400 !important;
+}
+/* Keep that guarantee even if a visitor route is mounted while an account token exists. */
+html[data-app-font='active'] .pub-page :where(*) {
+  font-family: var(--font-identity) !important;
+  font-weight: 400 !important;
+}
+.pub-page { --font-body: var(--font-identity); --body-scale: 1; }
+.pub-page p { font-size: max(1rem, calc(1rem * var(--body-scale))) !important; line-height: 1.55 !important; }
+
+/* These are content descriptions and controls inside the live preview. Its heading is
+   deliberately excluded so it continues to demonstrate the fixed identity face. */
+.typography-live-preview {
+  --font-ui: var(--font-body);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 13px;
+  background: var(--paper-soft);
+}
+.typography-preview-copy { min-width: 0; }
+.typography-preview-copy .type-overline { display: block; margin-bottom: 6px; }
+.typography-preview-copy .type-h2 { margin: 0 0 5px; }
+.typography-preview-copy .type-body { max-width: 60ch; margin: 0; }
+.typography-preview-copy .type-caption { display: block; margin-top: 7px; }
+.typography-preview-button { flex: none; min-height: 42px; padding: 8px 14px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--text-primary); background: var(--paper); cursor: default; }
+
+/* Readable wrapping for notes and task titles without changing the surrounding layout. */
+.app-shell :is(.task-row-copy, .task-row-copy > strong, .task-title, .backlog-title,
+  .chapter-name, .chapter-notes, .user-note, .user-generated-text, .search-result-text strong) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.app-shell .task-row-copy > strong { white-space: normal; text-overflow: clip; }
+
+@media (max-width: 640px) {
+  .type-brand, .app-shell .type-brand { font-size: 1.5rem !important; }
+  .type-display, .app-shell .type-display { font-size: 1.9rem !important; }
+  .type-h1, .app-shell h1:not(.type-display), .app-shell .type-h1 { font-size: 1.75rem !important; }
+  .type-h2, .app-shell h2, .app-shell .type-h2 { font-size: 1.375rem !important; }
+  .type-h3, .type-empty, .app-shell h3, .app-shell .type-h3, .app-shell .type-empty { font-size: 1.125rem !important; }
+  .type-metric,
+  .app-shell :is(.stat-value, .progress-ring-label, .ring-value, .countdown-number,
+    .streak-number, .streak-number span, .streak-bottom strong, .study-time-value,
+    .test-summary-card > strong, .revision-summary strong, .jee-stat > strong,
+    .jee-track-percent, .exam-mode-days, .jee-split-item strong, .jee-streak-numbers strong,
+    .jee-mini-stats strong, .jee-countdown strong, .jee-weekly-grid strong,
+    .jee-pipeline-count strong, .jee-progress-compare strong) {
+    font-size: 1.75rem !important;
+  }
+  .app-shell .focus-clock { font-size: 1.9rem !important; }
+  .auth-page-public h2 { font-size: 1.375rem !important; }
+  .auth-page-public h3 { font-size: 1.125rem !important; }
+  .typography-live-preview { align-items: flex-start; flex-direction: column; gap: 12px; padding: 14px; }
+  .typography-preview-button { width: 100%; }
+}
