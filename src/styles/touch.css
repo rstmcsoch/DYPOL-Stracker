@@ -1,0 +1,171 @@
+/* Mobile tap, press feedback, selection and keyboard focus.
+   Scoped to interactive controls so study content stays selectable. */
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+[role='button'],
+input,
+select,
+textarea,
+summary,
+.nav-link,
+.mobile-nav-item,
+.icon-button,
+.text-button,
+.text-link,
+.button,
+.card-clickable,
+.theme-choice,
+.sidebar-search,
+.ai-launcher,
+.ai-send-button,
+.ai-history-item,
+.ai-provider-choice {
+  touch-action: manipulation;
+}
+
+/* Drag handles keep native pan-none so chapter reorder still works. */
+.chapter-grip {
+  touch-action: none;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible,
+[role='button']:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgba(82, 108, 154, 0.28);
+  background: color-mix(in srgb, var(--text-accent, var(--accent)) 30%, transparent);
+  color: var(--ink);
+}
+
+button,
+.nav-link,
+.mobile-nav-item,
+.icon-button,
+.text-button,
+.text-link,
+[role='button'],
+.sidebar-search,
+.ai-launcher,
+.ai-send-button,
+.ai-history-item,
+.ai-suggestion-grid button,
+.theme-choice,
+.revision-done-button,
+.mistake-row-action,
+.import-drop-button {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+.button,
+.icon-button,
+[role='button']:not(a),
+.card-clickable,
+.nav-link,
+.mobile-nav-item,
+.sidebar-search,
+.ai-launcher,
+.ai-send-button,
+.ai-history-item,
+.theme-choice,
+.revision-done-button {
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.button:active:not(:disabled),
+.icon-button:active:not(:disabled),
+[role='button']:not(a):active:not(:disabled),
+.card-clickable:active,
+.nav-link:active,
+.mobile-nav-item:active,
+.sidebar-search:active,
+.ai-launcher:active:not(:disabled),
+.ai-send-button:active:not(:disabled),
+.ai-history-item:active,
+.theme-choice:active,
+.revision-done-button:active:not(:disabled) {
+  transform: translateY(2px) scale(0.98);
+}
+
+.button-primary:active:not(:disabled),
+.button-danger:active:not(:disabled),
+.button-marker:active:not(:disabled),
+.button-secondary:active:not(:disabled) {
+  box-shadow: none;
+}
+
+/* Inline action text should not squash; keep a light opacity cue instead. */
+.text-button:active:not(:disabled),
+.text-link:active:not(:disabled),
+a.text-button:active {
+  transform: none;
+  opacity: 0.78;
+}
+
+.button:disabled:active,
+.icon-button:disabled:active,
+[aria-disabled='true']:active {
+  transform: none;
+  box-shadow: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .icon-button,
+  [role='button']:not(a),
+  .card-clickable,
+  .nav-link,
+  .mobile-nav-item,
+  .sidebar-search,
+  .ai-launcher,
+  .ai-send-button,
+  .ai-history-item,
+  .theme-choice,
+  .revision-done-button {
+    transition: background 80ms ease, border-color 80ms ease, color 80ms ease;
+  }
+
+  .button:active:not(:disabled),
+  .icon-button:active:not(:disabled),
+  [role='button']:not(a):active:not(:disabled),
+  .card-clickable:active,
+  .nav-link:active,
+  .mobile-nav-item:active,
+  .sidebar-search:active,
+  .ai-launcher:active:not(:disabled),
+  .ai-send-button:active:not(:disabled),
+  .ai-history-item:active,
+  .theme-choice:active,
+  .revision-done-button:active:not(:disabled),
+  .button:hover:not(:disabled) {
+    transform: none;
+  }
+}
