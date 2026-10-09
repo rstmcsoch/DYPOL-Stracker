@@ -8,7 +8,7 @@
 .field-error {
   display: block;
   color: var(--red);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.35;
 }
 .mock-score-entry.has-error input {
@@ -21,7 +21,7 @@
 .settings-header-actions,
 .settings-account-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .settings-account-actions { margin-top: 14px; }
-.settings-account-note { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
+.settings-account-note { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
 
 .weak-mobile-disclosure { display: none; }
 .weak-mobile-extra { display: table-row; }

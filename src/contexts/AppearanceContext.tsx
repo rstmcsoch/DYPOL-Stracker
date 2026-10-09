@@ -3,20 +3,25 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { useData } from './DataContext'
 import { useToast } from './ToastContext'
 import { applyReadingFont, clearReadingFont, normalizeReadingFont } from '../lib/fonts'
-import type { AppSettings, ReadingFont, ThemeMode } from '../types'
+import { normalizeColorTheme } from '../lib/themes'
+import type { AppSettings, ColorTheme, ReadingFont, ThemeMode } from '../types'
 
 export type ResolvedTheme = 'light' | 'dark'
 
 interface AppearanceContextValue {
-  /** Stored preference, including `auto`. */
+  /** Stored display-mode preference, including `auto`. */
   theme: ThemeMode
   /** What the UI is actually rendering right now. */
   resolvedTheme: ResolvedTheme
   isDark: boolean
+  /** Stored colour palette; independent of the display mode. */
+  colorTheme: ColorTheme
   /** The committed, account-scoped Reading font (drafts stay inside SettingsPage). */
   readingFont: ReadingFont
   /** Persist a theme toggle through the existing app_settings row. */
   setTheme: (theme: ThemeMode) => void
+  /** Persist the colour palette; never touches the display mode. */
+  setColorTheme: (colorTheme: ColorTheme) => void
   saving: boolean
 }
 
@@ -43,6 +48,10 @@ function useSystemPrefersDark(): boolean {
  * solely by the Appearance tab in SettingsPage: this provider only applies a saved
  * value and never persists a font on selection. The public site and public auth routes
  * do not mount this provider and always use their fixed CSS typography scope.
+ *
+ * Display mode (`data-theme`) and colour palette (`data-color`) are two attributes:
+ * the top-right switch writes only the mode, the Settings palette writes only the
+ * colour, and neither can reset the other.
  */
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const { data, upsert } = useData()
@@ -56,6 +65,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   const writeQueue = useRef<Promise<void>>(Promise.resolve())
 
   const theme = settings.theme
+  const colorTheme = normalizeColorTheme(settings.color_theme)
   const resolvedTheme: ResolvedTheme = theme === 'auto' ? (systemPrefersDark ? 'dark' : 'light') : theme
   const readingFont = normalizeReadingFont(settings.interface_font)
 
@@ -65,26 +75,33 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? DARK_THEME_COLOR : LIGHT_THEME_COLOR)
   }, [resolvedTheme])
 
+  useEffect(() => {
+    const root = document.documentElement
+    if (colorTheme === 'default') delete root.dataset.color
+    else root.dataset.color = colorTheme
+  }, [colorTheme])
+
   useLayoutEffect(() => {
     const root = document.documentElement
     root.dataset.appFont = 'active'
     applyReadingFont(root, readingFont)
   }, [readingFont])
 
-  // Never carry one account's reading preference across sign-out or into public routes.
+  // Never carry one account's appearance across sign-out or into public routes.
   useLayoutEffect(() => () => {
     const root = document.documentElement
     delete root.dataset.appFont
+    delete root.dataset.color
     clearReadingFont(root)
   }, [])
 
-  const persistTheme = useCallback((nextTheme: ThemeMode) => {
+  const persistAppearance = useCallback((patch: { theme?: ThemeMode; color_theme?: ColorTheme }) => {
     const write = writeQueue.current.then(async () => {
       setSaving(true)
       try {
         await upsert('app_settings', {
           ...settingsRef.current,
-          theme: nextTheme,
+          ...patch,
           updated_at: new Date().toISOString()
         })
       } catch (error) {
@@ -98,17 +115,23 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   }, [notify, upsert])
 
   const setTheme = useCallback((next: ThemeMode) => {
-    void persistTheme(next)
-  }, [persistTheme])
+    void persistAppearance({ theme: next })
+  }, [persistAppearance])
+
+  const setColorTheme = useCallback((next: ColorTheme) => {
+    void persistAppearance({ color_theme: normalizeColorTheme(next) })
+  }, [persistAppearance])
 
   const value = useMemo<AppearanceContextValue>(() => ({
     theme,
     resolvedTheme,
     isDark: resolvedTheme === 'dark',
+    colorTheme,
     readingFont,
     setTheme,
+    setColorTheme,
     saving
-  }), [theme, resolvedTheme, readingFont, setTheme, saving])
+  }), [theme, resolvedTheme, colorTheme, readingFont, setTheme, setColorTheme, saving])
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>
 }

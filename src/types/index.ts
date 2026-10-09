@@ -14,6 +14,25 @@ export type ThemeMode = 'light' | 'dark' | 'auto'
 export const READING_FONTS = ['default', 'poppins', 'sora', 'open-sans'] as const
 export type ReadingFont = (typeof READING_FONTS)[number]
 
+/**
+ * Account-scoped colour theme. Independent of the light/dark/auto display mode:
+ * every theme ships a light AND a dark palette, applied via `data-color` on the
+ * document root while `data-theme` keeps owning the mode. `default` is the
+ * established Stracker warm-paper/chalkboard identity.
+ */
+export const COLOR_THEMES = [
+  'default',
+  'sunset-blaze',
+  'forest-emerald',
+  'sandalwood',
+  'ocean-deep',
+  'sakura-blossom',
+  'dracula-midnight',
+  'lavender-mist',
+  'cyberpunk-neon'
+] as const
+export type ColorTheme = (typeof COLOR_THEMES)[number]
+
 /** @deprecated Kept as a source-compatible alias for the legacy database column. */
 export const INTERFACE_FONTS = READING_FONTS
 export type InterfaceFont = ReadingFont
@@ -305,6 +324,8 @@ export interface AppSettings extends BaseRecord {
   theme: ThemeMode
   /** Backward-compatible database column now presented as Reading font in the UI. */
   interface_font: ReadingFont
+  /** Colour palette, kept separate from the light/dark/auto display mode. */
+  color_theme: ColorTheme
   weak_threshold: number
   strong_threshold: number
   dropping_threshold: number

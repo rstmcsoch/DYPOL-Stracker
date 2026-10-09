@@ -158,7 +158,10 @@ describe('role typography coverage', () => {
     expect(ai).toContain('font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace')
   })
 
-  it('keeps every ordinary stylesheet text size at or above 0.75rem', () => {
+  it('keeps every ordinary stylesheet text size at or above the readable floor', () => {
+    // Scaled sizes must sit behind a max() floor of at least 0.75rem; the
+    // authenticated app raises that floor to 0.8125rem (13px) for captions and
+    // labels. Raw pixel sizes may never drop below 12px.
     const tooSmall: string[] = []
     const styleFiles = readdirSync(`${process.cwd()}/src/styles`)
       .filter(file => file.endsWith('.css') && file !== 'fonts.css')
@@ -167,7 +170,7 @@ describe('role typography coverage', () => {
       for (const match of css.matchAll(/(?:^|[;{])\s*(font-size|font)\s*:\s*([^;{}]+)/g)) {
         const property = match[1] ?? 'font'
         const value = match[2]?.trim() ?? ''
-        if (/max\(\s*\.75rem/i.test(value) || /(?:ui-)?monospace/i.test(value)) continue
+        if (/max\(\s*\.(?:75|8125)rem/i.test(value) || /(?:ui-)?monospace/i.test(value)) continue
         const smallPixels = [...value.matchAll(/([0-9]+(?:\.[0-9]+)?)px/g)]
           .map(size => Number(size[1]))
           .filter(size => size < 12)
@@ -175,5 +178,12 @@ describe('role typography coverage', () => {
       }
     }
     expect(tooSmall).toEqual([])
+  })
+
+  it('uses the 13px caption floor across the authenticated app stylesheets', () => {
+    for (const fileName of ['base.css', 'jee.css']) {
+      const css = readFileSync(`${process.cwd()}/src/styles/${fileName}`, 'utf8')
+      expect(css).toContain('max(.8125rem, calc(')
+    }
   })
 })

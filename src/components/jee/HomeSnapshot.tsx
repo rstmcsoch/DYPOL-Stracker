@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowUpRight, Bell, Clock3, Flame, Info, ListChecks } from 'lucide-react'
+import { ArrowUpRight, Bell, Clock3, ListChecks } from 'lucide-react'
 import { NotebookCard } from '../ui'
 import { Meter, Pct, minutesLabel } from './shared'
 import { useData } from '../../contexts/DataContext'
 import { indiaToday } from '../../lib/date'
 import { aggregatePractice, pyqCompletion, syllabusProgress } from '../../lib/jee/progress'
-import { currentExamMode, countdownLabel, trackReadiness, TRACK_LABEL } from '../../lib/jee/exam'
-import { PRIMARY_ACTIVITIES, studyMinutesByActivity, STREAK_RULE_TEXT, weekRange, computeStreaks } from '../../lib/jee/study-time'
+import { currentExamMode, trackReadiness, TRACK_LABEL } from '../../lib/jee/exam'
+import { PRIMARY_ACTIVITIES, studyMinutesByActivity, weekRange } from '../../lib/jee/study-time'
 import { computeReminders, isAwake } from '../../lib/jee/reminders'
 import type { ActivityMinutes } from '../../lib/jee/study-time'
 
@@ -22,7 +22,6 @@ export function HomeSnapshot() {
   const today = indiaToday()
   const todayMinutes = useMemo(() => studyMinutesByActivity(data, today, today), [data, today])
   const week = useMemo(() => studyMinutesByActivity(data, weekRange(today).start, today), [data, today])
-  const streak = useMemo(() => computeStreaks(data, today), [data, today])
   const progress = useMemo(() => syllabusProgress(data.chapters, data.settings), [data.chapters, data.settings])
   const practice = useMemo(() => aggregatePractice(data.practiceSessions), [data.practiceSessions])
   const pyqMain = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Main', data.settings), [data.pyqRecords, data.settings])
@@ -40,17 +39,8 @@ export function HomeSnapshot() {
       <SplitRow minutes={week} compact />
     </NotebookCard>
 
-    <NotebookCard className="jee-snap-card jee-snap-streak">
-      <div className="jee-snap-head"><span className="eyebrow"><Flame size={13} aria-hidden="true" /> STREAK</span>
-        <span className="jee-info" title={STREAK_RULE_TEXT} tabIndex={0} aria-label={STREAK_RULE_TEXT}><Info size={14} aria-hidden="true" /></span></div>
-      <div className="jee-streak-numbers">
-        <div><strong>{streak.current}</strong><span>current</span></div>
-        <div><strong>{streak.longest}</strong><span>longest</span></div>
-        <div><strong>{streak.weeklyConsistency}/7</strong><span>this week</span></div>
-      </div>
-      <p className="jee-small jee-muted">{streak.qualifyingToday ? 'Today counts.' : 'Today is not counted yet — 15+ min of study or a practice log will count it.'}</p>
-    </NotebookCard>
-
+    {/* Streak and the exam countdown live in the hero cards above; repeating the
+        same numbers here was removed so every statistic renders exactly once. */}
     <NotebookCard className="jee-snap-card jee-snap-progress">
       <div className="jee-snap-head"><span className="eyebrow">SYLLABUS</span><button type="button" className="jee-link" onClick={() => navigate('/syllabus')}>Open <ArrowUpRight size={13} aria-hidden="true" /></button></div>
       <ProgressLine label="Raw completion" value={progress.raw} detail={`${progress.completedChapters}/${progress.totalChapters} chapters`} />
@@ -71,8 +61,7 @@ export function HomeSnapshot() {
 
     <NotebookCard className="jee-snap-card jee-snap-exam">
       <div className="jee-snap-head"><span className="eyebrow">{TRACK_LABEL[data.settings.active_track].toUpperCase()}</span><button type="button" className="jee-link" onClick={() => navigate('/settings')}>Exam dates <ArrowUpRight size={13} aria-hidden="true" /></button></div>
-      <div className="jee-countdown"><strong>{mode.daysLeft !== null && mode.daysLeft >= 0 ? mode.daysLeft : '—'}</strong><span>{countdownLabel(mode.daysLeft)}</span></div>
-      <p className="jee-small">{mode.active ? mode.reason : 'Exam Mode turns on automatically in the final 30 days.'}</p>
+      <p className="jee-small">{mode.active ? mode.reason : 'Exam Mode turns on automatically in the final 30 days. The big countdown lives at the top of Home.'}</p>
       <ProgressLine label="Track readiness" value={track.percent} detail="weighted syllabus, PYQs and recent tests" />
     </NotebookCard>
 
