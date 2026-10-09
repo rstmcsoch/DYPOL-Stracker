@@ -237,7 +237,7 @@ code, pre, samp, .mono,
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-* { box-sizing: border-box; min-width: 0; }
+* { box-sizing: border-box; min-width: 0; -webkit-tap-highlight-color: transparent; }
 html { min-width: 320px; scroll-behavior: smooth; background: var(--bg); font-family: var(--font-body); }
 body { min-width: 320px; margin: 0; color: var(--ink); background: var(--bg); overflow-x: hidden; font-family: inherit; font-size: 16px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
 #root { min-height: 100vh; min-height: 100dvh; font-family: inherit; }
@@ -247,11 +247,10 @@ button, input, textarea, select { font: inherit; }
 option, optgroup, ::file-selector-button { font: inherit; }
 ::placeholder { font: inherit; }
 button { color: inherit; }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 3px solid rgba(89, 123, 175, .52); outline-offset: 3px; }
-:root[data-theme='dark'] button:focus-visible, :root[data-theme='dark'] a:focus-visible, :root[data-theme='dark'] input:focus-visible, :root[data-theme='dark'] select:focus-visible, :root[data-theme='dark'] textarea:focus-visible, :root[data-theme='dark'] summary:focus-visible { outline-color: rgba(169, 191, 220, .76); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 58%, transparent); outline-offset: 3px; }
 a { color: inherit; text-decoration: none; }
 button:disabled { opacity: .45; cursor: not-allowed !important; }
-::selection { background: rgba(208, 182, 107, .34); }
+::selection { background: rgba(82, 108, 154, .28); background: color-mix(in srgb, var(--text-accent, var(--accent)) 30%, transparent); color: var(--ink); }
 .visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 .spin { animation: rotate .9s linear infinite; }
 .sync-spin { animation: rotate 1.6s linear infinite; }
@@ -358,7 +357,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .notebook-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 15px 17px 14px 16px; background-color: var(--paper); background-image: repeating-linear-gradient(0deg, transparent 0 32px, rgba(137, 148, 141, .025) 33px, transparent 34px); box-shadow: var(--shadow); }
 .accent-blue { --card-accent: var(--subject-physics); }.accent-green { --card-accent: var(--subject-chemistry); }.accent-orange { --card-accent: var(--subject-maths); }.accent-yellow { --card-accent: #c49a46; }
 .button { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; min-width: 44px; min-height: 42px; max-width: 100%; padding: 8px 14px; border: 1px solid transparent; border-radius: 9px 11px 10px 8px; cursor: pointer; font:600 15px/1.2 var(--font-body); text-align: center; overflow-wrap: anywhere; transition: background .16s ease, box-shadow .16s ease, transform .16s ease, border-color .16s ease; }
-.button:hover:not(:disabled) { transform: translateY(-1px); }.button:active:not(:disabled) { transform: translateY(0); }
+.button:hover:not(:disabled) { transform: translateY(-1px); }.button:active:not(:disabled) { transform: translateY(2px) scale(0.98); }
 .button-primary { border-color: var(--button-primary-border); color: var(--button-primary-ink); background: var(--button-primary-bg); box-shadow: 0 3px 0 var(--button-primary-shadow); }.button-primary:hover:not(:disabled) { background: var(--button-primary-hover); }
 .button-secondary { border-color: var(--line-strong); color: var(--ink-soft); background: var(--paper); box-shadow: 0 2px 0 rgba(71, 70, 57, .07); }.button-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); background: var(--paper-soft); }
 .button-quiet { color: var(--ink-soft); background: transparent; }.button-quiet:hover:not(:disabled) { background: var(--paper-muted); }
