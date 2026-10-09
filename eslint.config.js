@@ -5,7 +5,8 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules'] },
+  // mobile/ is a separate Expo project with its own ESLint configuration (mobile/eslint.config.js).
+  { ignores: ['dist', 'node_modules', 'mobile'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

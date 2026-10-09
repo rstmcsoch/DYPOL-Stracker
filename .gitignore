@@ -9,3 +9,22 @@ coverage/
 
 # Local tooling and generated assets
 .venv/
+
+# React Native / Expo app (mobile/): native projects are generated, dependencies and build output are local,
+# and signing material never belongs in Git.
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/build/
+mobile/android/
+mobile/ios/
+mobile/credentials/
+mobile/.env
+mobile/.env.*
+!mobile/.env.example
+*.jks
+*.keystore
+*.p12
+*.apk
+*.aab

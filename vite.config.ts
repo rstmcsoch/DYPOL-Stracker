@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
@@ -50,5 +51,7 @@ export default defineConfig({
   ],
   server: { host: '0.0.0.0', allowedHosts: true },
   preview: { host: '0.0.0.0', allowedHosts: true },
-  build: { sourcemap: false, chunkSizeWarningLimit: 1000 }
+  build: { sourcemap: false, chunkSizeWarningLimit: 1000 },
+  // mobile/ has its own Jest suites, which run under the React Native preset, not under this website's Vitest.
+  test: { exclude: [...configDefaults.exclude, 'mobile/**'] }
 })

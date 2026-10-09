@@ -177,3 +177,10 @@ Serve the production app over HTTPS so browser authentication, IndexedDB, and se
 ## License
 
 No license has been selected for this repository yet. Add a `LICENSE` file before redistributing or reusing the project outside the owner’s deployment.
+
+## Android app (React Native)
+
+The Android app lives in [`mobile/`](mobile/README.md), as a separate Expo project. It uses this website's Supabase project,
+database, and `/api/ai/*` endpoints, and it does not replace or change the website. Setup, the EAS release build, release
+signing, and the Supabase redirect configuration are documented in [`docs/mobile/`](docs/mobile/README.md).
+

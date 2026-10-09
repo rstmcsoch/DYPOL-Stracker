@@ -1,0 +1,17 @@
+Bundled fonts for the Stracker mobile app
+Converted from the website's self-hosted subsets. SIL Open Font License 1.1.
+
+== Lexend
+Copyright 2019 The Lexend Project Authors (https://github.com/googlefonts/lexend)
+
+== OpenSans
+Copyright 2020 The Open Sans Project Authors (https://github.com/googlefonts/opensans)
+
+== PatrickHand
+Copyright (c) 2012 Patrick Wagesreiter (mail@patrickwagesreiter.at)
+
+== Poppins
+Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
+
+== Sora
+Copyright 2019 The Sora Project Authors (https://github.com/sora-xor/sora-font)

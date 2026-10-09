@@ -1,0 +1,5 @@
+import { AnalyticsScreen } from '../../screens/AnalyticsScreen'
+
+export default function Analytics() {
+  return <AnalyticsScreen />
+}
