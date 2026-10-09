@@ -37,42 +37,74 @@ jobs:
 
       - run: npm ci
 
+      - name: Add Capacitor Android and status bar support
+        run: npm install --no-save --package-lock=false @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/status-bar@7
+
       - name: Build web app
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npx vite build
 
-      - name: Add Capacitor (not saved to package.json)
-        run: npm install --no-save @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
-
-      - name: Create Android project
+      - name: Create Android project with the correct package ID and safe system bars
         run: |
           cat > capacitor.config.json <<'EOF'
           {
-            "appId": "app.dypol.stracker",
+            "appId": "com.stracker.dypollabs",
             "appName": "Stracker",
             "webDir": "dist",
-            "android": { "backgroundColor": "#f7f4ec" }
+            "android": {
+              "backgroundColor": "#f7f4ec",
+              "allowMixedContent": false
+            },
+            "plugins": {
+              "StatusBar": {
+                "overlaysWebView": false,
+                "style": "LIGHT",
+                "backgroundColor": "#f7f4ec"
+              }
+            }
           }
           EOF
           npx cap add android
           npx cap sync android
 
-      - name: App icon (optional)
-        continue-on-error: true
+      - name: Keep content below the Android status bar
         run: |
-          if [ ! -f public/icons/icon-512.png ]; then echo "no icon, skipping"; exit 0; fi
-          if command -v magick >/dev/null 2>&1; then IM=magick
-          elif command -v convert >/dev/null 2>&1; then IM=convert
-          else sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick && IM=convert; fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          styles = Path("android/app/src/main/res/values/styles.xml")
+          source = styles.read_text()
+          theme = re.search(r'(<style\s+name="AppTheme\.NoActionBar"[^>]*>)(.*?)(</style>)', source, re.S)
+          if not theme:
+              raise SystemExit("Could not find AppTheme.NoActionBar; refusing to build without the status-bar inset fix.")
+          body = theme.group(2)
+          item = '<item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>'
+          if "windowOptOutEdgeToEdgeEnforcement" not in body:
+              body += "\n        " + item + "\n    "
+          source = source[:theme.start()] + theme.group(1) + body + theme.group(3) + source[theme.end():]
+          styles.write_text(source)
+          print("Applied status-bar inset protection to AppTheme.NoActionBar")
+          PY
+          grep -q 'windowOptOutEdgeToEdgeEnforcement' android/app/src/main/res/values/styles.xml
+
+          # Keep the APK on target SDK 35 so Android 15's documented opt-out remains
+          # available. The theme item above prevents the WebView drawing under the
+          # status bar on current Android builds that honor this compatibility path.
+          sed -i 's/targetSdkVersion 36/targetSdkVersion 35/g' android/variables.gradle android/app/build.gradle 2>/dev/null || true
+
+      - name: Apply Stracker launcher icon
+        run: |
+          if ! command -v convert >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+          fi
           R=android/app/src/main/res
-          rm -rf $R/mipmap-anydpi-v26
           for s in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
             d=${s%%:*}; px=${s##*:}
-            $IM public/icons/icon-512.png -resize ${px}x${px} $R/mipmap-$d/ic_launcher.png
+            convert public/icons/icon-512.png -resize ${px}x${px} $R/mipmap-$d/ic_launcher.png
             cp $R/mipmap-$d/ic_launcher.png $R/mipmap-$d/ic_launcher_round.png
-            rm -f $R/mipmap-$d/ic_launcher_foreground.png
           done
 
       - name: Build APK
@@ -81,18 +113,26 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk DYPOL-Stracker.apk
+      - name: Rename APK and checksum
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk Stracker.apk
+          sha256sum Stracker.apk > Stracker.apk.sha256
+          ls -lh Stracker.apk
+          cat Stracker.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DYPOL-Stracker-apk
-          path: DYPOL-Stracker.apk
+          name: Stracker-Android-APK
+          path: |
+            Stracker.apk
+            Stracker.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "apk-${{ github.run_number }}" DYPOL-Stracker.apk \
-            --title "DYPOL Stracker APK #${{ github.run_number }}" \
-            --notes "Debug-signed APK. Install on Android (allow unknown sources)."
+          gh release create "stracker-apk-${{ github.run_number }}" Stracker.apk Stracker.apk.sha256 \
+            --title "Stracker Android APK #${{ github.run_number }}" \
+            --notes "App name: Stracker. Application ID: com.stracker.dypollabs. Debug-signed APK for direct Android installation."
