@@ -11,6 +11,21 @@ vi.mock('../contexts/DataContext', () => ({
   useData: () => ({ data: harness.data, upsert: vi.fn(async () => undefined), upsertMany: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), refresh: vi.fn(), syncState: 'local', pendingCount: 0, syncError: null, undoAvailable: false, undoDelete: vi.fn(), dismissUndo: vi.fn(), mergeImportedData: vi.fn(), saveImage: vi.fn() })
 }))
 vi.mock('../contexts/ToastContext', () => ({ useToast: () => ({ notify: vi.fn() }) }))
+vi.mock('../contexts/FocusContext', () => ({
+  useFocus: () => ({
+    running: false,
+    remainingSeconds: 25 * 60,
+    mode: 'Pomodoro',
+    progress: 0,
+    elapsedSeconds: 0,
+    finished: false,
+    focusMinutes: 25,
+    durations: { Pomodoro: 25, 'Short Break': 5, 'Long Break': 15, Custom: 40 },
+    start: vi.fn(),
+    pause: vi.fn(),
+    setTask: vi.fn()
+  })
+}))
 
 const USER = '00000000-0000-4000-8000-000000000001'
 function baseData(settings: Partial<ReturnType<typeof defaultSettings>> = {}): AppData {
