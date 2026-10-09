@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { EXAM_MODES, INTERFACE_FONTS, REMINDER_KINDS, TRACK_IDS } from '../types/index.js'
+import { EXAM_MODES, READING_FONTS, REMINDER_KINDS, TRACK_IDS } from '../types/index.js'
 
 const dateValue = z.iso.date()
 const timestampValue = z.iso.datetime({ offset: true })
@@ -13,7 +13,7 @@ export const settingsSchema = z.object({
   theme: z.enum(['light', 'dark', 'auto']),
   // Defaulted so rows written before the preference existed still validate and simply
   // fall back to the Stracker default typography.
-  interface_font: z.enum(INTERFACE_FONTS).default('default'),
+  interface_font: z.enum(READING_FONTS).default('default'),
   weak_threshold: z.number().finite().min(0).max(99.99).multipleOf(0.01),
   strong_threshold: z.number().finite().min(0.01).max(100).multipleOf(0.01),
   dropping_threshold: z.number().finite().min(0).max(100).multipleOf(0.01),
@@ -55,7 +55,7 @@ export function settingsFieldErrors(error: z.ZodError): SettingsFieldErrors {
         : 'Must be between 0.01 and 100, using up to two decimal places.'; break
       case 'dropping_threshold': fieldErrors[field] = 'Must be between 0 and 100, using up to two decimal places.'; break
       case 'revision_gaps': fieldErrors[field] = 'Enter 1–12 positive whole days, e.g. 1, 7, 30.'; break
-      case 'interface_font': fieldErrors[field] = 'Choose Default, Poppins, Sora, or Open Sans.'; break
+      case 'interface_font': fieldErrors[field] = 'Choose Lexend, Poppins, Sora, or Open Sans.'; break
       case 'daily_study_goal_minutes': fieldErrors[field] = 'Enter a daily goal from 0 to 24 hours.'; break
       case 'owner_name': fieldErrors[field] = 'Name must be 100 characters or fewer.'; break
       case 'main_exam_date': fieldErrors[field] = 'Choose a valid calendar date or leave it blank.'; break

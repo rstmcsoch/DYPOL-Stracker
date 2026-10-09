@@ -1,7 +1,7 @@
 import { SYLLABUS } from './syllabus.js'
 import { createId, stableId } from './id.js'
 import { indiaToday } from './date.js'
-import { normalizeInterfaceFont } from './fonts.js'
+import { normalizeReadingFont } from './fonts.js'
 import type {
   AppSettings, Chapter, ChapterImportance, ChapterStage, ChapterStageKey, ReminderKind, Subject,
   TrackId, UserExamTrack
@@ -68,7 +68,7 @@ export function normalizeSettings(row: Record<string, unknown>, userId: string):
     advanced_exam_date: typeof row.advanced_exam_date === 'string' ? row.advanced_exam_date : '',
     target_score: asNumber(row.target_score, fallback.target_score),
     theme: row.theme === 'dark' || row.theme === 'auto' || row.theme === 'light' ? row.theme : fallback.theme,
-    interface_font: normalizeInterfaceFont(row.interface_font),
+    interface_font: normalizeReadingFont(row.interface_font),
     weak_threshold: asNumber(row.weak_threshold, fallback.weak_threshold),
     strong_threshold: asNumber(row.strong_threshold, fallback.strong_threshold),
     dropping_threshold: asNumber(row.dropping_threshold, fallback.dropping_threshold),

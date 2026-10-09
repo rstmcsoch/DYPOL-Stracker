@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultSettings } from '../lib/defaults'
-import { INTERFACE_FONT_OPTIONS, INTERFACE_FONT_STORAGE_KEY } from '../lib/fonts'
+import { readingFontOption } from '../lib/fonts'
 import type { AppSettings } from '../types'
 
 const mocks = vi.hoisted(() => ({ useData: vi.fn(), notify: vi.fn() }))
@@ -13,10 +13,11 @@ vi.mock('./ToastContext', () => ({ useToast: () => ({ notify: mocks.notify }) })
 import { AppearanceProvider, useAppearance } from './AppearanceContext'
 
 function AppearanceProbe() {
-  const { interfaceFont, setInterfaceFont } = useAppearance()
+  const { readingFont, theme, setTheme } = useAppearance()
   return <>
-    <output data-testid="active-font">{interfaceFont}</output>
-    <button type="button" onClick={() => setInterfaceFont('sora')}>Use Sora</button>
+    <output data-testid="active-font">{readingFont}</output>
+    <output data-testid="active-theme">{theme}</output>
+    <button type="button" onClick={() => setTheme('dark')}>Use dark theme</button>
   </>
 }
 
@@ -46,60 +47,74 @@ beforeEach(() => {
   })
   mocks.useData.mockReset()
   mocks.notify.mockReset()
-  localStorage.clear()
 })
 
 afterEach(() => {
   cleanup()
-  document.documentElement.style.removeProperty('--app-font-family')
+  delete document.documentElement.dataset.appFont
+  document.documentElement.style.removeProperty('--reading-font-family')
+  document.documentElement.style.removeProperty('--body-scale')
 })
 
-describe('AppearanceProvider interface font lifecycle', () => {
-  it('restores the saved account font to the document root when the app session mounts', () => {
+describe('AppearanceProvider committed Reading font lifecycle', () => {
+  it('applies the saved account Reading font to content tokens while leaving identity fixed', () => {
     mountAppearance(settingsFor('user-one', 'open-sans'))
 
     expect(screen.getByTestId('active-font').textContent).toBe('open-sans')
-    expect(document.documentElement.style.getPropertyValue('--app-font-family'))
-      .toBe(INTERFACE_FONT_OPTIONS.find(option => option.value === 'open-sans')?.stack)
+    expect(document.documentElement.dataset.appFont).toBe('active')
+    expect(document.documentElement.style.getPropertyValue('--reading-font-family'))
+      .toBe(readingFontOption('open-sans').stack)
+    expect(document.documentElement.style.getPropertyValue('--body-scale')).toBe('1.00')
+    // The identity token is static CSS, never written or replaced by account settings.
+    expect(document.documentElement.style.getPropertyValue('--font-identity')).toBe('')
   })
 
-  it('applies a new choice immediately and persists it through the account settings row', async () => {
+  it('uses Lexend as the safe default for accounts without a valid saved value', () => {
+    mountAppearance({ ...defaultSettings('user-one'), interface_font: 'default' })
+    expect(screen.getByTestId('active-font').textContent).toBe('default')
+    expect(document.documentElement.style.getPropertyValue('--reading-font-family'))
+      .toBe(readingFontOption('default').stack)
+
+    cleanup()
+    mountAppearance({ ...defaultSettings('user-two'), interface_font: 'bad-value' as AppSettings['interface_font'] })
+    expect(screen.getByTestId('active-font').textContent).toBe('default')
+    expect(document.documentElement.style.getPropertyValue('--reading-font-family'))
+      .toBe(readingFontOption('default').stack)
+  })
+
+  it('never persists a font as a side effect of mounting the appearance provider', () => {
     const upsert = vi.fn().mockResolvedValue(undefined)
-    mountAppearance(settingsFor('user-one', 'default'), upsert)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Use Sora' }))
-
-    expect(document.documentElement.style.getPropertyValue('--app-font-family'))
-      .toBe(INTERFACE_FONT_OPTIONS.find(option => option.value === 'sora')?.stack)
-    // The device cache the boot script reads on the next load mirrors the new choice.
-    expect(localStorage.getItem(INTERFACE_FONT_STORAGE_KEY)).toBe('sora')
-    await waitFor(() => expect(upsert).toHaveBeenCalledWith('app_settings', expect.objectContaining({
-      user_id: 'user-one',
-      interface_font: 'sora'
-    })))
+    mountAppearance(settingsFor('user-one', 'sora'), upsert)
+    expect(upsert).not.toHaveBeenCalled()
   })
 
-  it('clears one account font on logout and restores the next account font on login', () => {
+  it('clears the previous account font on logout and applies only the next account value', () => {
     const firstSession = mountAppearance(settingsFor('user-one', 'sora'))
-    expect(document.documentElement.style.getPropertyValue('--app-font-family'))
-      .toBe(INTERFACE_FONT_OPTIONS.find(option => option.value === 'sora')?.stack)
+    expect(document.documentElement.style.getPropertyValue('--reading-font-family'))
+      .toBe(readingFontOption('sora').stack)
 
     firstSession.unmount()
-    expect(document.documentElement.style.getPropertyValue('--app-font-family'))
-      .toBe(INTERFACE_FONT_OPTIONS.find(option => option.value === 'default')?.stack)
+    expect(document.documentElement.dataset.appFont).toBeUndefined()
+    expect(document.documentElement.style.getPropertyValue('--reading-font-family')).toBe('')
+    expect(document.documentElement.style.getPropertyValue('--body-scale')).toBe('')
 
     mountAppearance(settingsFor('user-two', 'open-sans'))
-    expect(document.documentElement.style.getPropertyValue('--app-font-family'))
-      .toBe(INTERFACE_FONT_OPTIONS.find(option => option.value === 'open-sans')?.stack)
+    expect(screen.getByTestId('active-font').textContent).toBe('open-sans')
+    expect(document.documentElement.style.getPropertyValue('--reading-font-family'))
+      .toBe(readingFontOption('open-sans').stack)
   })
 
-  it('mirrors the resolved font into the boot cache and clears it on logout', () => {
-    const session = mountAppearance(settingsFor('user-one', 'sora'))
-    expect(localStorage.getItem(INTERFACE_FONT_STORAGE_KEY)).toBe('sora')
+  it('keeps the header theme control independent and writes only the theme field', async () => {
+    const upsert = vi.fn().mockResolvedValue(undefined)
+    mountAppearance(settingsFor('user-one', 'poppins'), upsert)
 
-    session.unmount()
-    expect(localStorage.getItem(INTERFACE_FONT_STORAGE_KEY)).toBeNull()
-    expect(document.documentElement.style.getPropertyValue('--app-font-family'))
-      .toBe(INTERFACE_FONT_OPTIONS.find(option => option.value === 'default')?.stack)
+    fireEvent.click(screen.getByRole('button', { name: 'Use dark theme' }))
+    await waitFor(() => expect(upsert).toHaveBeenCalledWith('app_settings', expect.objectContaining({
+      user_id: 'user-one',
+      theme: 'dark',
+      interface_font: 'poppins'
+    })))
+    expect(document.documentElement.style.getPropertyValue('--reading-font-family'))
+      .toBe(readingFontOption('poppins').stack)
   })
 })

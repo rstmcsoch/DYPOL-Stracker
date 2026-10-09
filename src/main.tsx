@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-// All selectable interface families are self-hosted as subset WOFF2 files under
+// Identity and selectable Reading families are self-hosted as subset WOFF2 files under
 // /assets/fonts/ and declared in styles/fonts.css with unicode-range + font-display:
 // swap. The boot script in index.html preloads the active family's regular face.
 import './styles/fonts.css'

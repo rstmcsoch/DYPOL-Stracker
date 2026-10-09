@@ -212,21 +212,21 @@ export function AppFrame() {
 }
 
 function NavItem({ to, label, icon: Icon, exact, onClick }: NavigationItem & { onClick?: () => void }) {
-  return <NavLink to={to} end={exact} onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+  return <NavLink to={to} end={exact} onClick={onClick} className={({ isActive }) => `nav-link type-nav ${isActive ? 'active' : ''}`}>
     <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
   </NavLink>
 }
 
 function MobileNavItem({ item }: { item: NavigationItem }) {
   const Icon = item.icon
-  return <NavLink to={item.to} end={item.exact} className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}>
+  return <NavLink to={item.to} end={item.exact} className={({ isActive }) => `mobile-nav-item type-nav ${isActive ? 'active' : ''}`}>
     <Icon size={20} strokeWidth={1.8} /><span>{item.label === 'Mistake notebook' ? 'Mistakes' : item.label}</span>
   </NavLink>
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return <NavLink className={`brand ${compact ? 'brand-compact' : ''}`} to="/" aria-label="Stracker home">
-    <span className="brand-mark"><span>S</span><i>✳</i></span><span className="brand-type">Stracker<small>JEE STUDY HOME</small></span>
+    <span className="brand-mark"><span>S</span><i>✳</i></span><span className="brand-type type-brand">Stracker<small className="type-overline">JEE STUDY HOME</small></span>
   </NavLink>
 }
 

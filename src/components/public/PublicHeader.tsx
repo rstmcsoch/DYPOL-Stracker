@@ -18,7 +18,7 @@ export function PublicBrand({ compact = false }: { compact?: boolean }) {
   return <Link className={`pub-brand ${compact ? 'pub-brand-compact' : ''}`} to="/" aria-label="Stracker home">
     <span className="brand-mark" aria-hidden="true"><span>S</span><i>✳</i></span>
     <span className="pub-brand-text">
-      <strong>Stracker</strong>
+      <strong className="type-brand">Stracker</strong>
       <small>by DYPOL LABS</small>
     </span>
   </Link>

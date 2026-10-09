@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { AlertOctagon, Bell, CalendarDays, Check, Cloud, Database, KeyRound, LogOut, Palette, RotateCcw, Save, Shield, SlidersHorizontal, Target, Timer, Type, UserRound } from 'lucide-react'
@@ -8,7 +8,7 @@ import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
-import { INTERFACE_FONT_OPTIONS } from '../lib/fonts'
+import { readingFontOption, READING_FONT_OPTIONS } from '../lib/fonts'
 import { settingsFieldErrors, settingsSchema } from '../lib/settings-validation'
 import { passwordLengthError } from '../lib/auth-rules'
 import { AISettingsSection } from '../components/ai/AISettingsSection'
@@ -271,6 +271,7 @@ export default function SettingsPage() {
   }
 
   const auto = draft.theme === 'auto'
+  const selectedReadingFont = readingFontOption(draft.interface_font)
   return <div className="content-page settings-page">
     <PageHeader eyebrow="MAKE IT YOUR OWN" title="Settings" subtitle="Small adjustments for the way you study." doodle={<SlidersHorizontal size={19} />} />
 
@@ -350,18 +351,26 @@ export default function SettingsPage() {
             <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Notebook theme" note="Choose paper, blackboard, or follow this device." /><div className="settings-section-content"><div className="theme-choice-grid" role="radiogroup" aria-label="Theme preference">{([['light','Warm paper','Light notebook paper'],['dark','Chalkboard','Dark, high-contrast study mode'],['auto','Auto','Follow your device setting']] as const).map(([value,title,desc]) => <label className={`theme-choice theme-choice-${value} ${draft.theme === value ? 'selected' : ''}`} key={value}><input type="radio" name="theme" value={value} checked={draft.theme === value} onChange={() => patch('theme', value as ThemeMode)} /><span className="theme-swatch"><i /><i /><i /></span><strong>{title}</strong><small>{desc}</small>{draft.theme === value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> {auto ? 'Auto theme follows the device appearance.' : 'Theme choice is saved with your account.'}</div></div></NotebookCard>
 
             <NotebookCard className="settings-section">
-              <SectionLabel icon={<Type size={18} />} title="Interface font" note="One font across the entire app, including headings, navigation and controls." />
+              <SectionLabel icon={<Type size={18} />} title="Reading font" note="Changes body text, menus and buttons. Headings and the Stracker identity stay the same." />
               <div className="settings-section-content">
-                <div className="font-choice-grid" role="radiogroup" aria-label="Interface font">
-                  {INTERFACE_FONT_OPTIONS.map(option => <label className={`font-choice ${draft.interface_font === option.value ? 'selected' : ''}`} key={option.value}>
+                <div className="font-choice-grid" role="radiogroup" aria-label="Reading font">
+                  {READING_FONT_OPTIONS.map(option => <label className={`font-choice ${draft.interface_font === option.value ? 'selected' : ''}`} key={option.value} style={{ '--body-scale': option.scale } as CSSProperties}>
                     <input type="radio" name="interface_font" value={option.value} checked={draft.interface_font === option.value} onChange={() => patch('interface_font', option.value)} />
-                    {/* These two samples intentionally preview each option; the rest of the UI inherits the global token. */}
                     <span className="font-choice-sample" style={{ fontFamily: option.stack }} aria-hidden="true">Aa</span>
-                    <span className="font-choice-copy"><strong style={{ fontFamily: option.stack }}>{option.label}</strong><small>{option.note}</small></span>
+                    <span className="font-choice-copy" style={{ fontFamily: option.stack }}><strong>{option.label}</strong><small>{option.description}</small></span>
                     {draft.interface_font === option.value && <span className="theme-check"><Check size={13} /></span>}
                   </label>)}
                 </div>
-                <div className="settings-note-line"><Type size={15} /> Save to apply it across every page, heading, sidebar, button, form, dialog, chart label and notification. JSON, CSV, PDF and DOCX exports keep their own typography.</div>
+                <div className="typography-live-preview" style={{ '--font-body': selectedReadingFont.stack, '--body-scale': selectedReadingFont.scale } as CSSProperties} aria-live="polite">
+                  <div className="typography-preview-copy">
+                    <span className="type-overline">LIVE PREVIEW</span>
+                    <h2 className="type-h2">A clearer study session</h2>
+                    <p className="type-body">Keep your notes easy to follow, so you can spend more time understanding each idea.</p>
+                    <span className="type-caption">Your saved preference changes content text, not headings.</span>
+                  </div>
+                  <button className="type-button typography-preview-button" type="button">Review today’s plan</button>
+                </div>
+                <div className="settings-note-line"><Type size={15} /> The preview updates as you choose. Save applies the Reading font to authenticated content; public pages keep their fixed typography.</div>
               </div>
             </NotebookCard>
           </fieldset>

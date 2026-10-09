@@ -1,75 +1,77 @@
-import { INTERFACE_FONTS, type InterfaceFont } from '../types/index.js'
+import { READING_FONTS, type ReadingFont } from '../types/index.js'
 
 /**
- * Registry for the one application-wide interface font.
- *
- * `stack` is the canonical mapping from the persisted preference to
- * `--app-font-family`. AppearanceContext applies it once to `<html>`; every semantic
- * typography token in base.css aliases that variable, so components inherit the same
- * family instead of maintaining their own choices. Families are self-hosted as subset
- * WOFF2 files in src/styles/fonts.css (served from /assets/fonts/ with font-display:
- * swap) and each stack ends in a system fallback.
+ * Registry for account-scoped reading fonts. Identity typography is intentionally
+ * excluded: Patrick Hand is a fixed design role, never an option in Settings.
+ * Font files are self-hosted under /assets/fonts/ and declared in fonts.css.
  */
-export interface InterfaceFontOption {
-  value: InterfaceFont
+export interface ReadingFontOption {
+  value: ReadingFont
   label: string
-  note: string
-  /** Fallback chain used when the family is still loading or cannot be fetched. */
+  description: string
+  /** Locally bundled family stack; also used by the Settings font previews. */
   stack: string
+  /** Optical size compensation applied to content typography only. */
+  scale: number
 }
 
-/** The Default cut is the original Caveat handwriting font, bundled locally. */
-const CAVEAT_STACK = "'Caveat', 'Segoe Print', 'Bradley Hand', cursive"
-
 const FALLBACK_STACK = "'Trebuchet MS', system-ui, sans-serif"
+const PATRICK_HAND_STACK = "'Patrick Hand', 'Segoe Print', 'Bradley Hand', cursive"
 
-export const INTERFACE_FONT_OPTIONS: readonly InterfaceFontOption[] = [
-  { value: 'default', label: 'Default', note: 'Caveat — the original handwriting notebook font', stack: CAVEAT_STACK },
-  { value: 'poppins', label: 'Poppins', note: 'Rounded geometric sans', stack: `'Poppins', ${FALLBACK_STACK}` },
-  { value: 'sora', label: 'Sora', note: 'Compact technical sans', stack: `'Sora', ${FALLBACK_STACK}` },
-  { value: 'open-sans', label: 'Open Sans', note: 'Neutral and readable; covers Greek letters, ₹ and maths symbols', stack: `'Open Sans', ${FALLBACK_STACK}` }
+export const READING_FONT_OPTIONS: readonly ReadingFontOption[] = [
+  {
+    value: 'default',
+    label: 'Lexend',
+    description: 'Lexend — a clear, readable font for your study sessions.',
+    stack: `'Lexend', ${FALLBACK_STACK}`,
+    scale: 1.00
+  },
+  {
+    value: 'poppins',
+    label: 'Poppins',
+    description: 'Rounded letterforms with a friendly rhythm.',
+    stack: `'Poppins', ${FALLBACK_STACK}`,
+    scale: 0.95
+  },
+  {
+    value: 'sora',
+    label: 'Sora',
+    description: 'Geometric shapes for a crisp, modern reading feel.',
+    stack: `'Sora', ${FALLBACK_STACK}`,
+    scale: 0.97
+  },
+  {
+    value: 'open-sans',
+    label: 'Open Sans',
+    description: 'A familiar, neutral font for long study sessions and formulas.',
+    stack: `'Open Sans', ${FALLBACK_STACK}`,
+    scale: 1.00
+  }
 ]
 
-/** Public site always uses Caveat — never the saved app preference. */
-export const PUBLIC_FONT_STACK = CAVEAT_STACK
+/** Public pages never consult account preferences. */
+export const PUBLIC_FONT_STACK = PATRICK_HAND_STACK
 
-/**
- * Coerce anything that may arrive from IndexedDB, Supabase, or an older backup into a
- * supported font. Rows saved before this preference existed resolve to the default cut,
- * so no migration step or error state is required for existing accounts.
- */
-export function normalizeInterfaceFont(value: unknown): InterfaceFont {
-  return typeof value === 'string' && (INTERFACE_FONTS as readonly string[]).includes(value)
-    ? value as InterfaceFont
+/** Resolve old/missing/invalid saved values to the Lexend default. */
+export function normalizeReadingFont(value: unknown): ReadingFont {
+  return typeof value === 'string' && (READING_FONTS as readonly string[]).includes(value)
+    ? value as ReadingFont
     : 'default'
 }
 
-export function interfaceFontOption(font: InterfaceFont): InterfaceFontOption {
-  return INTERFACE_FONT_OPTIONS.find(option => option.value === font) ?? INTERFACE_FONT_OPTIONS[0]!
+export function readingFontOption(font: ReadingFont): ReadingFontOption {
+  return READING_FONT_OPTIONS.find(option => option.value === normalizeReadingFont(font)) ?? READING_FONT_OPTIONS[0]!
 }
 
-/** Apply the selected stack at the document boundary, never on individual components. */
-export function applyInterfaceFont(root: HTMLElement, font: InterfaceFont): void {
-  const option = interfaceFontOption(font)
-  root.style.setProperty('--app-font-family', option.stack)
+/** Apply only the user-selectable content family and its optical scale. */
+export function applyReadingFont(root: HTMLElement, font: ReadingFont): void {
+  const option = readingFontOption(font)
+  root.style.setProperty('--reading-font-family', option.stack)
+  root.style.setProperty('--body-scale', option.scale.toFixed(2))
 }
 
-/**
- * Device-level cache of the interface font. The boot script in index.html reads it
- * before React mounts so a returning reader never sees the default family flash;
- * AppearanceContext keeps it in sync with the resolved account preference. The cache
- * is per device (the boot script runs before sign-in) and is cleared on logout.
- */
-export const INTERFACE_FONT_STORAGE_KEY = 'stracker-interface-font'
-
-export function cacheInterfaceFont(font: InterfaceFont): void {
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(INTERFACE_FONT_STORAGE_KEY, font)
-  } catch { /* a blocked store must never break appearance */ }
-}
-
-export function clearInterfaceFontCache(): void {
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(INTERFACE_FONT_STORAGE_KEY)
-  } catch { /* a blocked store must never break appearance */ }
+/** Clear transient document state on sign-out so no account preference can leak. */
+export function clearReadingFont(root: HTMLElement): void {
+  root.style.removeProperty('--reading-font-family')
+  root.style.removeProperty('--body-scale')
 }

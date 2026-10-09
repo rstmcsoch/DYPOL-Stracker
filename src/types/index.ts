@@ -8,12 +8,15 @@ export type RetryStatus = 'pending' | 'retried'
 export type ThemeMode = 'light' | 'dark' | 'auto'
 
 /**
- * Interface fonts the owner can choose for the Stracker UI.
- * Only default cuts of each family are exposed — no variants, weights, or pairings —
- * and the value is a closed union so no arbitrary CSS can be stored.
+ * User-selectable Reading fonts affect authenticated content only. Patrick Hand is
+ * reserved for identity typography and is deliberately not part of this union.
  */
-export const INTERFACE_FONTS = ['default', 'poppins', 'sora', 'open-sans'] as const
-export type InterfaceFont = (typeof INTERFACE_FONTS)[number]
+export const READING_FONTS = ['default', 'poppins', 'sora', 'open-sans'] as const
+export type ReadingFont = (typeof READING_FONTS)[number]
+
+/** @deprecated Kept as a source-compatible alias for the legacy database column. */
+export const INTERFACE_FONTS = READING_FONTS
+export type InterfaceFont = ReadingFont
 
 /* ------------------------------------------------------------------ */
 /* Practice / DPP log                                                  */
@@ -300,7 +303,8 @@ export interface AppSettings extends BaseRecord {
   advanced_exam_date: string
   target_score: number
   theme: ThemeMode
-  interface_font: InterfaceFont
+  /** Backward-compatible database column now presented as Reading font in the UI. */
+  interface_font: ReadingFont
   weak_threshold: number
   strong_threshold: number
   dropping_threshold: number

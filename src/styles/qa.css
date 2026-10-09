@@ -28,7 +28,7 @@
 
 @media (max-width: 760px) {
   .weak-mobile-disclosure { display: flex; justify-content: center; width: 100%; margin: 10px 0 0; }
-  .weak-mobile-disclosure button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 7px 13px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--ink-soft); background: var(--paper); cursor: pointer; font: 600 13px var(--font-body); }
+  .weak-mobile-disclosure button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 7px 13px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--ink-soft); background: var(--paper); cursor: pointer; font:600 13px var(--font-body); }
   .weak-mobile-extra { display: none; }
   .weak-page.mobile-tested-expanded .weak-mobile-extra { display: table-row; }
   .settings-header-actions { justify-content: flex-end; }
