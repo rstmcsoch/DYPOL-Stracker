@@ -1,0 +1,93 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [apk-build]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Check Supabase keys
+        env:
+          URL: ${{ secrets.VITE_SUPABASE_URL }}
+          KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then
+            echo "::error::Add repo secrets VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (Settings > Secrets and variables > Actions), then re-run."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Build web app
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx vite build
+
+      - name: Add Capacitor (not saved to package.json)
+        run: npm install --no-save @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
+
+      - name: Create Android project
+        run: |
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "app.dypol.stracker",
+            "appName": "Stracker",
+            "webDir": "dist",
+            "android": { "backgroundColor": "#f7f4ec" }
+          }
+          EOF
+          npx cap add android
+          npx cap sync android
+
+      - name: App icon
+        run: |
+          if [ -f public/icons/icon-512.png ]; then
+            R=android/app/src/main/res
+            rm -rf $R/mipmap-anydpi-v26
+            for s in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+              d=${s%%:*}; px=${s##*:}
+              convert public/icons/icon-512.png -resize ${px}x${px} $R/mipmap-$d/ic_launcher.png
+              cp $R/mipmap-$d/ic_launcher.png $R/mipmap-$d/ic_launcher_round.png
+              rm -f $R/mipmap-$d/ic_launcher_foreground.png
+            done
+          fi
+
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk DYPOL-Stracker.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DYPOL-Stracker-apk
+          path: DYPOL-Stracker.apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "apk-${{ github.run_number }}" DYPOL-Stracker.apk \
+            --title "DYPOL Stracker APK #${{ github.run_number }}" \
+            --notes "Debug-signed APK. Install on Android (allow unknown sources)."
