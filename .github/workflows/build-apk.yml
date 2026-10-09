@@ -95,18 +95,50 @@ jobs:
           # status bar on current Android builds that honor this compatibility path.
           sed -i 's/targetSdkVersion 36/targetSdkVersion 35/g' android/variables.gradle android/app/build.gradle 2>/dev/null || true
 
-      - name: Apply Stracker launcher icon
+      - name: Apply Stracker launcher and adaptive icons
         run: |
           if ! command -v convert >/dev/null 2>&1; then
             sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
           fi
           R=android/app/src/main/res
-          for s in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
-            d=${s%%:*}; px=${s##*:}
-            convert public/icons/icon-512.png -resize ${px}x${px} $R/mipmap-$d/ic_launcher.png
-            cp $R/mipmap-$d/ic_launcher.png $R/mipmap-$d/ic_launcher_round.png
+          # Legacy launcher icons used on older Android versions.
+          # Adaptive foregrounds are separate resources and must also be replaced.
+          for s in mdpi:48:108 hdpi:72:162 xhdpi:96:216 xxhdpi:144:324 xxxhdpi:192:432; do
+            density=${s%%:*}; rest=${s#*:}; legacy=${rest%%:*}; adaptive=${rest##*:}
+            convert public/icons/icon-512.png -resize ${legacy}x${legacy} $R/mipmap-$density/ic_launcher.png
+            cp $R/mipmap-$density/ic_launcher.png $R/mipmap-$density/ic_launcher_round.png
+            # Add transparent padding so the full logo stays inside Android's adaptive-icon safe zone.
+            convert public/icons/icon-512.png -resize ${adaptive}x${adaptive} -resize 80% -gravity center -background none -extent ${adaptive}x${adaptive} $R/mipmap-$density/ic_launcher_foreground.png
           done
+          # Match the adaptive-icon background to the exact edge color of the source logo.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
 
+          res = Path("android/app/src/main/res")
+          pixel = subprocess.check_output(["convert", "public/icons/icon-512.png", "-format", "%[pixel:p{0,0}]", "info:"], text=True)
+          rgb = [int(value) for value in re.findall(r"\d+", pixel)]
+          if len(rgb) < 3 or any(value < 0 or value > 255 for value in rgb[:3]):
+              raise SystemExit(f"Could not determine logo background color from {pixel!r}")
+          background = "#" + "".join(f"{value:02x}" for value in rgb[:3])
+          (res / "values" / "stracker_icon.xml").write_text(
+              "<resources>\n    <color name=\"stracker_launcher_background\">" + background + "</color>\n</resources>\n"
+          )
+          adaptive = '''<?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/stracker_launcher_background" />
+              <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+          </adaptive-icon>
+          '''
+          folder = res / "mipmap-anydpi-v26"
+          folder.mkdir(parents=True, exist_ok=True)
+          for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
+              (folder / name).write_text(adaptive.strip() + "\n")
+          print(f"Applied Stracker logo to legacy and adaptive Android launcher icons; background={background}")
+          PY
+          grep -q '@mipmap/ic_launcher_foreground' $R/mipmap-anydpi-v26/ic_launcher.xml
+          test -s $R/mipmap-xxxhdpi/ic_launcher_foreground.png
       - name: Build APK
         working-directory: android
         run: |
