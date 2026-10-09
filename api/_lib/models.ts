@@ -3,6 +3,7 @@ import { endpointFor, modelOptionsFromApi, providerBaseUrl, validateCustomBaseUr
 import { ApiError } from './http.js'
 import { AIError, normalizeHttpProviderError } from './ai-errors.js'
 import { fetchCustomProvider } from './secure-fetch.js'
+import { stripControlChars } from '../../src/lib/control-chars.js'
 import type { AIModelOption } from './registry.js'
 
 export interface ModelDiscoveryResult {
@@ -15,13 +16,16 @@ function modelHeaders(setup: ProviderSetup, apiKey: string): Record<string, stri
   if (setup.protocol === 'google') return { 'x-goog-api-key': apiKey }
   if (setup.protocol === 'anthropic-compatible') return { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
   const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` }
-  if (setup.organizationId) headers['OpenAI-Organization'] = setup.organizationId
+  if (setup.organizationId) {
+    const organization = stripControlChars(setup.organizationId).trim()
+    if (organization) headers['OpenAI-Organization'] = organization
+  }
   return headers
 }
 
 async function getModels(providerId: string, url:string,headers:Record<string,string>,signal:AbortSignal,custom=false):Promise<Record<string,unknown>> {
   let response:Response
-  try { response = custom ? await fetchCustomProvider(url,{headers,signal}) : await fetch(url,{headers,signal}) }
+  try { response = custom ? await fetchCustomProvider(url,{headers,signal}) : await fetch(url,{headers,signal,redirect:'error'}) }
   catch {
     if (signal.aborted) throw new AIError('TIMEOUT', { provider: providerId })
     throw new AIError('NETWORK_ERROR', { provider: providerId })

@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { defaultExamTracks, defaultSettings, normalizeSettings, seedChapters } from '../lib/defaults'
 import { assetKey, localDb } from '../lib/database'
+import { isOwnedStoragePath } from '../lib/storage-path'
 import { createId } from '../lib/id'
 import { relatedRowsForRemoval } from '../lib/data-relations'
 import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
@@ -180,7 +181,8 @@ async function uploadPendingImage(record: Record<string, unknown>, userId: strin
 
 async function retirePreviousMistakeImage(record: Record<string, unknown>): Promise<Record<string, unknown>> {
   const previousPath = typeof record.image_previous_path === 'string' ? record.image_previous_path : ''
-  if (previousPath && previousPath !== record.image_path && supabase) {
+  const owner = typeof record.user_id === 'string' ? record.user_id : ''
+  if (previousPath && previousPath !== record.image_path && supabase && isOwnedStoragePath(owner, previousPath)) {
     const { error } = await supabase.storage.from('mistake-images').remove([previousPath])
     if (error) throw error
   }
@@ -236,7 +238,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           const { error } = await supabase.from(change.table).delete().eq('id', change.id).eq('user_id', userId)
           if (error) throw error
           if (change.table === 'mistakes') {
-            const paths = [change.record?.image_path, change.record?.image_previous_path].filter((path): path is string => typeof path === 'string' && path.length > 0)
+            const paths = [change.record?.image_path, change.record?.image_previous_path].filter((path): path is string => typeof path === 'string' && isOwnedStoragePath(userId, path))
             const uniquePaths = [...new Set(paths)]
             if (uniquePaths.length) {
               const { error: storageError } = await supabase.storage.from('mistake-images').remove(uniquePaths)
@@ -308,7 +310,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             const cached = queryDataRef.current?.mistakes.find(item => item.id === row.id)
             const asset = await localDb.assets.get(assetKey(userId, String(row.id)))
             if (cached?.image_data || asset?.data_url) return { ...row, image_data: cached?.image_data ?? asset?.data_url, image_preview: cached?.image_data ?? asset?.data_url }
-            if (typeof row.image_path === 'string' && row.image_path) {
+            if (typeof row.image_path === 'string' && isOwnedStoragePath(userId, row.image_path)) {
               const { data: signed } = await cloud.storage.from('mistake-images').createSignedUrl(row.image_path, 3600)
               return { ...row, image_preview: signed?.signedUrl ?? null }
             }

@@ -8,6 +8,7 @@ import { useData } from '../../contexts/DataContext'
 import { useToast } from '../../contexts/ToastContext'
 import { Button, Dialog, IconButton, StatusBadge } from '../ui'
 import { AIProviderMark } from './AIProviderMark'
+import { isSafeAppPath } from '../../lib/safe-path'
 
 const SUGGESTIONS = [
   'How am I doing in each subject?',
@@ -51,7 +52,7 @@ function ActionConfirmationCard({ action,messageId }: { action:AIActionConfirmat
 function AssistantMessage({ message }: { message:AIMessage }) {
   const { providers,retryLast } = useAI()
   const navigate = useNavigate()
-  const resultRoute = typeof message.result?.route === 'string' && message.result.route.startsWith('/') ? message.result.route : null
+  const resultRoute = typeof message.result?.route === 'string' && isSafeAppPath(message.result.route) ? message.result.route : null
   const providerId = message.providerId ?? null
   const providerName = activeProviderLabel(providerId,providers)
   const fallbackName = message.fallbackFrom?.providerName || activeProviderLabel(message.fallbackFrom?.providerId,providers)

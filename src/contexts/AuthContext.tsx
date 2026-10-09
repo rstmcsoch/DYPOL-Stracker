@@ -59,7 +59,7 @@ function friendlyAuthError(message: string): string {
 /** Sign-up specific mapping: the shared mapper would hide the useful cases. */
 function friendlySignUpError(message: string): string {
   const normalized = message.toLowerCase()
-  if (normalized.includes('already registered') || normalized.includes('already been registered')) return 'That email already has a Stracker account. Log in instead, or reset the password.'
+  if (normalized.includes('already registered') || normalized.includes('already been registered')) return 'Could not create a new account with those details. If you already use Stracker, log in or reset the password.'
   if (normalized.includes('signups not allowed') || normalized.includes('signup disabled')) return 'This deployment does not allow new accounts to be created yet. Enable email sign-ups in Supabase Auth, or sign in with an existing account.'
   if (normalized.includes('password should be') || normalized.includes('password is too short')) return 'Use at least 8 characters for your password.'
   if (normalized.includes('unable to validate email') || normalized.includes('invalid email')) return 'That email address does not look right. Check it and try again.'

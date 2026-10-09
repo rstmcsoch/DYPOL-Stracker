@@ -20,6 +20,16 @@ describe('production deployment freshness contract', () => {
     expect(appHeaders.get('cache-control')).toContain('must-revalidate')
     expect(appHeaders.get('cdn-cache-control')).toBe('no-store')
     expect(appHeaders.get('vercel-cdn-cache-control')).toBe('no-store')
+    expect(appHeaders.get('x-content-type-options')).toBe('nosniff')
+    expect(appHeaders.get('referrer-policy')).toBe('strict-origin-when-cross-origin')
+    expect(appHeaders.get('x-frame-options')).toBe('DENY')
+    const csp = appHeaders.get('content-security-policy') ?? ''
+    expect(csp).toContain("default-src 'self'")
+    expect(csp).toContain("script-src 'self'")
+    expect(csp).toContain("frame-ancestors 'none'")
+    expect(csp).not.toContain('unsafe-eval')
+    expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/)
+    expect(csp).toContain('https://*.supabase.co')
     expect(vercel.rewrites).toContainEqual({ source: '/(.*)', destination: '/index.html' })
   })
 
