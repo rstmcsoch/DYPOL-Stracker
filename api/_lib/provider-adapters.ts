@@ -1,5 +1,6 @@
 import type { AIProtocol, AIProviderId, ProviderConfigRow } from './registry.js'
 import { endpointFor, providerBaseUrl, validateCustomBaseUrl } from './registry.js'
+import { stripControlChars } from '../../src/lib/control-chars.js'
 import { fetchCustomProvider } from './secure-fetch.js'
 import {
   AIError, normalizeHttpProviderError, normalizeUnknownError, parseProviderErrorBody, safeProviderText
@@ -76,7 +77,7 @@ async function readErrorBody(response: Response): Promise<string> {
 async function checkedFetch(config: Pick<ProviderCall, 'providerId' | 'modelId' | 'signal'>, url: string, init: RequestInit, custom = false): Promise<Response> {
   let response: Response
   try {
-    response = custom ? await fetchCustomProvider(url, init) : await fetch(url, init)
+    response = custom ? await fetchCustomProvider(url, init) : await fetch(url, { ...init, redirect: 'error' })
   } catch (error) {
     if (init.signal?.aborted) throw error
     throw normalizeUnknownError(error, { provider: config.providerId, model: config.modelId })
@@ -97,7 +98,10 @@ function jsonHeaders(config: ProviderCall): Record<string, string> {
     headers['anthropic-version'] = '2023-06-01'
   } else {
     headers.Authorization = `Bearer ${config.apiKey}`
-    if (config.organizationId) headers['OpenAI-Organization'] = config.organizationId
+    if (config.organizationId) {
+      const organization = stripControlChars(config.organizationId).trim()
+      if (organization) headers['OpenAI-Organization'] = organization
+    }
   }
   return headers
 }
