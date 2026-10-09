@@ -1133,7 +1133,7 @@
 
 .pub-footer {
   margin-top: clamp(20px, 2.8vw, 32px);
-  padding-bottom: clamp(40px, 4vw, 60px);
+  padding-bottom: 0;
   border-top: 1px solid var(--line);
   background: var(--paper-soft);
 }
