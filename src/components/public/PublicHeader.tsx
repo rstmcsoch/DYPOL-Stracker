@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu, X } from 'lucide-react'
+import { Menu, Moon, Sun, X } from 'lucide-react'
+
+export type PublicTheme = 'light' | 'dark'
 
 /**
  * The public section list drives both the desktop navigation and the mobile menu, so a
@@ -24,12 +26,38 @@ export function PublicBrand({ compact = false }: { compact?: boolean }) {
   </Link>
 }
 
+/** Homepage-only switch: its state never reaches AppearanceContext or account settings. */
+function PublicThemeToggle({ theme, onToggle }: { theme: PublicTheme; onToggle: () => void }) {
+  const isDark = theme === 'dark'
+  const action = isDark ? 'Switch to light mode' : 'Switch to night mode'
+  const label = isDark ? 'Night mode on' : 'Light mode on'
+
+  return <button
+    type="button"
+    role="switch"
+    aria-checked={isDark}
+    aria-label={`${label}. ${action}.`}
+    title={`${label} — ${action}`}
+    className={`theme-toggle pub-theme-toggle ${isDark ? 'theme-toggle-dark' : 'theme-toggle-light'}`}
+    onClick={onToggle}
+  >
+    <span className="theme-toggle-track" aria-hidden="true">
+      <Sun size={13} className="theme-toggle-icon theme-toggle-sun" />
+      <Moon size={13} className="theme-toggle-icon theme-toggle-moon" />
+      <span className="theme-toggle-thumb" />
+    </span>
+    <span className="theme-toggle-copy">
+      <strong>{isDark ? 'Night' : 'Light'}</strong>
+      <small>Theme</small>
+    </span>
+  </button>
+}
+
 /**
- * Public-site header: wordmark, section navigation, and the two account actions.
- * The mobile trigger only appears when the navigation cannot fit, and the panel it
- * opens closes on link tap, Escape, an outside tap, or a route change.
+ * Public-site header: wordmark, section navigation, independent theme action, and
+ * account actions. The mobile trigger keeps its existing close behaviours and menu.
  */
-export function PublicHeader() {
+export function PublicHeader({ theme, onThemeToggle }: { theme: PublicTheme; onThemeToggle: () => void }) {
   const [open, setOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -63,6 +91,7 @@ export function PublicHeader() {
       <nav className="pub-nav" aria-label="Stracker sections">
         {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-nav-link" href={section.href}>{section.label}</a>)}
       </nav>
+      <PublicThemeToggle theme={theme} onToggle={onThemeToggle} />
       <div className="pub-header-actions">
         <Link className="button button-quiet button-sm" to="/login">Log In</Link>
         <Link className="button button-primary button-sm" to="/signup">Sign Up</Link>

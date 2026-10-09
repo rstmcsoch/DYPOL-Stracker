@@ -1,12 +1,24 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowDown, ArrowRight, Check, LockKeyhole } from 'lucide-react'
-import { PublicHeader } from '../components/public/PublicHeader'
+import { PublicHeader, type PublicTheme } from '../components/public/PublicHeader'
 import { PublicFooter } from '../components/public/PublicFooter'
 import { NotebookPreview } from '../components/public/NotebookPreview'
 import {
   AiSection, DypolSection, FeatureSection, FinalCta, HowItWorksSection, PrincipleSection, PrivacySection, StudyLoopSection
 } from '../components/public/LandingSections'
 import { usePageMeta } from '../lib/head'
+
+const PUBLIC_THEME_STORAGE_KEY = 'stracker-public-home-theme'
+
+function readPublicTheme(): PublicTheme {
+  if (typeof window === 'undefined') return 'light'
+  try {
+    return window.localStorage.getItem(PUBLIC_THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
 
 /** The eight things the notebook brings onto one page, in the order they are used. */
 const HERO_PILLARS = [
@@ -22,14 +34,28 @@ const HERO_PILLARS = [
  * front-end, so the marketing surface and the product cannot drift apart.
  */
 export default function LandingPage() {
+  const [publicTheme, setPublicTheme] = useState<PublicTheme>(readPublicTheme)
+
+  const togglePublicTheme = () => {
+    setPublicTheme(current => {
+      const next: PublicTheme = current === 'dark' ? 'light' : 'dark'
+      try {
+        window.localStorage.setItem(PUBLIC_THEME_STORAGE_KEY, next)
+      } catch {
+        // The in-memory toggle still works when storage is unavailable.
+      }
+      return next
+    })
+  }
+
   usePageMeta(
     'Stracker by DYPOL LABS — a serious JEE 2027 study notebook',
     'Stracker by DYPOL LABS is a digital study notebook for JEE preparation: syllabus tracking, test journal, mistakes and retries, spaced revision, daily planning, focus sessions and analytics.'
   )
 
-  return <div className="pub-page" id="top">
+  return <div className="pub-page" id="top" data-public-theme={publicTheme}>
     <a className="pub-skip-link" href="#main">Skip to content</a>
-    <PublicHeader />
+    <PublicHeader theme={publicTheme} onThemeToggle={togglePublicTheme} />
     <main id="main" className="pub-main">
       <section className="hero" aria-labelledby="hero-title">
         <div className="pub-shell hero-shell">
