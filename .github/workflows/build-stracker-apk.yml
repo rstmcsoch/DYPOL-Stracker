@@ -1,0 +1,77 @@
+name: Build Stracker Android APK
+
+on:
+  push:
+    branches:
+      - android-apk
+    paths:
+      - capacitor.config.ts
+      - .github/workflows/build-stracker-apk.yml
+      - package.json
+      - package-lock.json
+      - index.html
+      - src/**
+      - public/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-android-apk:
+    name: Build installable Stracker APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out Stracker
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Install Capacitor Android tooling without changing project dependencies
+        run: npm install --no-save --package-lock=false @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
+
+      - name: Build and type-check the existing web app
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: build-only-placeholder
+        run: npm run build
+
+      - name: Generate Android project
+        run: npx cap add android
+
+      - name: Sync Capacitor project
+        run: npx cap sync android
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+          cd ..
+          cp android/app/build/outputs/apk/debug/app-debug.apk Stracker.apk
+          sha256sum Stracker.apk > Stracker.apk.sha256
+
+      - name: Upload Stracker APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stracker-APK
+          path: |
+            Stracker.apk
+            Stracker.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
