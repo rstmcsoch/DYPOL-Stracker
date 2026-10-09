@@ -146,7 +146,7 @@
 }
 .app-shell :is(h4, h5, h6) { line-height: 1.25; }
 .app-shell .focus-main > h1 { font-size: var(--type-display-size) !important; line-height: 1.08 !important; }
-.app-shell .focus-clock { font-size: var(--type-display-size) !important; line-height: 1.08 !important; }
+.app-shell .focus-clock { font-size: clamp(56px, 27cqw, 108px) !important; line-height: 1 !important; letter-spacing: 2px; }
 .app-shell :is(.brand-type, .brand-mark > span, .loading-mark, .footer-credit, .sheet-brand-credit) {
   color: var(--text-primary);
   font-family: var(--font-identity) !important;
@@ -398,7 +398,7 @@ html[data-app-font='active'] .pub-page :where(*) {
     .jee-pipeline-count strong, .jee-progress-compare strong) {
     font-size: 1.75rem !important;
   }
-  .app-shell .focus-clock { font-size: 1.9rem !important; }
+  .app-shell .focus-clock { font-size: clamp(46px, 24cqw, 88px) !important; }
   .auth-page-public h2 { font-size: 1.375rem !important; }
   .auth-page-public h3 { font-size: 1.125rem !important; }
   .typography-live-preview { align-items: flex-start; flex-direction: column; gap: 12px; padding: 14px; }

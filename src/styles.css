@@ -1,4 +1,5 @@
 @import './styles/base.css';
+@import './styles/themes.css';
 @import './styles/qa.css';
 @import './styles/public.css';
 @import './styles/responsive.css';

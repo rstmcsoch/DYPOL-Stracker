@@ -9,6 +9,7 @@ import { useToast } from '../contexts/ToastContext'
 import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
 import { readingFontOption, READING_FONT_OPTIONS } from '../lib/fonts'
+import { COLOR_THEME_OPTIONS } from '../lib/themes'
 import { settingsFieldErrors, settingsSchema } from '../lib/settings-validation'
 import { passwordLengthError } from '../lib/auth-rules'
 import { AISettingsSection } from '../components/ai/AISettingsSection'
@@ -30,7 +31,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
 const TAB_FIELDS: Record<Exclude<SettingsTab, 'data'>, (keyof AppSettings)[]> = {
   account: ['owner_name'],
   exam: ['main_exam_date', 'advanced_exam_date', 'target_score', 'active_track', 'exam_mode', 'weight_high', 'weight_medium', 'weight_low', 'pyq_from_year', 'pyq_to_year'],
-  appearance: ['theme', 'interface_font'],
+  appearance: ['theme', 'interface_font', 'color_theme'],
   rhythm: ['weak_threshold', 'strong_threshold', 'dropping_threshold', 'revision_gaps', 'daily_study_goal_minutes', 'sound_enabled', 'reminders_enabled', 'reminder_time', 'reminder_types']
 }
 
@@ -349,6 +350,8 @@ export default function SettingsPage() {
         <form className="settings-form" noValidate onSubmit={event => void saveTab('appearance', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'appearance'}>
             <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Notebook theme" note="Choose paper, blackboard, or follow this device." /><div className="settings-section-content"><div className="theme-choice-grid" role="radiogroup" aria-label="Theme preference">{([['light','Warm paper','Light notebook paper'],['dark','Chalkboard','Dark, high-contrast study mode'],['auto','Auto','Follow your device setting']] as const).map(([value,title,desc]) => <label className={`theme-choice theme-choice-${value} ${draft.theme === value ? 'selected' : ''}`} key={value}><input type="radio" name="theme" value={value} checked={draft.theme === value} onChange={() => patch('theme', value as ThemeMode)} /><span className="theme-swatch"><i /><i /><i /></span><strong>{title}</strong><small>{desc}</small>{draft.theme === value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> {auto ? 'Auto theme follows the device appearance.' : 'Theme choice is saved with your account.'}</div></div></NotebookCard>
+
+            <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Color theme" note="A palette for the whole notebook. It ships light and dark variants — the mode controls above pick which one you see." /><div className="settings-section-content"><div className="color-theme-grid" role="radiogroup" aria-label="Color theme">{COLOR_THEME_OPTIONS.map(option => <label className={`color-theme-choice ${draft.color_theme === option.value ? 'selected' : ''}`} key={option.value}><input type="radio" name="color_theme" value={option.value} checked={draft.color_theme === option.value} onChange={() => patch('color_theme', option.value)} /><span className="color-theme-swatch" aria-hidden="true"><span className="swatch-half light"><i style={{ background: option.light[0] }} /><i style={{ background: option.light[1] }} /><i style={{ background: option.light[2] }} /></span><span className="swatch-half dark"><i style={{ background: option.dark[0] }} /><i style={{ background: option.dark[1] }} /><i style={{ background: option.dark[2] }} /></span></span><strong>{option.label}</strong><small>{option.description}</small>{draft.color_theme === option.value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> The top-right Light/Night switch keeps this palette and only changes the mode.</div></div></NotebookCard>
 
             <NotebookCard className="settings-section">
               <SectionLabel icon={<Type size={18} />} title="Reading font" note="Changes body text, menus and buttons. Headings and the Stracker identity stay the same." />

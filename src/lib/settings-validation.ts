@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { EXAM_MODES, READING_FONTS, REMINDER_KINDS, TRACK_IDS } from '../types/index.js'
+import { COLOR_THEMES, EXAM_MODES, READING_FONTS, REMINDER_KINDS, TRACK_IDS } from '../types/index.js'
 
 const dateValue = z.iso.date()
 const timestampValue = z.iso.datetime({ offset: true })
@@ -14,6 +14,8 @@ export const settingsSchema = z.object({
   // Defaulted so rows written before the preference existed still validate and simply
   // fall back to the Stracker default typography.
   interface_font: z.enum(READING_FONTS).default('default'),
+  // Colour palette is additive: legacy rows and exports without it default safely.
+  color_theme: z.enum(COLOR_THEMES).default('default'),
   weak_threshold: z.number().finite().min(0).max(99.99).multipleOf(0.01),
   strong_threshold: z.number().finite().min(0.01).max(100).multipleOf(0.01),
   dropping_threshold: z.number().finite().min(0).max(100).multipleOf(0.01),

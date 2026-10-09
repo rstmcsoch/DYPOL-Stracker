@@ -1,0 +1,330 @@
+/* STRACKER colour themes.
+   A theme is a palette: it redefines the semantic core tokens from base.css for
+   light mode via `:root[data-color='…']` and for dark mode via
+   `:root[data-color='…'][data-theme='dark']`. The display mode (light/dark/auto)
+   stays owned by `data-theme`, so every palette works in both modes and the
+   top-right switch never resets the palette. Derived tokens (tinted surfaces,
+   score badges, focus surfaces…) are computed from these core tokens with
+   color-mix() in base.css, so they follow any palette automatically.
+   `default` sets nothing here — the base :root / dark blocks ARE the Default
+   theme (warm paper & chalkboard identity). */
+
+/* ------------------------------------------------------ Sunset Blaze */
+:root[data-color='sunset-blaze'] {
+  --tint-warm: #c2643a; --tint-cool: #a04a63; --tint-tip: #c08a3a;
+  --bg: #f9f2ec; --paper: #fffaf5; --paper-soft: #fcf6f0; --paper-muted: #f4eae1;
+  --ink: #372a26; --ink-soft: #5c4a43; --muted: #715d55;
+  --line: #ecdcd1; --line-strong: #d8c0b1;
+  --accent: #b0512a; --accent-dark: #99431f; --accent-light: #f8e4d8;
+  --text-muted: #6b564d; --text-accent: #99431f;
+  --subject-physics: #9c4460; --subject-chemistry: #5d6b2a; --subject-maths: #94500f;
+  --subject-physics-bg: #f7e1e8; --subject-chemistry-bg: #eef0da; --subject-maths-bg: #f8e7d2;
+  --red: #a83a32; --red-bg: #f8e1dd; --green: #4d7043; --green-bg: #e5efdc;
+  --orange: #9a5a1e; --orange-bg: #f8ead4; --blue-bg: #f0e4ea; --yellow-bg: #f9ecc9;
+  --chart-grid: #e5d2c4; --ring-track: #e2cbb9; --focus-accent: #e0955a;
+
+  --button-primary-bg: var(--accent-dark);
+  --button-primary-border: color-mix(in srgb, var(--accent-dark) 80%, #000);
+  --button-primary-ink: #ffffff;
+  --button-primary-shadow: color-mix(in srgb, var(--accent-dark) 70%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent-dark) 85%, #000);
+}
+:root[data-color='sunset-blaze'][data-theme='dark'] {
+  --tint-warm: #e08a5c; --tint-cool: #e795ac; --tint-tip: #e3b46a;
+  --bg: #251b17; --paper: #302420; --paper-soft: #362a25; --paper-muted: #2a1f1a;
+  --ink: #f4eae2; --ink-soft: #d9c7bc; --muted: #b49d92;
+  --line: #473731; --line-strong: #614b42;
+  --accent: #f0a273; --accent-dark: #f2ae83; --accent-light: #4b2e21;
+  --text-muted: #c4ada1; --text-accent: #f2ae83;
+  --subject-physics: #e795ac; --subject-chemistry: #cbd07f; --subject-maths: #f2ae67;
+  --subject-physics-bg: #4b2b36; --subject-chemistry-bg: #3d3d24; --subject-maths-bg: #4d3521;
+  --red: #f2a098; --red-bg: #4d2f2a; --green: #abd3a0; --green-bg: #33422c;
+  --orange: #efb57a; --orange-bg: #4d3a24; --blue-bg: #43303c; --yellow-bg: #4d432a;
+  --chart-grid: #4e3c34; --ring-track: #4c3a31; --focus-accent: #e0955a;
+
+  --button-primary-bg: var(--accent);
+  --button-primary-border: color-mix(in srgb, var(--accent) 60%, #000);
+  --button-primary-ink: var(--bg);
+  --button-primary-shadow: color-mix(in srgb, var(--accent) 50%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent) 82%, #fff);
+}
+
+/* ---------------------------------------------------- Forest Emerald */
+:root[data-color='forest-emerald'] {
+  --tint-warm: #b98a4a; --tint-cool: #2e6b4f; --tint-tip: #8a9a4a;
+  --bg: #f1f6f0; --paper: #fbfdf9; --paper-soft: #f6faf4; --paper-muted: #eaf1e7;
+  --ink: #24322a; --ink-soft: #46584b; --muted: #5c6b5f;
+  --line: #dbe7d8; --line-strong: #bfd3bd;
+  --accent: #2e6b4f; --accent-dark: #235a41; --accent-light: #dfeee5;
+  --text-muted: #55645a; --text-accent: #235a41;
+  --subject-physics: #33628a; --subject-chemistry: #2e6b4f; --subject-maths: #8f5a1f;
+  --subject-physics-bg: #e2ebf4; --subject-chemistry-bg: #e0efe5; --subject-maths-bg: #f5ead8;
+  --red: #a13d35; --red-bg: #f6e2de; --green: #2e6b4f; --green-bg: #e0efe5;
+  --orange: #8f5a1f; --orange-bg: #f5ead8; --blue-bg: #e2ebf4; --yellow-bg: #f2f0d5;
+  --chart-grid: #d5e2d0; --ring-track: #d2dfcc; --focus-accent: #9ec27a;
+
+  --button-primary-bg: var(--accent-dark);
+  --button-primary-border: color-mix(in srgb, var(--accent-dark) 80%, #000);
+  --button-primary-ink: #ffffff;
+  --button-primary-shadow: color-mix(in srgb, var(--accent-dark) 70%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent-dark) 85%, #000);
+}
+:root[data-color='forest-emerald'][data-theme='dark'] {
+  --tint-warm: #d8b078; --tint-cool: #7fc49f; --tint-tip: #c9cf7f;
+  --bg: #161f19; --paper: #212b24; --paper-soft: #263128; --paper-muted: #1c251e;
+  --ink: #e9efe6; --ink-soft: #c2cec0; --muted: #9db1a0;
+  --line: #34423a; --line-strong: #4c5f52;
+  --accent: #7fc49f; --accent-dark: #90cfae; --accent-light: #2a4234;
+  --text-muted: #b0c1b2; --text-accent: #a5d8bc;
+  --subject-physics: #8fb7e0; --subject-chemistry: #8fd0ab; --subject-maths: #e8b478;
+  --subject-physics-bg: #2c3d50; --subject-chemistry-bg: #2b4536; --subject-maths-bg: #4a3a24;
+  --red: #f0a098; --red-bg: #48302c; --green: #a5d8ac; --green-bg: #2f4530;
+  --orange: #e8b478; --orange-bg: #4a3a24; --blue-bg: #2c3d50; --yellow-bg: #45442c;
+  --chart-grid: #405045; --ring-track: #3e4e43; --focus-accent: #b7d18c;
+
+  --button-primary-bg: var(--accent);
+  --button-primary-border: color-mix(in srgb, var(--accent) 60%, #000);
+  --button-primary-ink: var(--bg);
+  --button-primary-shadow: color-mix(in srgb, var(--accent) 50%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent) 82%, #fff);
+}
+
+/* ---------------------------------------------------------- Sandalwood */
+:root[data-color='sandalwood'] {
+  --tint-warm: #a97c48; --tint-cool: #5d7a86; --tint-tip: #8a7a3a;
+  --bg: #f6f1e8; --paper: #fffcf5; --paper-soft: #fbf7ee; --paper-muted: #f1ead9;
+  --ink: #322a20; --ink-soft: #544938; --muted: #6b5f4c;
+  --line: #e5dbc6; --line-strong: #d0c1a4;
+  --accent: #7a5a33; --accent-dark: #644926; --accent-light: #efe5cf;
+  --text-muted: #655947; --text-accent: #644926;
+  --subject-physics: #4f6d86; --subject-chemistry: #516c3a; --subject-maths: #96562a;
+  --subject-physics-bg: #e5edf3; --subject-chemistry-bg: #e9f0dd; --subject-maths-bg: #f6e8d6;
+  --red: #9d4238; --red-bg: #f6e3de; --green: #4c7147; --green-bg: #e4efdf;
+  --orange: #8f5a26; --orange-bg: #f6e8d6; --blue-bg: #e5edf3; --yellow-bg: #f4edcd;
+  --chart-grid: #e0d5bd; --ring-track: #ddd2b8; --focus-accent: #c9a35f;
+
+  --button-primary-bg: var(--accent-dark);
+  --button-primary-border: color-mix(in srgb, var(--accent-dark) 80%, #000);
+  --button-primary-ink: #ffffff;
+  --button-primary-shadow: color-mix(in srgb, var(--accent-dark) 70%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent-dark) 85%, #000);
+}
+:root[data-color='sandalwood'][data-theme='dark'] {
+  --tint-warm: #d3a877; --tint-cool: #9fb7c4; --tint-tip: #cbbd7a;
+  --bg: #201a13; --paper: #2b241b; --paper-soft: #312a20; --paper-muted: #251f17;
+  --ink: #f0e8da; --ink-soft: #d3c7b2; --muted: #ad9e86;
+  --line: #443a2b; --line-strong: #5d5140;
+  --accent: #d3a877; --accent-dark: #dcb587; --accent-light: #453823;
+  --text-muted: #bcae95; --text-accent: #dcb587;
+  --subject-physics: #9fb7d0; --subject-chemistry: #b3cf96; --subject-maths: #e8b478;
+  --subject-physics-bg: #33404d; --subject-chemistry-bg: #39452c; --subject-maths-bg: #4a3a24;
+  --red: #f0a098; --red-bg: #4a302b; --green: #a9d3a0; --green-bg: #32452d;
+  --orange: #e8b478; --orange-bg: #4a3a24; --blue-bg: #33404d; --yellow-bg: #47422a;
+  --chart-grid: #4c4232; --ring-track: #4a4030; --focus-accent: #c9a35f;
+
+  --button-primary-bg: var(--accent);
+  --button-primary-border: color-mix(in srgb, var(--accent) 60%, #000);
+  --button-primary-ink: var(--bg);
+  --button-primary-shadow: color-mix(in srgb, var(--accent) 50%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent) 82%, #fff);
+}
+
+/* ---------------------------------------------------------- Ocean Deep */
+:root[data-color='ocean-deep'] {
+  --tint-warm: #b98a4a; --tint-cool: #1f5f8b; --tint-tip: #22766c;
+  --bg: #edf3f6; --paper: #fbfdfe; --paper-soft: #f5f9fb; --paper-muted: #e7eff4;
+  --ink: #1c2b36; --ink-soft: #3f5261; --muted: #556773;
+  --line: #d6e2ea; --line-strong: #b7cbd8;
+  --accent: #1f5f8b; --accent-dark: #164d73; --accent-light: #deebf4;
+  --text-muted: #4f6270; --text-accent: #164d73;
+  --subject-physics: #1f5f8b; --subject-chemistry: #1c675e; --subject-maths: #8f5a1f;
+  --subject-physics-bg: #dfebf4; --subject-chemistry-bg: #ddefec; --subject-maths-bg: #f5ead8;
+  --red: #a13d3d; --red-bg: #f6e2e2; --green: #2f7355; --green-bg: #dfeee7;
+  --orange: #8f5a20; --orange-bg: #f5ead8; --blue-bg: #dfebf4; --yellow-bg: #f0efd4;
+  --chart-grid: #d2e0e8; --ring-track: #cfdde5; --focus-accent: #6fb5c9;
+
+  --button-primary-bg: var(--accent-dark);
+  --button-primary-border: color-mix(in srgb, var(--accent-dark) 80%, #000);
+  --button-primary-ink: #ffffff;
+  --button-primary-shadow: color-mix(in srgb, var(--accent-dark) 70%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent-dark) 85%, #000);
+}
+:root[data-color='ocean-deep'][data-theme='dark'] {
+  --tint-warm: #e8b478; --tint-cool: #7db6dd; --tint-tip: #6fd0c0;
+  --bg: #0f1a24; --paper: #192733; --paper-soft: #1e2e3c; --paper-muted: #15212b;
+  --ink: #e4edf3; --ink-soft: #bccdd9; --muted: #92a7b4;
+  --line: #2a3d4c; --line-strong: #3f586b;
+  --accent: #7db6dd; --accent-dark: #92c3e4; --accent-light: #23405a;
+  --text-muted: #a5b8c4; --text-accent: #a5d0ea;
+  --subject-physics: #8fb7e0; --subject-chemistry: #6fd0c0; --subject-maths: #e8b478;
+  --subject-physics-bg: #263c52; --subject-chemistry-bg: #1f4440; --subject-maths-bg: #4a3a24;
+  --red: #f0a098; --red-bg: #46302f; --green: #93d3b4; --green-bg: #24443a;
+  --orange: #e8b478; --orange-bg: #4a3a24; --blue-bg: #263c52; --yellow-bg: #43422a;
+  --chart-grid: #35485a; --ring-track: #33465a; --focus-accent: #6fb5c9;
+
+  --button-primary-bg: var(--accent);
+  --button-primary-border: color-mix(in srgb, var(--accent) 60%, #000);
+  --button-primary-ink: var(--bg);
+  --button-primary-shadow: color-mix(in srgb, var(--accent) 50%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent) 82%, #fff);
+}
+
+/* ------------------------------------------------------ Sakura Blossom */
+:root[data-color='sakura-blossom'] {
+  --tint-warm: #c98a9a; --tint-cool: #7a4a86; --tint-tip: #b96a86;
+  --bg: #f9f1f3; --paper: #fffafc; --paper-soft: #fcf5f8; --paper-muted: #f6e9ee;
+  --ink: #3b2731; --ink-soft: #5e4450; --muted: #745664;
+  --line: #efd9e1; --line-strong: #dcbccb;
+  --accent: #b0446e; --accent-dark: #97365c; --accent-light: #f8e0ea;
+  --text-muted: #6c505e; --text-accent: #97365c;
+  --subject-physics: #7a4a86; --subject-chemistry: #596b43; --subject-maths: #8f4f22;
+  --subject-physics-bg: #efe2f2; --subject-chemistry-bg: #eaefdf; --subject-maths-bg: #f7e8d8;
+  --red: #a83a4a; --red-bg: #f8dfe3; --green: #466847; --green-bg: #e3eede;
+  --orange: #96522b; --orange-bg: #f7e8d8; --blue-bg: #e9e2f2; --yellow-bg: #f8edda;
+  --chart-grid: #ead4dc; --ring-track: #e7d0d9; --focus-accent: #d98aa6;
+
+  --button-primary-bg: var(--accent-dark);
+  --button-primary-border: color-mix(in srgb, var(--accent-dark) 80%, #000);
+  --button-primary-ink: #ffffff;
+  --button-primary-shadow: color-mix(in srgb, var(--accent-dark) 70%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent-dark) 85%, #000);
+}
+:root[data-color='sakura-blossom'][data-theme='dark'] {
+  --tint-warm: #e39ab8; --tint-cool: #cfa3dd; --tint-tip: #e39ab8;
+  --bg: #241920; --paper: #302229; --paper-soft: #36272f; --paper-muted: #291d23;
+  --ink: #f3e7ec; --ink-soft: #d6c1cb; --muted: #b099a6;
+  --line: #46343f; --line-strong: #604a57;
+  --accent: #e39ab8; --accent-dark: #eaaac4; --accent-light: #4a2b3a;
+  --text-muted: #c2abb7; --text-accent: #eec0d4;
+  --subject-physics: #cfa3dd; --subject-chemistry: #b3cf9d; --subject-maths: #eab183;
+  --subject-physics-bg: #402b48; --subject-chemistry-bg: #37422a; --subject-maths-bg: #4a3524;
+  --red: #f2a0ac; --red-bg: #4a2b31; --green: #a9d3a0; --green-bg: #32452d;
+  --orange: #eab183; --orange-bg: #4a3524; --blue-bg: #402b48; --yellow-bg: #4a4130;
+  --chart-grid: #4c3a45; --ring-track: #4a3843; --focus-accent: #d98aa6;
+
+  --button-primary-bg: var(--accent);
+  --button-primary-border: color-mix(in srgb, var(--accent) 60%, #000);
+  --button-primary-ink: var(--bg);
+  --button-primary-shadow: color-mix(in srgb, var(--accent) 50%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent) 82%, #fff);
+}
+
+/* ---------------------------------------------------- Dracula Midnight */
+:root[data-color='dracula-midnight'] {
+  --tint-warm: #c9a35f; --tint-cool: #6272a4; --tint-tip: #b98ad9;
+  --bg: #f3f1f9; --paper: #fcfbff; --paper-soft: #f8f6fd; --paper-muted: #edeaf6;
+  --ink: #2b2640; --ink-soft: #4b4562; --muted: #5f5a78;
+  --line: #dfdbef; --line-strong: #c6c0df;
+  --accent: #6a3fc0; --accent-dark: #5a31a8; --accent-light: #eae2fb;
+  --text-muted: #585273; --text-accent: #5a31a8;
+  --subject-physics: #1f6f9e; --subject-chemistry: #1b704b; --subject-maths: #935210;
+  --subject-physics-bg: #dfeef6; --subject-chemistry-bg: #def0e6; --subject-maths-bg: #f6e8d4;
+  --red: #b03a3a; --red-bg: #f7e0e0; --green: #1b704b; --green-bg: #def0e6;
+  --orange: #935210; --orange-bg: #f6e8d4; --blue-bg: #e4e2f6; --yellow-bg: #f2efd8;
+  --chart-grid: #dcd7ec; --ring-track: #d9d3ea; --focus-accent: #bd93f9;
+
+  --button-primary-bg: var(--accent-dark);
+  --button-primary-border: color-mix(in srgb, var(--accent-dark) 80%, #000);
+  --button-primary-ink: #ffffff;
+  --button-primary-shadow: color-mix(in srgb, var(--accent-dark) 70%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent-dark) 85%, #000);
+}
+:root[data-color='dracula-midnight'][data-theme='dark'] {
+  --tint-warm: #ffb86c; --tint-cool: #8be9fd; --tint-tip: #bd93f9;
+  --bg: #282a36; --paper: #343746; --paper-soft: #3a3d4d; --paper-muted: #2e3040;
+  --ink: #f8f8f2; --ink-soft: #dcdcd2; --muted: #a0a2b4;
+  --line: #44475a; --line-strong: #6272a4;
+  --accent: #bd93f9; --accent-dark: #cab0ff; --accent-light: #3d3458;
+  --text-muted: #b3b5c6; --text-accent: #cab0ff;
+  --subject-physics: #8be9fd; --subject-chemistry: #50fa7b; --subject-maths: #ffb86c;
+  --subject-physics-bg: #2b3d50; --subject-chemistry-bg: #2b4a38; --subject-maths-bg: #4d3d28;
+  --red: #ff6e6e; --red-bg: #4d2b30; --green: #69f794; --green-bg: #2b4a38;
+  --orange: #ffb86c; --orange-bg: #4d3d28; --blue-bg: #383a5e; --yellow-bg: #4a4634;
+  --chart-grid: #4a4d62; --ring-track: #484b60; --focus-accent: #bd93f9;
+
+  --button-primary-bg: var(--accent);
+  --button-primary-border: color-mix(in srgb, var(--accent) 60%, #000);
+  --button-primary-ink: var(--bg);
+  --button-primary-shadow: color-mix(in srgb, var(--accent) 50%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent) 82%, #fff);
+}
+
+/* -------------------------------------------------------- Lavender Mist */
+:root[data-color='lavender-mist'] {
+  --tint-warm: #b99ac9; --tint-cool: #6250a8; --tint-tip: #9a86d0;
+  --bg: #f4f3f9; --paper: #fdfcff; --paper-soft: #f9f8fd; --paper-muted: #efecf6;
+  --ink: #2c2a3a; --ink-soft: #4d4a60; --muted: #625f76;
+  --line: #e2dff0; --line-strong: #c9c4de;
+  --accent: #6250a8; --accent-dark: #514190; --accent-light: #e9e5f7;
+  --text-muted: #5a576e; --text-accent: #514190;
+  --subject-physics: #4a5aa0; --subject-chemistry: #446b52; --subject-maths: #8f5a26;
+  --subject-physics-bg: #e4e8f6; --subject-chemistry-bg: #e2efe6; --subject-maths-bg: #f5ead8;
+  --red: #a03d47; --red-bg: #f6e1e4; --green: #47714f; --green-bg: #e2efe4;
+  --orange: #8f5a26; --orange-bg: #f5ead8; --blue-bg: #e4e8f6; --yellow-bg: #f2efd8;
+  --chart-grid: #ddd9ec; --ring-track: #dad5e9; --focus-accent: #a596d9;
+
+  --button-primary-bg: var(--accent-dark);
+  --button-primary-border: color-mix(in srgb, var(--accent-dark) 80%, #000);
+  --button-primary-ink: #ffffff;
+  --button-primary-shadow: color-mix(in srgb, var(--accent-dark) 70%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent-dark) 85%, #000);
+}
+:root[data-color='lavender-mist'][data-theme='dark'] {
+  --tint-warm: #b1a3e8; --tint-cool: #a3b1f0; --tint-tip: #b1a3e8;
+  --bg: #1b1926; --paper: #262434; --paper-soft: #2c293b; --paper-muted: #211f2d;
+  --ink: #eceaf5; --ink-soft: #cbc8db; --muted: #a5a2b9;
+  --line: #3a3750; --line-strong: #514d6e;
+  --accent: #b1a3e8; --accent-dark: #bfb2ef; --accent-light: #37315a;
+  --text-muted: #b7b4c9; --text-accent: #cfc4f5;
+  --subject-physics: #a3b1f0; --subject-chemistry: #9fd0ae; --subject-maths: #e8b478;
+  --subject-physics-bg: #303455; --subject-chemistry-bg: #2c4437; --subject-maths-bg: #4a3a24;
+  --red: #f0a0ac; --red-bg: #482c34; --green: #a5d8ac; --green-bg: #2f4531;
+  --orange: #e8b478; --orange-bg: #4a3a24; --blue-bg: #303455; --yellow-bg: #454130;
+  --chart-grid: #413e58; --ring-track: #3f3c56; --focus-accent: #a596d9;
+
+  --button-primary-bg: var(--accent);
+  --button-primary-border: color-mix(in srgb, var(--accent) 60%, #000);
+  --button-primary-ink: var(--bg);
+  --button-primary-shadow: color-mix(in srgb, var(--accent) 50%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent) 82%, #fff);
+}
+
+/* ------------------------------------------------------ Cyberpunk Neon */
+:root[data-color='cyberpunk-neon'] {
+  --tint-warm: #c98a3a; --tint-cool: #0f6f8f; --tint-tip: #a03d78;
+  --bg: #f1f4f8; --paper: #fbfcff; --paper-soft: #f6f8fc; --paper-muted: #e9edf4;
+  --ink: #171c2b; --ink-soft: #3a4157; --muted: #545c72;
+  --line: #d8deea; --line-strong: #b8c2d6;
+  --accent: #0f6f8f; --accent-dark: #0b5a76; --accent-light: #ddf0f6;
+  --text-muted: #4e566c; --text-accent: #0b5a76;
+  --subject-physics: #0e6d8c; --subject-chemistry: #276e4f; --subject-maths: #a03d78;
+  --subject-physics-bg: #dceef4; --subject-chemistry-bg: #dfeee7; --subject-maths-bg: #f6e2ec;
+  --red: #b03434; --red-bg: #f7e0e0; --green: #1d6c45; --green-bg: #dfeee5;
+  --orange: #93511f; --orange-bg: #f6e8d4; --blue-bg: #dceef4; --yellow-bg: #f0efd4;
+  --chart-grid: #d4dce8; --ring-track: #d1d9e6; --focus-accent: #22d3ee;
+
+  --button-primary-bg: var(--accent-dark);
+  --button-primary-border: color-mix(in srgb, var(--accent-dark) 80%, #000);
+  --button-primary-ink: #ffffff;
+  --button-primary-shadow: color-mix(in srgb, var(--accent-dark) 70%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent-dark) 85%, #000);
+}
+:root[data-color='cyberpunk-neon'][data-theme='dark'] {
+  --tint-warm: #fbbf24; --tint-cool: #45d8f0; --tint-tip: #ff5ea8;
+  --bg: #0d0f1a; --paper: #161a2a; --paper-soft: #1a1f31; --paper-muted: #121522;
+  --ink: #e8ecf8; --ink-soft: #c3cadf; --muted: #97a0bd;
+  --line: #262c42; --line-strong: #3a4263;
+  --accent: #45d8f0; --accent-dark: #6ae2f5; --accent-light: #10333f;
+  --text-muted: #aab3cd; --text-accent: #7deaff;
+  --subject-physics: #45d8f0; --subject-chemistry: #34d399; --subject-maths: #ff5ea8;
+  --subject-physics-bg: #113340; --subject-chemistry-bg: #0f3a2c; --subject-maths-bg: #3d1430;
+  --red: #ff6b6b; --red-bg: #3d1a1e; --green: #4ade80; --green-bg: #123527;
+  --orange: #fbbf24; --orange-bg: #3a3013; --blue-bg: #113340; --yellow-bg: #3a3413;
+  --chart-grid: #2c3350; --ring-track: #2a314e; --focus-accent: #22d3ee;
+
+  --button-primary-bg: var(--accent);
+  --button-primary-border: color-mix(in srgb, var(--accent) 60%, #000);
+  --button-primary-ink: var(--bg);
+  --button-primary-shadow: color-mix(in srgb, var(--accent) 50%, #000);
+  --button-primary-hover: color-mix(in srgb, var(--accent) 82%, #fff);
+}
