@@ -13,6 +13,7 @@ import { useToast } from '../contexts/ToastContext'
 import { createBackup, testsToCsv, triggerDownload, validateBackupText, type ValidatedImport } from '../lib/backup'
 import { createDocxReport, createPdfReport, type ReportOptions, type ReportSections } from '../lib/report'
 import { supabase } from '../lib/supabase'
+import { isOwnedStoragePath } from '../lib/storage-path'
 import { indiaDate, prettyDate, indiaToday } from '../lib/date'
 import type { AppSettings, Mistake, Profile } from '../types'
 
@@ -55,7 +56,7 @@ export default function BackupPage() {
       const imageFailures: string[] = []
       if (cloud && user && !user.isLocal) {
         await Promise.all(backup.mistakes.map(async mistake => {
-          if (mistake.image_data || !mistake.image_path) return
+          if (mistake.image_data || !mistake.image_path || !user || !isOwnedStoragePath(user.id, mistake.image_path)) return
           const { data: signed, error } = await cloud.storage.from('mistake-images').createSignedUrl(mistake.image_path, 300)
           if (error || !signed?.signedUrl) { imageFailures.push(mistake.id); return }
           try {
