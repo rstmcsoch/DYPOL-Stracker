@@ -5,11 +5,10 @@ replace, host, or embed the website. It talks to the same Supabase project, the 
 same authenticated `/api/ai/*` endpoints on the Vercel deployment.
 
 - **Identity:** display name *Stracker*, Android application ID `com.stracker.dypollabs`, target and compile API 36,
-  minimum API 24 (Android 7.0) *configured but not yet verified*: no Gradle build has run, so dependency minimums are
-  unconfirmed. Four native ABIs: `armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64`.
+  minimum API 24 (Android 7.0) *configured and declared minimums checked* (React Native, Hermes, and Expo modules resolve to 24). No Gradle build has run yet, so the device-level claim is not made. Four native ABIs: `armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64`.
 - **Stack:** Expo SDK 57, React Native 0.86, React 19, TypeScript, expo-router, expo-sqlite (offline cache),
   expo-secure-store (Keystore-backed session), react-native-svg (charts), expo-notifications (daily reminder).
-- **Status:** source complete for every website route. Not yet built into an APK in this environment. See
+- **Status:** source complete for every website route. No APK has been built yet: EAS needs an Expo sign-in (see `../docs/mobile/eas-build.md`). See
   `../docs/mobile/implementation-report.md` for what has and has not been verified.
 
 ## Layout
@@ -24,8 +23,8 @@ same authenticated `/api/ai/*` endpoints on the Vercel deployment.
 | `src/shared/` | **Byte-for-byte copies** of 34 website modules (types, validation, analytics, syllabus, JEE logic). Never edit by hand; run `npm run shared:sync`. |
 | `src/theme/` | Design tokens generated from the website CSS (`design-tokens.generated.ts`, never hand-edited) and the font registry. |
 | `assets/` | Fonts, brand artwork, launcher and splash images, the completion tone. |
-| `__tests__/` | Jest suites: sync engine, SQLite store, account reset, exports and report files. |
-| `scripts/` | `sync-shared.mjs`, `generate-design-tokens.mjs`, `generate_brand_assets.py`, `verify-apk.sh`. |
+| `__tests__/` | Jest suites (58 tests): sync engine, SQLite store, account reset, exports, session and token refresh, AI streaming, Supabase key policy, RLS coverage, route parity, entry navigation. |
+| `scripts/` | `sync-shared.mjs`, `generate-design-tokens.mjs`, `generate_brand_assets.py`, `create-release-keystore.py`, `verify-apk.sh`. |
 | `release-signing/` | The **public** release certificate only. The private keystore is never in the repository. |
 
 ## Commands
@@ -49,7 +48,7 @@ Public, client-side values only. Anything prefixed `EXPO_PUBLIC_` is compiled in
 | Variable | Needed for | Where it comes from |
 | --- | --- | --- |
 | `EXPO_PUBLIC_SUPABASE_URL` | Sign-in and sync | The existing Supabase project URL |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Sign-in and sync | The project's public anon/publishable key (RLS protects the data) |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Sign-in and sync | The project's publishable key. `EXPO_PUBLIC_SUPABASE_ANON_KEY` is accepted as a legacy alias; if both are set, the publishable key wins. RLS protects the data. A service-role key is rejected at build time. |
 | `EXPO_PUBLIC_API_BASE_URL` | AI assistant | Defaults to `https://dypol-stracker.vercel.app` |
 
 Local development reads `.env` (copy `.env.example`). Production builds read **EAS environment variables**. A

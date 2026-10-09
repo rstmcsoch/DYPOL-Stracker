@@ -25,9 +25,11 @@
     },
     "production": {
       "distribution": "internal",
+      "environment": "production",
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
+        "gradleCommand": ":app:assembleRelease",
+        "credentialsSource": "remote"
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://dypol-stracker.vercel.app"

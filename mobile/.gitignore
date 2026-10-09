@@ -29,6 +29,8 @@ yarn-error.*
 # macOS
 .DS_Store
 *.pem
+# Public release certificate only. Private keys (*.pem, *.p12, *.key) stay ignored.
+!release-signing/*.cert.pem
 
 # local env files
 .env*.local
@@ -40,7 +42,7 @@ yarn-error.*
 /ios
 /android
 
-# Stracker release signing and local secrets. Never commit these; see docs/release-signing.md.
+# Stracker release signing and local secrets. Never commit these; see docs/mobile/release-signing.md.
 credentials/
 .env
 .env.*

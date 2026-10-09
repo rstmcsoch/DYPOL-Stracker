@@ -5,11 +5,11 @@
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { AppState, type AppStateStatus } from 'react-native'
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabaseConfigured } from './config'
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabaseConfigured } from './config'
 import { secureSessionStorage } from './secure-storage'
 
 export const supabase: SupabaseClient | null = supabaseConfigured
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
       auth: {
         storage: secureSessionStorage,
         persistSession: true,

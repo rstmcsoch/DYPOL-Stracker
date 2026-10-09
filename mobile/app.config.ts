@@ -1,6 +1,23 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config'
 
 /**
+ * Same policy as src/lib/supabase-key.ts. It is kept inline because Expo's config loader cannot
+ * import a TypeScript module from src/; __tests__/supabase-key.test.ts checks both copies.
+ */
+function isPrivilegedSupabaseKey(key: string): boolean {
+  const value = key.trim()
+  if (value.startsWith('sb_secret_')) return true
+  const segments = value.split('.')
+  if (segments.length !== 3) return false
+  try {
+    const claims = JSON.parse(Buffer.from(segments[1], 'base64url').toString('utf8')) as { role?: unknown }
+    return claims.role === 'service_role'
+  } catch {
+    return true
+  }
+}
+
+/**
  * Stracker — Expo application configuration.
  *
  * Identity: display name "Stracker", Android application ID `com.stracker.dypollabs`.
@@ -15,8 +32,14 @@ import type { ConfigContext, ExpoConfig } from 'expo/config'
 // A production APK without its Supabase settings would install and never sign in. EAS sets
 // EAS_BUILD_PROFILE on every cloud build, so this check fails the build early and says why. Local
 // `expo export` and `prebuild` runs are unaffected.
-if (process.env.EAS_BUILD_PROFILE === 'production' && !(process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim())) {
-  throw new Error('Production builds need EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY set as EAS environment variables. See docs/mobile/eas-build.md.')
+// The publishable key is EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY; EXPO_PUBLIC_SUPABASE_ANON_KEY is an alias.
+const supabasePublicKey = (process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '').trim() || (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim()
+// A service-role key compiled into an app would be readable by anyone who installs it, so the build refuses one.
+if (isPrivilegedSupabaseKey(supabasePublicKey)) {
+  throw new Error('The Supabase key is privileged (service role). Set the publishable key instead; the service-role key must never reach the app.')
+}
+if (process.env.EAS_BUILD_PROFILE === 'production' && !(process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() && supabasePublicKey)) {
+  throw new Error('Production builds need EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or the EXPO_PUBLIC_SUPABASE_ANON_KEY alias) set as EAS environment variables. See docs/mobile/eas-build.md.')
 }
 
 const BRAND = {
