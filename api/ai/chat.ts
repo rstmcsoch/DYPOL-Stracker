@@ -6,6 +6,7 @@ import { logAIEvent } from '../_lib/diagnostics.js'
 import { authenticateRequest } from '../_lib/supabase.js'
 import { redactPotentialSecrets } from '../_lib/secrets.js'
 import { runAssistant } from '../_lib/agent.js'
+import { CHAT_RATE, takeRateSlot } from '../_lib/rate-limit.js'
 
 const requestSchema = z.object({
   conversationId: z.uuid().nullable().optional(),
@@ -84,10 +85,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       return
     }
 
-    const minuteAgo = new Date(Date.now() - 60_000).toISOString()
-    const { count, error: rateError } = await adminClient.from('ai_tasks').select('id',{ count:'exact',head:true }).eq('user_id',userId).gte('started_at',minuteAgo)
-    if (rateError) throw new ApiError(503,'task_unavailable','Stracker could not start an AI task. Try again.')
-    if ((count ?? 0) >= 10) throw new ApiError(429,'request_limit','You have sent several AI requests recently. Wait a minute and try again.')
+    await takeRateSlot(adminClient, userId, CHAT_RATE)
     const activeSince = new Date(Date.now() - 90_000).toISOString()
     const { data: active } = await adminClient.from('ai_tasks').select('id').eq('user_id',userId).in('status',['running','tool_call','fallback','retrying']).gte('started_at',activeSince).limit(1)
     if (active?.length) throw new ApiError(409,'assistant_busy','A Stracker AI task is already running. Stop it or wait for it to finish.')
