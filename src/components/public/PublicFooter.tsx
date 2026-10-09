@@ -52,5 +52,8 @@ export function PublicFooter() {
       <p>© {year} DYPOL LABS · Stracker for JEE 2027</p>
       <span className="pub-footer-rule" aria-hidden="true" />
     </div>
+    <div className="pub-footer-wordmark-window" aria-hidden="true">
+      <p className="pub-footer-wordmark">STRACKER</p>
+    </div>
   </footer>
 }

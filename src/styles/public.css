@@ -21,16 +21,103 @@
   --pub-muted: #6a6d61;
 }
 
-:root[data-theme='dark'] .pub-page,
 :root[data-theme='dark'] .auth-page-public { --pub-muted: #a0a89d; }
 
 .pub-page {
+  /* The marketing homepage owns a fixed Stracker palette. Account palettes and any
+     lingering authenticated root theme must never recolour this public-only surface. */
+  color-scheme: light;
+  color: var(--ink);
+  transition: color .2s ease, background-color .2s ease;
+  --pub-wordmark-color: #b5b6ac;
+  --bg: #f7f4ec;
+  --paper: #fffdf7;
+  --paper-soft: #fcfaf3;
+  --paper-muted: #f1eee4;
+  --ink: #29332d;
+  --ink-soft: #566057;
+  --muted: #6b6c62;
+  --line: #e8e2d4;
+  --line-strong: #d5cdbb;
+  --accent: #526c9a;
+  --accent-dark: #415982;
+  --accent-light: #e8edf5;
+  --text-primary: var(--ink);
+  --text-muted: #5f655c;
+  --text-accent: var(--accent-dark);
+  --subject-physics: #3f639b;
+  --subject-chemistry: #40694e;
+  --subject-maths: #8f5620;
+  --subject-physics-bg: #e8eef7;
+  --subject-chemistry-bg: #e9f1e8;
+  --subject-maths-bg: #f7eddf;
+  --red: #a03f38;
+  --red-bg: #f8e9e5;
+  --green: #3d6a47;
+  --green-bg: #e6f0e6;
+  --orange: #8f5620;
+  --orange-bg: #f8eddd;
+  --blue-bg: #e8eef7;
+  --yellow-bg: #fbf2ce;
+  --shadow: 0 11px 26px rgba(73, 63, 43, .055), 0 2px 5px rgba(73, 63, 43, .04);
+  --shadow-float: 0 18px 42px rgba(41, 51, 45, .16), 0 3px 10px rgba(41, 51, 45, .08);
+  --ring-track: #d8d1bd;
+  --button-primary-bg: #526d9c;
+  --button-primary-border: #475f8b;
+  --button-primary-ink: #ffffff;
+  --button-primary-shadow: #3e5379;
+  --button-primary-hover: #465f8e;
   position: relative;
   background: var(--bg);
   /* Hand-drawn margin notes sit slightly outside the shell. Clipping the x-axis keeps
      them from producing a horizontal scrollbar; `clip` (not `hidden`) leaves the
      sticky header and anchor offsets working. */
   overflow-x: clip;
+}
+
+.pub-page[data-public-theme='dark'] {
+  color-scheme: dark;
+  --pub-muted: #a0a89d;
+  --pub-wordmark-color: #7f8981;
+  --bg: #202522;
+  --paper: #2b312d;
+  --paper-soft: #303733;
+  --paper-muted: #252b27;
+  --ink: #ecede4;
+  --ink-soft: #c2c9bc;
+  --muted: #a0a89d;
+  --line: #3c453e;
+  --line-strong: #566055;
+  --accent: #a9bfdc;
+  --accent-dark: #9db4d3;
+  --accent-light: #384556;
+  --text-primary: var(--ink);
+  --text-muted: #bdc5ba;
+  --text-accent: #c2d2e7;
+  --subject-physics: #93b7ef;
+  --subject-chemistry: #90d2a1;
+  --subject-maths: #f0b174;
+  --subject-physics-bg: #37485d;
+  --subject-chemistry-bg: #354b3d;
+  --subject-maths-bg: #594532;
+  --red: #f39c94;
+  --red-bg: #4a3431;
+  --green: #a6d9aa;
+  --green-bg: #344737;
+  --orange: #efbd7d;
+  --orange-bg: #4c3e2e;
+  --blue-bg: #354352;
+  --yellow-bg: #514a32;
+  --shadow: 0 11px 27px rgba(0, 0, 0, .17), 0 2px 7px rgba(0, 0, 0, .13);
+  --shadow-float: 0 20px 50px rgba(0, 0, 0, .45), 0 4px 12px rgba(0, 0, 0, .2);
+  --ring-track: #4c574e;
+}
+
+/* Recolour the public surface as a single short transition, without shifting layout. */
+.pub-page :where(*) {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: .2s;
+  transition-timing-function: ease;
 }
 
 .pub-main {
@@ -55,7 +142,7 @@
   background-size: 160px 160px;
 }
 
-:root[data-theme='dark'] .pub-grain { opacity: .025; }
+.pub-page[data-public-theme='dark'] .pub-grain { opacity: .025; }
 
 .pub-skip-link {
   position: absolute;
@@ -148,6 +235,19 @@
 .pub-header-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .pub-header-actions .button { flex: none; }
 
+/* Match the authenticated switch's track and thumb while keeping it homepage-scoped. */
+.pub-page .pub-theme-toggle .theme-toggle-track {
+  border-color: var(--line);
+  background: linear-gradient(96deg, #fbf3dc 0 50%, #39423c 50% 100%);
+  box-shadow: inset 0 1px 2px rgba(41, 51, 45, .07);
+}
+
+.pub-page[data-public-theme='dark'] .pub-theme-toggle .theme-toggle-track {
+  border-color: #566055;
+  background: linear-gradient(96deg, #2b312d 0 50%, #4a5a4d 50% 100%);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .28);
+}
+
 .pub-menu-trigger {
   display: none;
   place-items: center;
@@ -236,11 +336,11 @@
   box-decoration-break: clone;
 }
 
-:root[data-theme='dark'] .hero h1 em,
-:root[data-theme='dark'] .pub-section h2 em,
-:root[data-theme='dark'] .principle-copy em,
-:root[data-theme='dark'] .dypol-band em,
-:root[data-theme='dark'] .final-sheet em {
+.pub-page[data-public-theme='dark'] .hero h1 em,
+.pub-page[data-public-theme='dark'] .pub-section h2 em,
+.pub-page[data-public-theme='dark'] .principle-copy em,
+.pub-page[data-public-theme='dark'] .dypol-band em,
+.pub-page[data-public-theme='dark'] .final-sheet em {
   color: #9dc4a6;
   background-image: linear-gradient(transparent 79%, rgba(216, 176, 106, .26) 79%);
 }
@@ -385,7 +485,7 @@
   font:600 12px var(--font-body);
 }
 
-:root[data-theme='dark'] .hero-streak { border-color: #56492f; color: #e6c188; background: #3b3324; }
+.pub-page[data-public-theme='dark'] .hero-streak { border-color: #56492f; color: #e6c188; background: #3b3324; }
 
 .hero-sheet-split {
   display: grid;
@@ -529,12 +629,12 @@
 }
 .hero-sheet-foot > span { display: inline-flex; align-items: center; gap: 5px; }
 .hero-sheet-sign { font: 400 17px var(--font-label); color: #9a8b6b; }
-:root[data-theme='dark'] .hero-sheet-sign { color: #b7a888; }
-:root[data-theme='dark'] .hero-tape,
-:root[data-theme='dark'] .final-tape { background: rgba(206, 190, 140, .22); }
+.pub-page[data-public-theme='dark'] .hero-sheet-sign { color: #b7a888; }
+.pub-page[data-public-theme='dark'] .hero-tape,
+.pub-page[data-public-theme='dark'] .final-tape { background: rgba(206, 190, 140, .22); }
 
 .hero-doodle { color: #c39a4e; line-height: 1; }
-:root[data-theme='dark'] .hero-doodle { color: #d8b06a; }
+.pub-page[data-public-theme='dark'] .hero-doodle { color: #d8b06a; }
 .hero-doodle-trend { position: absolute; right: 10px; bottom: 8px; font-size: 17px; transform: rotate(9deg); }
 .hero-doodle-star { font-size: 16px; transform: rotate(12deg); }
 .hero-doodle-note { margin-left: auto; font-size: 17px; transform: rotate(-8deg); }
@@ -556,7 +656,7 @@
    Scoped to the illustration so the notebook's own colours are untouched. */
 .hero-sheet { --muted: var(--pub-muted); }
 
-:root:not([data-theme='dark']) .hero-sheet {
+.pub-page[data-public-theme='light'] .hero-sheet {
   --red: #9c4a43;
   --subject-physics: #446a9f;
   --subject-chemistry: #456f54;
@@ -612,7 +712,7 @@
 }
 
 .loop-step-index { display: block; color: #c9a866; font: 400 22px/1 var(--font-label); }
-:root[data-theme='dark'] .loop-step-index { color: #d8b06a; }
+.pub-page[data-public-theme='dark'] .loop-step-index { color: #d8b06a; }
 .loop-step-card h3 { margin: 6px 0 0; color: var(--ink); font: 400 20px/1.15 var(--font-heading); }
 .loop-step-card p { margin: 6px 0 10px; color: var(--ink-soft); font-size: 13.5px; line-height: 1.45; }
 
@@ -635,9 +735,9 @@
   font-size: 15px;
   transform: translateY(-50%);
 }
-:root[data-theme='dark'] .loop-arrow { color: #cfae6e; }
+.pub-page[data-public-theme='dark'] .loop-arrow { color: #cfae6e; }
 .loop-arrow-repeat { color: #7f9a84; }
-:root[data-theme='dark'] .loop-arrow-repeat { color: #9dc4a6; }
+.pub-page[data-public-theme='dark'] .loop-arrow-repeat { color: #9dc4a6; }
 
 .loop-footnote {
   display: flex;
@@ -675,7 +775,7 @@
 
 .feature-entry-head { display: flex; align-items: flex-start; gap: 10px; }
 .feature-index { flex: none; width: 30px; color: #c9a866; font: 400 23px/1 var(--font-label); }
-:root[data-theme='dark'] .feature-index { color: #d8b06a; }
+.pub-page[data-public-theme='dark'] .feature-index { color: #d8b06a; }
 
 .feature-icon {
   display: grid;
@@ -704,7 +804,7 @@
 }
 .feature-points li { display: flex; gap: 7px; color: var(--ink-soft); font-size: 13.5px; line-height: 1.45; }
 .feature-points svg { flex: none; margin-top: 4px; color: #6b916c; }
-:root[data-theme='dark'] .feature-points svg { color: #9dc4a6; }
+.pub-page[data-public-theme='dark'] .feature-points svg { color: #9dc4a6; }
 
 .feature-footnote {
   display: flex;
@@ -906,7 +1006,7 @@
 
 .privacy-list dt { display: flex; align-items: center; gap: 8px; color: var(--ink); font: 400 16.5px/1.25 var(--font-heading); }
 .privacy-list dt svg { flex: none; color: #668469; }
-:root[data-theme='dark'] .privacy-list dt svg { color: #9dc4a6; }
+.pub-page[data-public-theme='dark'] .privacy-list dt svg { color: #9dc4a6; }
 .privacy-list dd { margin: 6px 0 0; color: var(--ink-soft); font-size: 14px; line-height: 1.5; }
 
 .privacy-foot {
@@ -1028,7 +1128,7 @@
 }
 .final-note svg { flex: none; color: #c39a4e; }
 .final-doodle { position: absolute; right: 20px; bottom: 15px; color: #c39a4e; font-size: 20px; transform: rotate(10deg); }
-:root[data-theme='dark'] .final-doodle { color: #d8b06a; }
+.pub-page[data-public-theme='dark'] .final-doodle { color: #d8b06a; }
 
 /* ------------------------------------------------------------------ footer */
 
@@ -1079,6 +1179,35 @@
 }
 .pub-footer-bottom p { margin: 0; text-align: center; }
 .pub-footer-rule { flex: 1; height: 1px; background: var(--line-strong); }
+
+/* The footer's final line deliberately ends 20% into the Sora capitals. Sora 700's
+   bundled cap height is .73em; this .615em window retains roughly four-fifths of the
+   visible glyph while keeping the crop local to the wordmark, not the footer content. */
+.pub-footer-wordmark-window {
+  --pub-wordmark-size: clamp(2rem, 18.2vw, 24rem);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  height: calc(var(--pub-wordmark-size) * .615);
+  margin-top: clamp(10px, 1.8vw, 22px);
+  overflow: hidden;
+  text-align: center;
+}
+
+.pub-page .pub-footer-wordmark,
+html[data-app-font='active'] .pub-page .pub-footer-wordmark {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0;
+  color: var(--pub-wordmark-color);
+  font-family: 'Sora', sans-serif !important;
+  font-size: var(--pub-wordmark-size) !important;
+  font-weight: 700 !important;
+  line-height: .84 !important;
+  letter-spacing: -.075em;
+  white-space: nowrap;
+}
 
 /* ------------------------------------------------ authentication entry pages */
 
@@ -1165,12 +1294,42 @@
   .pub-footer-inner { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Phone header: wordmark + menu trigger only, with the actions inside the menu. */
+/* Compact but keep the desktop navigation centred when the added action is close. */
+@media (min-width: 901px) and (max-width: 1020px) {
+  .pub-header-inner {
+    gap: clamp(8px, 1vw, 12px);
+    padding-inline: clamp(12px, 2.8vw, 28px);
+  }
+  .pub-nav { gap: clamp(0px, .35vw, 4px); }
+  .pub-nav-link { padding-inline: clamp(5px, .7vw, 8px); }
+}
+
+/* Phone header: the theme action precedes the original hamburger and menu. */
 @media (max-width: 900px) {
+  .pub-header { padding-top: env(safe-area-inset-top, 0px); }
+  #main,
+  #top,
+  #why-stracker,
+  #features,
+  #how-it-works,
+  #ai,
+  #privacy,
+  #dypol-labs { scroll-margin-top: calc(84px + env(safe-area-inset-top, 0px)); }
   .pub-nav,
   .pub-header-actions { display: none; }
-  .pub-menu-trigger { display: grid; margin-left: auto; }
-  .pub-header-inner { min-height: 58px; }
+  .pub-theme-toggle {
+    min-height: 44px;
+    margin-left: auto;
+    padding: 4px 5px;
+  }
+  .pub-theme-toggle .theme-toggle-copy { display: none; }
+  .pub-theme-toggle .theme-toggle-track { width: 44px; height: 26px; }
+  .pub-theme-toggle.theme-toggle-dark .theme-toggle-thumb { transform: translateX(20px); }
+  .pub-menu-trigger { display: grid; margin-left: 0; }
+  .pub-header-inner {
+    min-height: 58px;
+    padding-inline: max(14px, env(safe-area-inset-left, 0px)) max(14px, env(safe-area-inset-right, 0px));
+  }
 }
 
 @media (max-width: 700px) {
@@ -1216,7 +1375,9 @@
 }
 
 @media (max-width: 400px) {
-  .pub-header-inner { padding-inline: 12px; }
+  .pub-header-inner {
+    padding-inline: max(12px, env(safe-area-inset-left, 0px)) max(12px, env(safe-area-inset-right, 0px));
+  }
   .hero { padding-block: 22px 26px; }
   .hero-streak { font-size: max(.75rem, calc(11px * var(--body-scale))); }
   .dypol-band { gap: 12px; }

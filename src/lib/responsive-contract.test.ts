@@ -152,8 +152,10 @@ describe('responsive layout contract', () => {
     // Ordinary interface rules must use a centralized typography token.
     const withoutFontFaces = componentStyles.replace(/@font-face\s*\{[^}]*\}/g, '')
     const withoutCodeSamples = withoutFontFaces.replace(/(?:code,\s*pre,\s*samp,\s*\.mono,\s*\.ai-code-block|\.ai-code-block)\s*\{[^}]*\}/g, '')
+    // The one decorative branding exception is the public homepage's oversized Sora wordmark.
+    const withoutPublicWordmark = withoutCodeSamples.replace(/(?:\.pub-page \.pub-footer-wordmark,\s*html\[data-app-font='active'\] \.pub-page \.pub-footer-wordmark)\s*\{[^}]*\}/g, '')
     const allowedGlobalFamily = /^(?:inherit|var\(\s*--(?:reading-font-family|font-(?:identity|public|default-reading|ui|body|heading|label|number))\s*\))$/i
-    const fontFamilyDeclarations = [...withoutCodeSamples.matchAll(/(?<![-\w])font-family\s*:\s*([^;}]+)/gi)]
+    const fontFamilyDeclarations = [...withoutPublicWordmark.matchAll(/(?<![-\w])font-family\s*:\s*([^;}]+)/gi)]
     const nonGlobalFamilies = fontFamilyDeclarations
       .map(([, value]) => (value?.trim() ?? '').replace(/\s*!important$/i, ''))
       .filter(value => !allowedGlobalFamily.test(value))
