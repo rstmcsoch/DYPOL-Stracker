@@ -20,9 +20,9 @@ function readPublicTheme(): PublicTheme {
   }
 }
 
-/** The eight things the notebook brings onto one page, in the order they are used. */
+/** The most useful notebook pages to surface before the visitor starts. */
 const HERO_PILLARS = [
-  'Syllabus', 'Tests', 'Mistakes', 'Revision', 'Daily planning', 'Focus sessions', 'Analytics', 'AI assistance'
+  'Syllabus', 'Tests', 'Mistakes', 'Revision', 'Analytics'
 ]
 
 /**
