@@ -177,3 +177,7 @@ Serve the production app over HTTPS so browser authentication, IndexedDB, and se
 ## License
 
 No license has been selected for this repository yet. Add a `LICENSE` file before redistributing or reusing the project outside the owner’s deployment.
+
+## Stracker Control Center
+
+A private administration console lives at `/control-panel/`. It is for the DYPOL LABS operator team, is not linked from the public site or the student dashboard, and is marked `noindex`. Access requires an existing account granted a server-side admin role plus a verified authenticator (TOTP). See [docs/control-center.md](docs/control-center.md) for provisioning, MFA recovery, required environment variables and current limits.
