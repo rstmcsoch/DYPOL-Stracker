@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { ChevronsLeft, ChevronDown, Menu, Search, LogOut, ShieldCheck, X, LayoutDashboard, Users, KeyRound, ShieldAlert, ScrollText, Activity, Info } from 'lucide-react'
+import { ChevronsLeft, ChevronDown, Menu, Search, LogOut, ShieldCheck, X, LayoutDashboard, Users, KeyRound, ShieldAlert, ScrollText, Activity, Info, Palette } from 'lucide-react'
 import { useControlSession } from './ControlSession'
 import { CommandLauncher } from './CommandLauncher'
 import { NAV_GROUPS, activeNavItem, breadcrumbsFor, CONSOLE_BASE, documentTitleFor, secondsUntilIdle, formatCountdown, type NavIcon } from './policy'
 import { Button, Dialog } from './ui'
 import { BrandMark } from './BrandMark'
 import { useTimeZone } from './time'
+import { ControlThemeSwitch } from './ControlTheme'
+import { useUnsavedChanges, UNSAVED_MESSAGE } from './unsaved'
 
 const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
   overview: LayoutDashboard,
@@ -15,7 +17,8 @@ const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
   security: ShieldAlert,
   audit: ScrollText,
   health: Activity,
-  about: Info
+  about: Info,
+  appearance: Palette
 }
 
 /** Keeps the browser tab title in step with client-side navigation. */
@@ -42,6 +45,9 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
   const crumbs = breadcrumbsFor(location.pathname, detailLabel)
   const session = phase.kind === 'granted' ? phase.session : null
   const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const { dirty } = useUnsavedChanges()
+  /** Asks before navigating away from a screen with unsaved edits. */
+  const leaveAllowed = () => !dirty || window.confirm(UNSAVED_MESSAGE)
 
   useDocumentTitle(documentTitleFor(location.pathname, detailLabel))
 
@@ -86,7 +92,7 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
                 const to = item.to ? `${CONSOLE_BASE}/${item.to}` : CONSOLE_BASE
                 const active = current?.to === item.to
                 return (
-                  <NavLink key={item.to || 'overview'} to={to} end={item.to === ''} className={active ? 'is-active' : ''} title={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined}>
+                  <NavLink key={item.to || 'overview'} to={to} end={item.to === ''} className={active ? 'is-active' : ''} title={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={event => { if (!leaveAllowed()) event.preventDefault() }}>
                     <Icon size={18} aria-hidden="true" />
                     <span className="cc-nav__text">{item.label}</span>
                     {collapsed && <span className="cc-sr-only">{item.label}</span>}
@@ -120,6 +126,7 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
             <button type="button" className="cc-search-btn" onClick={() => setLauncherOpen(true)} aria-label="Search pages and accounts (Control K)" aria-keyshortcuts="Control+K Meta+K">
               <Search size={16} aria-hidden="true" /> <span>Search</span> <kbd className="cc-kbd">Ctrl K</kbd>
             </button>
+            <ControlThemeSwitch />
             <span className="cc-pill cc-pill--ok" title={session ? `Assurance ${session.aal}; ${session.recentMfa ? 'verified recently' : 'verification older than 15 minutes'}` : undefined}>
               <ShieldCheck size={14} aria-hidden="true" /> {session?.recentMfa ? 'MFA verified' : 'MFA session'}
             </span>

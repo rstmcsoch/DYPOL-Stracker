@@ -5,6 +5,9 @@ import { ControlLayout } from './ControlLayout'
 import { AccessDenied, GateError, MfaGate, SignInGate } from './gates'
 import { ReauthProvider } from './reauth'
 import { TimeZoneProvider } from './time'
+import { ControlThemeRoot } from './ControlTheme'
+import { readControlThemePreference, resolveControlTheme, systemPrefersDark } from '../lib/control-theme'
+import { UnsavedChangesProvider } from './unsaved'
 import { Skeleton } from './ui'
 import { CONSOLE_BASE, CONSOLE_NAME } from './policy'
 import './control.css'
@@ -17,6 +20,8 @@ const AuditPage = lazy(() => import('./pages/AuditPage'))
 const SecurityPage = lazy(() => import('./pages/SecurityPage'))
 const HealthPage = lazy(() => import('./pages/HealthPage'))
 const AboutPage = lazy(() => import('./pages/AboutPage'))
+const AppearancePage = lazy(() => import('./appearance/AppearancePage'))
+const PublicPreviewPage = lazy(() => import('./appearance/PublicPreviewPage'))
 
 /**
  * Entry point for /control-panel/*. It is lazy-loaded by the application router, so the
@@ -24,13 +29,15 @@ const AboutPage = lazy(() => import('./pages/AboutPage'))
  */
 export default function ControlPanelApp() {
   return (
-    <div className="cc-root">
+    <ControlThemeRoot>
       <ControlSessionProvider>
         <TimeZoneProvider>
-          <ControlRouter />
+          <UnsavedChangesProvider>
+            <ControlRouter />
+          </UnsavedChangesProvider>
         </TimeZoneProvider>
       </ControlSessionProvider>
-    </div>
+    </ControlThemeRoot>
   )
 }
 
@@ -45,8 +52,8 @@ function useRobotsDirective() {
       activeThemeColor.name = 'theme-color'
       document.head.appendChild(activeThemeColor)
     }
-    // Match the browser/system chrome to the console's fixed dark surface.
-    activeThemeColor.content = '#0d0e11'
+    // Match the browser chrome to the console's current light or dark surface.
+    activeThemeColor.content = resolveControlTheme(readControlThemePreference(), systemPrefersDark()) === 'light' ? '#f6f5f1' : '#0d0e11'
 
     const tag = document.createElement('meta')
     tag.name = 'robots'
@@ -84,6 +91,16 @@ function ControlRouter() {
   if (phase.kind === 'denied') return <AccessDenied />
   if (phase.kind === 'error') return <GateError message={phase.message} />
 
+  // Owner preview of the public homepage: rendered without the console chrome, for the
+  // Appearance preview frame only. Access is still the owner gate above and the API check.
+  if (location.pathname === `${CONSOLE_BASE}/preview/public`) {
+    return (
+      <Suspense fallback={<p className="cc-preview-message">Loading preview…</p>}>
+        <PublicPreviewPage />
+      </Suspense>
+    )
+  }
+
   // Granted: the server has confirmed an active owner with aal2.
   return (
     <ReauthProvider>
@@ -98,6 +115,7 @@ function ControlRouter() {
             <Route path="security" element={<SecurityPage />} />
             <Route path="health" element={<HealthPage />} />
             <Route path="about" element={<AboutPage />} />
+            <Route path="appearance/*" element={<AppearancePage />} />
             <Route path="*" element={<NotInConsole />} />
           </Routes>
         </Suspense>

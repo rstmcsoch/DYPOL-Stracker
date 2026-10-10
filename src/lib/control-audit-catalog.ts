@@ -23,7 +23,7 @@ export interface AuditActionDefinition {
   /** Short noun phrase for menus. */
   label: string
   /** Where it is used in the console. */
-  group: 'Access' | 'Accounts' | 'Audit log' | 'Roles'
+  group: 'Access' | 'Accounts' | 'Appearance' | 'Audit log' | 'Roles'
   /** Plain-language sentence per outcome; `{target}` is replaced with the target label. */
   sentence: Record<AuditOutcome, string>
 }
@@ -54,6 +54,18 @@ export const AUDIT_ACTIONS: readonly AuditActionDefinition[] = [
     sentence: { success: 'Restored sign-in for {target}', denied: 'Restore refused for {target}', failed: 'Restore failed for {target}' }
   },
   {
+    action: 'content.publish',
+    label: 'Website copy published',
+    group: 'Appearance',
+    sentence: { success: 'Published website and navigation copy', denied: 'Publishing refused', failed: 'Publishing failed' }
+  },
+  {
+    action: 'content.restore',
+    label: 'Website copy restored',
+    group: 'Appearance',
+    sentence: { success: 'Restored an earlier published version', denied: 'Restore refused', failed: 'Restore failed' }
+  },
+  {
     action: 'audit.export',
     label: 'Audit log exported',
     group: 'Audit log',
@@ -76,6 +88,10 @@ export const AUDIT_ERROR_LABELS: Record<string, string> = {
   recent_mfa_required: 'a fresh authenticator code was required',
   rate_limited: 'request limit reached',
   owner_protected: 'administrator accounts cannot be suspended here',
+  no_changes: 'nothing differed from the live copy',
+  draft_invalid: 'the draft no longer passed validation',
+  publish_failed: 'the database rejected the publish',
+  restore_failed: 'the database rejected the restore',
   self_action_blocked: 'the acting account cannot change itself',
   auth_update_failed: 'the authentication service rejected the change',
   audit_unavailable: 'the audit log was unavailable',

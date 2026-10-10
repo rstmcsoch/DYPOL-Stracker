@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { AppearanceProvider } from './contexts/AppearanceContext'
+import { SiteContentProvider } from './contexts/SiteContentContext'
 import { DataProvider } from './contexts/DataContext'
 import { AIProvider } from './contexts/AIContext'
 import { FocusProvider } from './contexts/FocusContext'
@@ -78,8 +79,9 @@ function ProtectedApp() {
 function RootRoute() {
   const { user, loading } = useAuth()
   if (loading) return <AppLoading label="Opening Stracker…" />
-  if (!user) return <LandingPage />
-  return <Outlet />
+  // Published website and notebook copy is loaded once here, for both the homepage and the notebook.
+  if (!user) return <SiteContentProvider><LandingPage /></SiteContentProvider>
+  return <SiteContentProvider><Outlet /></SiteContentProvider>
 }
 
 /** /login and /signup are for visitors only: a signed-in user is sent into the notebook. */

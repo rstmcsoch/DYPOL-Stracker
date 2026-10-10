@@ -16,6 +16,9 @@ import { createId } from '../lib/id'
 import { computeReminders, shouldFireToday } from '../lib/jee/reminders'
 import { taskInputSchema } from '../lib/task-validation'
 import type { AppData, DailyTask, Priority, Subject } from '../types'
+import { useSiteValues } from '../contexts/SiteContentContext'
+import { navCaptionFor, navLabelFor } from '../lib/site-content/nav'
+import type { SiteValues } from '../lib/site-content/content'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
 interface NavigationGroup { caption: string; items: NavigationItem[] }
@@ -65,9 +68,16 @@ const mobileBar: NavigationItem[] = [
   { to: '/revision', label: 'Revision', icon: AlarmClock }
 ]
 const allNav: NavigationItem[] = navGroups.flatMap(group => group.items)
+
+/** Label of the destination for the current path, using the owner's wording when one is saved. */
+function currentNavLabel(pathname: string, values: SiteValues): string | undefined {
+  const item = allNav.find(entry => entry.to === pathname)
+  return item ? navLabelFor(item.to, item.label, values) : undefined
+}
 const moreRoutes = new Set(allNav.map(item => item.to).filter(to => !mobileBar.some(item => item.to === to)))
 
 export function AppFrame() {
+  const siteValues = useSiteValues()
   const { user, signOut } = useAuth()
   const { data, syncState, pendingCount, syncError, refresh, undoAvailable, undoDelete, dismissUndo } = useData()
   const { notify } = useToast()
@@ -126,9 +136,9 @@ export function AppFrame() {
       </div>
       <div className="sidebar-scroll">
         {navGroups.map(group => <div key={group.caption} className="nav-group">
-          <div className="nav-caption">{group.caption}</div>
+          <div className="nav-caption">{navCaptionFor(group.caption, siteValues)}</div>
           <nav className="nav-list" aria-label={`${group.caption.toLowerCase()} sections`}>
-            {group.items.map(item => <NavItem key={item.to} {...item} />)}
+            {group.items.map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} />)}
           </nav>
         </div>)}
       </div>
@@ -153,7 +163,7 @@ export function AppFrame() {
 
     <main className="main-area">
       <div className="topline">
-        <div className="breadcrumb"><span>JEE 2027</span><ChevronRight size={13} /><strong>{allNav.find(item => item.to === location.pathname)?.label ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
+        <div className="breadcrumb"><span>JEE 2027</span><ChevronRight size={13} /><strong>{currentNavLabel(location.pathname, siteValues) ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
         <div className="topline-right">
           {user?.isLocal && <span className="preview-pill"><span />Local preview — not synced</span>}
           <button className={`sync-pill sync-${syncState}`} onClick={() => void refresh()} title={syncError ?? 'Click to sync now'}>
@@ -171,7 +181,7 @@ export function AppFrame() {
     </main>
 
     <nav className="mobile-nav" aria-label="Mobile navigation">
-      {mobileBar.map(item => <MobileNavItem key={item.to} item={item} />)}
+      {mobileBar.map(item => <MobileNavItem key={item.to} item={{ ...item, label: navLabelFor(item.to, item.label, siteValues) }} />)}
       <button className={`mobile-nav-item ${activeMore || mobileMore ? 'active' : ''}`} onClick={() => setMobileMore(true)} aria-expanded={mobileMore}>
         <MoreHorizontal size={20} /><span>More</span>
       </button>
@@ -181,8 +191,8 @@ export function AppFrame() {
         <div className="sheet-handle" /><div className="sheet-head"><div><span className="eyebrow">STUDY TOOLS</span><h2>More to explore</h2></div><IconButton label="Close navigation" onClick={() => setMobileMore(false)}><X size={19} /></IconButton></div>
         <nav className="sheet-nav">
           {navGroups.map(group => <div key={group.caption}>
-            <div className="sheet-nav-caption">{group.caption.charAt(0) + group.caption.slice(1).toLowerCase()}</div>
-            {group.items.filter(item => !mobileBar.some(bar => bar.to === item.to)).map(item => <NavItem key={item.to} {...item} onClick={() => setMobileMore(false)} />)}
+            <div className="sheet-nav-caption">{(() => { const caption = navCaptionFor(group.caption, siteValues); return caption.charAt(0) + caption.slice(1).toLowerCase() })()}</div>
+            {group.items.filter(item => !mobileBar.some(bar => bar.to === item.to)).map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} onClick={() => setMobileMore(false)} />)}
           </div>)}
           <button className="nav-link sheet-help" onClick={() => { setMobileMore(false); setShortcutsOpen(true) }}><CircleHelp size={18} /><span>Keyboard shortcuts</span></button>
           <button className="nav-link sheet-help" onClick={() => { setMobileMore(false); void signOut() }}><LogOut size={18} /><span>Sign out</span></button>

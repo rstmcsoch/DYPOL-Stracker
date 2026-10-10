@@ -5,12 +5,15 @@ export class ControlApiError extends Error {
   readonly code: string
   /** Optional safe hint from the server (for example `field:outcome` for an invalid filter). */
   readonly reason: string | null
-  constructor(status: number, code: string, message: string, reason: string | null = null) {
+  /** Per-field messages for a rejected content save (`field key → message`), or null. */
+  readonly fieldErrors: Record<string, string> | null
+  constructor(status: number, code: string, message: string, reason: string | null = null, fieldErrors: Record<string, string> | null = null) {
     super(message)
     this.name = 'ControlApiError'
     this.status = status
     this.code = code
     this.reason = reason
+    this.fieldErrors = fieldErrors
   }
 }
 
@@ -27,7 +30,7 @@ async function accessToken(): Promise<string> {
  * request header only: nothing is cached in local storage by this module, and the server
  * re-verifies it on every call.
  */
-export async function controlFetch<T>(path: string, init: { method?: 'GET' | 'POST'; body?: unknown } = {}): Promise<T> {
+export async function controlFetch<T>(path: string, init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown } = {}): Promise<T> {
   const token = await accessToken()
   let response: Response
   try {
@@ -50,7 +53,10 @@ export async function controlFetch<T>(path: string, init: { method?: 'GET' | 'PO
   if (!response.ok) {
     const code = typeof body?.error === 'string' ? body.error : 'request_failed'
     const message = typeof body?.message === 'string' ? body.message : 'The request could not be completed.'
-    throw new ControlApiError(response.status, code, message, typeof body?.reason === 'string' ? body.reason : null)
+    const fieldErrors = body?.errors && typeof body.errors === 'object' && !Array.isArray(body.errors)
+      ? Object.fromEntries(Object.entries(body.errors as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+      : null
+    throw new ControlApiError(response.status, code, message, typeof body?.reason === 'string' ? body.reason : null, fieldErrors)
   }
   if (!body) throw new ControlApiError(response.status, 'unexpected_response', 'The Control Center returned an unexpected response.')
   return body as T

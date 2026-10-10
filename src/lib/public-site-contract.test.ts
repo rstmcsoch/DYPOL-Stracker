@@ -18,7 +18,7 @@ const publicComponentFiles = readdirSync(publicDir).filter(file => file.endsWith
 
 const app = read('App.tsx')
 const landing = read('pages/LandingPage.tsx')
-const publicSources = [landing, ...publicComponentFiles.map(file => readFileSync(`${publicDir}${file}`, 'utf8'))].join('\n')
+const publicSources = [landing, readFileSync(`${srcDir}lib/site-content/registry.ts`, 'utf8'), ...publicComponentFiles.map(file => readFileSync(`${publicDir}${file}`, 'utf8'))].join('\n')
 const authPageFiles = ['pages/LoginPage.tsx', 'pages/SignupPage.tsx', 'pages/ResetPasswordPage.tsx']
 const authSources = authPageFiles.map(read)
 const styles = readFileSync(`${srcDir}styles/public.css`, 'utf8')
@@ -37,7 +37,7 @@ describe('public site routes', () => {
     expect(app).toContain('<Route path="/" element={<RootRoute />}>')
     const root = /function RootRoute\(\) \{([\s\S]*?)\n\}/.exec(app)?.[1] ?? ''
     expect(root).toContain('if (loading)')
-    expect(root).toContain('if (!user) return <LandingPage />')
+    expect(root).toContain('if (!user) return <SiteContentProvider><LandingPage /></SiteContentProvider>')
     expect(root).toContain('<Outlet />')
   })
 
@@ -104,14 +104,15 @@ describe('homepage honesty', () => {
   })
 
   it('claims no AI inference that DYPOL does not provide', () => {
-    const sections = readFileSync(`${publicDir}LandingSections.tsx`, 'utf8')
+    // Copy lives in the editable content registry; the component only renders it.
+    const sections = readFileSync(`${srcDir}lib/site-content/registry.ts`, 'utf8')
     expect(sections).toContain('DYPOL does not supply or proxy a model key')
     expect(sections).toContain('with AI switched off')
     expect(sections).not.toMatch(/unlimited ai|free ai|free inference/i)
   })
 
   it('keeps the privacy section to claims the architecture supports', () => {
-    const sections = readFileSync(`${publicDir}LandingSections.tsx`, 'utf8')
+    const sections = readFileSync(`${srcDir}lib/site-content/registry.ts`, 'utf8')
     expect(sections).not.toMatch(/military-grade|bank-level|unhackable/i)
     expect(sections).toContain('row-level security')
     expect(sections).toContain('AES-256-GCM')

@@ -103,6 +103,26 @@
       "destination": "/api/control/operations?route=user-access"
     },
     {
+      "source": "/api/control/appearance-state",
+      "destination": "/api/control/appearance?route=state"
+    },
+    {
+      "source": "/api/control/appearance-draft",
+      "destination": "/api/control/appearance?route=draft"
+    },
+    {
+      "source": "/api/control/appearance-discard",
+      "destination": "/api/control/appearance?route=discard"
+    },
+    {
+      "source": "/api/control/appearance-publish",
+      "destination": "/api/control/appearance?route=publish"
+    },
+    {
+      "source": "/api/control/appearance-restore",
+      "destination": "/api/control/appearance?route=restore"
+    },
+    {
       "source": "/api/control/(.*)",
       "destination": "/api/control/system?route=not-found"
     },

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu, Moon, Sun, X } from 'lucide-react'
+import { useSiteText } from '../../contexts/SiteContentContext'
 
 export type PublicTheme = 'light' | 'dark'
 
@@ -10,10 +11,10 @@ export type PublicTheme = 'light' | 'dark'
  * Every href is an anchor on the homepage — the links are real, not decorative.
  */
 export const PUBLIC_SECTIONS = [
-  { href: '#features', label: 'Features' },
-  { href: '#how-it-works', label: 'How It Works' },
-  { href: '#ai', label: 'AI Assistant' },
-  { href: '#privacy', label: 'Privacy' }
+  { href: '#features', key: 'public.header.features.label' },
+  { href: '#how-it-works', key: 'public.header.how.label' },
+  { href: '#ai', key: 'public.header.ai.label' },
+  { href: '#privacy', key: 'public.header.privacy.label' }
 ] as const
 
 export function PublicBrand({ compact = false }: { compact?: boolean }) {
@@ -59,6 +60,7 @@ function PublicThemeToggle({ theme, onToggle }: { theme: PublicTheme; onToggle: 
  */
 export function PublicHeader({ theme, onThemeToggle }: { theme: PublicTheme; onThemeToggle: () => void }) {
   const [open, setOpen] = useState(false)
+  const t = useSiteText
   const panelRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -89,12 +91,12 @@ export function PublicHeader({ theme, onThemeToggle }: { theme: PublicTheme; onT
     <div className="pub-header-inner">
       <PublicBrand />
       <nav className="pub-nav" aria-label="Stracker sections">
-        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-nav-link" href={section.href}>{section.label}</a>)}
+        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-nav-link" href={section.href}>{t(section.key)}</a>)}
       </nav>
       <PublicThemeToggle theme={theme} onToggle={onThemeToggle} />
       <div className="pub-header-actions">
-        <Link className="button button-quiet button-sm" to="/login">Log In</Link>
-        <Link className="button button-primary button-sm" to="/signup">Sign Up</Link>
+        <Link className="button button-quiet button-sm" to="/login">{t('public.header.login.label')}</Link>
+        <Link className="button button-primary button-sm" to="/signup">{t('public.header.signup.label')}</Link>
       </div>
       <button
         ref={triggerRef}
@@ -110,11 +112,11 @@ export function PublicHeader({ theme, onThemeToggle }: { theme: PublicTheme; onT
     </div>
     {open && <div className="pub-menu" id="stracker-public-menu" ref={panelRef}>
       <nav className="pub-menu-nav" aria-label="Stracker sections">
-        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-menu-link" href={section.href} onClick={() => setOpen(false)}>{section.label}</a>)}
+        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-menu-link" href={section.href} onClick={() => setOpen(false)}>{t(section.key)}</a>)}
       </nav>
       <div className="pub-menu-actions">
-        <Link className="button button-secondary" to="/login" onClick={() => setOpen(false)}>Log In</Link>
-        <Link className="button button-primary" to="/signup" onClick={() => setOpen(false)}>Sign Up</Link>
+        <Link className="button button-secondary" to="/login" onClick={() => setOpen(false)}>{t('public.header.login.label')}</Link>
+        <Link className="button button-primary" to="/signup" onClick={() => setOpen(false)}>{t('public.header.signup.label')}</Link>
       </div>
     </div>}
   </header>
