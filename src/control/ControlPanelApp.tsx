@@ -34,6 +34,17 @@ export default function ControlPanelApp() {
 function useRobotsDirective() {
   useEffect(() => {
     const previousTitle = document.title
+    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    const previousThemeColor = themeColor?.content
+    const createdThemeColor = !themeColor
+    const activeThemeColor = themeColor ?? document.createElement('meta')
+    if (createdThemeColor) {
+      activeThemeColor.name = 'theme-color'
+      document.head.appendChild(activeThemeColor)
+    }
+    // Match the browser/system chrome to the console's fixed dark surface.
+    activeThemeColor.content = '#0d0e11'
+
     const tag = document.createElement('meta')
     tag.name = 'robots'
     tag.content = 'noindex, nofollow, noarchive'
@@ -42,6 +53,8 @@ function useRobotsDirective() {
     document.title = 'Control Center · Stracker by DYPOL LABS'
     return () => {
       tag.remove()
+      if (themeColor && previousThemeColor !== undefined) themeColor.content = previousThemeColor
+      else if (createdThemeColor) activeThemeColor.remove()
       document.title = previousTitle
     }
   }, [])
