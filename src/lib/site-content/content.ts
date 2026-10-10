@@ -5,7 +5,7 @@ import {
   SITE_CONTENT_FIELDS,
   fieldDefinition,
   type FieldDefinition
-} from './registry'
+} from './registry.js'
 
 /**
  * Validation, resolution and diffing for owner-editable copy.
