@@ -29,32 +29,11 @@ deployment.
   Summaries are sanitized: keys that look like tokens, passwords, codes, cookies, keys, links or
   emails are dropped, and values are limited to short scalars.
 
-## Owner provisioning (one time, operator-run)
+## Owner provisioning
 
-The owner is the existing account `dypollabs@gmail.com`. The bootstrap script does not create,
-verify, or reset accounts, and it does not touch profile, settings, or study data. It fails if the
-account does not exist or if more than one account matches the email.
-
-Required environment, in the operator's shell only (never in the repository or a `VITE_` variable):
-
-| Variable | Purpose |
-| --- | --- |
-| `SUPABASE_URL` (or `VITE_SUPABASE_URL`) | Project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service-role secret, used only by this process |
-| `CONTROL_OWNER_EMAIL` | Optional; defaults to `dypollabs@gmail.com` |
-
-```bash
-npm run control:provision-owner:dry-run   # verify the target account, no writes
-npm run control:provision-owner           # grant, or confirm an existing grant
-```
-
-The script is idempotent. Running it again reports the existing grant and writes nothing new.
-Apply the migration first (`supabase/migrations/20261009210000_control_center_admin.sql`). A
-rollback is provided in `supabase/rollbacks/20261009210000_control_center_admin.down.sql`; it removes
-only the admin objects.
-
-**Awaiting configuration:** the migration has been checked only against an in-memory PGlite
-Postgres, not the production database.
+The owner assignment was provisioned in the existing `public.control_roles` table. The browser
+cannot grant or revoke a role. Do not run a separate owner bootstrap script or apply a duplicate
+`admin_*` schema migration.
 
 ## First sign-in and TOTP enrollment
 
