@@ -19,11 +19,11 @@ const world = vi.hoisted(() => ({
 
 vi.mock('@supabase/supabase-js', () => {
   const admin = {
-    rpc: async (name: string) => ({ data: name === 'admin_take_rate_slot' ? world.rateAllowed : null, error: null }),
+    rpc: async (name: string) => ({ data: name === 'control_take_rate_slot' ? world.rateAllowed : null, error: null }),
     from: (table: string) => ({
       select: () => ({
         eq: (_column: string, value: string) => ({
-          maybeSingle: async () => ({ data: table === 'admin_roles' ? world.roles[value] ?? null : null, error: table === 'admin_roles' ? world.roleError : null })
+          maybeSingle: async () => ({ data: table === 'control_roles' ? world.roles[value] ?? null : null, error: table === 'control_roles' ? world.roleError : null })
         }),
         order: () => ({ limit: async () => ({ data: [], error: null }) })
       }),
@@ -145,7 +145,7 @@ describe('console authentication and authorization', () => {
     expect(res.statusCode).toBe(403)
     expect(res.body).toMatchObject({ error: 'access_not_granted', message: 'Access not granted.' })
     expect(JSON.stringify(res.body)).not.toMatch(/owner|admin|role|secret/i)
-    const denied = world.writes.find(write => write.table === 'admin_audit_events')
+    const denied = world.writes.find(write => write.table === 'control_audit_events')
     expect(denied?.row).toMatchObject({ action: 'control.access', outcome: 'denied', actor_id: STUDENT })
   })
 
@@ -234,7 +234,7 @@ describe('account access changes', () => {
     const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody()))
     expect(res.statusCode).toBe(200)
     expect(world.updates).toEqual([{ id: TARGET, attributes: { ban_duration: '876000h' } }])
-    const audit = world.writes.find(write => write.table === 'admin_audit_events')
+    const audit = world.writes.find(write => write.table === 'control_audit_events')
     expect(audit?.row).toMatchObject({ action: 'user.suspend', outcome: 'success', target_id: TARGET, actor_id: OWNER })
     expect(JSON.stringify(audit?.row)).not.toMatch(/token|password|totp/i)
   })
@@ -290,7 +290,7 @@ describe('account access changes', () => {
     const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody()))
     expect(res.statusCode).toBe(502)
     expect(res.body).toMatchObject({ error: 'auth_update_failed' })
-    const audit = world.writes.find(write => write.table === 'admin_audit_events')
+    const audit = world.writes.find(write => write.table === 'control_audit_events')
     expect(audit?.row).toMatchObject({ outcome: 'failed' })
   })
 
