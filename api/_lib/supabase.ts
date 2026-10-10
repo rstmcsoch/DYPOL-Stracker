@@ -20,7 +20,7 @@ export interface AuthenticatedRequestContext {
  */
 function supabaseEnvironment(): SupabaseServerConfig {
   const resolved = supabaseServerConfig()
-  if (!resolved.ok) {
+  if (resolved.ok === false) {
     logAIEvent('warn', 'ai_backend_not_configured', {
       reason: resolved.reason,
       missing: resolved.missing.join(','),
