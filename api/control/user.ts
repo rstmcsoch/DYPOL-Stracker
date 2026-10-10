@@ -20,13 +20,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
 
     const [profile, role, chapters, tests, mistakes, sessions, lastTest, audit] = await Promise.all([
       admin.from('profiles').select('display_name, created_at').eq('user_id', id).maybeSingle(),
-      admin.from('admin_roles').select('role, revoked_at, granted_at').eq('user_id', id).maybeSingle(),
+      admin.from('control_roles').select('role, revoked_at, granted_at').eq('user_id', id).maybeSingle(),
       admin.from('chapters').select('id', { count: 'exact', head: true }).eq('user_id', id),
       admin.from('tests').select('id', { count: 'exact', head: true }).eq('user_id', id),
       admin.from('mistakes').select('id', { count: 'exact', head: true }).eq('user_id', id),
       admin.from('study_sessions').select('id', { count: 'exact', head: true }).eq('user_id', id),
       admin.from('tests').select('test_date').eq('user_id', id).order('test_date', { ascending: false }).limit(1).maybeSingle(),
-      admin.from('admin_audit_events').select('id, occurred_at, action, outcome, severity, actor_role, error_code, reason, summary').eq('target_id', id).order('occurred_at', { ascending: false }).limit(25)
+      admin.from('control_audit_events').select('id, created_at, action, result, actor_role, error_category, reason, before_summary, after_summary').eq('target_id', id).order('created_at', { ascending: false }).limit(25)
     ])
     const failures = [profile, role, chapters, tests, mistakes, sessions, lastTest, audit].filter(result => result.error)
     if (failures.length) throw new ApiError(503, 'user_detail_unavailable', 'Part of this account could not be loaded. Try again shortly.')
@@ -68,7 +68,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         studySessions: sessions.count ?? 0,
         lastTestDate: lastTest.data?.test_date ?? null
       },
-      audit: audit.data ?? []
+      audit: ((audit.data ?? []) as Array<Record<string, unknown>>).map(row => ({
+        id: row.id,
+        occurred_at: row.created_at,
+        action: row.action,
+        outcome: row.result === 'error' ? 'failed' : row.result,
+        severity: row.result === 'error' ? 'warning' : row.result === 'denied' ? 'notice' : 'info',
+        actor_role: row.actor_role,
+        error_code: row.error_category,
+        reason: row.reason,
+        summary: { ...((row.before_summary ?? {}) as Record<string, unknown>), ...((row.after_summary ?? {}) as Record<string, unknown>) }
+      }))
     })
   })
 }
