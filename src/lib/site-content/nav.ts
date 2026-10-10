@@ -1,5 +1,5 @@
-import { USER_NAV_ITEMS } from './registry'
-import type { SiteValues } from './content'
+import { USER_NAV_ITEMS } from './registry.js'
+import type { SiteValues } from './content.js'
 
 /**
  * Maps a notebook destination to the registry key of its editable label. The key only
