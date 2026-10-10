@@ -73,20 +73,19 @@ describe('control center isolation', () => {
     }
   })
 
-  it('grants the admin tables to the service role only, never to anon or authenticated', () => {
-    const migrations = walk(join(root, 'supabase', 'migrations')).filter(file => file.includes('control_center_admin'))
-    expect(migrations).toHaveLength(1)
-    const sql = code(read(migrations[0] ?? '').replace(/--[^\n]*/g, ''))
-    expect(sql).not.toMatch(/grant[^;]*\bto\s+(anon|authenticated|public)\b/i)
-    expect(sql).toMatch(/enable row level security/)
-    expect(sql).not.toMatch(/create policy[^;]*\bto\s+(anon|authenticated|public)\b/i)
-    expect(sql).not.toMatch(/\bdrop\s+table\b(?![^;]*if exists)/i)
-    expect(sql).not.toMatch(/\bdelete\s+from\s+(public\.)?(profiles|auth\.|user)/i)
+  it('uses the existing control schema and does not create a parallel admin schema', () => {
+    const migrations = walk(join(root, 'supabase', 'migrations'))
+    expect(migrations.filter(file => /control_center_admin|admin_roles|admin_audit_events|admin_rate_events/.test(file))).toHaveLength(0)
+    const backend = code(read('api/_lib/control.ts'))
+    expect(backend).toMatch(/from\('control_roles'\)/)
+    expect(backend).toMatch(/from\('control_audit_events'\)/)
+    expect(backend).toMatch(/rpc\('control_take_rate_slot'/)
+    expect(backend).not.toMatch(/admin_roles|admin_audit_events|admin_take_rate_slot/)
   })
 
-  it('bootstraps the owner through a script that never creates, verifies, or resets accounts', () => {
-    const script = code(read('scripts/owner-provisioning.mjs'))
-    expect(script).not.toMatch(/createUser|resetPassword|updateUserById\(\s*[^)]*password/)
-    expect(script).not.toMatch(/password/i)
+  it('does not ship a separate owner bootstrap script that writes to duplicate tables', () => {
+    expect(existsSync(join(root, 'scripts', 'owner-provisioning.mjs'))).toBe(false)
+    const backend = code(read('api/_lib/control.ts'))
+    expect(backend).toContain("from('control_roles')")
   })
 })

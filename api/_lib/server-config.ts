@@ -115,12 +115,13 @@ export function evaluateServerConfig(env: Env = process.env): ServerConfigStatus
     missing.push(...supabase.missing)
     invalid.push(...supabase.invalid)
     reason = supabase.reason
-  } else if (encryption === 'missing') {
+  }
+  if (encryption === 'missing') {
     missing.push(AI_CREDENTIALS_ENCRYPTION_KEY_VAR)
-    reason = 'credential_encryption_missing'
+    if (reason === null) reason = 'credential_encryption_missing'
   } else if (encryption === 'invalid') {
     invalid.push(AI_CREDENTIALS_ENCRYPTION_KEY_VAR)
-    reason = 'credential_encryption_invalid'
+    if (reason === null) reason = 'credential_encryption_invalid'
   }
   return { configured: checks.supabaseServerConfig && checks.credentialEncryption, checks, reason, missing, invalid }
 }
