@@ -135,16 +135,24 @@ export function validateOverrides(raw: unknown): { ok: true; value: SiteOverride
   return { ok: true, value: overrides }
 }
 
-/** Resolves stored overrides (or nothing) into a complete, safe value map. */
-export function resolveSiteValues(stored: SiteOverrides | null | undefined): SiteValues {
-  const values: SiteValues = { ...SITE_CONTENT_DEFAULTS }
-  if (!stored) return values
-  for (const [key, value] of Object.entries(stored)) {
+/** Lenient read used at render time. Invalid or unknown values fall back to the default. */
+export function sanitizeStoredOverrides(raw: unknown): SiteOverrides {
+  const overrides: SiteOverrides = {}
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return overrides
+  for (const [key, value] of Object.entries(raw)) {
     const definition = fieldDefinition(key)
     if (!definition) continue
     const result = validateFieldValue(definition, value)
-    if (result.ok) values[key] = result.value
+    if (result.ok && result.value !== definition.defaultValue) overrides[key] = result.value
   }
+  return overrides
+}
+
+/** Resolves stored overrides (or nothing) into a complete, safe value map. */
+export function resolveSiteValues(stored: SiteOverrides | null | undefined): SiteValues {
+  const values: SiteValues = { ...SITE_CONTENT_DEFAULTS }
+  const applied = sanitizeStoredOverrides(stored)
+  for (const [key, value] of Object.entries(applied)) values[key] = value
   return values
 }
 
