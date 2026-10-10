@@ -1,7 +1,7 @@
-import type { ApiRequest, ApiResponse } from '../_lib/http.js'
-import { ApiError, sendJson } from '../_lib/http.js'
-import { controlHandler, recordAuditEvent } from '../_lib/control.js'
-import { isUuid } from '../_lib/control-policy.js'
+import type { ApiRequest, ApiResponse } from '../http.js'
+import { ApiError, sendJson } from '../http.js'
+import { controlHandler, recordAuditEvent } from '../control.js'
+import { isUuid } from '../control-policy.js'
 
 /**
  * GET /api/control/user?id=<uuid>

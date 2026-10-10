@@ -1,6 +1,6 @@
-import type { ApiRequest, ApiResponse } from '../_lib/http.js'
-import { ApiError, sendJson } from '../_lib/http.js'
-import { controlHandler } from '../_lib/control.js'
+import type { ApiRequest, ApiResponse } from '../http.js'
+import { ApiError, sendJson } from '../http.js'
+import { controlHandler } from '../control.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const RANGES = { today: 1, '7d': 7, '30d': 30 } as const

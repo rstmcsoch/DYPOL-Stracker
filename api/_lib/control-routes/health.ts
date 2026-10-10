@@ -1,8 +1,8 @@
-import type { ApiRequest, ApiResponse } from '../_lib/http.js'
-import { sendJson } from '../_lib/http.js'
-import { controlHandler } from '../_lib/control.js'
-import { evaluateServerConfig, supabaseServerConfig } from '../_lib/server-config.js'
-import { shortCommit } from '../_lib/control-policy.js'
+import type { ApiRequest, ApiResponse } from '../http.js'
+import { sendJson } from '../http.js'
+import { controlHandler } from '../control.js'
+import { evaluateServerConfig, supabaseServerConfig } from '../server-config.js'
+import { shortCommit } from '../control-policy.js'
 
 type CheckStatus = 'healthy' | 'degraded' | 'unavailable' | 'unknown'
 

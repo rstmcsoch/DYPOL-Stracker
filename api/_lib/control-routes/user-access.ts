@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import type { ApiRequest, ApiResponse } from '../_lib/http.js'
-import { ApiError, readJson, sendJson } from '../_lib/http.js'
-import { controlHandler, recordAuditEvent, requireRecentMfa } from '../_lib/control.js'
+import type { ApiRequest, ApiResponse } from '../http.js'
+import { ApiError, readJson, sendJson } from '../http.js'
+import { controlHandler, recordAuditEvent, requireRecentMfa } from '../control.js'
 
 /** Effectively permanent ban that Supabase Auth honours on the next token refresh. */
 const SUSPEND_DURATION = '876000h'

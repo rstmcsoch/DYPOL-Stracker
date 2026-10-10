@@ -1,6 +1,6 @@
-import type { ApiRequest, ApiResponse } from '../_lib/http.js'
-import { sendJson } from '../_lib/http.js'
-import { controlHandler } from '../_lib/control.js'
+import type { ApiRequest, ApiResponse } from '../http.js'
+import { sendJson } from '../http.js'
+import { controlHandler } from '../control.js'
 
 /**
  * GET /api/control/roles

@@ -1,7 +1,7 @@
-import type { ApiRequest, ApiResponse } from '../_lib/http.js'
-import { sendJson } from '../_lib/http.js'
-import { controlHandler } from '../_lib/control.js'
-import { isAal2, isRecentMfa } from '../_lib/control-policy.js'
+import type { ApiRequest, ApiResponse } from '../http.js'
+import { sendJson } from '../http.js'
+import { controlHandler } from '../control.js'
+import { isAal2, isRecentMfa } from '../control-policy.js'
 
 /**
  * GET /api/control/session

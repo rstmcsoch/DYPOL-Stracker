@@ -1,7 +1,7 @@
-import type { ApiRequest, ApiResponse } from '../_lib/http.js'
-import { ApiError, sendJson } from '../_lib/http.js'
-import { controlHandler } from '../_lib/control.js'
-import { parsePage, parseSearch, parseUserSort, parseUserStatus } from '../_lib/control-policy.js'
+import type { ApiRequest, ApiResponse } from '../http.js'
+import { ApiError, sendJson } from '../http.js'
+import { controlHandler } from '../control.js'
+import { parsePage, parseSearch, parseUserSort, parseUserStatus } from '../control-policy.js'
 
 type AuthUserRow = {
   id: string

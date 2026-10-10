@@ -90,7 +90,7 @@ const claimsFor = (sub: string, aal: string, totpAgeSeconds: number | null) => (
 })
 
 async function call(path: string, req: unknown) {
-  const mod = (await import(`./${path}.ts`)) as { default: (req: never, res: never) => Promise<void> }
+  const mod = (await import(`../_lib/control-routes/${path}.ts`)) as { default: (req: never, res: never) => Promise<void> }
   const res = fakeResponse()
   await mod.default(req as never, res as never)
   return res
