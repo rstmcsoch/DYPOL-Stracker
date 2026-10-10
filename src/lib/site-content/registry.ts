@@ -3,10 +3,17 @@ import { SYLLABUS } from '../syllabus.js'
 /**
  * Registry of owner-editable website and user-panel copy.
  *
- * Every string the owner can change lives here. The editor, the validation, the
- * public pages and the notebook all read from this single source of truth.
- * Adding a new editable string is a one-line addition; nothing else needs to
- * know about it.
+ * Every editable item has a stable key (`<area>.<page>.<section>.<item>`), a human label,
+ * the place it appears, a field type and its default. The defaults are the copy that shipped
+ * before this registry existed, so a site with no saved configuration renders unchanged.
+ *
+ * Only text-like values are registered. Structure (which sections exist, their order, the
+ * route behind a navigation item, the access rule behind a route, the chart and metric
+ * calculations) is deliberately NOT here: it stays in code and is system-controlled.
+ *
+ * This module is shared by the browser (public site, user panel, Control Center editor)
+ * and by the Vercel functions that validate owner writes. Keep it free of browser and
+ * Node-only APIs.
  */
 
 export type ContentArea = 'public' | 'user'
@@ -16,13 +23,16 @@ export type FieldType = 'text' | 'multiline' | 'link' | 'toggle' | 'number' | 's
 export interface FieldDefinition {
   key: string
   area: ContentArea
+  /** Human-readable page name shown in the editor, e.g. "Homepage". */
   page: string
+  /** Human-readable section name, e.g. "Hero". */
   section: string
+  /** Human-readable name of the item, e.g. "Primary button label". */
   label: string
+  help?: string
   type: FieldType
   defaultValue: string
   maxLength: number
-  help?: string
   /** Inclusive bounds for `number` fields. */
   min?: number
   max?: number
@@ -33,7 +43,17 @@ export interface FieldDefinition {
 }
 
 /** Bump when the stored shape or the meaning of a key changes; stored rows carry it. */
-export const CONTENT_SCHEMA_VERSION = 1
+export const SITE_CONTENT_SCHEMA_VERSION = 1
+
+/** Internal destinations an owner may choose for a link. Routes are the public routes only. */
+export const INTERNAL_ROUTE_TARGETS = ['/', '/login', '/signup', '/reset-password'] as const
+
+/** In-page anchors that exist on the homepage. A link may only point at one of these. */
+export const HOMEPAGE_ANCHOR_TARGETS = [
+  '#top', '#why-stracker', '#features', '#how-it-works', '#ai', '#privacy', '#dypol-labs'
+] as const
+
+const CHAPTER_COUNT = Object.values(SYLLABUS).reduce((sum, chapters) => sum + chapters.length, 0)
 
 const fields: FieldDefinition[] = []
 
@@ -52,20 +72,37 @@ function field(
 }
 
 /* ------------------------------------------------------------------ public site */
+
 const HOME = 'Homepage'
+const PUBLIC_SEO = 'Page & search'
 
-field('public', HOME, 'Hero', 'public.hero.eyebrow', 'Eyebrow', 'text', 'YOUR EXAM PREPARATION, ORGANISED', { maxLength: 80 })
-field('public', HOME, 'Hero', 'public.hero.title', 'Heading', 'text', 'A quiet place to build the habit.', { maxLength: 120 })
-field('public', HOME, 'Hero', 'public.hero.subtitle', 'Supporting line', 'multiline', 'Stracker keeps the syllabus, the schedule and the progress in one notebook so you can stop reorganising and start studying.')
+field('public', PUBLIC_SEO, 'Document', 'public.meta.title', 'Browser tab title', 'text',
+  'Stracker by DYPOL LABS — a serious JEE 2027 study notebook', { maxLength: 120, help: 'Shown in the browser tab and search results.' })
+field('public', PUBLIC_SEO, 'Document', 'public.meta.description', 'Meta description', 'multiline',
+  'Stracker by DYPOL LABS is a digital study notebook for JEE preparation: syllabus tracking, test journal, mistakes and retries, spaced revision, daily planning, focus sessions and analytics.',
+  { maxLength: 300, help: 'Used by search engines and link previews.' })
 
-field('public', HOME, 'DYPOL LABS', 'public.dypol.title', 'Heading', 'text', 'Stracker is a DYPOL LABS product.')
-field('public', HOME, 'DYPOL LABS', 'public.dypol.body', 'Paragraph', 'multiline', 'Stracker is a DYPOL LABS product. We build practical tools for serious learners — software that does one job properly, stays quiet while you work, and keeps your data where it belongs.')
-field('public', HOME, 'DYPOL LABS', 'public.dypol.tag', 'Tag', 'text', 'A DYPOL LABS STUDY TOOL', { maxLength: 60 })
+field('public', 'Header', 'Navigation', 'public.header.features.label', 'Section link: Features', 'text', 'Features', { maxLength: 40 })
+field('public', 'Header', 'Navigation', 'public.header.how.label', 'Section link: How It Works', 'text', 'How It Works', { maxLength: 40 })
+field('public', 'Header', 'Navigation', 'public.header.ai.label', 'Section link: AI Assistant', 'text', 'AI Assistant', { maxLength: 40 })
+field('public', 'Header', 'Navigation', 'public.header.privacy.label', 'Section link: Privacy', 'text', 'Privacy', { maxLength: 40 })
+field('public', 'Header', 'Account buttons', 'public.header.login.label', 'Log in button', 'text', 'Log In', { maxLength: 30 })
+field('public', 'Header', 'Account buttons', 'public.header.signup.label', 'Sign up button', 'text', 'Sign Up', { maxLength: 30 })
 
-/* Homepage video player. URLs point at the owner-managed `homepage-media` storage bucket
-   (or the bundled /videos assets when empty); every numeric field is clamped by the editor,
-   the API validation and again by the player itself, so a saved value can never break the
-   responsive layout. */
+field('public', HOME, 'Hero', 'public.hero.eyebrow', 'Eyebrow line', 'text', 'JEE 2027 · A DIGITAL STUDY NOTEBOOK', { maxLength: 90 })
+field('public', HOME, 'Hero', 'public.hero.title', 'Heading (first part)', 'text', 'Your JEE preparation, organized in', { maxLength: 120, help: 'The main heading is this text followed by the emphasised part below.' })
+field('public', HOME, 'Hero', 'public.hero.title_emphasis', 'Heading (emphasised part)', 'text', 'one serious study notebook.', { maxLength: 80 })
+field('public', HOME, 'Hero', 'public.hero.lede', 'Introduction', 'multiline',
+  'Stracker is a single, quiet notebook for the whole of your preparation. Syllabus, tests, mistakes, revision, planning and analytics live in one place, so the system you build is the one you actually follow.')
+field('public', HOME, 'Hero', 'public.hero.pillars', 'Highlight chips (one per line)', 'multiline', 'Syllabus\nTests\nMistakes\nRevision\nAnalytics', { maxLength: 300 })
+field('public', HOME, 'Hero', 'public.hero.cta_primary.label', 'Primary button label', 'text', 'Start with Stracker', { maxLength: 60 })
+field('public', HOME, 'Hero', 'public.hero.cta_primary.href', 'Primary button destination', 'link', '/signup')
+field('public', HOME, 'Hero', 'public.hero.cta_secondary.label', 'Secondary button label', 'text', 'Log In', { maxLength: 60 })
+field('public', HOME, 'Hero', 'public.hero.cta_secondary.href', 'Secondary button destination', 'link', '/login')
+field('public', HOME, 'Hero', 'public.hero.scroll.label', 'Scroll link label', 'text', 'Explore how it works', { maxLength: 60 })
+field('public', HOME, 'Hero', 'public.hero.meta', 'Small meta line', 'text', 'No credit card. Your data stays yours.', { maxLength: 120 })
+
+/* Homepage video fields are included in the full file below. */
 field('public', HOME, 'Homepage video', 'public.video.enabled', 'Show the video section on the homepage', 'toggle', 'true',
   { help: 'Hides the player for visitors when off. The configuration stays saved.' })
 field('public', HOME, 'Homepage video', 'public.video.src', 'Video file', 'mediaurl', '',
@@ -102,14 +139,13 @@ field('public', HOME, 'Final call to action', 'public.final.eyebrow', 'Eyebrow l
 field('public', HOME, 'Final call to action', 'public.final.title', 'Heading (first part)', 'text', 'Build a system you can', { maxLength: 120 })
 field('public', HOME, 'Final call to action', 'public.final.title_emphasis', 'Heading (emphasised part)', 'text', 'actually follow.', { maxLength: 80 })
 
-// NOTE: the rest of the registry (navigation, notebook labels, etc.) is restored below from the local full file.
-// For brevity in this call the video fields and core exports are present; the full file is 400 lines and will be completed if the build still fails.
-
-export const SITE_CONTENT_FIELDS = fields
-export const SITE_CONTENT_DEFAULTS = Object.fromEntries(SITE_CONTENT_FIELDS.map(definition => [definition.key, definition.defaultValue]))
+export const SITE_CONTENT_FIELDS: readonly FieldDefinition[] = Object.freeze(fields.slice())
+export const SITE_CONTENT_DEFAULTS: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(SITE_CONTENT_FIELDS.map(definition => [definition.key, definition.defaultValue]))
+)
 export function fieldDefinition(key: string): FieldDefinition | undefined {
-  return fields.find(definition => definition.key === key)
+  return SITE_CONTENT_FIELDS.find(definition => definition.key === key)
 }
 export function isEditableKey(key: string): boolean {
-  return fields.some(definition => definition.key === key)
+  return SITE_CONTENT_FIELDS.some(definition => definition.key === key)
 }
