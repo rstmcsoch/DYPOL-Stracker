@@ -9,7 +9,7 @@ import { controlHandler } from '../_lib/control.js'
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   await controlHandler(req, res, ['GET'], { requireAal2: true }, async context => {
-    const { data, error } = await context.admin.from('control_roles).select('user_id, role, granted_at, revoked_at').order('granted_at', { ascending: true })
+    const { data, error } = await context.admin.from('control_roles').select('user_id, role, granted_at, revoked_at').order('granted_at', { ascending: true })
     if (error) throw new Error('roles_query_failed')
     const assignments = await Promise.all((data ?? []).map(async row => {
       const { data: auth } = await context.admin.auth.admin.getUserById(row.user_id as string)
