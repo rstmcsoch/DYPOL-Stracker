@@ -1,33 +1,48 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Download } from 'lucide-react'
-import { controlDownload, controlFetch, ControlApiError, type AuditRow } from '../api'
+import { Download, FilterX } from 'lucide-react'
+import { controlDownload, controlFetch, ControlApiError, type AuditResponse, type AuditRow } from '../api'
 import { Badge, Button, EmptyState, Field, Panel, Spinner, ErrorState, Pager, Skeleton } from '../ui'
 import { PageHeader } from '../pageParts'
-import { formatDateTime, shortId } from '../policy'
+import { CONSOLE_BASE, formatDateTime, formatDateTimeFull, formatDayRange, shortId } from '../policy'
 import { useSensitiveAction } from '../reauth'
 import { useToast } from '../../contexts/ToastContext'
-import { useSearchParams } from 'react-router-dom'
+import { useTimeZone, TimeZoneSwitch } from '../time'
+import { useControlSession } from '../ControlSession'
+import { AUDIT_ACTIONS, describeAuditEvent } from '../../lib/control-audit-catalog'
+import {
+  auditActionChoices,
+  auditFiltersToParams,
+  buildAuditQuery,
+  DEFAULT_AUDIT_FILTERS,
+  invalidFilterField,
+  isDefaultAuditFilters,
+  readAuditFilters,
+  readAuditPage,
+  type AuditFilters,
+  type AuditOutcomeOption
+} from '../audit-filters'
 
 const PAGE_SIZE = 50
-const OUTCOMES = ['all', 'success', 'denied', 'failed'] as const
-
-interface AuditResponse { events: AuditRow[]; total: number; page: number; pageSize: number }
 
 function outcomeTone(outcome: AuditRow['outcome']): 'ok' | 'warn' | 'crit' {
   return outcome === 'success' ? 'ok' : outcome === 'denied' ? 'warn' : 'crit'
 }
 
-/** Read-only audit table, also used by account detail pages. */
+/** Read-only audit table, also used by account detail pages. Times are shown in the console's display zone. */
 export function AuditTable({ rows, emptyTitle, emptyBody }: { rows: AuditRow[]; emptyTitle: string; emptyBody: string }) {
+  const { zone, shortLabel } = useTimeZone()
+  const { phase } = useControlSession()
+  const selfId = phase.kind === 'granted' ? phase.session.userId : null
   if (rows.length === 0) return <EmptyState title={emptyTitle} body={emptyBody} />
   return (
     <div className="cc-table-wrap" tabIndex={0} aria-label="Audit events, scrollable on small screens">
       <table className="cc-table cc-table--audit">
         <thead>
           <tr>
-            <th scope="col">When</th>
-            <th scope="col">Action</th>
+            <th scope="col">When <span className="cc-table__unit">({shortLabel})</span></th>
+            <th scope="col">Event</th>
             <th scope="col">Outcome</th>
             <th scope="col">Actor</th>
             <th scope="col">Target</th>
@@ -35,21 +50,31 @@ export function AuditTable({ rows, emptyTitle, emptyBody }: { rows: AuditRow[]; 
           </tr>
         </thead>
         <tbody>
-          {rows.map(row => (
-            <tr key={row.id}>
-              <td>{formatDateTime(row.occurred_at)}</td>
-              <td><code>{row.action}</code></td>
-              <td><Badge tone={outcomeTone(row.outcome)}>{row.outcome}</Badge></td>
-              <td className="cc-mono">{row.actor_id ? shortId(row.actor_id) : row.actor_role ?? 'system'}</td>
-              <td className="cc-mono">{row.target_id ? shortId(row.target_id) : '—'}</td>
-              <td>
-                {row.error_code && <span className="cc-muted">{row.error_code}</span>}
-                {row.reason && <span className="cc-reason">{row.reason}</span>}
-                {row.summary && Object.keys(row.summary).length > 0 && <span className="cc-muted cc-mono">{Object.entries(row.summary).map(([k, v]) => `${k}=${String(v)}`).join(' · ')}</span>}
-                {!row.error_code && !row.reason && (!row.summary || Object.keys(row.summary).length === 0) && '—'}
-              </td>
-            </tr>
-          ))}
+          {rows.map(row => {
+            const description = describeAuditEvent(row, { selfId })
+            const summaryEntries = Object.entries(row.summary ?? {})
+            return (
+              <tr key={row.id}>
+                <td><time dateTime={row.occurred_at} title={formatDateTimeFull(row.occurred_at, zone)}>{formatDateTime(row.occurred_at, zone)}</time></td>
+                <td>
+                  <span className="cc-event__title">{description.title}</span>
+                  <code className="cc-event__code">{row.action}</code>
+                </td>
+                <td><Badge tone={outcomeTone(row.outcome)}>{row.outcome}</Badge></td>
+                <td className="cc-mono" title={row.actor_id ?? undefined}>{description.actor}</td>
+                <td className="cc-mono">
+                  {row.target_id && row.target_type === 'user'
+                    ? <Link to={`${CONSOLE_BASE}/users/${row.target_id}`} className="cc-link" title={row.target_id}>{shortId(row.target_id)}</Link>
+                    : row.target_id ? <span title={row.target_id}>{shortId(row.target_id)}</span> : '—'}
+                </td>
+                <td>
+                  {description.detail && <span className="cc-reason">{description.detail}</span>}
+                  {summaryEntries.length > 0 && <span className="cc-muted cc-mono cc-wrap">{summaryEntries.map(([k, v]) => `${k}=${String(v)}`).join(' · ')}</span>}
+                  {!description.detail && summaryEntries.length === 0 && '—'}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -58,38 +83,42 @@ export function AuditTable({ rows, emptyTitle, emptyBody }: { rows: AuditRow[]; 
 
 export default function AuditPage() {
   const [params, setParams] = useSearchParams()
-  const outcome = (OUTCOMES as readonly string[]).includes(params.get('outcome') ?? '') ? params.get('outcome') ?? 'all' : 'all'
-  const action = params.get('action') ?? ''
-  const target = params.get('target') ?? ''
-  const from = params.get('from') ?? ''
-  const to = params.get('to') ?? ''
-  const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1)
-  const [actionDraft, setActionDraft] = useState(action)
-  const [targetDraft, setTargetDraft] = useState(target)
+  const filters = useMemo(() => readAuditFilters(params), [params])
+  const page = readAuditPage(params)
+  const { zone, longLabel } = useTimeZone()
+  const [draft, setDraft] = useState<AuditFilters>(filters)
   const [exporting, setExporting] = useState(false)
   const { notify } = useToast()
   const sensitive = useSensitiveAction()
 
-  const update = (changes: Record<string, string>) => {
-    setParams(previous => {
-      const next = new URLSearchParams(previous)
-      for (const [key, value] of Object.entries(changes)) { if (value && value !== 'all') next.set(key, value); else next.delete(key) }
-      if (!('page' in changes)) next.delete('page')
-      return next
-    })
+  // Keep the visible controls in step with the URL (back/forward, links from other pages, Clear).
+  useEffect(() => { setDraft(filters) }, [filters])
+
+  const apply = (next: AuditFilters, nextPage = 1) => {
+    setParams(auditFiltersToParams(next, nextPage))
+  }
+  const clear = () => {
+    setDraft(DEFAULT_AUDIT_FILTERS)
+    apply(DEFAULT_AUDIT_FILTERS)
   }
 
-  const filterString = new URLSearchParams({ outcome, action, target, from, to }).toString()
+  const queryString = buildAuditQuery(filters, zone)
   const query = useQuery({
-    queryKey: ['control', 'audit', outcome, action, target, from, to, page],
-    queryFn: () => controlFetch<AuditResponse>(`audit?${filterString}&page=${page}&pageSize=${PAGE_SIZE}`),
-    placeholderData: previous => previous
+    queryKey: ['control', 'audit', queryString, page],
+    queryFn: () => controlFetch<AuditResponse>(`audit?${queryString}&page=${page}&pageSize=${PAGE_SIZE}`),
+    placeholderData: previous => previous,
+    retry: (count, error) => !(error instanceof ControlApiError && error.status === 400) && count < 1
   })
 
+  const invalidField = query.isError && query.error instanceof ControlApiError ? invalidFilterField(query.error.reason) : null
+  const resultsUsable = Boolean(query.data) && !query.isError
+  const canExport = resultsUsable && !exporting && !query.isFetching
+
   const exportCsv = async () => {
+    if (!canExport) return
     setExporting(true)
     try {
-      const { blob, filename } = await sensitive(() => controlDownload(`audit?${filterString}&format=csv`))
+      const { blob, filename } = await sensitive(() => controlDownload(`audit?${buildAuditQuery(filters, zone, { format: 'csv' })}`))
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -106,45 +135,85 @@ export default function AuditPage() {
     }
   }
 
+  const draftDirty = JSON.stringify(draft) !== JSON.stringify(filters)
+  const filtered = !isDefaultAuditFilters(filters)
+  const exportTitle = !resultsUsable ? 'Export is available once the audit log has loaded successfully.' : query.isFetching ? 'Wait for the current query to finish.' : `Export up to 5,000 rows matching the current filters (${longLabel}).`
+
   return (
     <>
       <PageHeader
         title="Audit log"
-        description="Append-only record of administrative access, denials, account changes and exports. Entries cannot be edited or deleted."
-        actions={<Button variant="ghost" onClick={() => void exportCsv()} disabled={exporting}>{exporting ? <Spinner label="Exporting…" /> : <><Download size={15} aria-hidden="true" /> Export CSV</>}</Button>}
+        description="Append-only record of console access, denials, account changes and exports. Entries cannot be edited or deleted."
+        actions={
+          <Button variant="default" onClick={() => void exportCsv()} disabled={!canExport} title={exportTitle} aria-describedby="cc-audit-export-help">
+            {exporting ? <Spinner label="Exporting…" /> : <><Download size={15} aria-hidden="true" /> Export CSV</>}
+          </Button>
+        }
       />
+      <span id="cc-audit-export-help" className="cc-sr-only">{exportTitle}</span>
       <Panel>
-        <form className="cc-toolbar cc-toolbar--wrap" role="search" onSubmit={event => { event.preventDefault(); update({ action: actionDraft.trim(), target: targetDraft.trim() }) }}>
-          <label className="cc-select">
-            <span className="cc-sr-only">Outcome</span>
-            <select value={outcome} onChange={event => update({ outcome: event.target.value })}>
+        <form
+          className="cc-filters"
+          role="search"
+          aria-label="Audit log filters"
+          onSubmit={event => { event.preventDefault(); apply({ ...draft, action: draft.action.trim(), target: draft.target.trim().toLowerCase() }) }}
+        >
+          <Field label="Action" htmlFor="cc-audit-action" error={invalidField === 'action' ? 'Not a valid action name.' : null}>
+            <select id="cc-audit-action" className="cc-input" value={draft.action} onChange={event => setDraft(current => ({ ...current, action: event.target.value }))}>
+              <option value="">All actions</option>
+              {auditActionChoices(draft.action).map(name => {
+                const known = AUDIT_ACTIONS.find(entry => entry.action === name)
+                return <option key={name} value={name}>{known ? `${known.label} (${name})` : name}</option>
+              })}
+            </select>
+          </Field>
+          <Field label="Target account ID" htmlFor="cc-audit-target" hint="Full account ID (UUID)" error={invalidField === 'target' ? 'Enter the full account ID.' : null}>
+            <input id="cc-audit-target" className="cc-input cc-mono" value={draft.target} onChange={event => setDraft(current => ({ ...current, target: event.target.value }))} maxLength={36} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autoComplete="off" spellCheck={false} inputMode="text" />
+          </Field>
+          <Field label="From" htmlFor="cc-audit-from" error={invalidField === 'from' ? 'Choose a valid date.' : null}>
+            <input id="cc-audit-from" className="cc-input" type="date" value={draft.from} max={draft.to || undefined} onChange={event => setDraft(current => ({ ...current, from: event.target.value }))} />
+          </Field>
+          <Field label="To" htmlFor="cc-audit-to" error={invalidField === 'to' ? 'Choose a date on or after From.' : null}>
+            <input id="cc-audit-to" className="cc-input" type="date" value={draft.to} min={draft.from || undefined} onChange={event => setDraft(current => ({ ...current, to: event.target.value }))} />
+          </Field>
+          <Field label="Outcome" htmlFor="cc-audit-outcome" error={invalidField === 'outcome' ? 'Choose an outcome.' : null}>
+            <select id="cc-audit-outcome" className="cc-input" value={draft.outcome} onChange={event => setDraft(current => ({ ...current, outcome: event.target.value as AuditOutcomeOption }))}>
               <option value="all">All outcomes</option>
               <option value="success">Success</option>
               <option value="denied">Denied</option>
               <option value="failed">Failed</option>
             </select>
-          </label>
-          <Field label="Action" htmlFor="cc-audit-action" hint="e.g. user.suspend">
-            <input id="cc-audit-action" className="cc-input" value={actionDraft} onChange={event => setActionDraft(event.target.value)} maxLength={80} />
           </Field>
-          <Field label="Target account ID" htmlFor="cc-audit-target" hint="Full UUID">
-            <input id="cc-audit-target" className="cc-input cc-mono" value={targetDraft} onChange={event => setTargetDraft(event.target.value)} maxLength={36} />
-          </Field>
-          <Field label="From" htmlFor="cc-audit-from">
-            <input id="cc-audit-from" className="cc-input" type="date" value={from} onChange={event => update({ from: event.target.value })} />
-          </Field>
-          <Field label="To" htmlFor="cc-audit-to">
-            <input id="cc-audit-to" className="cc-input" type="date" value={to} onChange={event => update({ to: event.target.value })} />
-          </Field>
-          <div className="cc-toolbar__submit"><Button type="submit" variant="ghost">Apply text filters</Button></div>
+          <div className="cc-filters__actions">
+            <Button type="submit" variant="primary" disabled={query.isFetching && !draftDirty}>Apply filters</Button>
+            <Button type="button" variant="ghost" onClick={clear} disabled={!filtered && !draftDirty}><FilterX size={15} aria-hidden="true" /> Clear filters</Button>
+          </div>
+          <p className="cc-filters__summary" role="status">
+            {filters.from || filters.to
+              ? <>Dates are whole calendar days in {longLabel}{filters.from && filters.to ? `: ${formatDayRange(filters.from, filters.to)}` : filters.from ? ` from ${formatDayRange(filters.from, filters.from)}` : ` up to ${formatDayRange(filters.to, filters.to)}`}.</>
+              : <>Dates and times are shown in {longLabel}.</>}
+            {' '}<TimeZoneSwitch />
+          </p>
         </form>
 
         {query.isPending && <Skeleton rows={8} />}
-        {query.isError && !query.data && <ErrorState message={query.error instanceof Error ? query.error.message : 'The audit log could not be loaded.'} onRetry={() => void query.refetch()} />}
+        {query.isError && !query.data && (
+          <ErrorState
+            message={query.error instanceof Error ? query.error.message : 'The audit log could not be loaded.'}
+            onRetry={() => void query.refetch()}
+            secondaryAction={filtered ? <Button variant="default" onClick={clear}><FilterX size={15} aria-hidden="true" /> Clear filters</Button> : undefined}
+          />
+        )}
+        {query.isError && query.data && (
+          <p className="cc-note cc-note--warn" role="status">
+            {query.error instanceof Error ? query.error.message : 'The latest request failed.'} Showing the previous results; export is disabled until a query succeeds.
+            {' '}<button type="button" className="cc-link" onClick={() => void query.refetch()}>Try again</button>
+          </p>
+        )}
         {query.data && (
           <>
-            <AuditTable rows={query.data.events} emptyTitle="No matching events" emptyBody="Try a wider date range or clear the filters." />
-            {query.data.total > 0 && <Pager page={query.data.page} pageSize={query.data.pageSize} total={query.data.total} onPage={next => update({ page: String(next) })} />}
+            <AuditTable rows={query.data.events} emptyTitle="No matching events" emptyBody={filtered ? 'Try a wider date range or clear the filters.' : 'Console access, denials, account changes and exports appear here once they happen.'} />
+            {query.data.total > 0 && <Pager page={query.data.page} pageSize={query.data.pageSize} total={query.data.total} onPage={next => apply(filters, next)} />}
           </>
         )}
       </Panel>

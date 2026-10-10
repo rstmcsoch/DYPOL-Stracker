@@ -3,6 +3,7 @@ import { controlFetch } from '../api'
 import { Badge, EmptyState, Panel, Skeleton, ErrorState } from '../ui'
 import { PageHeader } from '../pageParts'
 import { formatDateTime } from '../policy'
+import { useTimeZone } from '../time'
 
 interface RolesResponse {
   assignments: Array<{ userId: string; email: string; role: string; grantedAt: string; revokedAt: string | null; active: boolean }>
@@ -16,6 +17,7 @@ const ROLE_MODEL = [
 ]
 
 export default function RolesPage() {
+  const { zone } = useTimeZone()
   const query = useQuery({ queryKey: ['control', 'roles'], queryFn: () => controlFetch<RolesResponse>('roles'), staleTime: 60_000 })
 
   return (
@@ -35,8 +37,8 @@ export default function RolesPage() {
                   <tr key={`${item.userId}-${item.grantedAt}`}>
                     <td>{item.email || <span className="cc-mono">{item.userId.slice(0, 8)}…</span>}</td>
                     <td><code>{item.role}</code></td>
-                    <td>{formatDateTime(item.grantedAt)}</td>
-                    <td>{item.active ? <Badge tone="ok">Active</Badge> : <Badge tone="neutral">Revoked {formatDateTime(item.revokedAt)}</Badge>}</td>
+                    <td>{formatDateTime(item.grantedAt, zone)}</td>
+                    <td>{item.active ? <Badge tone="ok">Active</Badge> : <Badge tone="neutral">Revoked {formatDateTime(item.revokedAt, zone)}</Badge>}</td>
                   </tr>
                 ))}
               </tbody>

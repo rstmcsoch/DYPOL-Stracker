@@ -4,8 +4,9 @@ import { ControlSessionProvider, useControlSession } from './ControlSession'
 import { ControlLayout } from './ControlLayout'
 import { AccessDenied, GateError, MfaGate, SignInGate } from './gates'
 import { ReauthProvider } from './reauth'
+import { TimeZoneProvider } from './time'
 import { Skeleton } from './ui'
-import { CONSOLE_BASE } from './policy'
+import { CONSOLE_BASE, CONSOLE_NAME } from './policy'
 import './control.css'
 
 const OverviewPage = lazy(() => import('./pages/OverviewPage'))
@@ -25,7 +26,9 @@ export default function ControlPanelApp() {
   return (
     <div className="cc-root">
       <ControlSessionProvider>
-        <ControlRouter />
+        <TimeZoneProvider>
+          <ControlRouter />
+        </TimeZoneProvider>
       </ControlSessionProvider>
     </div>
   )
@@ -50,7 +53,7 @@ function useRobotsDirective() {
     tag.content = 'noindex, nofollow, noarchive'
     tag.dataset.controlCenter = 'true'
     document.head.appendChild(tag)
-    document.title = 'Control Center · Stracker by DYPOL LABS'
+    document.title = CONSOLE_NAME
     return () => {
       tag.remove()
       if (themeColor && previousThemeColor !== undefined) themeColor.content = previousThemeColor
@@ -60,10 +63,20 @@ function useRobotsDirective() {
   }, [])
 }
 
+const GATE_TITLES: Record<string, string> = {
+  loading: `Loading · ${CONSOLE_NAME}`,
+  signed_out: `Sign in · ${CONSOLE_NAME}`,
+  mfa: `Two-step verification · ${CONSOLE_NAME}`,
+  denied: `Access not granted · ${CONSOLE_NAME}`,
+  error: `Unavailable · ${CONSOLE_NAME}`
+}
+
 function ControlRouter() {
   const { phase } = useControlSession()
   const location = useLocation()
   useRobotsDirective()
+  // Gate screens set their own titles; the layout sets per-page titles once access is granted.
+  useEffect(() => { if (phase.kind !== 'granted') document.title = GATE_TITLES[phase.kind] ?? CONSOLE_NAME }, [phase.kind])
 
   if (phase.kind === 'loading') return <LoadingScreen />
   if (phase.kind === 'signed_out') return <SignInGate notice={phase.notice} />

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode, type ButtonHTMLAttributes } from 'react'
-import { X, LoaderCircle, TriangleAlert } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { X, LoaderCircle, TriangleAlert, ArrowUpRight, ChevronDown } from 'lucide-react'
 
 export type Tone = 'ok' | 'warn' | 'crit' | 'info' | 'neutral'
 
@@ -28,13 +29,37 @@ export function Panel({ title, description, actions, children, className = '', i
   )
 }
 
-export function Stat({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: ReactNode; tone?: Tone }) {
-  return (
-    <div className={`cc-stat${tone ? ` cc-stat--${tone}` : ''}`}>
-      <span className="cc-stat__label">{label}</span>
+/**
+ * Metric card. `period` states the time range the figure covers ("All time" or the window
+ * label) so no figure is ambiguous. With `to`, the whole card is a link to the page that
+ * explains the number (for example Accounts → Users).
+ */
+export function Stat({ label, value, hint, tone, period, to, linkLabel }: {
+  label: string; value: ReactNode; hint?: ReactNode; tone?: Tone; period?: string; to?: string; linkLabel?: string
+}) {
+  const className = `cc-stat${tone ? ` cc-stat--${tone}` : ''}${to ? ' cc-stat--link' : ''}`
+  const body = (
+    <>
+      <span className="cc-stat__top">
+        <span className="cc-stat__label">{label}</span>
+        {period && <span className="cc-stat__period">{period}</span>}
+      </span>
       <strong className="cc-stat__value">{value}</strong>
       {hint && <span className="cc-stat__hint">{hint}</span>}
-    </div>
+      {to && <span className="cc-stat__go"><ArrowUpRight size={14} aria-hidden="true" /> {linkLabel ?? 'Open'}</span>}
+    </>
+  )
+  if (to) return <Link to={to} className={className} aria-label={`${label}: ${typeof value === 'string' || typeof value === 'number' ? value : ''}${period ? `, ${period}` : ''}. ${linkLabel ?? 'Open'}`}>{body}</Link>
+  return <div className={className}>{body}</div>
+}
+
+/** Native <details> with the console's chevron instead of the browser marker. Keyboard and semantics are the platform's. */
+export function Disclosure({ summary, children, className = '' }: { summary: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <details className={`cc-disclosure ${className}`}>
+      <summary><ChevronDown size={16} aria-hidden="true" className="cc-disclosure__chevron" /> <span>{summary}</span></summary>
+      <div className="cc-disclosure__body">{children}</div>
+    </details>
   )
 }
 
@@ -60,7 +85,7 @@ export function EmptyState({ title, body, action }: { title: string; body: React
   )
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function ErrorState({ message, onRetry, secondaryAction }: { message: string; onRetry?: () => void; secondaryAction?: ReactNode }) {
   return (
     <div className="cc-error" role="alert">
       <TriangleAlert size={18} aria-hidden="true" />
@@ -68,7 +93,12 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
         <strong>Could not load this view.</strong>
         <p>{message}</p>
       </div>
-      {onRetry && <Button variant="ghost" onClick={onRetry}>Try again</Button>}
+      {(onRetry || secondaryAction) && (
+        <div className="cc-error__actions">
+          {secondaryAction}
+          {onRetry && <Button variant="ghost" onClick={onRetry}>Try again</Button>}
+        </div>
+      )}
     </div>
   )
 }

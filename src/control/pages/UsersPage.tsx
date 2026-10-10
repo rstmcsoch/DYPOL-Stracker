@@ -6,6 +6,7 @@ import { controlFetch, type UsersResponse } from '../api'
 import { Badge, EmptyState, Panel, Skeleton, ErrorState, Pager } from '../ui'
 import { PageHeader } from '../pageParts'
 import { CONSOLE_BASE, formatDate, formatRelative } from '../policy'
+import { useTimeZone } from '../time'
 
 const PAGE_SIZE = 25
 const STATUS_OPTIONS = [
@@ -26,6 +27,7 @@ function oneOf(value: string | null, options: Array<{ value: string }>, fallback
 
 export default function UsersPage() {
   const [params, setParams] = useSearchParams()
+  const { zone } = useTimeZone()
   const initialQuery = params.get('q') ?? ''
   const [search, setSearch] = useState(initialQuery)
   const [debounced, setDebounced] = useState(initialQuery)
@@ -127,7 +129,7 @@ export default function UsersPage() {
                           <span className="cc-mono cc-muted">{user.id.slice(0, 8)}…</span>
                         </th>
                         <td>{user.email}</td>
-                        <td>{formatDate(user.createdAt)}</td>
+                        <td>{formatDate(user.createdAt, zone)}</td>
                         <td>{formatRelative(user.lastSignInAt)}</td>
                         <td className="is-num">{user.testsCount}</td>
                         <td>
