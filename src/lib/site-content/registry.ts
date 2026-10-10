@@ -1,4 +1,4 @@
-import { SYLLABUS } from '../syllabus'
+import { SYLLABUS } from '../syllabus.js'
 
 /**
  * Registry of owner-editable website and user-panel copy.
