@@ -10,13 +10,16 @@ import { CONSOLE_BASE, formatRelative, IDLE_TIMEOUT_MS, RECENT_MFA_SECONDS } fro
 import { useControlSession } from '../ControlSession'
 import { useSensitiveAction } from '../reauth'
 import { AuditTable } from './AuditPage'
+import { useTimeZone } from '../time'
+import { dayKeyInZone, shiftDayKey } from '../../lib/time-window'
 import { useToast } from '../../contexts/ToastContext'
 
 interface AuditList { events: AuditRow[]; total: number }
 const PRIVILEGED_ACTIONS = new Set(['owner.provisioned', 'user.suspend', 'user.restore', 'audit.export'])
 
-function sevenDaysAgoDate(): string {
-  return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+/** First calendar day of the trailing 7-day window (today and the six days before it) in the display zone. */
+function sevenDayWindowStart(zone: string, now = new Date()): string {
+  return shiftDayKey(dayKeyInZone(now, zone), -6)
 }
 
 export default function SecurityPage() {
@@ -26,6 +29,7 @@ export default function SecurityPage() {
   const [busy, setBusy] = useState(false)
   const sensitive = useSensitiveAction()
   const { notify } = useToast()
+  const { zone } = useTimeZone()
 
   const factors = useQuery({
     queryKey: ['control', 'security', 'factors'],
@@ -37,8 +41,8 @@ export default function SecurityPage() {
     }
   })
   const denied = useQuery({
-    queryKey: ['control', 'security', 'denied'],
-    queryFn: () => controlFetch<AuditList & { page: number }>(`audit?outcome=denied&from=${sevenDaysAgoDate()}&pageSize=10`)
+    queryKey: ['control', 'security', 'denied', zone],
+    queryFn: () => controlFetch<AuditList & { page: number }>(`audit?outcome=denied&from=${sevenDayWindowStart(zone)}&tz=${encodeURIComponent(zone)}&pageSize=10`)
   })
   const changes = useQuery({
     queryKey: ['control', 'security', 'changes'],
@@ -128,7 +132,7 @@ export default function SecurityPage() {
           {changes.isPending && <Skeleton rows={3} />}
           {changes.isError && <ErrorState message="Privileged changes could not be loaded." onRetry={() => void changes.refetch()} />}
           {changes.data && (changes.data.length === 0 ? <EmptyState title="No privileged changes yet" body="Restrictions, restorations, provisioning and exports are listed here." /> : <AuditTable rows={changes.data} emptyTitle="" emptyBody="" />)}
-          <p className="cc-note">Last refreshed {formatRelative(new Date().toISOString())}. <Link to={`${CONSOLE_BASE}/audit`} className="cc-link">Full audit log</Link></p>
+          <p className="cc-note">Last refreshed {changes.dataUpdatedAt ? formatRelative(new Date(changes.dataUpdatedAt).toISOString()) : '—'}. <Link to={`${CONSOLE_BASE}/audit`} className="cc-link cc-link--icon">Full audit log</Link></p>
         </Panel>
       </div>
 

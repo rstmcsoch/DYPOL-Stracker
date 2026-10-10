@@ -4,12 +4,14 @@ import { controlFetch, type HealthResponse } from '../api'
 import { Badge, Button, Panel, Skeleton, ErrorState, Stat, type Tone } from '../ui'
 import { PageHeader } from '../pageParts'
 import { formatDateTime } from '../policy'
+import { useTimeZone } from '../time'
 
 const STATUS_TONE: Record<string, Tone> = { healthy: 'ok', degraded: 'warn', unavailable: 'crit', unknown: 'neutral' }
 const STATUS_LABEL: Record<string, string> = { healthy: 'Healthy', degraded: 'Degraded', unavailable: 'Unavailable', unknown: 'Unknown' }
 
 export default function HealthPage() {
   const queryClient = useQueryClient()
+  const { zone } = useTimeZone()
   // No background polling: checks run on open and on demand, to keep database and auth load low.
   const query = useQuery({
     queryKey: ['control', 'health'],
@@ -35,7 +37,7 @@ export default function HealthPage() {
       {query.data && (
         <>
           <div className="cc-kpis cc-kpis--compact">
-            <Stat label="Overall" value={STATUS_LABEL[query.data.overall] ?? query.data.overall} tone={STATUS_TONE[query.data.overall]} hint={`Checked ${formatDateTime(query.data.checkedAt)}`} />
+            <Stat label="Overall" value={STATUS_LABEL[query.data.overall] ?? query.data.overall} tone={STATUS_TONE[query.data.overall]} hint={`Checked ${formatDateTime(query.data.checkedAt, zone)}`} />
             <Stat label="Deployment" value={query.data.deployment.commit ?? 'Unknown'} hint={`Environment: ${query.data.deployment.environment}`} />
           </div>
           <Panel title="Checks">

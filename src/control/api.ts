@@ -3,11 +3,14 @@ import { supabase } from '../lib/supabase'
 export class ControlApiError extends Error {
   readonly status: number
   readonly code: string
-  constructor(status: number, code: string, message: string) {
+  /** Optional safe hint from the server (for example `field:outcome` for an invalid filter). */
+  readonly reason: string | null
+  constructor(status: number, code: string, message: string, reason: string | null = null) {
     super(message)
     this.name = 'ControlApiError'
     this.status = status
     this.code = code
+    this.reason = reason
   }
 }
 
@@ -47,7 +50,7 @@ export async function controlFetch<T>(path: string, init: { method?: 'GET' | 'PO
   if (!response.ok) {
     const code = typeof body?.error === 'string' ? body.error : 'request_failed'
     const message = typeof body?.message === 'string' ? body.message : 'The request could not be completed.'
-    throw new ControlApiError(response.status, code, message)
+    throw new ControlApiError(response.status, code, message, typeof body?.reason === 'string' ? body.reason : null)
   }
   if (!body) throw new ControlApiError(response.status, 'unexpected_response', 'The Control Center returned an unexpected response.')
   return body as T
@@ -58,8 +61,8 @@ export async function controlDownload(path: string): Promise<{ blob: Blob; filen
   const token = await accessToken()
   const response = await fetch(`/api/control/${path}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', credentials: 'omit' })
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string; message?: string } | null
-    throw new ControlApiError(response.status, body?.error ?? 'request_failed', body?.message ?? 'The export could not be produced.')
+    const body = (await response.json().catch(() => null)) as { error?: string; message?: string; reason?: string } | null
+    throw new ControlApiError(response.status, body?.error ?? 'request_failed', body?.message ?? 'The export could not be produced.', body?.reason ?? null)
   }
   const disposition = response.headers.get('content-disposition') ?? ''
   const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'stracker-control-export.csv'
@@ -79,7 +82,8 @@ export interface SessionResponse {
 
 export interface OverviewResponse {
   generatedAt: string
-  range: { key: 'today' | '7d' | '30d'; since: string; until: string; timezone: 'UTC' }
+  /** since/until are half-open query instants; firstDay/lastDay are the inclusive calendar days in `timezone`. */
+  range: { key: 'today' | '7d' | '30d'; since: string; until: string; firstDay: string; lastDay: string; timezone: string }
   database: { status: 'healthy'; latencyMs: number }
   metrics: {
     totalAccounts: number
@@ -100,19 +104,28 @@ export interface OverviewResponse {
 }
 
 export interface AuditRow {
-  id: number
+  id: number | string
   occurred_at: string
   action: string
   outcome: 'success' | 'denied' | 'failed'
   severity: 'info' | 'notice' | 'warning' | 'critical'
   actor_id?: string | null
   actor_role?: string | null
-  target_type?: string
-  target_id?: string
-  error_code?: string
-  reason?: string
-  summary?: Record<string, unknown>
-  request_id?: string
+  target_type?: string | null
+  target_id?: string | null
+  error_code?: string | null
+  reason?: string | null
+  summary?: Record<string, unknown> | null
+  request_id?: string | null
+}
+
+export interface AuditResponse {
+  events: AuditRow[]
+  total: number
+  page: number
+  pageSize: number
+  /** The filters the server actually applied (echo), including the resolved query instants. */
+  filters?: { outcome: string | null; action: string | null; target: string | null; from: string | null; to: string | null; timeZone: string; since: string | null; until: string | null }
 }
 
 export interface DirectoryUser {

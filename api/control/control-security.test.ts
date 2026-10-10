@@ -11,27 +11,63 @@ const world = vi.hoisted(() => ({
   roles: {} as Record<string, Record<string, unknown> | null>,
   roleError: null as unknown,
   rateAllowed: true,
+  /** Per-bucket overrides for the rate limiter (bucket name → allowed). */
+  rateByBucket: {} as Record<string, boolean>,
+  rateCalls: [] as Array<{ key: string; bucket: string; limit: number; window: number }>,
   users: {} as Record<string, { id: string; email: string; banned_until?: string | null; app_metadata?: Record<string, unknown> }>,
+  /** List rows returned for a table (audit reads). */
+  rows: {} as Record<string, Array<Record<string, unknown>>>,
+  /** Optional read error for a table. */
+  readError: {} as Record<string, unknown>,
+  /** Every chained query, so tests can assert which filters reached the database. */
+  queries: [] as Array<{ table: string; filters: Array<[string, string, string]>; range?: [number, number]; limit?: number }>,
   writes: [] as Array<{ table: string; row: Record<string, unknown> }>,
+  writeError: null as unknown,
   updates: [] as Array<{ id: string; attributes: Record<string, unknown> }>,
   updateError: null as unknown
 }))
 
 vi.mock('@supabase/supabase-js', () => {
-  const admin = {
-    rpc: async (name: string) => ({ data: name === 'control_take_rate_slot' ? world.rateAllowed : null, error: null }),
-    from: (table: string) => ({
-      select: () => ({
-        eq: (_column: string, value: string) => ({
-          maybeSingle: async () => ({ data: table === 'control_roles' ? world.roles[value] ?? null : null, error: table === 'control_roles' ? world.roleError : null })
-        }),
-        order: () => ({ limit: async () => ({ data: [], error: null }) })
-      }),
+  /** Minimal chainable PostgREST stand-in: records filters, resolves scripted rows. */
+  function builder(table: string) {
+    const record: { table: string; filters: Array<[string, string, string]>; range?: [number, number]; limit?: number } = { table, filters: [] }
+    world.queries.push(record)
+    const result = () => ({ data: world.rows[table] ?? [], error: world.readError[table] ?? null, count: (world.rows[table] ?? []).length })
+    const chain: Record<string, unknown> = {}
+    const self = () => chain
+    Object.assign(chain, {
+      select: self,
+      order: self,
+      range: (from: number, to: number) => { record.range = [from, to]; return chain },
+      limit: (value: number) => { record.limit = value; return chain },
+      eq: (column: string, value: string) => { record.filters.push(['eq', column, value]); return chain },
+      gte: (column: string, value: string) => { record.filters.push(['gte', column, value]); return chain },
+      lt: (column: string, value: string) => { record.filters.push(['lt', column, value]); return chain },
+      in: self,
+      maybeSingle: async () => {
+        if (table === 'control_roles') {
+          const id = record.filters.find(([, column]) => column === 'user_id')?.[2] ?? ''
+          return { data: world.roles[id] ?? null, error: world.roleError }
+        }
+        return { data: null, error: null }
+      },
+      then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve(result()).then(resolve, reject),
       insert: async (row: Record<string, unknown>) => {
         world.writes.push({ table, row })
-        return { error: null }
+        return { error: world.writeError }
       }
-    }),
+    })
+    return chain
+  }
+  const admin = {
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      if (name !== 'control_take_rate_slot') return { data: null, error: null }
+      const bucket = String(args.bucket)
+      world.rateCalls.push({ key: String(args.actor_key), bucket, limit: Number(args.per_limit), window: Number(args.window_seconds) })
+      const allowed = bucket in world.rateByBucket ? world.rateByBucket[bucket] : world.rateAllowed
+      return { data: allowed, error: null }
+    },
+    from: (table: string) => builder(table),
     auth: {
       admin: {
         getUserById: async (id: string) => ({ data: { user: world.users[id] ?? null }, error: world.users[id] ? null : { message: 'not found' } }),
@@ -102,7 +138,13 @@ beforeEach(() => {
   world.roles = { [OWNER]: { role: 'owner', revoked_at: null } }
   world.roleError = null
   world.rateAllowed = true
+  world.rateByBucket = {}
+  world.rateCalls = []
+  world.rows = {}
+  world.readError = {}
+  world.queries = []
   world.writes = []
+  world.writeError = null
   world.updates = []
   world.updateError = null
   world.users = {
@@ -177,10 +219,28 @@ describe('console authentication and authorization', () => {
     expect(data.body).toMatchObject({ error: 'mfa_required' })
   })
 
-  it('grants the console to the owner at aal2', async () => {
-    world.claims = claimsFor(OWNER, 'aal2', 60)
+  it('grants the console to the owner at aal2 and records the access once per Auth session', async () => {
+    world.claims = { ...claimsFor(OWNER, 'aal2', 60), session_id: 'sess-1' }
     const session = await call('session', request('GET', '/api/control/session'))
     expect(session.body).toMatchObject({ status: 'granted', role: 'owner', userId: OWNER, recentMfa: true })
+    const granted = world.writes.filter(write => write.row.action === 'control.access' && write.row.result === 'success')
+    expect(granted).toHaveLength(1)
+    expect(granted[0]?.row).toMatchObject({ actor_id: OWNER, actor_role: 'owner', target_type: 'control_panel' })
+    expect(JSON.stringify(granted[0]?.row)).not.toMatch(/sess-1|token|bearer/)
+
+    // The latch refuses a second slot: a token refresh or reload does not duplicate the row.
+    world.rateByBucket['console-session'] = false
+    await call('session', request('GET', '/api/control/session'))
+    expect(world.writes.filter(write => write.row.action === 'control.access' && write.row.result === 'success')).toHaveLength(1)
+  })
+
+  it('does not record an access event for the pre-MFA session check, but does for an aal1 data request', async () => {
+    world.claims = claimsFor(OWNER, 'aal1', null)
+    await call('session', request('GET', '/api/control/session'))
+    expect(world.writes).toHaveLength(0)
+    const data = await call('audit', request('GET', '/api/control/audit'))
+    expect(data.statusCode).toBe(403)
+    expect(world.writes.find(write => write.row.action === 'control.access')?.row).toMatchObject({ result: 'denied', error_category: 'mfa_required', actor_id: OWNER })
   })
 
   it('rejects a method the endpoint does not support, before any work', async () => {
@@ -255,13 +315,14 @@ describe('account access changes', () => {
     expect(world.updates).toHaveLength(0)
   })
 
-  it('protects other administrator accounts from suspension through the console', async () => {
+  it('protects other administrator accounts from suspension through the console, and records the refusal', async () => {
     world.claims = claimsFor(OWNER, 'aal2', 60)
     world.roles[TARGET] = { role: 'administrator', revoked_at: null }
     const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody()))
     expect(res.statusCode).toBe(409)
     expect(res.body).toMatchObject({ error: 'owner_protected' })
     expect(world.updates).toHaveLength(0)
+    expect(world.writes.find(write => write.row.action === 'user.suspend')?.row).toMatchObject({ result: 'denied', error_category: 'owner_protected', target_id: TARGET, actor_id: OWNER })
   })
 
   it('rejects unexpected body fields such as a role grant attempt', async () => {
@@ -304,6 +365,21 @@ describe('account access changes', () => {
 })
 
 describe('audit export and reads', () => {
+  it('loads the default audit page when the browser sends every filter empty or as "all"', async () => {
+    world.claims = claimsFor(OWNER, 'aal2', 60)
+    const res = await call('audit', request('GET', '/api/control/audit?outcome=all&action=&target=&from=&to=&page=1&pageSize=50'))
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toMatchObject({ events: [], total: 0, page: 1, pageSize: 50 })
+    const read = world.queries.find(query => query.table === 'control_audit_events')
+    expect(read?.filters).toEqual([])
+  })
+
+  it('loads the audit page with no query string at all', async () => {
+    world.claims = claimsFor(OWNER, 'aal2', 60)
+    const res = await call('audit', request('GET', '/api/control/audit'))
+    expect(res.statusCode).toBe(200)
+  })
+
   it('refuses a CSV export without a recent verification', async () => {
     world.claims = claimsFor(OWNER, 'aal2', 2 * 60 * 60)
     const res = await call('audit', request('GET', '/api/control/audit?format=csv'))
@@ -311,17 +387,82 @@ describe('audit export and reads', () => {
     expect(res.body).toMatchObject({ error: 'reauthentication_required' })
   })
 
-  it('rejects unknown audit filter values instead of passing them to the database', async () => {
+  it('rejects unknown audit filter values instead of passing them to the database, naming the field', async () => {
     world.claims = claimsFor(OWNER, 'aal2', 60)
     const res = await call('audit', request('GET', `/api/control/audit?outcome=${encodeURIComponent("success' OR '1'='1")}`))
     expect(res.statusCode).toBe(400)
-    expect(res.body).toMatchObject({ error: 'invalid_filter' })
+    expect(res.body).toMatchObject({ error: 'invalid_filter', reason: 'field:outcome' })
+    expect(String((res.body as { message: string }).message)).toMatch(/Outcome filter is not valid/)
+    expect(JSON.stringify(res.body)).not.toMatch(/stack|postgres|supabase|service/i)
+    expect(world.queries.filter(query => query.table === 'control_audit_events')).toHaveLength(0)
+    // Validation failures go to the server log, never to the audit table.
+    expect(world.writes).toHaveLength(0)
   })
 
-  it('rejects a malformed target filter', async () => {
+  it('rejects a malformed target filter and an inverted date range with the right field', async () => {
     world.claims = claimsFor(OWNER, 'aal2', 60)
-    const res = await call('audit', request('GET', '/api/control/audit?target=%27%20or%201%3D1'))
-    expect(res.statusCode).toBe(400)
+    const target = await call('audit', request('GET', '/api/control/audit?target=%27%20or%201%3D1'))
+    expect(target.statusCode).toBe(400)
+    expect(target.body).toMatchObject({ reason: 'field:target' })
+    const dates = await call('audit', request('GET', '/api/control/audit?from=2026-10-10&to=2026-10-01'))
+    expect(dates.body).toMatchObject({ error: 'invalid_filter', reason: 'field:to' })
+    const badDay = await call('audit', request('GET', '/api/control/audit?from=2026-02-30'))
+    expect(badDay.body).toMatchObject({ reason: 'field:from' })
+  })
+
+  it('applies date filters as whole calendar days in the requested zone, To inclusive', async () => {
+    world.claims = claimsFor(OWNER, 'aal2', 60)
+    const res = await call('audit', request('GET', '/api/control/audit?from=2026-10-04&to=2026-10-10&tz=Asia%2FKolkata&outcome=denied'))
+    expect(res.statusCode).toBe(200)
+    const read = world.queries.find(query => query.table === 'control_audit_events')
+    expect(read?.filters).toEqual([
+      ['eq', 'result', 'denied'],
+      ['gte', 'created_at', '2026-10-03T18:30:00.000Z'],
+      ['lt', 'created_at', '2026-10-10T18:30:00.000Z']
+    ])
+    expect(res.body).toMatchObject({ filters: { timeZone: 'Asia/Kolkata', from: '2026-10-04', to: '2026-10-10' } })
+  })
+
+  it('falls back to UTC for an unknown zone instead of failing the request', async () => {
+    world.claims = claimsFor(OWNER, 'aal2', 60)
+    const res = await call('audit', request('GET', '/api/control/audit?to=2026-10-10&tz=Mars%2FOlympus'))
+    expect(res.statusCode).toBe(200)
+    const read = world.queries.find(query => query.table === 'control_audit_events')
+    expect(read?.filters).toEqual([['lt', 'created_at', '2026-10-11T00:00:00.000Z']])
+  })
+
+  it('exports exactly the filtered rows with a fresh verification, and records the export', async () => {
+    world.claims = claimsFor(OWNER, 'aal2', 60)
+    world.rows.control_audit_events = [{ id: '1', created_at: '2026-10-10T02:47:03.000Z', action: 'user.viewed', result: 'success', actor_id: OWNER, actor_role: 'owner', target_type: 'user', target_id: TARGET, error_category: null, reason: null, request_id: 'ctl_x', before_summary: null, after_summary: null }]
+    const res = await call('audit', request('GET', '/api/control/audit?format=csv&action=user.viewed&tz=Asia%2FKolkata'))
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toContain('text/csv')
+    const csv = String(res.body)
+    expect(csv.split('\r\n')[0]).toBe('occurred_at_utc,occurred_at_local,time_zone,action,outcome,severity,actor_id,actor_role,target_type,target_id,error_code,reason,request_id,summary')
+    expect(csv).toContain('2026-10-10T02:47:03.000Z,2026-10-10 08:17:03,Asia/Kolkata,user.viewed,success')
+    const read = world.queries.find(query => query.table === 'control_audit_events' && query.limit === 5000)
+    expect(read?.filters).toEqual([['eq', 'action', 'user.viewed']])
+    const exported = world.writes.find(write => write.row.action === 'audit.export')
+    expect(exported?.row).toMatchObject({ result: 'success', actor_id: OWNER, target_type: 'audit_log' })
+    expect(JSON.stringify(exported?.row)).not.toMatch(/token|password|totp|bearer/i)
+  })
+
+  it('records a failed export when the database read fails, and returns a safe error', async () => {
+    world.claims = claimsFor(OWNER, 'aal2', 60)
+    world.readError.control_audit_events = { message: 'relation missing', code: '42P01' }
+    const res = await call('audit', request('GET', '/api/control/audit?format=csv'))
+    expect(res.statusCode).toBe(503)
+    expect(res.body).toMatchObject({ error: 'audit_unavailable' })
+    expect(JSON.stringify(res.body)).not.toMatch(/relation|42P01/)
+    expect(world.writes.find(write => write.row.action === 'audit.export')?.row).toMatchObject({ result: 'error', error_category: 'audit_unavailable' })
+  })
+
+  it('records a refused export (stale verification) as a bounded denied event', async () => {
+    world.claims = claimsFor(OWNER, 'aal2', 2 * 60 * 60)
+    const res = await call('audit', request('GET', '/api/control/audit?format=csv'))
+    expect(res.statusCode).toBe(403)
+    expect(world.writes.find(write => write.row.action === 'audit.export')?.row).toMatchObject({ result: 'denied', error_category: 'recent_mfa_required', actor_id: OWNER })
+    expect(world.rateCalls.some(call => call.bucket === 'denied-access')).toBe(true)
   })
 
   it('validates the user detail identifier before any lookup', async () => {

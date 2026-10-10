@@ -10,6 +10,7 @@ import { useControlSession } from '../ControlSession'
 import { useSensitiveAction } from '../reauth'
 import { useToast } from '../../contexts/ToastContext'
 import { AuditTable } from './AuditPage'
+import { useTimeZone } from '../time'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 type Tab = 'overview' | 'activity' | 'security' | 'audit'
@@ -41,6 +42,7 @@ function UserBody({ data }: { data: UserDetailResponse }) {
   const [dialog, setDialog] = useState<null | 'suspend' | 'restore'>(null)
   const { phase } = useControlSession()
   const self = phase.kind === 'granted' && phase.session.userId === data.user.id
+  const { zone } = useTimeZone()
   const u = data.user
 
   return (
@@ -84,10 +86,10 @@ function UserBody({ data }: { data: UserDetailResponse }) {
               <div><dt>Account ID</dt><dd><CopyId id={u.id} /></dd></div>
               <div><dt>Display name</dt><dd>{u.displayName || '—'}</dd></div>
               <div><dt>Email</dt><dd>{u.email || '—'}</dd></div>
-              <div><dt>Email verified</dt><dd>{formatDateTime(u.emailConfirmedAt)}</dd></div>
-              <div><dt>Registered</dt><dd>{formatDateTime(u.createdAt)}</dd></div>
-              <div><dt>Last sign-in</dt><dd>{formatDateTime(u.lastSignInAt)} <span className="cc-muted">({formatRelative(u.lastSignInAt)})</span></dd></div>
-              <div><dt>Sign-in status</dt><dd>{u.suspended ? `Suspended until ${formatDateTime(u.bannedUntil)}` : 'Active'}</dd></div>
+              <div><dt>Email verified</dt><dd>{formatDateTime(u.emailConfirmedAt, zone)}</dd></div>
+              <div><dt>Registered</dt><dd>{formatDateTime(u.createdAt, zone)}</dd></div>
+              <div><dt>Last sign-in</dt><dd>{formatDateTime(u.lastSignInAt, zone)} <span className="cc-muted">({formatRelative(u.lastSignInAt)})</span></dd></div>
+              <div><dt>Sign-in status</dt><dd>{u.suspended ? `Suspended until ${formatDateTime(u.bannedUntil, zone)}` : 'Active'}</dd></div>
             </dl>
           </Panel>
         )}
@@ -108,8 +110,8 @@ function UserBody({ data }: { data: UserDetailResponse }) {
           <Panel title="Sign-in and security" description="What this console can and cannot see about the account.">
             <dl className="cc-dl">
               <div><dt>Sign-in provider</dt><dd>{u.provider ?? 'Unknown'}</dd></div>
-              <div><dt>Email confirmation</dt><dd>{u.emailConfirmedAt ? `Confirmed ${formatDateTime(u.emailConfirmedAt)}` : 'Not confirmed'}</dd></div>
-              <div><dt>Restriction</dt><dd>{u.suspended ? `Sign-in disabled until ${formatDateTime(u.bannedUntil)}` : 'None'}</dd></div>
+              <div><dt>Email confirmation</dt><dd>{u.emailConfirmedAt ? `Confirmed ${formatDateTime(u.emailConfirmedAt, zone)}` : 'Not confirmed'}</dd></div>
+              <div><dt>Restriction</dt><dd>{u.suspended ? `Sign-in disabled until ${formatDateTime(u.bannedUntil, zone)}` : 'None'}</dd></div>
             </dl>
             <p className="cc-note">Active session lists and per-account failed sign-in history are not available through the Supabase Admin API this console uses. Use the Security center for administrative sign-in events.</p>
           </Panel>

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ApiRequest, ApiResponse } from '../http.js'
 import { ApiError, readJson, sendJson } from '../http.js'
-import { controlHandler, recordAuditEvent, requireRecentMfa } from '../control.js'
+import { controlHandler, recordAuditEvent, recordBoundedDenial, requireRecentMfa } from '../control.js'
 
 /** Effectively permanent ban that Supabase Auth honours on the next token refresh. */
 const SUSPEND_DURATION = '876000h'
@@ -23,13 +23,20 @@ const bodySchema = z.object({
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   await controlHandler(req, res, ['POST'], { requireAal2: true }, async context => {
-    requireRecentMfa(context)
     const parsed = bodySchema.safeParse(await readJson(req, 4_000))
     if (!parsed.success) throw new ApiError(400, 'invalid_request', parsed.error.issues[0]?.message ?? 'Check the account action and try again.')
     const { userId, action, reason, confirmEmail } = parsed.data
+    const auditAction = action === 'suspend' ? 'user.suspend' : 'user.restore'
+    await requireRecentMfa(context, { action: auditAction, targetType: 'user', targetId: userId })
     const admin = context.admin
 
-    if (userId === context.userId) throw new ApiError(409, 'self_action_blocked', 'You cannot change the access of the account you are signed in with.')
+    const refuse = async (errorCode: string, status: number, message: string): Promise<never> => {
+      // Refused privileged changes are security-relevant and are recorded (bounded per account).
+      await recordBoundedDenial(admin, { requestId: context.requestId, actorId: context.userId, actorRole: context.role, action: auditAction, targetType: 'user', targetId: userId, errorCode })
+      throw new ApiError(status, errorCode, message)
+    }
+
+    if (userId === context.userId) await refuse('self_action_blocked', 409, 'You cannot change the access of the account you are signed in with.')
 
     const { data: authData, error: authError } = await admin.auth.admin.getUserById(userId)
     if (authError || !authData?.user) throw new ApiError(404, 'user_not_found', 'That account could not be found.')
@@ -40,7 +47,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
 
     const { data: roleRow, error: roleError } = await admin.from('control_roles').select('role, revoked_at').eq('user_id', userId).maybeSingle()
     if (roleError) throw new ApiError(503, 'control_unavailable', 'Account roles could not be checked. Nothing was changed.')
-    if (roleRow && !roleRow.revoked_at) throw new ApiError(409, 'owner_protected', 'Administrator accounts cannot be suspended from the console.')
+    if (roleRow && !roleRow.revoked_at) await refuse('owner_protected', 409, 'Administrator accounts cannot be suspended from the console.')
 
     const wasSuspended = Boolean(target.banned_until && Date.parse(target.banned_until) > Date.now())
     if ((action === 'suspend') === wasSuspended) {

@@ -30,6 +30,8 @@ export interface ControlContext {
   aal: string
   /** Unix seconds of the newest TOTP/phone verification in this session, or null. */
   mfaAt: number | null
+  /** Supabase Auth session identifier from the JWT (an opaque id, not a credential), or null. */
+  sessionId: string | null
   requestId: string
   /** Service-role client. Only ever used after the checks above. Never returned to a browser. */
   admin: SupabaseClient
@@ -113,15 +115,24 @@ export async function recordAuditEvent(admin: SupabaseClient, event: AuditEvent)
   return true
 }
 
-/** Records a denied attempt by an authenticated, non-owner account, bounded per account. */
-async function recordDeniedAccess(admin: SupabaseClient, userId: string, requestId: string, errorCode: string): Promise<void> {
+/**
+ * Records a denied or refused privileged request, bounded per account so a misbehaving
+ * client cannot flood the audit trail. Never throws: denial logging must not change the
+ * response the caller receives.
+ */
+export async function recordBoundedDenial(admin: SupabaseClient, event: Omit<AuditEvent, 'outcome' | 'severity'> & { actorId: string }): Promise<void> {
   try {
-    const { data } = await admin.rpc('control_take_rate_slot', { actor_key: userId, bucket: 'denied-access', per_limit: DENIED_AUDIT_LIMIT.limit, window_seconds: DENIED_AUDIT_LIMIT.windowSeconds })
+    const { data } = await admin.rpc('control_take_rate_slot', { actor_key: event.actorId, bucket: 'denied-access', per_limit: DENIED_AUDIT_LIMIT.limit, window_seconds: DENIED_AUDIT_LIMIT.windowSeconds })
     if (data !== true) return
-    await recordAuditEvent(admin, { requestId, actorId: userId, actorRole: null, action: 'control.access', targetType: 'control_panel', outcome: 'denied', severity: 'notice', errorCode })
+    await recordAuditEvent(admin, { ...event, outcome: 'denied', severity: 'notice' })
   } catch {
-    // Denial logging must never change the response the caller receives.
+    // Intentionally silent; see above.
   }
+}
+
+/** Records a denied attempt to use the console (no active role, or no aal2 where required). */
+async function recordDeniedAccess(admin: SupabaseClient, userId: string, requestId: string, errorCode: string, actorRole: string | null = null): Promise<void> {
+  await recordBoundedDenial(admin, { requestId, actorId: userId, actorRole, action: 'control.access', targetType: 'control_panel', errorCode })
 }
 
 export interface AuthorizeOptions {
@@ -175,6 +186,9 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
 
   const aal = typeof claims.aal === 'string' ? claims.aal : 'aal1'
   if (options.requireAal2 && !isAal2(aal)) {
+    // A data request from an owner session that never completed two-step verification is a
+    // security-relevant denial (the normal pre-MFA flow only calls /session, which allows aal1).
+    await recordDeniedAccess(admin, userId, requestId, 'mfa_required', 'owner')
     throw new ApiError(403, 'mfa_required', 'Complete two-step verification to continue.', { reason: 'aal2_required' })
   }
 
@@ -183,15 +197,57 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
     role: 'owner',
     aal,
     mfaAt: latestMfaTimestamp(claims.amr),
+    sessionId: typeof claims.session_id === 'string' && claims.session_id.length <= 80 ? claims.session_id : null,
     requestId,
     admin
   }
 }
 
-/** Sensitive operations (access changes, exports) need a TOTP verification in the last 15 minutes. */
-export function requireRecentMfa(context: ControlContext, nowSeconds = Math.floor(Date.now() / 1000)): void {
-  if (!isRecentMfa(context.mfaAt, nowSeconds)) {
-    throw new ApiError(403, 'reauthentication_required', 'Verify your authenticator code again before making this change.', { reason: 'recent_mfa_required' })
+/** True when the session's newest TOTP verification is recent enough for a sensitive action. */
+export function hasRecentMfa(context: ControlContext, nowSeconds = Math.floor(Date.now() / 1000)): boolean {
+  return isRecentMfa(context.mfaAt, nowSeconds)
+}
+
+/**
+ * Sensitive operations (access changes, exports) need a TOTP verification in the last 15
+ * minutes. A refusal is itself recorded (bounded) as a denied event for the attempted action.
+ */
+export async function requireRecentMfa(context: ControlContext, attempted: { action: string; targetType?: string; targetId?: string }, nowSeconds = Math.floor(Date.now() / 1000)): Promise<void> {
+  if (hasRecentMfa(context, nowSeconds)) return
+  await recordBoundedDenial(context.admin, {
+    requestId: context.requestId,
+    actorId: context.userId,
+    actorRole: context.role,
+    action: attempted.action,
+    targetType: attempted.targetType,
+    targetId: attempted.targetId,
+    errorCode: 'recent_mfa_required'
+  })
+  throw new ApiError(403, 'reauthentication_required', 'Verify your authenticator code again before making this change.', { reason: 'recent_mfa_required' })
+}
+
+/**
+ * Records that a console session was opened (first aal2-granted /session call per Auth
+ * session). The existing atomic rate-slot function is reused as a once-per-session latch so
+ * token refreshes and page reloads do not create duplicate rows. Never throws.
+ */
+export async function recordSessionGranted(context: ControlContext): Promise<void> {
+  try {
+    const latchKey = `${context.userId}:${context.sessionId ?? 'nosid'}`
+    const { data, error } = await context.admin.rpc('control_take_rate_slot', { actor_key: latchKey, bucket: 'console-session', per_limit: 1, window_seconds: 12 * 60 * 60 })
+    if (error || data !== true) return
+    await recordAuditEvent(context.admin, {
+      requestId: context.requestId,
+      actorId: context.userId,
+      actorRole: context.role,
+      action: 'control.access',
+      targetType: 'control_panel',
+      outcome: 'success',
+      severity: 'info',
+      summary: { aal: context.aal, mfa_recent: hasRecentMfa(context) }
+    })
+  } catch {
+    // Access logging must never block the session response.
   }
 }
 

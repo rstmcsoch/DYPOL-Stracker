@@ -106,10 +106,11 @@ export function parseSearch(value: unknown): string {
 }
 
 export const AUDIT_OUTCOMES = ['success', 'denied', 'failed'] as const
+export type AuditOutcomeFilter = (typeof AUDIT_OUTCOMES)[number]
 export const AUDIT_ACTION_PATTERN = /^[a-z][a-z0-9_.]{0,79}$/
 
-export function parseAuditOutcome(value: unknown): (typeof AUDIT_OUTCOMES)[number] | null {
-  return (AUDIT_OUTCOMES as readonly string[]).includes(value as string) ? (value as (typeof AUDIT_OUTCOMES)[number]) : null
+export function parseAuditOutcome(value: unknown): AuditOutcomeFilter | null {
+  return (AUDIT_OUTCOMES as readonly string[]).includes(value as string) ? (value as AuditOutcomeFilter) : null
 }
 
 export function parseAuditAction(value: unknown): string | null {
@@ -123,6 +124,54 @@ export function parseIsoDate(value: unknown): string | null {
   if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return null
   return date.toISOString()
 }
+
+export interface AuditFilterInput {
+  outcome: AuditOutcomeFilter | null
+  action: string | null
+  target: string | null
+  /** Inclusive calendar days (YYYY-MM-DD) in the request's time zone. */
+  fromDay: string | null
+  toDay: string | null
+}
+
+export type AuditFilterField = 'outcome' | 'action' | 'target' | 'from' | 'to'
+
+export interface AuditFilterProblem { field: AuditFilterField; expected: string }
+
+/**
+ * Validates raw audit query parameters. Absent values, empty strings and the UI's "all"
+ * sentinel for outcome mean "no filter"; anything else must match its exact grammar.
+ * Returns the first problem with its field so the browser can point at the right control.
+ */
+export function parseAuditFilters(raw: { outcome?: string | null; action?: string | null; target?: string | null; from?: string | null; to?: string | null }):
+  { ok: true; filters: AuditFilterInput } | { ok: false; problem: AuditFilterProblem } {
+  const present = (value: string | null | undefined): value is string => typeof value === 'string' && value.trim() !== ''
+  const outcomeRaw = present(raw.outcome) && raw.outcome.trim() !== 'all' ? raw.outcome.trim() : null
+  const outcome = outcomeRaw ? parseAuditOutcome(outcomeRaw) : null
+  if (outcomeRaw && !outcome) return { ok: false, problem: { field: 'outcome', expected: 'one of success, denied or failed' } }
+
+  const actionRaw = present(raw.action) ? raw.action.trim() : null
+  const action = actionRaw ? parseAuditAction(actionRaw) : null
+  if (actionRaw && !action) return { ok: false, problem: { field: 'action', expected: 'an action name such as user.suspend (lowercase letters, digits, dots and underscores)' } }
+
+  const targetRaw = present(raw.target) ? raw.target.trim() : null
+  const target = targetRaw ? (isUuid(targetRaw) ? targetRaw.toLowerCase() : null) : null
+  if (targetRaw && !target) return { ok: false, problem: { field: 'target', expected: 'a full account ID (UUID)' } }
+
+  const fromRaw = present(raw.from) ? raw.from.trim() : null
+  const fromDay = fromRaw ? (parseIsoDate(fromRaw) ? fromRaw : null) : null
+  if (fromRaw && !fromDay) return { ok: false, problem: { field: 'from', expected: 'a calendar date in YYYY-MM-DD form' } }
+
+  const toRaw = present(raw.to) ? raw.to.trim() : null
+  const toDay = toRaw ? (parseIsoDate(toRaw) ? toRaw : null) : null
+  if (toRaw && !toDay) return { ok: false, problem: { field: 'to', expected: 'a calendar date in YYYY-MM-DD form' } }
+
+  if (fromDay && toDay && fromDay > toDay) return { ok: false, problem: { field: 'to', expected: 'a date on or after the From date' } }
+
+  return { ok: true, filters: { outcome, action, target, fromDay, toDay } }
+}
+
+export const AUDIT_FILTER_LABELS: Record<AuditFilterField, string> = { outcome: 'Outcome', action: 'Action', target: 'Target account ID', from: 'From', to: 'To' }
 
 export type AuditSummaryValue = string | number | boolean | null
 
