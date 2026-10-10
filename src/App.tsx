@@ -31,6 +31,8 @@ const BacklogPage = lazy(() => import('./pages/BacklogPage'))
 const MockAnalysisPage = lazy(() => import('./pages/MockAnalysisPage'))
 const DecksPage = lazy(() => import('./pages/DecksPage'))
 const StudyNowPage = lazy(() => import('./pages/StudyNowPage'))
+// Private operations console: lazy-loaded so its code and styles never reach the public or notebook bundles.
+const ControlPanelApp = lazy(() => import('./control/ControlPanelApp'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -115,6 +117,8 @@ function AppRoutes() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Route>
+      {/* Private console: not linked from any public or notebook navigation. Access is enforced by the server. */}
+      <Route path="/control-panel/*" element={<Suspense fallback={<RouteLoading />}><ControlPanelApp /></Suspense>} />
       <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
       <Route path="/signup" element={<PublicOnly><SignupPage /></PublicOnly>} />
       {/* Password recovery stays on its original public route: the emailed link

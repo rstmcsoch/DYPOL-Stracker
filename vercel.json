@@ -1,5 +1,9 @@
 {
-  "functions": { "api/ai/*.ts": { "maxDuration": 60 } },
+  "functions": {
+    "api/ai/*.ts": {
+      "maxDuration": 60
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",
@@ -54,7 +58,57 @@
           "value": "public, max-age=31536000, immutable"
         }
       ]
+    },
+    {
+      "source": "/control-panel(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
     }
   ],
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/api/control/users",
+      "destination": "/api/control/accounts?route=users"
+    },
+    {
+      "source": "/api/control/user",
+      "destination": "/api/control/accounts?route=user"
+    },
+    {
+      "source": "/api/control/overview",
+      "destination": "/api/control/system?route=overview"
+    },
+    {
+      "source": "/api/control/health",
+      "destination": "/api/control/system?route=health"
+    },
+    {
+      "source": "/api/control/session",
+      "destination": "/api/control/security?route=session"
+    },
+    {
+      "source": "/api/control/roles",
+      "destination": "/api/control/security?route=roles"
+    },
+    {
+      "source": "/api/control/audit",
+      "destination": "/api/control/operations?route=audit"
+    },
+    {
+      "source": "/api/control/user-access",
+      "destination": "/api/control/operations?route=user-access"
+    },
+    {
+      "source": "/api/control/(.*)",
+      "destination": "/api/control/system?route=not-found"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }
