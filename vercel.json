@@ -1,38 +1,25 @@
 {
-  "rewrites": [
-    {
-      "source": "/api/control/appearance-state",
-      "destination": "/api/control/operations?route=state"
-    },
-    {
-      "source": "/api/control/appearance-draft",
-      "destination": "/api/control/operations?route=draft"
-    },
-    {
-      "source": "/api/control/appearance-discard",
-      "destination": "/api/control/operations?route=discard"
-    },
-    {
-      "source": "/api/control/appearance-publish",
-      "destination": "/api/control/operations?route=publish"
-    },
-    {
-      "source": "/api/control/appearance-restore",
-      "destination": "/api/control/operations?route=restore"
-    },
-    {
-      "source": "/api/control/(.*)",
-      "destination": "/api/control/system?route=not-found"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+  "functions": {
+    "api/ai/*.ts": {
+      "maxDuration": 60
     }
-  ],
+  },
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store, no-cache, must-revalidate, max-age=0"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "no-store"
+        },
         {
           "key": "X-Content-Type-Options",
           "value": "nosniff"
@@ -71,6 +58,94 @@
           "value": "public, max-age=31536000, immutable"
         }
       ]
+    },
+    {
+      "source": "/videos/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=604800"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "public, max-age=604800"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, max-age=604800"
+        }
+      ]
+    },
+    {
+      "source": "/control-panel(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/control/users",
+      "destination": "/api/control/accounts?route=users"
+    },
+    {
+      "source": "/api/control/user",
+      "destination": "/api/control/accounts?route=user"
+    },
+    {
+      "source": "/api/control/overview",
+      "destination": "/api/control/system?route=overview"
+    },
+    {
+      "source": "/api/control/health",
+      "destination": "/api/control/system?route=health"
+    },
+    {
+      "source": "/api/control/session",
+      "destination": "/api/control/security?route=session"
+    },
+    {
+      "source": "/api/control/roles",
+      "destination": "/api/control/security?route=roles"
+    },
+    {
+      "source": "/api/control/audit",
+      "destination": "/api/control/operations?route=audit"
+    },
+    {
+      "source": "/api/control/user-access",
+      "destination": "/api/control/operations?route=user-access"
+    },
+    {
+      "source": "/api/control/appearance-state",
+      "destination": "/api/control/operations?route=state"
+    },
+    {
+      "source": "/api/control/appearance-draft",
+      "destination": "/api/control/operations?route=draft"
+    },
+    {
+      "source": "/api/control/appearance-discard",
+      "destination": "/api/control/operations?route=discard"
+    },
+    {
+      "source": "/api/control/appearance-publish",
+      "destination": "/api/control/operations?route=publish"
+    },
+    {
+      "source": "/api/control/appearance-restore",
+      "destination": "/api/control/operations?route=restore"
+    },
+    {
+      "source": "/api/control/(.*)",
+      "destination": "/api/control/system?route=not-found"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
