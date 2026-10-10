@@ -5,6 +5,7 @@ import { isUuid, parseAuditAction, parseAuditOutcome, parseIsoDate, parsePage, t
 
 const EXPORT_LIMIT = 5000
 const COLUMNS = ['occurred_at', 'action', 'outcome', 'severity', 'actor_id', 'actor_role', 'target_type', 'target_id', 'error_code', 'reason', 'request_id', 'summary'] as const
+const DB_COLUMNS = 'id, created_at, action, result, actor_id, actor_role, target_type, target_id, error_category, reason, request_id, before_summary, after_summary'
 
 interface AuditFilters {
   outcome: string | null
@@ -14,14 +15,49 @@ interface AuditFilters {
   to: string | null
 }
 
-/** Applies the validated filters to any audit query. Values are bound parameters, never SQL text. */
+type AuditDbRow = {
+  id: string
+  created_at: string
+  action: string
+  result: string
+  actor_id: string | null
+  actor_role: string | null
+  target_type: string | null
+  target_id: string | null
+  error_category: string | null
+  reason: string | null
+  request_id: string | null
+  before_summary: Record<string, unknown> | null
+  after_summary: Record<string, unknown> | null
+}
+
+function normalizeAuditRow(row: AuditDbRow): Record<string, unknown> {
+  const outcome = row.result === 'error' ? 'failed' : row.result
+  return {
+    id: row.id,
+    occurred_at: row.created_at,
+    action: row.action,
+    outcome,
+    severity: outcome === 'failed' ? 'warning' : outcome === 'denied' ? 'notice' : 'info',
+    actor_id: row.actor_id,
+    actor_role: row.actor_role,
+    target_type: row.target_type,
+    target_id: row.target_id,
+    error_code: row.error_category,
+    reason: row.reason,
+    request_id: row.request_id,
+    summary: { ...(row.before_summary ?? {}), ...(row.after_summary ?? {}) }
+  }
+}
+
+/** Apply validated filters to the existing control_audit_events columns. */
 function withFilters<Q extends { eq: (column: string, value: string) => Q; gte: (column: string, value: string) => Q; lt: (column: string, value: string) => Q }>(query: Q, filters: AuditFilters): Q {
   let next = query
-  if (filters.outcome) next = next.eq('outcome', filters.outcome)
+  if (filters.outcome) next = next.eq('result', filters.outcome === 'failed' ? 'error' : filters.outcome)
   if (filters.action) next = next.eq('action', filters.action)
   if (filters.target) next = next.eq('target_id', filters.target)
-  if (filters.from) next = next.gte('occurred_at', filters.from)
-  if (filters.to) next = next.lt('occurred_at', filters.to)
+  if (filters.from) next = next.gte('created_at', filters.from)
+  if (filters.to) next = next.lt('created_at', filters.to)
   return next
 }
 
@@ -39,17 +75,17 @@ function parseFilters(params: URLSearchParams): AuditFilters {
   if ((rawOutcome && !outcome) || (rawAction && !action) || (rawTarget && !target) || (rawFrom && !from) || (rawTo && !toDay)) {
     throw new ApiError(400, 'invalid_filter', 'One of the audit filters is not valid.')
   }
-  // "to" is inclusive of the whole named day (UTC).
+  // "to" includes the entire specified UTC day.
   const to = toDay ? new Date(Date.parse(toDay) + 24 * 60 * 60 * 1000).toISOString() : null
   return { outcome, action, target, from, to }
 }
 
 async function exportCsv(context: ControlContext, filters: AuditFilters, res: ApiResponse): Promise<void> {
   requireRecentMfa(context)
-  const base = context.admin.from('admin_audit_events').select(COLUMNS.join(', ')).order('occurred_at', { ascending: false }).limit(EXPORT_LIMIT)
+  const base = context.admin.from('control_audit_events').select(DB_COLUMNS).order('created_at', { ascending: false }).limit(EXPORT_LIMIT)
   const { data, error } = await withFilters(base, filters)
   if (error) throw new ApiError(503, 'audit_unavailable', 'The audit log could not be exported. Try again shortly.')
-  const rows = (data ?? []) as unknown as Array<Record<string, unknown>>
+  const rows = ((data ?? []) as unknown as AuditDbRow[]).map(normalizeAuditRow)
   const csv = toCsv([...COLUMNS], rows)
   const recorded = await recordAuditEvent(context.admin, {
     requestId: context.requestId,
@@ -70,8 +106,8 @@ async function exportCsv(context: ControlContext, filters: AuditFilters, res: Ap
 
 /**
  * GET /api/control/audit?outcome=&action=&target=&from=YYYY-MM-DD&to=YYYY-MM-DD&page=&pageSize=&format=json|csv
- * CSV export requires a recent TOTP verification and is itself recorded. Export is refused
- * if the export event cannot be recorded. The audit table is append-only in the database.
+ * CSV export requires recent TOTP verification and is itself recorded. Export is refused
+ * if the export event cannot be recorded. The database audit table is append-only.
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   const params = new URL(req.url ?? '/', 'http://localhost').searchParams
@@ -83,12 +119,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     }
     const { limit, offset, page } = parsePage(params.get('page'), params.get('pageSize'), 50, 100)
     const base = context.admin
-      .from('admin_audit_events')
-      .select(COLUMNS.join(', '), { count: 'exact' })
-      .order('occurred_at', { ascending: false })
+      .from('control_audit_events')
+      .select(DB_COLUMNS, { count: 'exact' })
+      .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
     const { data, error, count } = await withFilters(base, filters)
     if (error) throw new ApiError(503, 'audit_unavailable', 'The audit log could not be loaded. Try again shortly.')
-    sendJson(res, 200, { events: data ?? [], total: count ?? 0, page, pageSize: limit })
+    const events = ((data ?? []) as unknown as AuditDbRow[]).map(normalizeAuditRow)
+    sendJson(res, 200, { events, total: count ?? 0, page, pageSize: limit })
   })
 }
