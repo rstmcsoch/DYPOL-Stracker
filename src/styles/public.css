@@ -1072,6 +1072,176 @@
   white-space: nowrap;
 }
 
+/* ------------------------------------------------- promotional video player */
+
+/* The ambient player sits between the DYPOL band and the final CTA. Its pad
+   joins the neighbours' to keep the same 80–96px desktop / 56–72px mobile
+   rhythm the surrounding sections share — no extra gap of its own. */
+
+.pub-section-promo { padding-block: var(--pub-section-pad); }
+
+.promo-shell { display: flex; justify-content: center; }
+
+/* The frame reserves its 9:16 footprint before any media loads, so the player
+   never shifts the page. Width is derived from a height budget: roughly two
+   thirds of the viewport on phones, a little less on tablets, and ~54vh on
+   laptops and desktops, where the whole frame and its controls stay on screen
+   together. `min(100%, …)` keeps comfortable side margins on narrow screens. */
+.promo-video-frame {
+  --promo-height-budget: 66vh;
+  position: relative;
+  width: min(100%, calc(var(--promo-height-budget) * 0.5625));
+  aspect-ratio: 9 / 16;
+  border-radius: clamp(22px, 3.4vw, 30px);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--paper);
+  box-shadow:
+    0 26px 58px -20px rgba(41, 51, 45, .16),
+    0 6px 18px -8px rgba(41, 51, 45, .08);
+}
+
+.pub-page[data-public-theme='dark'] .promo-video-frame {
+  box-shadow:
+    0 26px 58px -18px rgba(0, 0, 0, .5),
+    0 6px 18px -8px rgba(0, 0, 0, .32);
+}
+
+/* Dynamic viewport units keep the full frame visible once phone toolbars
+   collapse; the static unit above remains the fallback for older engines. */
+@supports (height: 100dvh) {
+  .promo-video-frame { --promo-height-budget: 66dvh; }
+}
+
+@media (min-width: 700px) {
+  .promo-video-frame { --promo-height-budget: 62vh; }
+  @supports (height: 100dvh) {
+    .promo-video-frame { --promo-height-budget: 62dvh; }
+  }
+}
+
+@media (min-width: 1021px) {
+  .promo-video-frame { --promo-height-budget: 54vh; }
+  @supports (height: 100dvh) {
+    .promo-video-frame { --promo-height-budget: 54dvh; }
+  }
+}
+
+/* Short landscape phones keep the entire frame and its controls on screen. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .promo-video-frame { --promo-height-budget: 78vh; }
+}
+
+/* The frame matches the clip's 9:16 exactly, so cover fills it edge to edge
+   without ever cropping content. */
+.promo-video-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: transparent;
+}
+
+/* Cloud-like dissolve into the page colour: opaque only at the outer rim and
+   corners so the rounded edges melt into --bg in both themes while the centre
+   of the clip stays sharp. The gradient tints follow the theme automatically. */
+.promo-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(64% 46% at 0% 0%, var(--bg) -18%, color-mix(in srgb, var(--bg) 55%, transparent) 26%, transparent 62%),
+    radial-gradient(64% 46% at 100% 0%, var(--bg) -18%, color-mix(in srgb, var(--bg) 55%, transparent) 26%, transparent 62%),
+    radial-gradient(64% 46% at 0% 100%, var(--bg) -18%, color-mix(in srgb, var(--bg) 55%, transparent) 26%, transparent 62%),
+    radial-gradient(64% 46% at 100% 100%, var(--bg) -18%, color-mix(in srgb, var(--bg) 55%, transparent) 26%, transparent 62%),
+    linear-gradient(to bottom, color-mix(in srgb, var(--bg) 72%, transparent), transparent 11%),
+    linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent), transparent 11%),
+    linear-gradient(to right, color-mix(in srgb, var(--bg) 66%, transparent), transparent 9%),
+    linear-gradient(to left, color-mix(in srgb, var(--bg) 66%, transparent), transparent 9%);
+}
+
+/* ------------------------------------------------------- player controls */
+
+.promo-play-toggle,
+.promo-mute-toggle {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 253, 247, .32);
+  border-radius: 50%;
+  background: rgba(24, 30, 26, .46);
+  color: #fffdf7;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(12, 16, 13, .28);
+  transition: transform .18s ease, background-color .18s ease, opacity .18s ease;
+}
+
+/* The frosted finish is pleasant on hover devices; touch devices keep a plain
+   translucent fill so a playing clip never pays for backdrop blur. */
+@media (hover: hover) and (pointer: fine) {
+  .promo-play-toggle,
+  .promo-mute-toggle {
+    backdrop-filter: blur(9px) saturate(1.25);
+    -webkit-backdrop-filter: blur(9px) saturate(1.25);
+  }
+  .promo-play-toggle:hover { background: rgba(24, 30, 26, .6); transform: translate(-50%, -50%) scale(1.06); }
+  .promo-mute-toggle:hover { background: rgba(24, 30, 26, .6); transform: scale(1.06); }
+}
+
+.promo-play-toggle:active { transform: translate(-50%, -50%) scale(.95); }
+.promo-mute-toggle:active { transform: scale(.94); }
+
+.promo-play-toggle:focus-visible,
+.promo-mute-toggle:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 62%, transparent);
+  outline-offset: 3px;
+}
+
+.promo-play-toggle {
+  left: 50%;
+  top: 50%;
+  width: 68px;
+  height: 68px;
+  transform: translate(-50%, -50%);
+}
+/* The solid play triangle sits optically right of centre; the pause bars do not. */
+.promo-play-toggle svg { margin-left: 4px; }
+.promo-play-toggle.is-playing svg { margin-left: 0; }
+/* While the clip runs the control steps back but stays clearly tappable. */
+.promo-play-toggle.is-playing { opacity: .8; }
+.promo-play-toggle.is-playing:hover,
+.promo-play-toggle.is-playing:focus-visible { opacity: 1; }
+
+.promo-mute-toggle {
+  top: 14px;
+  right: 14px;
+  width: 48px;
+  height: 48px;
+}
+
+@media (max-width: 700px) {
+  .promo-play-toggle { width: 60px; height: 60px; }
+  .promo-play-toggle svg { margin-left: 3px; }
+  .promo-mute-toggle { top: 12px; right: 12px; width: 46px; height: 46px; }
+}
+
+.promo-fallback {
+  position: absolute;
+  inset: auto 14% 12%;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .promo-play-toggle,
+  .promo-mute-toggle { transition: none; }
+}
+
 /* ---------------------------------------------------------------- final CTA */
 
 .pub-final { padding-block: var(--pub-section-pad) clamp(40px, 4.2vw, 48px); }

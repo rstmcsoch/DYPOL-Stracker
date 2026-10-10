@@ -60,6 +60,23 @@
       ]
     },
     {
+      "source": "/videos/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=604800"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "public, max-age=604800"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, max-age=604800"
+        }
+      ]
+    },
+    {
       "source": "/control-panel(.*)",
       "headers": [
         {

@@ -6,6 +6,7 @@ import { NotebookPreview } from '../components/public/NotebookPreview'
 import {
   AiSection, DypolSection, FeatureSection, FinalCta, HowItWorksSection, PrincipleSection, PrivacySection, StudyLoopSection
 } from '../components/public/LandingSections'
+import { PromoVideoSection } from '../components/public/PromoVideoPlayer'
 import { usePageMeta } from '../lib/head'
 import { useSiteText } from '../contexts/SiteContentContext'
 import { SiteLink } from '../components/public/SiteLink'
@@ -85,6 +86,7 @@ export default function LandingPage() {
       <AiSection />
       <PrivacySection />
       <DypolSection />
+      <PromoVideoSection />
       <FinalCta />
     </main>
     <PublicFooter />
