@@ -108,16 +108,19 @@ export function evaluateServerConfig(env: Env = process.env): ServerConfigStatus
   const supabase = supabaseServerConfig(env)
   const encryption = credentialEncryptionStatus(env)
   const checks = { supabaseServerConfig: supabase.ok, credentialEncryption: encryption === 'ok' }
-  const missing = [...(supabase.ok ? [] : supabase.missing)]
-  const invalid = [...(supabase.ok ? [] : supabase.invalid)]
-  if (encryption === 'missing') missing.push(AI_CREDENTIALS_ENCRYPTION_KEY_VAR)
-  if (encryption === 'invalid') invalid.push(AI_CREDENTIALS_ENCRYPTION_KEY_VAR)
-  const reason: ServerConfigReason | null = !supabase.ok
-    ? supabase.reason
-    : encryption === 'missing'
-      ? 'credential_encryption_missing'
-      : encryption === 'invalid'
-        ? 'credential_encryption_invalid'
-        : null
+  const missing: string[] = []
+  const invalid: string[] = []
+  let reason: ServerConfigReason | null = null
+  if (supabase.ok === false) {
+    missing.push(...supabase.missing)
+    invalid.push(...supabase.invalid)
+    reason = supabase.reason
+  } else if (encryption === 'missing') {
+    missing.push(AI_CREDENTIALS_ENCRYPTION_KEY_VAR)
+    reason = 'credential_encryption_missing'
+  } else if (encryption === 'invalid') {
+    invalid.push(AI_CREDENTIALS_ENCRYPTION_KEY_VAR)
+    reason = 'credential_encryption_invalid'
+  }
   return { configured: checks.supabaseServerConfig && checks.credentialEncryption, checks, reason, missing, invalid }
 }
