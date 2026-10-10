@@ -146,7 +146,7 @@ describe('console authentication and authorization', () => {
     expect(res.body).toMatchObject({ error: 'access_not_granted', message: 'Access not granted.' })
     expect(JSON.stringify(res.body)).not.toMatch(/owner|admin|role|secret/i)
     const denied = world.writes.find(write => write.table === 'control_audit_events')
-    expect(denied?.row).toMatchObject({ action: 'control.access', outcome: 'denied', actor_id: STUDENT })
+    expect(denied?.row).toMatchObject({ action: 'control.access', result: 'denied', actor_id: STUDENT })
   })
 
   it('treats a revoked owner row exactly like no role', async () => {
@@ -235,7 +235,7 @@ describe('account access changes', () => {
     expect(res.statusCode).toBe(200)
     expect(world.updates).toEqual([{ id: TARGET, attributes: { ban_duration: '876000h' } }])
     const audit = world.writes.find(write => write.table === 'control_audit_events')
-    expect(audit?.row).toMatchObject({ action: 'user.suspend', outcome: 'success', target_id: TARGET, actor_id: OWNER })
+    expect(audit?.row).toMatchObject({ action: 'user.suspend', result: 'success', target_id: TARGET, actor_id: OWNER })
     expect(JSON.stringify(audit?.row)).not.toMatch(/token|password|totp/i)
   })
 
@@ -291,7 +291,7 @@ describe('account access changes', () => {
     expect(res.statusCode).toBe(502)
     expect(res.body).toMatchObject({ error: 'auth_update_failed' })
     const audit = world.writes.find(write => write.table === 'control_audit_events')
-    expect(audit?.row).toMatchObject({ outcome: 'failed' })
+    expect(audit?.row).toMatchObject({ result: 'error' })
   })
 
   it('reports no-op requests as conflicts instead of re-applying them', async () => {
