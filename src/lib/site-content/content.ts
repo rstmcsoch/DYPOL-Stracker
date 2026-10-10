@@ -6,13 +6,13 @@ import {
   type FieldDefinition
 } from './registry.js'
 
-/**
- * Validation, resolution and diffing for owner-editable copy.
- */
-
 export type SiteOverrides = Record<string, string>
 export type SiteValues = Record<string, string>
 export type FieldValidation = { ok: true; value: string } | { ok: false; message: string }
+
+export type OverrideValidation =
+  | { ok: true; overrides: SiteOverrides }
+  | { ok: false; errors: Record<string, string> }
 
 const MARKUP = /[<>]/
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u
@@ -100,36 +100,43 @@ export function validateFieldValue(definition: FieldDefinition, raw: unknown): F
   return { ok: true, value }
 }
 
-export function validateOverrides(raw: unknown): { ok: true; value: SiteOverrides } | { ok: false; message: string; field?: string } {
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ok: false, message: 'Expected an object of field values.' }
+export function validateOverrides(raw: unknown): OverrideValidation {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, errors: { _root: 'Send the content as a set of field values.' } }
   }
+  const errors: Record<string, string> = {}
   const overrides: SiteOverrides = {}
-  for (const [key, value] of Object.entries(raw)) {
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const definition = fieldDefinition(key)
-    if (!definition) return { ok: false, message: 'Unknown field.', field: key }
+    if (!definition) {
+      errors[key] = 'This is not an editable field.'
+      continue
+    }
     const result = validateFieldValue(definition, value)
-    if (!result.ok) return { ok: false, message: result.message, field: key }
+    if (!result.ok) {
+      errors[key] = result.message
+      continue
+    }
     if (result.value !== definition.defaultValue) overrides[key] = result.value
   }
-  return { ok: true, value: overrides }
+  return Object.keys(errors).length ? { ok: false, errors } : { ok: true, overrides }
 }
 
 export function sanitizeStoredOverrides(raw: unknown): SiteOverrides {
-  const overrides: SiteOverrides = {}
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return overrides
-  for (const [key, value] of Object.entries(raw)) {
+  const result: SiteOverrides = {}
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const definition = fieldDefinition(key)
     if (!definition) continue
-    const result = validateFieldValue(definition, value)
-    if (result.ok && result.value !== definition.defaultValue) overrides[key] = result.value
+    const checked = validateFieldValue(definition, value)
+    if (checked.ok && checked.value !== definition.defaultValue) result[key] = checked.value
   }
-  return overrides
+  return result
 }
 
-export function resolveSiteValues(stored: SiteOverrides | null | undefined): SiteValues {
+export function resolveSiteValues(overrides?: unknown): SiteValues {
   const values: SiteValues = { ...SITE_CONTENT_DEFAULTS }
-  const applied = sanitizeStoredOverrides(stored)
+  const applied = sanitizeStoredOverrides(overrides)
   for (const [key, value] of Object.entries(applied)) values[key] = value
   return values
 }
