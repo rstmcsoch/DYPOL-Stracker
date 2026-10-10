@@ -12,7 +12,7 @@ deployment.
 ## Access model
 
 - **Authentication:** the existing Supabase Auth sign-in. The console does not create its own login.
-- **Authorization:** a server-controlled `public.admin_roles` row. Client metadata, profile fields,
+- **Authorization:** a server-controlled `public.control_roles` row. Client metadata, profile fields,
   localStorage, and email matching alone never grant access. The table is readable and writable only
   by the `service_role` key; `anon` and `authenticated` have no grants and no policies.
 - **Roles:** `owner`, `administrator`, `support`, `analyst`. Access is denied by default. Only
@@ -25,7 +25,7 @@ deployment.
 - **Rate limits:** 120 API calls per account per minute; 60 anonymous calls per hashed IP per
   minute; at most 20 denied-attempt audit rows per account per 10 minutes. Raw IP addresses are
   never stored.
-- **Audit:** every privileged action, denial and failure writes a row to `public.admin_audit_events`.
+- **Audit:** every privileged action, denial and failure writes a row to `public.control_audit_events`.
   Summaries are sanitized: keys that look like tokens, passwords, codes, cookies, keys, links or
   emails are dropped, and values are limited to short scalars.
 
