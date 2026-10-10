@@ -104,23 +104,23 @@
     },
     {
       "source": "/api/control/appearance-state",
-      "destination": "/api/control/appearance?route=state"
+      "destination": "/api/control/operations?route=state"
     },
     {
       "source": "/api/control/appearance-draft",
-      "destination": "/api/control/appearance?route=draft"
+      "destination": "/api/control/operations?route=draft"
     },
     {
       "source": "/api/control/appearance-discard",
-      "destination": "/api/control/appearance?route=discard"
+      "destination": "/api/control/operations?route=discard"
     },
     {
       "source": "/api/control/appearance-publish",
-      "destination": "/api/control/appearance?route=publish"
+      "destination": "/api/control/operations?route=publish"
     },
     {
       "source": "/api/control/appearance-restore",
-      "destination": "/api/control/appearance?route=restore"
+      "destination": "/api/control/operations?route=restore"
     },
     {
       "source": "/api/control/(.*)",
