@@ -22,7 +22,7 @@ import {
 /**
  * Trusted server-side context for a console request. It is produced only after the bearer
  * JWT has been verified by the Auth server (getClaims), the account has an active owner row
- * in public.admin_roles, and (when required) the session is at aal2.
+ * in public.control_roles, and (when required) the session is at aal2.
  */
 export interface ControlContext {
   userId: string
@@ -79,8 +79,8 @@ function serviceClient(): { url: string; admin: SupabaseClient; anonKey: string 
 }
 
 /** Atomic database rate slot. Fails closed if the limiter itself is unavailable. */
-export async function takeControlRate(admin: SupabaseClient, key: string, rule: { limit: number; windowSeconds: number }): Promise<void> {
-  const { data, error } = await admin.rpc('admin_take_rate_slot', { p_key: key, p_limit: rule.limit, p_window_seconds: rule.windowSeconds })
+export async function takeControlRate(admin: SupabaseClient, key: string, rule: { limit: number; windowSeconds: number }, argumentsBucket = 'control-api'): Promise<void> {
+  const { data, error } = await admin.rpc('control_take_rate_slot', { actor_key: key, bucket: argumentsBucket, per_limit: rule.limit, window_seconds: rule.windowSeconds })
   if (error) {
     logAIEvent('error', 'control_rate_limit_unavailable', { code: error.code ?? '' })
     throw new ApiError(503, 'rate_limit_unavailable', 'The console could not check the request limit. Try again in a moment.')
@@ -90,18 +90,21 @@ export async function takeControlRate(admin: SupabaseClient, key: string, rule: 
 
 /** Writes one sanitized audit row through the service role. Returns false if the write failed. */
 export async function recordAuditEvent(admin: SupabaseClient, event: AuditEvent): Promise<boolean> {
-  const { error } = await admin.from('admin_audit_events').insert({
-    request_id: cleanText(event.requestId, 80),
+  const sanitized = sanitizeAuditSummary(event.summary) as Record<string, AuditSummaryValue>
+  const beforeValue = Object.prototype.hasOwnProperty.call(sanitized, 'before') ? { before: sanitized.before } : null
+  const afterValue = Object.fromEntries(Object.entries(sanitized).filter(([key]) => key !== 'before'))
+  const { error } = await admin.from('control_audit_events').insert({
+    request_id: cleanText(event.requestId, 80) || null,
     actor_id: event.actorId && isUuid(event.actorId) ? event.actorId : null,
     actor_role: event.actorRole ? cleanText(event.actorRole, 30) : null,
     action: event.action,
-    target_type: cleanText(event.targetType ?? '', 40),
-    target_id: cleanText(event.targetId ?? '', 120),
-    outcome: event.outcome,
-    severity: event.severity ?? (event.outcome === 'success' ? 'info' : 'notice'),
-    error_code: cleanText(event.errorCode ?? '', 60),
-    reason: cleanText(event.reason ?? '', 500),
-    summary: sanitizeAuditSummary(event.summary) as Record<string, AuditSummaryValue>
+    target_type: event.targetType ? cleanText(event.targetType, 40) : null,
+    target_id: event.targetId ? cleanText(event.targetId, 120) : null,
+    result: event.outcome === 'failed' ? 'error' : event.outcome,
+    error_category: event.errorCode ? cleanText(event.errorCode, 60) : null,
+    reason: event.reason ? cleanText(event.reason, 500) : null,
+    before_summary: beforeValue,
+    after_summary: Object.keys(afterValue).length ? afterValue : null
   })
   if (error) {
     logAIEvent('error', 'control_audit_write_failed', { action: event.action, code: error.code ?? '' })
@@ -113,7 +116,7 @@ export async function recordAuditEvent(admin: SupabaseClient, event: AuditEvent)
 /** Records a denied attempt by an authenticated, non-owner account, bounded per account. */
 async function recordDeniedAccess(admin: SupabaseClient, userId: string, requestId: string, errorCode: string): Promise<void> {
   try {
-    const { data } = await admin.rpc('admin_take_rate_slot', { p_key: `denied:${userId}`, p_limit: DENIED_AUDIT_LIMIT.limit, p_window_seconds: DENIED_AUDIT_LIMIT.windowSeconds })
+    const { data } = await admin.rpc('control_take_rate_slot', { actor_key: userId, bucket: 'denied-access', per_limit: DENIED_AUDIT_LIMIT.limit, window_seconds: DENIED_AUDIT_LIMIT.windowSeconds })
     if (data !== true) return
     await recordAuditEvent(admin, { requestId, actorId: userId, actorRole: null, action: 'control.access', targetType: 'control_panel', outcome: 'denied', severity: 'notice', errorCode })
   } catch {
@@ -140,7 +143,7 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
   const { url, anonKey, admin } = serviceClient()
 
   if (!token) {
-    await takeControlRate(admin, `anon:${clientKeyHash(req)}`, ANONYMOUS_LIMIT)
+    await takeControlRate(admin, `anon:${clientKeyHash(req)}`, ANONYMOUS_LIMIT, 'anonymous')
     throw new ApiError(401, 'unauthenticated', 'Sign in to open the Stracker Control Center.')
   }
 
@@ -155,7 +158,7 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
   const userId = claims.sub
 
   const { data: roleRow, error: roleError } = await admin
-    .from('admin_roles')
+    .from('control_roles')
     .select('role, revoked_at')
     .eq('user_id', userId)
     .maybeSingle()
