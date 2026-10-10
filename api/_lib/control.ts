@@ -67,7 +67,7 @@ export function clientKeyHash(req: ApiRequest): string {
 
 function serviceClient(): { url: string; admin: SupabaseClient; anonKey: string } {
   const resolved = supabaseServerConfig()
-  if (!resolved.ok) {
+  if (resolved.ok === false) {
     logAIEvent('warn', 'control_backend_not_configured', { reason: resolved.reason, missing: resolved.missing.join(','), invalid: resolved.invalid.join(',') })
     throw new ApiError(503, 'control_unavailable', 'The control center backend is not configured for this deployment yet.')
   }
