@@ -140,7 +140,9 @@ export function sanitizeAuditSummary(input: Record<string, unknown> | undefined)
     const key = rawKey.toLowerCase()
     if (!/^[a-z][a-z0-9_]{0,39}$/.test(key)) continue
     if (SENSITIVE_KEY.test(key)) continue
-    if (value === null || typeof value === 'boolean') {
+    if (value === null) {
+      output[key] = null
+    } else if (typeof value === 'boolean') {
       output[key] = value
     } else if (typeof value === 'number' && Number.isFinite(value)) {
       output[key] = value
