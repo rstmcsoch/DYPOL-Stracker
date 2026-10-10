@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { ArrowDown, ArrowRight, Check, LockKeyhole } from 'lucide-react'
 import { PublicHeader, type PublicTheme } from '../components/public/PublicHeader'
 import { PublicFooter } from '../components/public/PublicFooter'
@@ -8,6 +7,8 @@ import {
   AiSection, DypolSection, FeatureSection, FinalCta, HowItWorksSection, PrincipleSection, PrivacySection, StudyLoopSection
 } from '../components/public/LandingSections'
 import { usePageMeta } from '../lib/head'
+import { useSiteText } from '../contexts/SiteContentContext'
+import { SiteLink } from '../components/public/SiteLink'
 
 const PUBLIC_THEME_STORAGE_KEY = 'stracker-public-home-theme'
 
@@ -20,10 +21,10 @@ function readPublicTheme(): PublicTheme {
   }
 }
 
-/** The most useful notebook pages to surface before the visitor starts. */
-const HERO_PILLARS = [
-  'Syllabus', 'Tests', 'Mistakes', 'Revision', 'Analytics'
-]
+/** One highlight per line; blank lines are ignored. */
+function lines(value: string): string[] {
+  return value.split('\n').map(line => line.trim()).filter(Boolean)
+}
 
 /**
  * Public homepage for Stracker by DYPOL LABS.
@@ -35,6 +36,7 @@ const HERO_PILLARS = [
  */
 export default function LandingPage() {
   const [publicTheme, setPublicTheme] = useState<PublicTheme>(readPublicTheme)
+  const t = useSiteText
 
   const togglePublicTheme = () => {
     setPublicTheme(current => {
@@ -48,10 +50,7 @@ export default function LandingPage() {
     })
   }
 
-  usePageMeta(
-    'Stracker by DYPOL LABS — a serious JEE 2027 study notebook',
-    'Stracker by DYPOL LABS is a digital study notebook for JEE preparation: syllabus tracking, test journal, mistakes and retries, spaced revision, daily planning, focus sessions and analytics.'
-  )
+  usePageMeta(t('public.meta.title'), t('public.meta.description'))
 
   return <div className="pub-page" id="top" data-public-theme={publicTheme}>
     <a className="pub-skip-link" href="#main">Skip to content</a>
@@ -60,18 +59,18 @@ export default function LandingPage() {
       <section className="hero" aria-labelledby="hero-title">
         <div className="pub-shell hero-shell">
           <div className="hero-copy">
-            <p className="pub-eyebrow"><span aria-hidden="true">✎</span> JEE 2027 · A DIGITAL STUDY NOTEBOOK</p>
-            <h1 id="hero-title">Your JEE preparation, organized in <em>one serious study notebook.</em></h1>
-            <p className="hero-lede">Stracker keeps the syllabus, the tests, the mistakes, the revision queue, the daily plan, focus sessions and the analytics on the same page — then stays quiet while you actually study.</p>
+            <p className="pub-eyebrow"><span aria-hidden="true">✎</span> {t('public.hero.eyebrow')}</p>
+            <h1 id="hero-title">{t('public.hero.title')} <em>{t('public.hero.title_emphasis')}</em></h1>
+            <p className="hero-lede">{t('public.hero.lede')}</p>
             <ul className="hero-pillars" aria-label="What Stracker brings together">
-              {HERO_PILLARS.map(pillar => <li key={pillar}><Check size={13} strokeWidth={3} aria-hidden="true" /> <span>{pillar}</span></li>)}
+              {lines(t('public.hero.pillars')).map(pillar => <li key={pillar}><Check size={13} strokeWidth={3} aria-hidden="true" /> <span>{pillar}</span></li>)}
             </ul>
             <div className="pub-cta-row hero-cta-row">
-              <Link className="button button-primary button-lg" to="/signup">Start with Stracker <ArrowRight size={17} aria-hidden="true" /></Link>
-              <Link className="button button-secondary button-lg" to="/login">Log In</Link>
+              <SiteLink className="button button-primary button-lg" href={t('public.hero.cta_primary.href')}>{t('public.hero.cta_primary.label')} <ArrowRight size={17} aria-hidden="true" /></SiteLink>
+              <SiteLink className="button button-secondary button-lg" href={t('public.hero.cta_secondary.href')}>{t('public.hero.cta_secondary.label')}</SiteLink>
             </div>
-            <p className="hero-scroll"><a href="#why-stracker">Explore how it works <ArrowDown size={14} aria-hidden="true" /><span className="visually-hidden">(jump to the study system section)</span></a></p>
-            <p className="hero-meta"><LockKeyhole size={13} aria-hidden="true" /> Private to your account · Works on phone, tablet and desktop · Installable</p>
+            <p className="hero-scroll"><a href="#why-stracker">{t('public.hero.scroll.label')} <ArrowDown size={14} aria-hidden="true" /><span className="visually-hidden">(jump to the study system section)</span></a></p>
+            <p className="hero-meta"><LockKeyhole size={13} aria-hidden="true" /> {t('public.hero.meta')}</p>
           </div>
           <div className="hero-visual">
             <NotebookPreview />

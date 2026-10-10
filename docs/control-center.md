@@ -48,6 +48,8 @@ was allowed but could not be completed). The catalogue is defined once in
 | `user.viewed` | An operator opened an account detail page. | success |
 | `user.suspend` / `user.restore` | A sign-in restriction was applied or lifted. **denied** rows record refused attempts (`owner_protected`, `self_action_blocked`, stale MFA). | success, denied, failed |
 | `audit.export` | A CSV export was requested. The summary holds the filters used (never row contents). A refused export (stale MFA) is `denied`; a database failure is `failed`. | success, denied, failed |
+| `content.publish` | An owner published the saved Appearance draft to the live site (one row per publish). Summary: version before and after, and the number of changed fields. A refused publish (stale MFA) is `denied`; invalid draft, no changes, or a database failure is `failed`. | success, denied, failed |
+| `content.restore` | An owner published an earlier version as a new live version. Summary: restored version, version before and after. | success, denied, failed |
 
 Not in the audit log, by design:
 
@@ -61,6 +63,7 @@ Not in the audit log, by design:
   into it. Rate-limited requests get HTTP 429 and no row. They are visible in the Vercel function logs.
 - **Anonymous requests.** Unauthenticated calls are rate-limited per hashed IP and rejected with
   401 without an audit row (there is no verified actor to record).
+- **Draft saves and discards** in Appearance. Drafts are private, owner-only and replaced on each save; only the publish and restore that makes them live is audited.
 - **Successful read-only pages** other than account detail (`Overview`, `Users` list, `Roles`,
   `Security`, `Health`). Reading aggregate counts is covered by the per-session `control.access` row.
 
@@ -141,9 +144,54 @@ The health endpoint reports the result of each check, plus the deployed commit a
 - **System health:** database, auth, and configuration checks, with the deployed commit when Vercel
   provides it.
 
+## Appearance and theme
+
+**Control Center theme.** Light, Dark or System, chosen in the top bar. Dark is the default and matches
+the original console. The preference is stored only on this browser (`stracker-control-center-theme`),
+is read before the first render, and is not shared with the public website or the notebook, whose
+themes are unaffected. System follows the device setting while the console is open.
+
+**Appearance (owner only).** Edits the words shown on the public homepage, header and footer, and the
+notebook's menu labels. Sections that are built and working:
+
+- **Overview:** live version, draft status, and links to each editor.
+- **Public website:** searchable homepage, header and footer copy. Each field shows its default, the
+  live value when it differs, and validation.
+- **Navigation & labels:** menu labels only. A label never changes the destination, icon, group, or
+  who may open the page.
+- **Preview & publishing:** the saved draft in a homepage preview (phone, tablet, landscape, desktop),
+  the changes waiting, publish, discard, and version history with restore.
+
+Omitted, because they are not built yet (so they are not shown rather than shown as fake controls):
+Global branding, Pages & sections, Cards & components, Images & media, and Theme & design tokens. A
+separate Navigation & labels tab is folded into the Appearance section above.
+
+**How it works and what is enforced.**
+
+- Drafts are saved server-side, but only the published copy is ever served to visitors. The draft
+  preview is owner-only.
+- Publish and restore are atomic (one database function, under a lock). Each creates a new version;
+  older versions are kept. A publish with no changes is refused.
+- Every write re-validates on the server: unknown keys are refused, markup and control characters are
+  refused, text has length limits, and links are limited to listed public pages, homepage sections, or
+  `https://` addresses without credentials. No arbitrary HTML or JavaScript can be stored.
+- Saving a draft requires an aal2 session. **Publish and restore also require a TOTP code verified in
+  the last 15 minutes**, as for other sensitive actions.
+- Nothing here changes accounts, roles, study data, calculations, or code. Restoring a version does not
+  touch user data.
+- If the stored copy is missing or unreadable, the built-in default copy is shown.
+- Unsaved edits are guarded when navigating within the console and on reload or tab close.
+
+Storage: `supabase/migrations/20261010120000_site_content_publishing.sql` (`site_content_draft`,
+`site_content_published`, `site_content_versions`, and `site_content_commit`). The migration is
+additive and must be applied before publishing works; until then the site shows its defaults.
+
 ## Not implemented yet
 
 Administrator, Support and Analyst permission sets; feature flags; announcements; exam, subject
 and chapter configuration; email and authentication operations; analytics beyond the overview;
 settings; global search beyond the account launcher (Ctrl+K). These are intentionally absent from
 navigation until they work.
+
+Appearance tabs not yet built: Global branding, Pages & sections, Cards & components, Images & media,
+and Theme & design tokens. Logos, images, and brand colours are not editable yet.
