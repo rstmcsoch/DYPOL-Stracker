@@ -1,5 +1,3 @@
-import { SYLLABUS } from '../syllabus.js'
-
 /**
  * Registry of owner-editable website and user-panel copy.
  *
@@ -39,8 +37,6 @@ export interface FieldDefinition {
 export const SITE_CONTENT_SCHEMA_VERSION = 1
 export const INTERNAL_ROUTE_TARGETS = ['/', '/login', '/signup', '/reset-password'] as const
 export const HOMEPAGE_ANCHOR_TARGETS = ['#top', '#why-stracker', '#features', '#how-it-works', '#ai', '#privacy', '#dypol-labs'] as const
-
-const CHAPTER_COUNT = Object.values(SYLLABUS).reduce((sum, chapters) => sum + chapters.length, 0)
 
 const fields: FieldDefinition[] = []
 
