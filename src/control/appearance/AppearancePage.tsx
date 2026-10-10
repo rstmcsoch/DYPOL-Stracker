@@ -4,15 +4,18 @@ import { PageHeader } from '../pageParts'
 import { ContentEditorProvider } from './ContentEditor'
 import { NavigationTab, OverviewTab, PublicTab } from './EditorTabs'
 import { PublishingTab } from './PublishingTab'
+import { VideoTab } from './VideoTab'
 
 /**
- * Appearance: owner-only editor for public-site and notebook-label copy.
- * Only subsections that are wired to live pages appear here. Omitted (not yet built):
- * Global branding, Pages & sections, Cards & components, Images & media, Theme & design tokens.
+ * Appearance: owner-only editor for public-site copy, the homepage promotional
+ * video and notebook labels. Only subsections that are wired to live pages appear
+ * here. Omitted (not yet built): Global branding, Pages & sections, Cards &
+ * components, Theme & design tokens.
  */
 const TABS = [
   { to: '', label: 'Overview', end: true },
   { to: 'public', label: 'Public website', end: false },
+  { to: 'video', label: 'Homepage video', end: false },
   { to: 'navigation', label: 'Navigation & labels', end: false },
   { to: 'publishing', label: 'Preview & publishing', end: false }
 ]
@@ -32,6 +35,7 @@ export default function AppearancePage() {
         <Routes>
           <Route index element={<OverviewTab />} />
           <Route path="public" element={<PublicTab />} />
+          <Route path="video" element={<VideoTab />} />
           <Route path="navigation" element={<NavigationTab />} />
           <Route path="publishing" element={<PublishingTab />} />
           <Route path="*" element={<Navigate to={`${CONSOLE_BASE}/appearance`} replace />} />
