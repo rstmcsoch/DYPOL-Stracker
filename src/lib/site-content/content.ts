@@ -113,7 +113,7 @@ export function validateOverrides(raw: unknown): OverrideValidation {
       continue
     }
     const result = validateFieldValue(definition, value)
-    if (!result.ok) {
+    if (result.ok === false) {
       errors[key] = result.message
       continue
     }
