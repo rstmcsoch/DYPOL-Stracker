@@ -29,7 +29,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     const now = () => new Date().toISOString()
 
     const dbStarted = Date.now()
-    const { error: dbError } = await context.admin.from('admin_roles').select('user_id', { head: true, count: 'exact' }).limit(1)
+    const { error: dbError } = await context.admin.from('control_roles).select('user_id', { head: true, count: 'exact' }).limit(1)
     checks.push({
       id: 'database',
       label: 'Database connectivity',
