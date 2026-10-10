@@ -38,7 +38,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       throw new ApiError(400, 'confirmation_mismatch', 'The confirmation email does not match this account. Nothing was changed.')
     }
 
-    const { data: roleRow, error: roleError } = await admin.from('admin_roles').select('role, revoked_at').eq('user_id', userId).maybeSingle()
+    const { data: roleRow, error: roleError } = await admin.from('control_roles').select('role, revoked_at').eq('user_id', userId).maybeSingle()
     if (roleError) throw new ApiError(503, 'control_unavailable', 'Account roles could not be checked. Nothing was changed.')
     if (roleRow && !roleRow.revoked_at) throw new ApiError(409, 'owner_protected', 'Administrator accounts cannot be suspended from the console.')
 
