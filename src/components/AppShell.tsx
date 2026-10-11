@@ -20,6 +20,7 @@ import { useSiteValues } from '../contexts/SiteContentContext'
 import { navCaptionFor, navLabelFor } from '../lib/site-content/nav'
 import type { SiteValues } from '../lib/site-content/content'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
+import { chosenExamTitle, isJeeSettings } from '../lib/jee/exam'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
 interface NavigationGroup { caption: string; items: NavigationItem[] }
@@ -164,7 +165,7 @@ export function AppFrame() {
 
     <main className="main-area">
       <div className="topline">
-        <div className="breadcrumb"><span>JEE 2027</span><ChevronRight size={13} /><strong>{currentNavLabel(location.pathname, siteValues) ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
+        <div className="breadcrumb"><span>{isJeeSettings(data.settings) ? `JEE ${data.settings.exam_year ?? 2027}` : chosenExamTitle(data.settings)}</span><ChevronRight size={13} /><strong>{currentNavLabel(location.pathname, siteValues) ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
         <div className="topline-right">
           {user?.isLocal && <span className="preview-pill"><span />Local preview — not synced</span>}
           <button className={`sync-pill sync-${syncState}`} onClick={() => void refresh()} title={syncError ?? 'Click to sync now'}>
