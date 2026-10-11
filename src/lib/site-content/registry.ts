@@ -49,6 +49,8 @@ export interface FieldDefinition {
   itemLabelKey?: string
   /** `media` fields: the built-in file (default) or an upload of this kind from the homepage-media bucket. */
   mediaKind?: 'image' | 'video'
+  /** `media` image fields whose default is empty: the image is optional and can be removed. */
+  optional?: boolean
 }
 
 /** Bump when the stored shape or the meaning of a key changes; stored rows carry it. */
@@ -74,7 +76,7 @@ function field(
   label: string,
   type: FieldType,
   defaultValue: string,
-  options: { help?: string; maxLength?: number; options?: readonly FieldOption[]; itemCount?: number; minItems?: number; itemLabelKey?: string; mediaKind?: 'image' | 'video' } = {}
+  options: { help?: string; maxLength?: number; options?: readonly FieldOption[]; itemCount?: number; minItems?: number; itemLabelKey?: string; mediaKind?: 'image' | 'video'; optional?: boolean } = {}
 ) {
   const maxLength = options.maxLength ?? (type === 'multiline' ? 600 : type === 'link' ? 500 : 160)
   if (type === 'select' && !options.options?.some(option => option.value === defaultValue)) {
@@ -85,7 +87,7 @@ function field(
     key, area, page, section, label, type, defaultValue, maxLength, help: options.help,
     ...(options.options ? { options: options.options } : {}),
     ...(type === 'order' ? { itemCount: options.itemCount, minItems: options.minItems ?? 1, itemLabelKey: options.itemLabelKey } : {}),
-    ...(type === 'media' ? { mediaKind: options.mediaKind ?? 'image' } : {})
+    ...(type === 'media' ? { mediaKind: options.mediaKind ?? 'image', ...(options.optional ? { optional: true } : {}) } : {})
   })
 }
 
@@ -112,6 +114,11 @@ field('public', HOME, 'Hero', 'public.hero.title', 'Heading (first part)', 'text
 field('public', HOME, 'Hero', 'public.hero.title_emphasis', 'Heading (emphasised part)', 'text', 'one serious study notebook.', { maxLength: 80 })
 field('public', HOME, 'Hero', 'public.hero.lede', 'Introduction', 'multiline',
   'Stracker keeps the syllabus, the tests, the mistakes, the revision queue, the daily plan, focus sessions and the analytics on the same page — then stays quiet while you actually study.')
+field('public', HOME, 'Hero', 'public.hero.image', 'Hero image (optional)', 'media', '', {
+  mediaKind: 'image', optional: true, maxLength: 300,
+  help: 'Replaces the notebook illustration beside the heading. Leave empty to keep the illustration.'
+})
+field('public', HOME, 'Hero', 'public.hero.image_alt', 'Hero image description', 'text', 'Stracker study notebook on a laptop', { maxLength: 140, help: 'Read aloud by screen readers when a hero image is set.' })
 field('public', HOME, 'Hero', 'public.hero.pillars', 'Highlight chips (one per line)', 'multiline', 'Syllabus\nTests\nMistakes\nRevision\nAnalytics', { maxLength: 300 })
 field('public', HOME, 'Hero', 'public.hero.cta_primary.label', 'Primary button label', 'text', 'Start with Stracker', { maxLength: 60 })
 field('public', HOME, 'Hero', 'public.hero.cta_primary.href', 'Primary button destination', 'link', '/signup')
@@ -229,17 +236,25 @@ export const FEATURE_ICON_OPTIONS: readonly FieldOption[] = [
 ]
 const FEATURE_DEFAULT_ICONS = ['book-open', 'list-checks', 'notebook-pen', 'alarm-clock', 'calendar-check', 'timer', 'trending-up', 'sparkles']
 
+/** Feature cards beyond the shipped eight start hidden; showing one "adds" it to the homepage. */
+export const MAX_FEATURE_CARDS = 12
+const NEW_FEATURE = { title: 'New feature', summary: 'Describe what this feature does for a student.', points: ['First point'] }
+const FEATURE_SLOTS = Array.from({ length: MAX_FEATURE_CARDS }, (_, index) => FEATURES[index] ?? NEW_FEATURE)
+
 field('public', HOME, 'Feature cards', 'public.features.order', 'Card order and visibility', 'order', FEATURES.map((_, index) => index + 1).join(','), {
-  itemCount: FEATURES.length, minItems: 2, itemLabelKey: 'public.features.item_{n}.title', maxLength: 40,
-  help: 'Move cards up or down, hide the ones you do not want, or bring hidden cards back.'
+  itemCount: MAX_FEATURE_CARDS, minItems: 2, itemLabelKey: 'public.features.item_{n}.title', maxLength: 60,
+  help: `Move cards up or down, hide cards, or show a hidden one to add it (up to ${MAX_FEATURE_CARDS}). Edit a new card's words in its own section below.`
 })
-FEATURES.forEach((feature, index) => {
+FEATURE_SLOTS.forEach((feature, index) => {
   const n = index + 1
   const section = `Feature cards · ${String(n).padStart(2, '0')}`
   field('public', HOME, section, `public.features.item_${n}.icon`, 'Card icon', 'select', FEATURE_DEFAULT_ICONS[index] ?? 'sparkles', { options: FEATURE_ICON_OPTIONS })
   field('public', HOME, section, `public.features.item_${n}.title`, 'Card title', 'text', feature.title, { maxLength: 60 })
   field('public', HOME, section, `public.features.item_${n}.summary`, 'Card summary', 'multiline', feature.summary, { maxLength: 200 })
   field('public', HOME, section, `public.features.item_${n}.points`, 'Card points (one per line)', 'multiline', feature.points.join('\n'), { maxLength: 1000 })
+  field('public', HOME, section, `public.features.item_${n}.image`, 'Card image (optional)', 'media', '', {
+    mediaKind: 'image', optional: true, maxLength: 300, help: 'Shown at the top of the card, cropped to 16:9. The card title is used as its description.'
+  })
 })
 
 field('public', HOME, 'Principles', 'public.principles.eyebrow', 'Eyebrow line', 'text', 'WHY NOT A GENERIC APP', { maxLength: 90 })
@@ -254,10 +269,19 @@ const PRINCIPLES: Array<[string, string]> = [
   ['Planning tied to the syllabus', 'Tasks point at real chapters, so the day’s list and the long-term syllabus are never two separate stories.'],
   ['Signals instead of vibes', 'Thresholds, trends and untested chapters are computed from what you recorded — and shown even when the news is bad.']
 ]
-PRINCIPLES.forEach(([title, body], index) => {
+/** Principle items beyond the shipped six start hidden; showing one adds it. */
+export const MAX_PRINCIPLE_CARDS = 8
+export const PRINCIPLE_ICON_OPTIONS: readonly FieldOption[] = [{ value: 'check', label: 'Tick (default)' }, ...FEATURE_ICON_OPTIONS]
+field('public', HOME, 'Principle cards', 'public.principles.order', 'Item order and visibility', 'order', PRINCIPLES.map((_, index) => index + 1).join(','), {
+  itemCount: MAX_PRINCIPLE_CARDS, minItems: 2, itemLabelKey: 'public.principles.item_{n}.title', maxLength: 40,
+  help: `Move items up or down, hide items, or show a hidden one to add it (up to ${MAX_PRINCIPLE_CARDS}).`
+})
+const PRINCIPLE_SLOTS: Array<[string, string]> = Array.from({ length: MAX_PRINCIPLE_CARDS }, (_, index) => PRINCIPLES[index] ?? ['New principle', 'Describe this principle in a sentence or two.'])
+PRINCIPLE_SLOTS.forEach(([title, body], index) => {
   const section = `Principle cards · ${index + 1}`
   field('public', HOME, section, `public.principles.item_${index + 1}.title`, 'Item title', 'text', title, { maxLength: 80 })
   field('public', HOME, section, `public.principles.item_${index + 1}.body`, 'Item description', 'multiline', body, { maxLength: 300 })
+  field('public', HOME, section, `public.principles.item_${index + 1}.icon`, 'Item icon', 'select', 'check', { options: PRINCIPLE_ICON_OPTIONS })
 })
 
 field('public', HOME, 'How it works', 'public.how.eyebrow', 'Eyebrow line', 'text', 'HOW IT WORKS', { maxLength: 90 })

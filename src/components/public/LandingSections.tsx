@@ -81,7 +81,7 @@ const FEATURE_ICONS: Record<string, ReactNode> = {
 }
 
 const FEATURE_COUNT = fieldDefinition('public.features.order')?.itemCount ?? 8
-const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight']
+const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
 
 export function FeatureSection() {
   const [expanded, setExpanded] = useState(false)
@@ -99,7 +99,9 @@ export function FeatureSection() {
     <ol id="feature-list" className={`feature-list ${expanded ? 'is-expanded' : ''}`}>
       {order.map((n, index) => {
         const icon = FEATURE_ICONS[t(`public.features.item_${n}.icon`)] ?? <Sparkles size={19} />
-        return <li className="feature-entry" key={n}>
+        const image = t(`public.features.item_${n}.image`)
+        return <li className={`feature-entry${image ? ' has-image' : ''}`} key={n}>
+          {image && <img className="feature-image" src={image} alt={t(`public.features.item_${n}.title`)} loading="lazy" decoding="async" width={640} height={360} />}
           <div className="feature-entry-head">
             <span className="feature-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
             <span className="feature-icon" aria-hidden="true">{icon}</span>
@@ -135,6 +137,8 @@ export function FeatureSection() {
 
 export function PrincipleSection() {
   const t = useSiteText
+  const principleOrder = parseOrder(t('public.principles.order'), PRINCIPLE_COUNT)
+    ?? Array.from({ length: Math.min(6, PRINCIPLE_COUNT) }, (_, index) => index + 1)
   return <section className="pub-section pub-section-principle" aria-labelledby="principle-title">
     <div className="pub-shell">
       <div className="principle-spread">
@@ -145,8 +149,8 @@ export function PrincipleSection() {
           <p className="principle-note"><Compass size={15} aria-hidden="true" /> <span>{t('public.principles.note')}</span></p>
         </div>
         <ul className="principle-list">
-          {PRINCIPLE_COUNT_INDEXES.map(n => <li key={n}>
-            <span className="principle-tick" aria-hidden="true"><Check size={13} strokeWidth={3} /></span>
+          {principleOrder.map(n => <li key={n}>
+            <span className="principle-tick" aria-hidden="true">{PRINCIPLE_ICONS[t(`public.principles.item_${n}.icon`)] ?? <Check size={13} strokeWidth={3} />}</span>
             <div><strong>{t(`public.principles.item_${n}.title`)}</strong><p>{t(`public.principles.item_${n}.body`)}</p></div>
           </li>)}
         </ul>
@@ -155,7 +159,13 @@ export function PrincipleSection() {
   </section>
 }
 
-const PRINCIPLE_COUNT_INDEXES = [1, 2, 3, 4, 5, 6]
+const PRINCIPLE_COUNT = fieldDefinition('public.principles.order')?.itemCount ?? 6
+const PRINCIPLE_ICONS: Record<string, ReactNode> = {
+  'book-open': <BookOpen size={13} />, 'list-checks': <ListChecks size={13} />, 'notebook-pen': <NotebookPen size={13} />,
+  'alarm-clock': <AlarmClock size={13} />, 'calendar-check': <CalendarCheck size={13} />, timer: <Timer size={13} />,
+  'trending-up': <TrendingUp size={13} />, sparkles: <Sparkles size={13} />, target: <Target size={13} />,
+  'shield-check': <ShieldCheck size={13} />, compass: <Compass size={13} />, repeat: <Repeat2 size={13} />
+}
 
 /* -------------------------------------------------------------- how it works */
 

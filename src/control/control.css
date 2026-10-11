@@ -595,3 +595,4 @@ textarea.cc-input { resize: vertical; min-height: 84px; }
 .cc-media-preview { flex: none; width: 120px; max-height: 214px; overflow: hidden; border: 1px solid var(--cc-border); border-radius: 8px; background: var(--cc-border-soft); }
 .cc-media-preview video, .cc-media-preview img { display: block; width: 100%; height: auto; max-height: 214px; object-fit: contain; }
 .cc-media-meta { display: grid; gap: 8px; justify-items: start; min-width: 0; }
+.cc-image-preview { width: 160px; min-height: 90px; display: grid; place-items: center; }

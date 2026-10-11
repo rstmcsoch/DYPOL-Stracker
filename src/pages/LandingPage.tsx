@@ -104,7 +104,9 @@ export default function LandingPage() {
             <p className="hero-meta"><LockKeyhole size={13} aria-hidden="true" /> {t('public.hero.meta')}</p>
           </div>
           <div className="hero-visual">
-            <NotebookPreview />
+            {t('public.hero.image')
+              ? <img className="hero-image" src={t('public.hero.image')} alt={t('public.hero.image_alt')} decoding="async" width={1200} height={900} />
+              : <NotebookPreview />}
           </div>
         </div>
       </section>

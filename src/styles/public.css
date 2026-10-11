@@ -1631,3 +1631,8 @@ html[data-app-font='active'] .pub-page .pub-footer-wordmark {
    colour-theme palettes in src/lib/themes.ts; absent attribute = stylesheet default. */
 .pub-page[data-owner-accent] { --accent: var(--owner-accent-light); }
 .pub-page[data-owner-accent][data-public-theme='dark'] { --accent: var(--owner-accent-dark); }
+
+/* Owner images (optional): card and hero images keep a fixed shape so any upload fits. */
+.feature-image { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; margin: 0 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper-muted); }
+.hero-image { display: block; width: 100%; max-width: 620px; height: auto; max-height: 70vh; aspect-ratio: 4 / 3; object-fit: cover; margin-inline: auto; border-radius: clamp(16px, 2.4vw, 24px); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.principle-tick svg { width: 13px; height: 13px; }
