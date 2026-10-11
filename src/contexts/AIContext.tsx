@@ -81,7 +81,7 @@ interface AIContextValue {
   refreshProviders:()=>Promise<void>
   discoverModels:(draft:AIProviderDraft)=>Promise<{models:AIModelOption[];discoveryAvailable:boolean;message?:string}>
   saveProvider:(draft:AIProviderDraft)=>Promise<AIProviderConfig>
-  testProvider:(id:string)=>Promise<void>
+  testProvider:(id:string)=>Promise<{latencyMs?:number}>
   patchProvider:(id:string,action:'enable'|'disable'|'default')=>Promise<void>
   removeProvider:(id:string)=>Promise<void>
   recentConversations:AIConversationSummary[]
@@ -276,7 +276,7 @@ export function AIProvider({ children }: { children:ReactNode }) {
   },[apiFetch,refreshProviders])
 
   const testProvider = useCallback(async (id:string) => {
-    try { await apiFetch('/api/ai/test-connection',{method:'POST',body:JSON.stringify({configId:id})}) }
+    try { return await apiFetch<{latencyMs?:number}>('/api/ai/test-connection',{method:'POST',body:JSON.stringify({configId:id})}) ?? {} }
     finally { await refreshProviders() }
   },[apiFetch,refreshProviders])
 

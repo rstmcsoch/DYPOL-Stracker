@@ -1,3 +1,5 @@
+import { modelPreferences } from '../../lib/ai/model-preferences'
+import { pickDefaultModel, rankModels } from '../../lib/ai/model-ranking'
 import { useState } from 'react'
 import { AlertTriangle, Check, CircleHelp, KeyRound, LoaderCircle, Pencil, Plus, RefreshCw, ShieldCheck, Sparkles, Star, Trash2 } from 'lucide-react'
 import { AI_PROVIDERS, AI_STATUS_COPY, DEFAULT_CAPABILITIES, providerLabel, statusTone, type AIModelOption, type AIProviderConfig, type AIProviderId } from '../../lib/ai/catalog'
@@ -24,13 +26,15 @@ export function AISettingsSection() {
   const [workingId,setWorkingId] = useState<string|null>(null)
   const [removeTarget,setRemoveTarget] = useState<AIProviderConfig|null>(null)
   const [removing,setRemoving] = useState(false)
+  // New provider: Stracker picks the best tested model unless the student chooses one.
+  const [autoModel,setAutoModel] = useState(false)
 
   const openNew = () => {
-    setEditing(null); setModels([]); setModelsMessage(''); setDiscoveryAvailable(false)
+    setEditing(null); setModels([]); setModelsMessage(''); setDiscoveryAvailable(false); setAutoModel(true)
     setDraft({ providerId:'gemini',displayName:'',modelId:'',apiKey:'',baseUrl:null,protocol:'google',region:'international',capabilities:{...DEFAULT_CAPABILITIES} })
   }
   const openEdit = (provider:AIProviderConfig) => {
-    setEditing(provider); setModels([]); setModelsMessage(''); setDiscoveryAvailable(false)
+    setEditing(provider); setModels([]); setModelsMessage(''); setDiscoveryAvailable(false); setAutoModel(false)
     setDraft({ id:provider.id,providerId:provider.provider_id,displayName:provider.display_name,modelId:provider.model_id,apiKey:'',baseUrl:provider.base_url,protocol:provider.protocol,organizationId:provider.organization_id,region:provider.region === 'china' ? 'china' : 'international',capabilities:{...provider.capabilities} })
   }
   const closeEditor = () => { setDraft(null); setEditing(null); setModels([]); setModelsMessage(''); setSaving(false); setDiscovering(false) }
@@ -38,19 +42,59 @@ export function AISettingsSection() {
 
   const save = async () => {
     if (!draft || saving) return
-    if (!draft.modelId.trim()) { notify('Choose or enter a model ID before saving.', 'error'); return }
+    const auto = autoModel && !editing && draft.providerId !== 'custom'
+    if (!auto && !draft.modelId.trim()) { notify('Choose or enter a model ID before saving.', 'error'); return }
     if (!editing && !draft.apiKey?.trim()) { notify('Enter your provider API key before saving.', 'error'); return }
     setSaving(true)
     try {
+      const candidates = auto ? await rankedCandidates() : []
       const saved = await saveProvider({
-        ...draft,displayName:draft.displayName?.trim() || undefined,modelId:draft.modelId.trim(),apiKey:draft.apiKey?.trim() || undefined,
+        ...draft,displayName:draft.displayName?.trim() || undefined,modelId:candidates[0] ?? (draft.modelId.trim() || DEFAULT_MODEL[draft.providerId]),apiKey:draft.apiKey?.trim() || undefined,
         baseUrl:draft.providerId === 'custom' || ['openai','deepseek'].includes(draft.providerId) ? draft.baseUrl?.trim() || null : undefined,
         organizationId:draft.providerId === 'openai' ? draft.organizationId?.trim() || null : undefined
       })
       closeEditor()
-      await autoTest(saved)
+      if (candidates.length > 1) await autoPick(saved,candidates)
+      else await autoTest(saved)
     } catch (error) { notify(error instanceof Error ? error.message : 'Provider settings could not be saved.', 'error') }
     finally { setSaving(false) }
+  }
+
+  /** Same saved provider, only the model changes (no new key needed). */
+  const modelDraft = (provider:AIProviderConfig,modelId:string):AIProviderDraft => ({
+    id:provider.id,providerId:provider.provider_id,displayName:provider.display_name,modelId,
+    baseUrl:['openai','deepseek'].includes(provider.provider_id) ? provider.base_url : undefined,
+    protocol:provider.protocol,organizationId:provider.provider_id === 'openai' ? provider.organization_id : undefined,
+    region:provider.region === 'china' ? 'china' : 'international',capabilities:{...provider.capabilities}
+  })
+
+  /** Ranked defaults intersected with the live model list for the entered key. */
+  const rankedCandidates = async ():Promise<string[]> => {
+    if (!draft || draft.providerId === 'custom') return []
+    try {
+      const result = await discoverModels({ ...draft,modelId:draft.modelId.trim() || DEFAULT_MODEL[draft.providerId],baseUrl:['openai','deepseek'].includes(draft.providerId) ? draft.baseUrl?.trim() || null : undefined })
+      return rankModels((result.models ?? []).map(model => model.id),modelPreferences(draft.providerId))
+    } catch { return [] }
+  }
+
+  /** Test ranked candidates in turn (failing or >8 s replies are skipped) and keep the first good one. */
+  const autoPick = async (saved:AIProviderConfig,candidates:string[]) => {
+    setWorkingId(saved.id)
+    notify(`${providerLabel(saved.provider_id)} saved. Finding the best model for your key…`, 'info')
+    let current = saved
+    try {
+      const pick = await pickDefaultModel(candidates,async modelId => {
+        if (current.model_id !== modelId) current = await saveProvider(modelDraft(saved,modelId))
+        try { const result = await testProvider(saved.id); return { ok:true,latencyMs:result?.latencyMs } } catch { return { ok:false } }
+      })
+      if (pick.modelId && current.model_id !== pick.modelId) {
+        current = await saveProvider(modelDraft(saved,pick.modelId))
+        await testProvider(saved.id)
+      }
+      if (pick.modelId) notify(`${providerLabel(saved.provider_id)} is ready with “${pick.modelId}”. You can change the model any time.`)
+      else notify(`None of the recommended models worked for this key (${pick.tried.map(entry => entry.modelId).join(', ')}). Edit the provider and choose another model.`, 'error')
+    } catch (error) { notify(error instanceof Error ? error.message : 'The model could not be chosen automatically. Edit the provider and choose one.', 'error') }
+    finally { setWorkingId(null) }
   }
 
   /** Every save is followed by a real connection test with the chosen model. */
@@ -88,7 +132,7 @@ export function AISettingsSection() {
       })
       setModels(result.models ?? []); setDiscoveryAvailable(Boolean(result.discoveryAvailable))
       setModelsMessage(result.message ?? (result.models.length ? `Found ${result.models.length} available models.` : 'No models were listed. Enter a model ID manually.'))
-      if (result.models.length && !result.models.some(model => model.id === draft.modelId)) patchDraft({modelId:result.models[0]?.id ?? draft.modelId})
+      if (result.models.length && !autoModel && !result.models.some(model => model.id === draft.modelId)) patchDraft({modelId:rankModels(result.models.map(model => model.id),draft.providerId === 'custom' ? [] : modelPreferences(draft.providerId))[0] ?? result.models[0]?.id ?? draft.modelId})
     } catch (error) { setModelsMessage(error instanceof Error ? error.message : 'Models could not be loaded. Enter a model ID manually.') }
     finally { setDiscovering(false) }
   }
@@ -114,7 +158,7 @@ export function AISettingsSection() {
   const selectedProvider = draft ? AI_PROVIDERS.find(provider => provider.id === draft.providerId) : null
   const providerChanged = (providerId:AIProviderId) => {
     const definition = AI_PROVIDERS.find(provider => provider.id === providerId)!
-    patchDraft({providerId,protocol:definition.protocol,baseUrl:definition.defaultBaseUrl,modelId:DEFAULT_MODEL[providerId],organizationId:'',region:'international',capabilities:{...DEFAULT_CAPABILITIES}})
+    patchDraft({providerId,protocol:definition.protocol,baseUrl:definition.defaultBaseUrl,modelId:autoModel && !editing && providerId !== 'custom' ? '' : DEFAULT_MODEL[providerId],organizationId:'',region:'international',capabilities:{...DEFAULT_CAPABILITIES}})
     setModels([]); setModelsMessage(''); setDiscoveryAvailable(false)
   }
 
@@ -158,7 +202,7 @@ export function AISettingsSection() {
       </div>
       <div className="ai-editor-fields">
         <Field label="Display name" hint="Optional name used in the assistant and fallback notices."><input maxLength={80} value={draft.displayName ?? ''} onChange={event => patchDraft({displayName:event.target.value})} placeholder={selectedProvider.label} /></Field>
-        <div className="ai-model-field"><Field label="Model ID" required hint="Use Discover when supported, or enter a model ID from your provider account."><input list="ai-model-list" value={draft.modelId} onChange={event => patchDraft({modelId:event.target.value})} placeholder={DEFAULT_MODEL[draft.providerId] || 'e.g. provider-model-name'} autoComplete="off" /><datalist id="ai-model-list">{models.map(model => <option key={model.id} value={model.id} label={model.name} />)}</datalist></Field><Button type="button" variant="secondary" size="sm" onClick={() => void discover()} disabled={discovering || saving}>{discovering ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />} Discover</Button></div>
+        <div className="ai-model-field"><Field label="Model ID" required={!(autoModel && !editing && draft.providerId !== 'custom')} hint={autoModel && !editing && draft.providerId !== 'custom' ? 'Leave empty: Stracker tests the newest fast models for your key and picks the best one.' : 'Use Discover when supported, or enter a model ID from your provider account.'}><input list="ai-model-list" value={draft.modelId} onChange={event => { patchDraft({modelId:event.target.value}); if (!editing) setAutoModel(!event.target.value.trim()) }} placeholder={autoModel && !editing && draft.providerId !== 'custom' ? 'Auto (best tested model)' : DEFAULT_MODEL[draft.providerId] || 'e.g. provider-model-name'} autoComplete="off" /><datalist id="ai-model-list">{models.map(model => <option key={model.id} value={model.id} label={model.name} />)}</datalist></Field><Button type="button" variant="secondary" size="sm" onClick={() => void discover()} disabled={discovering || saving}>{discovering ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />} Discover</Button></div>
         {draft.providerId === 'custom' && <Field label="API protocol" required hint="Custom APIs must implement the selected chat-completions or messages protocol."><select value={draft.protocol} onChange={event => patchDraft({protocol:event.target.value as AIProviderDraft['protocol']})}><option value="openai-compatible">OpenAI-compatible</option><option value="anthropic-compatible">Anthropic-compatible</option></select></Field>}
         {(draft.providerId === 'custom' || ['openai','deepseek'].includes(draft.providerId)) && <Field label="API base URL" required hint="HTTPS only. Private, local, and link-local network endpoints are blocked."><input type="url" autoComplete="url" value={draft.baseUrl ?? ''} onChange={event => patchDraft({baseUrl:event.target.value})} placeholder={selectedProvider.defaultBaseUrl ?? 'https://api.example.com/v1'} /></Field>}
         {draft.providerId === 'qwen' && <Field label="Qwen service region" hint="The endpoint follows your selected DashScope region."><select value={draft.region ?? 'international'} onChange={event => patchDraft({region:event.target.value as 'international'|'china'})}><option value="international">International</option><option value="china">China mainland</option></select></Field>}
