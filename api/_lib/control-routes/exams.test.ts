@@ -80,6 +80,15 @@ describe('owner exam catalogue', () => {
     expect(state.audits[0]).toMatchObject({ action: 'exam.hide' })
   })
 
+  it('saves edited subjects (deduplicated) and leaves them untouched when omitted', async () => {
+    await call('PUT', { exam: exam({ subjects: ['Anatomy', 'Physiology', 'Anatomy'], session_label: 'Attempt' }) })
+    expect(state.upserts[0]).toMatchObject({ subjects: ['Anatomy', 'Physiology'], session_label: 'Attempt' })
+    await call('PUT', { exam: exam() })
+    expect(state.upserts[1]).not.toHaveProperty('subjects')
+    expect((await call('PUT', { exam: exam({ subjects: [''] }) })).statusCode).toBe(400)
+    expect((await call('PUT', { exam: exam({ subjects: ['x'.repeat(61)] }) })).statusCode).toBe(400)
+  })
+
   it('rejects bad input without writing', async () => {
     expect((await call('PUT', { exam: exam({ id: 'Bad Id' }) })).statusCode).toBe(400)
     expect((await call('PUT', { exam: exam({ years: [1999] }) })).statusCode).toBe(400)

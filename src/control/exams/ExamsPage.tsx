@@ -7,12 +7,12 @@ import { controlFetch } from '../api'
 import { EXAM_ID_PATTERN, examYears, groupByCategory, type ExamDefinition } from '../../lib/exams/catalog'
 
 type ListResponse = { ok: true; exams: ExamDefinition[] }
-type Draft = { id: string; name: string; category: string; years: string; sessions: string; boards: string; boards_addon: boolean; hidden: boolean; isNew: boolean }
+type Draft = { id: string; name: string; category: string; years: string; sessions: string; boards: string; boards_addon: boolean; subjects: string; session_label: string; hidden: boolean; isNew: boolean }
 
 const splitList = (value: string) => value.split(/[\n,]/).map(item => item.trim()).filter(Boolean)
 const toDraft = (exam?: ExamDefinition): Draft => exam
-  ? { id: exam.id, name: exam.name, category: exam.category, years: exam.years.join(', '), sessions: exam.sessions.join(', '), boards: exam.boards.join(', '), boards_addon: exam.boards_addon, hidden: exam.hidden, isNew: false }
-  : { id: '', name: '', category: '', years: '', sessions: '', boards: '', boards_addon: false, hidden: false, isNew: true }
+  ? { id: exam.id, name: exam.name, category: exam.category, years: exam.years.join(', '), sessions: exam.sessions.join(', '), boards: exam.boards.join(', '), boards_addon: exam.boards_addon, subjects: exam.subjects.join('\n'), session_label: exam.session_label, hidden: exam.hidden, isNew: false }
+  : { id: '', name: '', category: '', years: '', sessions: '', boards: '', boards_addon: false, subjects: '', session_label: '', hidden: false, isNew: true }
 
 /** Owner-only exam catalogue. Removing an exam hides it; students already on it keep it. */
 export default function ExamsPage() {
@@ -26,7 +26,7 @@ export default function ExamsPage() {
   const refresh = () => client.invalidateQueries({ queryKey: ['control', 'exams'] })
   const fail = (error: unknown) => setProblem(error instanceof Error ? error.message : 'That did not work. Nothing changed.')
   const save = useMutation({
-    mutationFn: (exam: Omit<ExamDefinition, 'sort_order' | 'subjects' | 'session_label'> & { sort_order?: number }) => controlFetch('exams', { method: 'PUT', body: { exam } }),
+    mutationFn: (exam: Omit<ExamDefinition, 'sort_order' | 'subjects' | 'session_label'> & { sort_order?: number; subjects?: string[]; session_label?: string }) => controlFetch('exams', { method: 'PUT', body: { exam } }),
     onSuccess: () => { setDraft(null); setProblem(null); setNotice('Saved. Students see the change the next time the exam list loads.'); void refresh() },
     onError: fail
   })
@@ -44,8 +44,11 @@ export default function ExamsPage() {
     if (!draft.name.trim() || !draft.category.trim()) { setProblem('Name and category are required.'); return }
     const years = splitList(draft.years).map(Number)
     if (years.some(year => !Number.isInteger(year) || year < 2020 || year > 2100)) { setProblem('Years must be whole years between 2020 and 2100, or leave blank.'); return }
+    const subjects = [...new Set(draft.subjects.split('\n').map(item => item.trim()).filter(Boolean))]
+    if (!subjects.length) { setProblem('Add at least one subject (one per line).'); return }
+    if (subjects.length > 30 || subjects.some(item => item.length > 60)) { setProblem('Use up to 30 subjects, each at most 60 characters.'); return }
     const existing = exams.find(exam => exam.id === id)
-    save.mutate({ id, name: draft.name.trim(), category: draft.category.trim(), years, sessions: splitList(draft.sessions), boards: splitList(draft.boards), boards_addon: draft.boards_addon, hidden: draft.hidden, ...(existing ? { sort_order: existing.sort_order } : {}) })
+    save.mutate({ id, name: draft.name.trim(), category: draft.category.trim(), years, sessions: splitList(draft.sessions), boards: splitList(draft.boards), boards_addon: draft.boards_addon, subjects, session_label: draft.session_label.trim(), hidden: draft.hidden, ...(existing ? { sort_order: existing.sort_order } : {}) })
   }
 
   const move = (id: string, step: -1 | 1) => {
@@ -76,6 +79,9 @@ export default function ExamsPage() {
         <datalist id="cc-exam-categories">{groupByCategory(exams).map(([category]) => <option key={category} value={category} />)}</datalist>
         <label>Target years <input value={draft.years} onChange={event => setDraft({ ...draft, years: event.target.value })} placeholder="blank = automatic" /></label>
         <label>Attempts / sessions <input value={draft.sessions} onChange={event => setDraft({ ...draft, sessions: event.target.value })} placeholder="e.g. January, May, September" /></label>
+        <label>Label for attempts / sessions <input value={draft.session_label} maxLength={30} onChange={event => setDraft({ ...draft, session_label: event.target.value })} placeholder='blank = "Attempt / session" (e.g. Stream)' /></label>
+        <label>Subjects (one per line; add, rename or remove) <textarea rows={6} value={draft.subjects} onChange={event => setDraft({ ...draft, subjects: event.target.value })} placeholder={'Physics\nChemistry\nBiology'} /></label>
+        <span className="cc-muted">Renaming or removing a subject does not change what students already logged; their older entries stay visible in their analytics.</span>
         <label>Boards to choose from (school classes) <input value={draft.boards} onChange={event => setDraft({ ...draft, boards: event.target.value })} placeholder="e.g. CBSE, ICSE / ISC, State board" /></label>
         <label className="cc-check"><input type="checkbox" checked={draft.boards_addon} onChange={event => setDraft({ ...draft, boards_addon: event.target.checked })} /> Allow students to add Class 12 boards alongside this exam</label>
         <div className="cc-row">
@@ -90,7 +96,7 @@ export default function ExamsPage() {
           : <ol className="cc-exam-list">
             {exams.map((exam, index) => <li key={exam.id} className={exam.hidden ? 'is-hidden' : undefined}>
               <div className="cc-exam-main">
-                <strong>{exam.name}</strong> <span className="cc-muted">{exam.category} · {examYears(exam).join(', ')}{exam.sessions.length ? ` · ${exam.sessions.join(', ')}` : ''}{exam.boards_addon ? ' · boards add-on' : ''}{exam.hidden ? ' · hidden' : ''}</span>
+                <strong>{exam.name}</strong> <span className="cc-muted">{exam.category} · {examYears(exam).join(', ')}{exam.sessions.length ? ` · ${exam.sessions.join(', ')}` : ''}{exam.boards_addon ? ' · boards add-on' : ''}{exam.subjects.length ? ` · ${exam.subjects.length} subjects` : ''}{exam.hidden ? ' · hidden' : ''}</span>
               </div>
               <div className="cc-row">
                 <Button size="sm" variant="ghost" aria-label={`Move ${exam.name} up`} disabled={busy || index === 0} onClick={() => move(exam.id, -1)}><ArrowUp size={13} aria-hidden="true" /></Button>

@@ -16,9 +16,12 @@ import { currentExamMode } from '../lib/jee/exam'
 import { fmtDuration } from '../lib/format'
 import { indiaToday, prettyDate } from '../lib/date'
 import { completeRevision as completeRevisionAction } from '../lib/revision-actions'
-import type { AppData, DailyTask, Revision, Subject } from '../types'
+import type { AppData, DailyTask, Revision } from '../types'
+import { useReportSubjects } from '../lib/exams/useExamSubjects'
+import { subjectColor } from '../lib/exams/subjects'
 
 export default function HomePage() {
+  const homeSubjects = useReportSubjects()
   const { data, upsert, upsertMany } = useData()
   const { notify } = useToast()
   const navigate = useNavigate()
@@ -160,10 +163,10 @@ export default function HomePage() {
       </NotebookCard>
       <NotebookCard className="syllabus-mini-card">
         <div className="syllabus-mini-head"><div><span className="eyebrow">THE LONG GAME</span><h3>Syllabus progress</h3></div><ProgressRing value={totalChapters ? completedChapters / totalChapters * 100 : 0} size={62} label={<span className="ring-value small">{Math.round(totalChapters ? completedChapters / totalChapters * 100 : 0)}<small>%</small></span>} /></div>
-        <div className="subject-mini-bars">{(['Physics', 'Chemistry', 'Maths'] as Subject[]).map(subject => {
+        <div className="subject-mini-bars">{homeSubjects.map(subject => {
           const total = data.chapters.filter(item => item.subject === subject).length
           const done = data.chapters.filter(item => item.subject === subject && (item.status === 'Done' || item.status === 'Revised')).length
-          return <div className="subject-mini-row" key={subject}><SubjectBadge subject={subject} /><ProgressBar value={total ? done / total * 100 : 0} color={`var(--subject-${subject.toLowerCase()})`} /><span>{done}/{total}</span></div>
+          return <div className="subject-mini-row" key={subject}><SubjectBadge subject={subject} /><ProgressBar value={total ? done / total * 100 : 0} color={subjectColor(subject)} /><span>{done}/{total}</span></div>
         })}</div>
         <button className="syllabus-mini-link" onClick={() => navigate('/syllabus')}>See all chapters <ChevronRight size={15} /></button>
       </NotebookCard>

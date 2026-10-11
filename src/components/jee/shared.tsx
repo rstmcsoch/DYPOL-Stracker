@@ -2,9 +2,9 @@
 import type { ReactNode } from 'react'
 import { Check, Circle, CircleDashed } from 'lucide-react'
 import type { Chapter, Subject } from '../../types'
-import { SUBJECTS } from '../../types'
 import { StatusBadge } from '../ui'
 import type { StageState } from '../../lib/jee/progress'
+import { useExamSubjects } from '../../lib/exams/useExamSubjects'
 
 /** Compact chip-style filter group. Each option is a 40px-high tap target on touch screens. */
 export function ChipFilter<T extends string>({ label, value, options, onChange }: {
@@ -21,12 +21,14 @@ export function ChipFilter<T extends string>({ label, value, options, onChange }
 export function ChapterSelect({ chapters, value, onChange, subject, label = 'Chapter', allowNone = false, noneLabel = 'All chapters' }: {
   chapters: Chapter[]; value: string; onChange: (value: string) => void; subject?: Subject | 'all' | ''; label?: string; allowNone?: boolean; noneLabel?: string
 }) {
+  const examList = useExamSubjects()
   const visible = chapters.filter(chapter => !subject || subject === 'all' || chapter.subject === subject)
+  const groupSubjects = [...new Set([...examList, ...visible.map(chapter => chapter.subject)])]
   return <label className="jee-select">
     <span>{label}</span>
     <select value={value} onChange={event => onChange(event.target.value)}>
       {allowNone ? <option value="">{noneLabel}</option> : <option value="" disabled>Choose a chapter</option>}
-      {SUBJECTS.map(item => {
+      {groupSubjects.map(item => {
         const group = visible.filter(chapter => chapter.subject === item)
         if (!group.length) return null
         return <optgroup key={item} label={item}>{group.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</optgroup>
@@ -36,11 +38,12 @@ export function ChapterSelect({ chapters, value, onChange, subject, label = 'Cha
 }
 
 export function SubjectSelect({ value, onChange, allowAll = true, label = 'Subject' }: { value: string; onChange: (value: string) => void; allowAll?: boolean; label?: string }) {
+  const selectSubjects = useExamSubjects(value === 'all' ? null : value)
   return <label className="jee-select">
     <span>{label}</span>
     <select value={value} onChange={event => onChange(event.target.value)}>
       {allowAll && <option value="all">All subjects</option>}
-      {SUBJECTS.map(subject => <option key={subject} value={subject}>{subject}</option>)}
+      {selectSubjects.map(subject => <option key={subject} value={subject}>{subject}</option>)}
     </select>
   </label>
 }

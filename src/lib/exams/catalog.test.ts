@@ -24,7 +24,7 @@ describe('exam catalogue', () => {
     }
     expect(BUILT_IN_EXAMS.find(exam => exam.id === 'jee')?.subjects).toEqual(['Physics', 'Chemistry', 'Maths'])
     expect(BUILT_IN_EXAMS.find(exam => exam.id === 'neet-ug')?.subjects).not.toContain('Maths')
-    const sql = readFileSync(new URL('../../../supabase/migrations/20261011120000_exam_subjects_onboarding.sql', import.meta.url), 'utf8')
+    const sql = readFileSync(new URL('../../../supabase/migrations/20261011040444_exam_subjects_onboarding.sql', import.meta.url), 'utf8')
     for (const exam of BUILT_IN_EXAMS) expect(sql).toContain(`where id = '${exam.id}' and subjects = '{}'`)
     expect(normalizeExam({ id: 'neet-ug', name: 'NEET UG', category: 'Medical' })?.subjects).toEqual(['Physics', 'Chemistry', 'Botany', 'Zoology'])
   })

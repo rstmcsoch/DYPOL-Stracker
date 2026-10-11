@@ -2,6 +2,7 @@ import { Children, cloneElement, isValidElement, useEffect, useId, useLayoutEffe
 import { createPortal } from 'react-dom'
 import { ArrowUpRight, Check, LoaderCircle, MoreHorizontal, Sparkles, X } from 'lucide-react'
 import type { Subject } from '../types'
+import { subjectSlug } from '../lib/exams/subjects'
 
 export function Button({
   children, variant = 'primary', size = 'md', className = '', loading = false, type = 'button', ...props
@@ -38,7 +39,7 @@ export function PageHeader({
 
 export function SubjectBadge({ subject, withMark = false }: { subject: Subject | null | undefined; withMark?: boolean }) {
   if (!subject) return <span className="subject-badge subject-neutral">General</span>
-  return <span className={`subject-badge type-badge subject-${subject.toLowerCase()}`}>
+  return <span className={`subject-badge type-badge subject-${subjectSlug(subject)}`}>
     {withMark && <span className="subject-mark" aria-hidden="true" />}{subject}
   </span>
 }

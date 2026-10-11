@@ -20,10 +20,8 @@ import {
 import { prettyDate } from '../lib/date'
 import { fmtDuration, fmtNumber } from '../lib/format'
 import { makeStudyBars, makeStudyHeatmap } from '../lib/study-aggregation'
-import type { Subject } from '../types'
-import { SUBJECTS } from '../types'
+import { subjectColor } from '../lib/exams/subjects'
 
-const subjectColors: Record<Subject, string> = { Physics: 'var(--subject-physics)', Chemistry: 'var(--subject-chemistry)', Maths: 'var(--subject-maths)' }
 
 /** Calendar ticks for the time-based trend axis, in the Indian format Stracker uses. */
 function chartDate(value: number | string): string {
@@ -103,14 +101,15 @@ export default function AnalyticsPage() {
   const overallAverage = getOverallTestAverage(data)
   const averageScore = overallAverage.average
   const targetComparison = useMemo(() => getTargetComparison(data), [data])
-  const hasTestScore = trends.some(row => row.overall !== null || row.Physics !== null || row.Chemistry !== null || row.Maths !== null)
+  const hasTestScore = trends.some(row => Object.entries(row).some(([key, value]) => key !== 'date' && value !== null))
   const hasSubjectScores = subjects.some(item => item.average !== null)
   const hasMistakes = mistakeCounts.some(item => item.count > 0)
   const hasSessions = data.sessions.some(session => session.duration_minutes > 0)
   const hasAttemptData = accuracy.rate !== null || attempt.rate !== null || negativeMetrics.totalNegativeMarks > 0 || data.sessions.length > 0
 
   const downloadChartCsv = () => {
-    const rows = [['Date','Overall %','Physics %','Chemistry %','Maths %'], ...trends.map(item => [item.date, item.overall ?? '', item.Physics ?? '', item.Chemistry ?? '', item.Maths ?? ''])]
+    const subjectNames = subjects.map(item => item.subject)
+    const rows = [['Date', 'Overall %', ...subjectNames.map(subject => `${subject} %`)], ...trends.map(item => [item.date, item.overall ?? '', ...subjectNames.map(subject => item[subject] ?? '')])]
     const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"','""')}"`).join(',')).join('\r\n')
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'stracker-performance.csv'; link.click(); URL.revokeObjectURL(url)
@@ -261,8 +260,8 @@ function PerformanceCard({ data, subjects, hasTestScore, hasSubjectScores, pinne
     </div>
     {nothingAtAll ? <NoDataLine label="Marks & subjects" hint="Log a test with marks and a total to start the trend." /> : <>
       {hasTestScore ? <>
-        <div className="chart-frame trend-chart"><ResponsiveContainer width="100%" height={280}><LineChart data={timeTrends} margin={{ top: 10, right: 14, left: -14, bottom: 0 }}><CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" /><XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={value => chartDate(Number(value))} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} minTickGap={34} /><YAxis domain={[0, 100]} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} tickFormatter={value => `${value}%`} /><Tooltip content={<NotebookTooltip />} labelFormatter={value => chartDateLong(Number(value))} /><Line type="monotone" dataKey="overall" name="Overall" stroke={chartColors.accent} strokeWidth={2.5} strokeDasharray="7 5" dot={{ r: 3.5, fill: chartColors.accent, strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} /><Line type="monotone" dataKey="Physics" name="Physics" stroke={subjectColors.Physics} strokeWidth={2} dot={{ r: 3, fill: subjectColors.Physics, strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} /><Line type="monotone" dataKey="Chemistry" name="Chemistry" stroke={subjectColors.Chemistry} strokeWidth={2} dot={{ r: 3, fill: subjectColors.Chemistry, strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} /><Line type="monotone" dataKey="Maths" name="Maths" stroke={subjectColors.Maths} strokeWidth={2} dot={{ r: 3, fill: subjectColors.Maths, strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} /></LineChart></ResponsiveContainer></div>
-        <div className="chart-legend-note" role="list" aria-label="Trend series"><span role="listitem"><i className="swatch-dashed" style={{ background: `repeating-linear-gradient(90deg, ${chartColors.accent} 0 6px, transparent 6px 9px)` }} /> Overall</span>{SUBJECTS.map(subject => <span key={subject} role="listitem"><i style={{ background: subjectColors[subject] }} />{subject}</span>)}</div>
+        <div className="chart-frame trend-chart"><ResponsiveContainer width="100%" height={280}><LineChart data={timeTrends} margin={{ top: 10, right: 14, left: -14, bottom: 0 }}><CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" /><XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={value => chartDate(Number(value))} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} minTickGap={34} /><YAxis domain={[0, 100]} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} tickFormatter={value => `${value}%`} /><Tooltip content={<NotebookTooltip />} labelFormatter={value => chartDateLong(Number(value))} /><Line type="monotone" dataKey="overall" name="Overall" stroke={chartColors.accent} strokeWidth={2.5} strokeDasharray="7 5" dot={{ r: 3.5, fill: chartColors.accent, strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />{subjects.map(({ subject }) => <Line key={subject} type="monotone" dataKey={subject} name={subject} stroke={subjectColor(subject)} strokeWidth={2} dot={{ r: 3, fill: subjectColor(subject), strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />)}</LineChart></ResponsiveContainer></div>
+        <div className="chart-legend-note" role="list" aria-label="Trend series"><span role="listitem"><i className="swatch-dashed" style={{ background: `repeating-linear-gradient(90deg, ${chartColors.accent} 0 6px, transparent 6px 9px)` }} /> Overall</span>{subjects.map(({ subject }) => <span key={subject} role="listitem"><i style={{ background: subjectColor(subject) }} />{subject}</span>)}</div>
       </> : <NoDataLine label="Marks trend" hint="No comparable test result in this range yet." />}
       <div className="performance-subjects">
         {hasSubjectScores ? <>
@@ -305,10 +304,10 @@ function HeatmapCard({ heatmap, hasSessions, pinned, onPin }: ChartCardProps) {
   </NotebookCard>
 }
 
-function SyllabusProgressCard({ data, totalChapters, doneChapters, pinned, onPin }: ChartCardProps) {
+function SyllabusProgressCard({ data, subjects, totalChapters, doneChapters, pinned, onPin }: ChartCardProps) {
   return <NotebookCard className={`syllabus-analytics-card ${totalChapters ? '' : 'chart-card-flat'}`}>
     <div className="chart-card-head"><div><span className="eyebrow">CHAPTERS MOVING FORWARD</span><h2>{CHART_TITLES.syllabus}</h2><p>{doneChapters} done or revised of {totalChapters} recorded chapters.</p></div><div className="chart-head-actions"><ProgressRing value={totalChapters ? doneChapters / totalChapters * 100 : 0} size={72} label={<span className="ring-value small">{totalChapters ? Math.round(doneChapters / totalChapters * 100) : 0}<small>%</small></span>} /><PinButton id="syllabus" pinned={pinned.includes('syllabus')} onPin={onPin} /></div></div>
-    {totalChapters ? <div className="subject-syllabus-list">{SUBJECTS.map(subject => { const chapters = data.chapters.filter(item => item.subject === subject); const done = chapters.filter(item => item.status === 'Done' || item.status === 'Revised').length; return <div key={subject}><div><SubjectBadge subject={subject} /><span>{done} / {chapters.length} chapters</span></div><ProgressBar value={chapters.length ? done / chapters.length * 100 : 0} color={subjectColors[subject]} /></div> })}</div> : <NoDataLine label="Syllabus progress" hint="Chapters appear here as soon as your syllabus has rows." />}
+    {totalChapters ? <div className="subject-syllabus-list">{subjects.map(({ subject }) => { const chapters = data.chapters.filter(item => item.subject === subject); const done = chapters.filter(item => item.status === 'Done' || item.status === 'Revised').length; return <div key={subject}><div><SubjectBadge subject={subject} /><span>{done} / {chapters.length} chapters</span></div><ProgressBar value={chapters.length ? done / chapters.length * 100 : 0} color={subjectColor(subject)} /></div> })}</div> : <NoDataLine label="Syllabus progress" hint="Chapters appear here as soon as your syllabus has rows." />}
   </NotebookCard>
 }
 

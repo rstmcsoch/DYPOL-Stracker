@@ -1,5 +1,6 @@
 import type { AppData, ErrorCategory, Subject, TestErrorLog, TestRecord, TestTimeEntry } from '../../types/index.js'
-import { ERROR_CATEGORIES, SUBJECTS } from '../../types/index.js'
+import { ERROR_CATEGORIES } from '../../types/index.js'
+import { examSubjects } from '../exams/subjects.js'
 import { getOverallTestScore, subjectPercentage } from '../analytics.js'
 
 /**
@@ -45,7 +46,8 @@ export interface SubjectTimeRow {
 export function subjectTimeRows(test: TestRecord, data: AppData): SubjectTimeRow[] {
   const entries = data.testTimeEntries.filter(entry => entry.test_id === test.id)
   const scores = data.testSubjectScores.filter(score => score.test_id === test.id)
-  return SUBJECTS.map(subject => {
+  const subjects = [...new Set([...examSubjects(data.settings), ...entries.map(entry => entry.subject), ...scores.map(score => score.subject)].filter((subject): subject is string => Boolean(subject)))]
+  return subjects.map(subject => {
     const rows = entries.filter(entry => entry.subject === subject)
     const minutes = rows.filter(row => row.minutes !== null)
     const attempted = rows.filter(row => row.attempted !== null)
@@ -84,7 +86,7 @@ export function mockInsights(test: TestRecord, data: AppData): MockInsight[] {
     list.push(log)
     bySubject.set(log.subject, list)
   }
-  for (const subject of SUBJECTS) {
+  for (const subject of [...new Set([...examSubjects(data.settings), ...bySubject.keys()])]) {
     const rows = bySubject.get(subject) ?? []
     const marked = rows.filter(row => row.marks_lost !== null && row.marks_lost > 0)
     const totalLost = marked.reduce((sum, row) => sum + (row.marks_lost ?? 0), 0)

@@ -32,7 +32,7 @@ describe('exam selection', () => {
     renderSection()
     fireEvent.change(screen.getByLabelText('Exam'), { target: { value: 'ca-intermediate' } })
     fireEvent.change(screen.getByLabelText('Target year'), { target: { value: String(new Date().getFullYear() + 1) } })
-    fireEvent.change(screen.getByLabelText('Attempt / session'), { target: { value: 'September' } })
+    fireEvent.change(screen.getByLabelText('Attempt'), { target: { value: 'September' } })
     fireEvent.click(screen.getByRole('button', { name: /Save exam/ }))
     await waitFor(() => expect(upsert).toHaveBeenCalledTimes(1))
     expect(upsert).toHaveBeenCalledWith('app_settings', expect.objectContaining({ exam_id: 'ca-intermediate', exam_year: new Date().getFullYear() + 1, exam_session: 'September', boards_addon: false, exam_board: null }))

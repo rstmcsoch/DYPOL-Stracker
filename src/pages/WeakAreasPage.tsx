@@ -7,11 +7,12 @@ import { getChapterPerformance } from '../lib/analytics'
 import { practiceByChapter, PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL, type PracticeAggregate } from '../lib/jee/progress'
 import { Meter, Pct } from '../components/jee/shared'
 import type { Chapter, Subject } from '../types'
-import { SUBJECTS } from '../types'
+import { useReportSubjects } from '../lib/exams/useExamSubjects'
 
 const MOBILE_VISIBLE_LIMIT = 8
 
 export default function WeakAreasPage() {
+  const subjectList = useReportSubjects()
   const { data } = useData()
   const navigate = useNavigate()
   const [subject, setSubject] = useState<'all' | Subject>('all')
@@ -35,7 +36,7 @@ export default function WeakAreasPage() {
   const pageClass = `content-page weak-page${showAllTestedMobile ? ' mobile-tested-expanded' : ''}`
 
   return <div className={pageClass}>
-    <PageHeader eyebrow="SCORE THE CHAPTER, NOT THE FEELING" title="Weak areas" subtitle="Chapter averages use the last three usable results. Untested stays unclassified." doodle={<Target size={19} />} action={<label className="weak-subject-select"><span>Subject</span><select value={subject} onChange={event => { setSubject(event.target.value as 'all' | Subject); setShowAllTestedMobile(false); setShowUntested(false) }}><option value="all">All subjects</option>{SUBJECTS.map(item => <option key={item}>{item}</option>)}</select></label>} />
+    <PageHeader eyebrow="SCORE THE CHAPTER, NOT THE FEELING" title="Weak areas" subtitle="Chapter averages use the last three usable results. Untested stays unclassified." doodle={<Target size={19} />} action={<label className="weak-subject-select"><span>Subject</span><select value={subject} onChange={event => { setSubject(event.target.value as 'all' | Subject); setShowAllTestedMobile(false); setShowUntested(false) }}><option value="all">All subjects</option>{subjectList.map(item => <option key={item}>{item}</option>)}</select></label>} />
     <div className="weak-rule-banner"><span className="rule-pencil">✎</span><p>Current bands: <strong>Weak &lt; {data.settings.weak_threshold}%</strong><span>·</span><strong>Okay {data.settings.weak_threshold}–{data.settings.strong_threshold}%</strong><span>·</span><strong>Strong &gt; {data.settings.strong_threshold}%</strong></p><button onClick={() => navigate('/settings')}>Adjust in Settings ↗</button></div>
     <div className="weak-overview-grid"><NotebookCard className="weak-overview-item weak-tint"><div><span className="weak-overview-icon"><TriangleAlert size={17} /></span><span className="eyebrow">NEEDS ANOTHER LOOK</span></div><strong>{weak.length}</strong><small>chapter{weak.length === 1 ? '' : 's'} below the weak-area threshold</small></NotebookCard><NotebookCard className="weak-overview-item dropping-tint"><div><span className="weak-overview-icon"><TrendingDown size={17} /></span><span className="eyebrow">DROPPING</span></div><strong>{dropCount}</strong><small>latest result fell by {data.settings.dropping_threshold} points or more</small></NotebookCard><NotebookCard className="weak-overview-item untested-tint"><div><span className="weak-overview-icon"><Target size={17} /></span><span className="eyebrow">NO BASELINE YET</span></div><strong>{untested.length}</strong><small>untested · not classified as weak</small></NotebookCard><NotebookCard className="weak-overview-item strong-tint"><div><span className="weak-overview-icon"><TrendingUp size={17} /></span><span className="eyebrow">FEELING STEADY</span></div><strong>{strong.length}</strong><small>chapter{strong.length === 1 ? '' : 's'} at or above the strong threshold</small></NotebookCard></div>
 
@@ -68,7 +69,7 @@ export default function WeakAreasPage() {
           </button>
         </div>
         {showUntested && <div className="untested-groups" id="untested-chapter-groups">
-          {SUBJECTS.map(subject => {
+          {subjectList.map(subject => {
             const chapters = untested.filter(item => item.chapter.subject === subject)
             if (!chapters.length) return null
             return <div className="untested-group" key={subject}>
