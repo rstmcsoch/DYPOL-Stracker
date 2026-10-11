@@ -38,7 +38,7 @@ const MODEL_TIMEOUT_MS = 20_000
 const TOTAL_BUDGET_MS = 53_000
 const MAX_CONTEXT_CHARS = 26_000
 
-const SYSTEM_PROMPT = `You are Stracker AI, an assistant for a JEE preparation notebook. Be warm, concise, and practical. Help with Physics, Chemistry, Maths, JEE Main and JEE Advanced study.
+const SYSTEM_PROMPT = `You are Stracker AI, an assistant for an exam-preparation study notebook. Be warm, concise, and practical. Help with the student's own exam and subjects (stated below when known); do not assume JEE or Physics/Chemistry/Maths unless that is their exam.
 
 SECURITY AND ACCURACY RULES:
 - You are an assistant using only the explicitly supplied Stracker tools. You do not have SQL, shell, arbitrary database, or cross-account access.
@@ -85,6 +85,35 @@ function requiresTools(message: string): boolean {
 function candidateScore(row: ProviderConfigRow, requiresReasoning: boolean): number {
   const caps = inferCapabilities(row.provider_id,row.model_id,row.protocol,row.capabilities)
   return (row.is_default ? 100 : 0) + (requiresReasoning && caps.supportsReasoning ? 10 : 0) + (caps.supportsTools ? 2 : 0)
+}
+
+/**
+ * One prompt line naming the student's exam and its subjects, from app_settings + exam_catalog.
+ * Best effort: any lookup failure simply leaves the prompt exam-neutral.
+ */
+export async function studentExamLine(admin: SupabaseClient, userId: string): Promise<string> {
+  try {
+    const { data: settings } = await admin.from('app_settings').select('exam_id,exam_year').eq('user_id',userId).maybeSingle()
+    const examId = (settings as { exam_id?: string | null } | null)?.exam_id || 'jee'
+    const year = (settings as { exam_year?: number | null } | null)?.exam_year
+    const { data: exam } = await admin.from('exam_catalog').select('name,subjects').eq('id',examId).maybeSingle()
+    const row = exam as { name?: string; subjects?: string[] } | null
+    const name = row?.name || (examId === 'jee' ? 'JEE (Main + Advanced)' : examId)
+    const subjects = Array.isArray(row?.subjects) && row.subjects.length ? row.subjects : examId === 'jee' ? ['Physics','Chemistry','Maths'] : []
+    return `\nThe student is preparing for ${name}${year ? ` ${year}` : ''}.${subjects.length ? ` Their subjects: ${subjects.slice(0, 20).join(', ')}.` : ''}`
+  } catch {
+    return ''
+  }
+}
+
+/** Distinguish "nothing connected" from "connected but switched off" so the user knows the next step. */
+async function explainNoEnabledProvider(admin: SupabaseClient, userId: string): Promise<void> {
+  const { data } = await admin.from('ai_provider_configs').select('connection_status').eq('user_id',userId)
+  const rows = (data ?? []) as Array<{ connection_status: string }>
+  if (rows.some(row => row.connection_status === 'connected')) {
+    throw new ApiError(409,'provider_disabled','Your AI provider is connected but switched off. Turn it on with Enable in Settings → AI Assistant.')
+  }
+  if (rows.length) throw new ApiError(409,'provider_not_ready','Your AI provider has not passed a connection test yet. Run Test in Settings → AI Assistant.')
 }
 
 async function getCandidates(admin: SupabaseClient, userId: string): Promise<ProviderConfigRow[]> {
@@ -149,13 +178,13 @@ function deriveCapabilities(row: ProviderConfigRow) {
   return inferCapabilities(row.provider_id,row.model_id,row.protocol,row.capabilities)
 }
 
-function selectedSystem(pageContext: string | null, taskKind: string, canUseTools: boolean): string {
+function selectedSystem(pageContext: string | null, taskKind: string, canUseTools: boolean, examLine = ''): string {
   const context = pageContext ? `\nCurrent Stracker section: ${pageContext}. This is only a navigation hint; read relevant information through the listed tools.` : ''
   const task = `\nCurrent task category: ${taskKind}.`
   const tools = canUseTools
     ? '\nUse the provided read tools when answering about saved Stracker data. When a user asks for an app change, call the correct write tool only after collecting required details; wait for the app confirmation.'
     : '\nNo Stracker data tools are enabled for this model. Do not claim to know the user’s saved data or perform an app action. For a personal Stracker question, explain that a tool-capable tested provider must be enabled in AI Assistant settings.'
-  return `${SYSTEM_PROMPT}${context}${task}${tools}`
+  return `${SYSTEM_PROMPT}${examLine}${context}${task}${tools}`
 }
 
 async function withProviderTimeout<T>(parent: AbortSignal, run: (signal: AbortSignal) => Promise<T>,timeoutMs=MODEL_TIMEOUT_MS): Promise<T> {
@@ -181,6 +210,8 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
   const intentTools = requiresTools(input.message)
   const requiresReasoning = COMPLEX_INTENT.test(input.message)
   const allCandidates = await getCandidates(input.adminClient,input.userId)
+  const examLine = await studentExamLine(input.adminClient,input.userId)
+  if (allCandidates.length === 0) await explainNoEnabledProvider(input.adminClient,input.userId)
   const usable = allCandidates.filter(row => runtimeHealth(row) === 'ready')
   const capabilityCandidates = usable.filter(row => !intentTools || deriveCapabilities(row).supportsTools)
   const sort = (items: ProviderConfigRow[]) => [...items].sort((a,b) => candidateScore(b,requiresReasoning) - candidateScore(a,requiresReasoning))
@@ -228,7 +259,7 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
       completion = await withProviderTimeout(input.signal, signal => completeWithProvider(providerCallFromConfig(
         selected,
         decryptCredential(selected.encrypted_api_key),
-        selectedSystem(input.pageContext,taskType(input.message),offerTools),
+        selectedSystem(input.pageContext,taskType(input.message),offerTools,examLine),
         agentMessages,
         offerTools ? MODEL_TOOLS : [],
         signal,

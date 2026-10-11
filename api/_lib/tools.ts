@@ -15,7 +15,21 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ModelTool, NormalizedToolCall } from './provider-adapters.js'
 import { ApiError } from './http.js'
 
-const subjectSchema = z.enum(['Physics','Chemistry','Maths'])
+// Any exam's subject (NEET Biology, CUET Economics, CA Accounting…), matching the widened DB check.
+const subjectSchema = z.string().trim().min(1).max(60)
+
+/**
+ * Whether a Full Mock's subject scores form a complete aggregate. Mirrors the app and the DB:
+ * Physics/Chemistry/Maths mocks need all three; other exams aggregate every saved subject, all complete.
+ */
+export function fullMockComplete(scores: ReadonlyArray<Record<string, unknown>>): boolean {
+  if (!scores.length) return false
+  const subjects = scores.map(score => String(score.subject))
+  if (new Set(subjects).size !== subjects.length) return false
+  if (!scores.every(score => score.marks_obtained != null && score.total_marks != null)) return false
+  const legacy = subjects.every(subject => (SUBJECTS as readonly string[]).includes(subject))
+  return !legacy || SUBJECTS.every(subject => subjects.includes(subject))
+}
 const idSchema = z.uuid()
 const emptyInput = z.object({}).strict()
 const toolSchemas = {
@@ -43,7 +57,7 @@ const toolSchemas = {
     negative_marks: z.number().finite().min(0).max(999_999.75).multipleOf(0.25).nullable().default(null),
     time_minutes: z.number().int().min(0).max(POSTGRES_INTEGER_MAX).nullable().default(null),
     notes: z.string().max(10_000).default(''),
-    subject_scores: z.array(z.object({ subject: subjectSchema, marks_obtained: z.number().finite().min(0).max(9_999_999.5).multipleOf(0.5).nullable(), total_marks: z.number().finite().int().min(1).max(9_999_999) }).strict()).max(3).default([])
+    subject_scores: z.array(z.object({ subject: subjectSchema, marks_obtained: z.number().finite().min(0).max(9_999_999.5).multipleOf(0.5).nullable(), total_marks: z.number().finite().int().min(1).max(9_999_999) }).strict()).max(30).default([])
   }).strict(),
   update_test: z.object({
     id: idSchema,
@@ -323,7 +337,7 @@ async function readTool(client: SupabaseClient, userId: string, name: ToolName, 
       const from = plusDays(indiaToday(), -days + 1)
       const sessions = await queryAll<StudySession>(client, 'study_sessions', userId, 'id,user_id,subject,started_at,duration_minutes,completion_state', 10_000)
       const relevant = sessions.filter(item => item.started_at.slice(0, 10) >= from && item.started_at.slice(0, 10) <= indiaToday())
-      const bySubject = SUBJECTS.map(subject => ({ subject, minutes: relevant.filter(item => item.subject === subject).reduce((sum, item) => sum + item.duration_minutes, 0) }))
+      const bySubject = [...new Set(relevant.map(item => item.subject).filter((value): value is string => Boolean(value)))].map(subject => ({ subject, minutes: relevant.filter(item => item.subject === subject).reduce((sum, item) => sum + item.duration_minutes, 0) }))
       const byDay = new Map<string, number>()
       for (const session of relevant) { const day = session.started_at.slice(0, 10); byDay.set(day, (byDay.get(day) ?? 0) + session.duration_minutes) }
       return { period_days: days, from, through: indiaToday(), total_minutes: relevant.reduce((sum, item) => sum + item.duration_minutes, 0), total_hours: Number((relevant.reduce((sum, item) => sum + item.duration_minutes, 0) / 60).toFixed(1)), sessions: relevant.length, by_subject: bySubject, by_day: [...byDay].sort(([a], [b]) => a.localeCompare(b)).map(([date, minutes]) => ({ date, minutes })) }
@@ -443,11 +457,11 @@ async function preflightAction(client: SupabaseClient, userId: string, name: Too
     const { data:existingScores,error } = await client.from('test_subject_scores').select('subject,marks_obtained,total_marks').eq('user_id',userId).eq('test_id',testId)
     if (error) throw dataError()
     const scores = [...((existingScores ?? []) as Array<{subject:string;marks_obtained:number|null;total_marks:number|null}>).filter(score => score.subject !== input.subject),{subject:String(input.subject),...parsed.data}]
-    const complete = SUBJECTS.every(subject => scores.some(score => score.subject === subject && score.marks_obtained !== null && score.total_marks !== null))
+    const complete = fullMockComplete(scores)
     if (complete) {
       const marks = scores.reduce((sum,score) => sum + (score.marks_obtained ?? 0),0)
       const total = scores.reduce((sum,score) => sum + (score.total_marks ?? 0),0)
-      if (marks > total || total > 9_999_999) throw new ApiError(400,'invalid_tool_input','These three subject scores exceed Stracker’s supported Full Mock total.')
+      if (marks > total || total > 9_999_999) throw new ApiError(400,'invalid_tool_input','These subject scores exceed Stracker’s supported Full Mock total.')
     }
     return { title:test.title }
   }
@@ -496,10 +510,7 @@ async function preflightAction(client: SupabaseClient, userId: string, name: Too
         if (parsedScore.data.marks_obtained != null && parsedScore.data.marks_obtained > (parsedScore.data.total_marks ?? 0)) throw new ApiError(400,'invalid_tool_input','Subject marks cannot exceed that subject’s total.')
       }
       if (scores.length && !isFullMock) throw new ApiError(400,'invalid_tool_input','Per-subject scores can only be added to a Full Mock.')
-      const completeMock = isFullMock && SUBJECTS.every(subjectValue => {
-        const score = scores.find(item => item.subject === subjectValue)
-        return score?.marks_obtained != null && score.total_marks != null
-      })
+      const completeMock = isFullMock && fullMockComplete(scores)
       const aggregateMarks = completeMock ? scores.reduce((sum,score) => sum + Number(score.marks_obtained ?? 0),0) : null
       const aggregateTotal = completeMock ? scores.reduce((sum,score) => sum + Number(score.total_marks ?? 0),0) : null
       if (completeMock && (aggregateMarks === null || aggregateTotal === null || aggregateMarks > aggregateTotal || aggregateTotal > 9_999_999)) {
