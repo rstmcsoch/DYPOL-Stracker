@@ -107,7 +107,7 @@ describe('locally bundled typography faces', () => {
     expect(typography).toContain('--body-scale: 1;')
     expect(typography).toContain('--font-default-reading')
     expect(settingsPage).toContain('title="Reading font"')
-    expect(settingsPage).toContain('Changes body text, menus and buttons. Headings and the Stracker identity stay the same.')
+    expect(settingsPage).toContain('Body text, menus and buttons.')
     expect(settingsPage).not.toContain('setInterfaceFont')
     expect(html).toContain('patrick-hand-latin-400-normal.woff2')
     expect(html).toContain('lexend-latin-400-normal.woff2')

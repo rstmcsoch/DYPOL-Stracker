@@ -84,7 +84,7 @@ export default function HomePage() {
   }
 
   return <div className="dashboard-page">
-    <PageHeader eyebrow={new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' }).format(new Date()).toUpperCase()} title={`Good ${getGreeting()}, ${data.settings.owner_name || data.profile?.display_name || 'future engineer'}.`} subtitle="Let’s make today count — one honest study block at a time." doodle={<span className="header-atom">✦</span>} />
+    <PageHeader eyebrow={new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' }).format(new Date()).toUpperCase()} title={`Good ${getGreeting()}, ${data.settings.owner_name || data.profile?.display_name || 'future engineer'}.`} doodle={<span className="header-atom">✦</span>} />
 
     <section className="hero-row" aria-label="Exam countdown and syllabus progress">
       <NotebookCard className="countdown-card">
@@ -111,7 +111,7 @@ export default function HomePage() {
         <SectionHeading title="Today's plan" note={`${doneTasks} of ${todayTasks.length} done`} action={<Button variant="secondary" size="sm" onClick={() => navigate('/planner?add=1')}><Plus size={16} /> Add task</Button>} />
         <NotebookCard className="today-plan-card">
           <div className="plan-card-top"><span className="handwriting-label">A little list for today</span><span className="plan-date"><CalendarDays size={14} /> {prettyDate(today, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
-          {todayTasks.length === 0 ? <EmptyState icon={<BookOpen size={26} />} title="Your page is still blank." description="Add one clear task and give today a gentle starting point." action={<Button variant="secondary" size="sm" onClick={() => navigate('/planner?add=1')}><Plus size={15} /> Plan a task</Button>} /> : <div className="task-list">
+          {todayTasks.length === 0 ? <EmptyState icon={<BookOpen size={26} />} title="No tasks today." action={<Button variant="secondary" size="sm" onClick={() => navigate('/planner?add=1')}><Plus size={15} /> Plan a task</Button>} /> : <div className="task-list">
             {todayTasks.slice(0, 6).map((task, index) => {
               const chapter = data.chapters.find(item => item.id === task.chapter_id)
               return <div key={task.id} className={`task-row ${task.is_completed ? 'task-done' : ''}`}>

@@ -122,3 +122,10 @@
 @media (max-width: 560px) {
   .onboarding-panel { width: 100vw; max-height: 100dvh; min-height: 100dvh; border-radius: 0; }
 }
+
+/* Context on demand: (i) next to headings; text appears on hover, focus or tap. */
+.info-tip { position: relative; display: inline-flex; align-items: center; margin-left: 6px; vertical-align: middle; color: var(--muted, currentColor); opacity: .7; cursor: help; border-radius: 50%; font-size: 0; }
+.info-tip:hover, .info-tip:focus-visible { opacity: 1; outline: none; }
+.info-tip:focus-visible { box-shadow: 0 0 0 2px var(--accent, currentColor); }
+.info-tip::after { content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); width: max-content; max-width: min(260px, 70vw); padding: 6px 9px; border-radius: 6px; background: var(--ink, #222); color: var(--paper, #fff); font: 400 12.5px/1.4 var(--font-body, inherit); letter-spacing: 0; text-transform: none; white-space: normal; z-index: 50; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.info-tip:hover::after, .info-tip:focus::after { opacity: 1; }

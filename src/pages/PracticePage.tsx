@@ -60,9 +60,8 @@ export default function PracticePage() {
 
   return <div className="content-page practice-page">
     <PageHeader
-      eyebrow="DPP & PRACTICE, LOGGED SEPARATELY FROM TESTS"
       title="Practice log"
-      subtitle="Questions you solved outside mocks — DPPs, modules, sheets. These feed chapter accuracy and Weak areas, but never count as a test."
+      subtitle="DPPs, modules and sheets — not counted as tests."
       action={<Button onClick={() => openCreate()}><Plus size={16} /> Log practice</Button>}
     />
 
@@ -82,16 +81,16 @@ export default function PracticePage() {
       <ChipFilter<Period> label="Date" value={period} onChange={setPeriod} options={[{ value: '7', label: 'Last 7 days' }, { value: '30', label: '30 days' }, { value: '90', label: '90 days' }, { value: 'all', label: 'All time' }]} />
     </NotebookCard>
 
-    {!hasAny ? <NotebookCard><EmptyState icon={<ClipboardList size={26} />} title="No practice logged yet." description="Log a DPP or module block with how many you attempted and got right. Accuracy by chapter appears here straight away." action={<Button variant="secondary" size="sm" onClick={() => openCreate()}><Plus size={15} /> Log your first block</Button>} /></NotebookCard>
+    {!hasAny ? <NotebookCard><EmptyState icon={<ClipboardList size={26} />} title="No practice logged yet." action={<Button variant="secondary" size="sm" onClick={() => openCreate()}><Plus size={15} /> Log your first block</Button>} /></NotebookCard>
     : <div className="jee-two-col">
       <section>
         <SectionHeading title="Chapter performance" note={`${byChapter.length} chapter${byChapter.length === 1 ? '' : 's'} with practice in view`} />
-        {byChapter.length === 0 ? <NotebookCard><EmptyState icon={<Target size={22} />} title="Nothing matches these filters." description="Widen the date range or clear the chapter or source filter." /></NotebookCard> : <div className="jee-chapter-list">
+        {byChapter.length === 0 ? <NotebookCard><EmptyState icon={<Target size={22} />} title="Nothing matches these filters." /></NotebookCard> : <div className="jee-chapter-list">
           {byChapter.map(({ chapter, agg }) => <ChapterPracticeRow key={chapter.id} chapter={chapter} agg={agg} weakThreshold={data.settings.weak_threshold} onLog={() => openCreate(chapter.id)} />)}
         </div>}
       </section>
       <section>
-        <SectionHeading title="History" note="Newest first. Edit or remove any block." />
+        <SectionHeading title="History" note="Newest first." />
         <NotebookCard className="jee-history-card">
           {filtered.length === 0 ? <p className="jee-muted jee-pad">No blocks in this view.</p> : <ul className="jee-history-list">
             {filtered.slice(0, 80).map(item => {
@@ -121,7 +120,7 @@ export default function PracticePage() {
               </li>
             })}
           </ul>}
-          {filtered.length > 80 && <p className="jee-muted jee-pad">Showing the newest 80 of {filtered.length}. Narrow the filters to see older blocks.</p>}
+          {filtered.length > 80 && <p className="jee-muted jee-pad">Newest 80 of {filtered.length}.</p>}
         </NotebookCard>
       </section>
     </div>}

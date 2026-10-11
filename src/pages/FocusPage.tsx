@@ -121,7 +121,7 @@ function ChapterSearchPicker({ chapters, selectedId, onClose, onChoose }: {
     if (event.key === 'Enter' && results[selected]) { event.preventDefault(); onChoose(results[selected].id) }
   }
 
-  return <Dialog title="Choose a chapter" subtitle="Type to search — results filter as you write." onClose={onClose} className="dialog-narrow chapter-picker-dialog">
+  return <Dialog title="Choose a chapter" onClose={onClose} className="dialog-narrow chapter-picker-dialog">
     <div className="chapter-picker-body">
       <div className="global-search-input chapter-picker-input"><Search size={17} aria-hidden="true" /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} onKeyDown={onKeyDown} placeholder="e.g. Current Electricity, Thermodynamics…" aria-label="Search chapters" /></div>
       {selectedId && <button type="button" className="chapter-picker-clear" onClick={() => onChoose(null)}><X size={14} aria-hidden="true" /> Clear chapter choice</button>}
@@ -145,7 +145,7 @@ function TaskLinkPicker({ tasks, linkedId, onClose, onChoose }: {
   onChoose: (taskId: string | null) => void
 }) {
   const open = tasks.filter(task => !task.is_completed)
-  return <Dialog title="Link a task" subtitle="Anchor this block to one of today’s planned tasks." onClose={onClose} className="dialog-narrow chapter-picker-dialog">
+  return <Dialog title="Link a task" onClose={onClose} className="dialog-narrow chapter-picker-dialog">
     <div className="chapter-picker-body">
       {open.length === 0 ? <div className="chapter-picker-empty"><CalendarCheck size={17} aria-hidden="true" /> No open tasks for today. Plan one in the Planner, then link it here.</div> : <div className="chapter-picker-results" role="listbox" aria-label="Today's tasks">
         {open.map(task => (

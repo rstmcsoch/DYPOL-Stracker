@@ -307,7 +307,7 @@ function QuickTaskDialog({ data, onClose }: { data: AppData; onClose: () => void
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save task. Retry.', 'error') }
     finally { loadingRef.current = false; setLoading(false) }
   }
-  return <Dialog title="A small step for today" subtitle="Add a task to your study plan." onClose={onClose}>
+  return <Dialog title="Add a task" onClose={onClose}>
     <form className="form-stack" noValidate onSubmit={save}>
       <Field label="What do you want to do?" required error={fieldErrors.title}><input autoFocus required maxLength={200} placeholder="e.g. Revise Kirchhoff's laws" value={title} onChange={event => { setTitle(event.target.value); setFieldErrors(current => { const next = { ...current }; delete next.title; return next }) }} /></Field>
       <div className="form-grid two"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{quickSubjects.map(item => <option key={item}>{item}</option>)}</select></Field>
@@ -351,7 +351,7 @@ function GlobalSearch({ data, onClose }: { data: AppData; onClose: () => void })
 
 function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const shortcuts = [['⌘ / Ctrl + K', 'Search your notebook'], ['N', 'Add a task'], ['T', 'Add a test'], ['R', 'Open revisions'], ['Space', 'Start or pause in Focus mode'], ['Esc', 'Close the current dialog'], ['?', 'Show this help']]
-  return <Dialog title="A few handy shortcuts" subtitle="Shortcuts stay out of the way while you type." onClose={onClose} className="dialog-narrow">
+  return <Dialog title="A few handy shortcuts" onClose={onClose} className="dialog-narrow">
     <div className="shortcut-list">{shortcuts.map(([key, action]) => <div className="shortcut-row" key={key}><span>{action}</span><kbd>{key}</kbd></div>)}</div>
     <div className="dialog-actions"><Button onClick={onClose}>Got it</Button></div>
   </Dialog>

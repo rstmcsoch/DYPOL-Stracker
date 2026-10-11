@@ -47,7 +47,7 @@ export function HomeSnapshot() {
       <div className="jee-snap-head"><span className="eyebrow">SYLLABUS</span><button type="button" className="jee-link" onClick={() => navigate('/syllabus')}>Open <ArrowUpRight size={13} aria-hidden="true" /></button></div>
       <ProgressLine label="Raw completion" value={progress.raw} detail={`${progress.completedChapters}/${progress.totalChapters} chapters`} />
       <ProgressLine label="Weighted completion" value={progress.weighted} detail="by chapter importance" />
-      <p className="jee-small jee-muted">Raw is the plain count. Weighted gives high-importance chapters more say; both stay visible.</p>
+      
     </NotebookCard>
 
     <NotebookCard className="jee-snap-card jee-snap-practice">

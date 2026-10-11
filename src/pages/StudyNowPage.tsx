@@ -17,7 +17,7 @@ export default function StudyNowPage() {
   const labels = trackLabels(data.settings)
   const reminders = computeReminders(data, today)
   return <div className="content-page study-now-page">
-    <PageHeader eyebrow="ONE DECISION AT A TIME" title="Study now" subtitle="The most urgent item across revisions, backlog, flashcards, practice, PYQs, weak chapters and mock losses — and exactly why." />
+    <PageHeader title="Study now" subtitle="Your most urgent item, and why." />
     <StudyNowCard />
 
     <SectionHeading title="Exam Mode" note={mode.reason} action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} /> Exam settings</Button>} />
@@ -30,7 +30,7 @@ export default function StudyNowPage() {
       {mode.active && <p className="jee-small">While Exam Mode is on, revision, PYQs, mocks, flashcards and weak-area fixes are weighted up. New theory is not suggested, and backlog only surfaces when it is due or high priority.</p>}
     </NotebookCard>
 
-    <SectionHeading title="Track readiness" note="One shared syllabus. Each track is measured against its own exam’s PYQs." />
+    <SectionHeading title="Track readiness" note="Each track is measured against its own PYQs." />
     <div className="jee-track-grid">
       {tracks.map(track => <NotebookCard key={track.track} className="jee-track-card">
         <div className="jee-track-head"><strong>{labels[track.track]}</strong><span className="jee-muted">{countdownLabel(track.daysLeft)}</span></div>
@@ -41,7 +41,7 @@ export default function StudyNowPage() {
     </div>
 
     {reminders.length > 0 && <>
-      <SectionHeading title="Reminders right now" note="Turn types on or off in Settings → Study rhythm." />
+      <SectionHeading title="Reminders right now" note="Change in Settings → Study rhythm." />
       <NotebookCard><ul className="jee-reminder-list">{reminders.map(item => <li key={item.kind}><span className="jee-tag">{REMINDER_LABEL[item.kind]}</span><span><strong>{item.title}.</strong> {item.body}</span></li>)}</ul></NotebookCard>
     </>}
   </div>

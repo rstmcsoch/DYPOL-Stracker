@@ -130,7 +130,7 @@ export function AISettingsSection() {
         }) : !providersError && !user?.isLocal ? <div className="ai-provider-empty"><AIProviderMark provider="gemini" /><div><strong>No AI provider connected yet.</strong><span>Add your own API key to get started.</span></div></div> : null}
       </div>
       {!user?.isLocal && <div className="ai-settings-footer"><span><CircleHelp size={14} /> Configure one or more providers for transparent fallback.</span><Button type="button" size="sm" onClick={openNew}><Plus size={15} /> Add provider</Button></div>}
-      <p className="ai-privacy-footnote">Provider terms and model data-retention settings are controlled by the provider. Never enter another person’s credentials or sensitive personal information.</p>
+      <p className="ai-privacy-footnote">Data retention is set by the provider. Never enter someone else’s credentials or sensitive data.</p>
     </NotebookCard>
 
     {draft && selectedProvider && <Dialog title={editing ? `Edit ${providerLabel(editing.provider_id)}` : 'Connect an AI provider'} subtitle="Use a key from your provider account. Stracker never supplies a substitute key." onClose={closeEditor} className="dialog-ai-provider">

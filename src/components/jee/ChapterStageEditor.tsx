@@ -42,7 +42,7 @@ export function ChapterStageEditor({ chapter }: { chapter: Chapter }) {
   }
 
   return <div className="jee-stage-editor" aria-label="Learning stages">
-    <div className="jee-stage-editor-head"><span className="eyebrow">LEARNING STAGES</span><span className="jee-muted jee-small">Independent — order is up to you</span></div>
+    <div className="jee-stage-editor-head"><span className="eyebrow">LEARNING STAGES</span><span className="jee-muted jee-small">Any order</span></div>
     <StagePipeline stages={stages} />
     <div className="jee-stage-toggles">
       {TOGGLEABLE.map(item => {

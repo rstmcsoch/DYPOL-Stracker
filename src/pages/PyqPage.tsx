@@ -97,9 +97,8 @@ export default function PyqPage() {
 
   return <div className="content-page pyq-page">
     <PageHeader
-      eyebrow="PREVIOUS YEAR QUESTIONS, YEAR BY YEAR"
       title="PYQ tracker"
-      subtitle="Mark each chapter’s past papers as done. Completion feeds the chapter stages and Study now."
+      subtitle="Mark past papers done per chapter."
       action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} /> Year range</Button>}
     />
 
@@ -121,7 +120,7 @@ export default function PyqPage() {
       <ChipFilter<StatusFilter> label="Status" value={status} onChange={setStatus} options={[{ value: 'all', label: 'All' }, { value: 'pending', label: 'Has pending years' }, { value: 'done', label: 'Complete' }]} />
     </NotebookCard>
 
-    {!hasWindow && <NotebookCard><EmptyState title="The year range is empty." description="Set the first and last PYQ year in Settings → Exam." action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}>Open Settings</Button>} /></NotebookCard>}
+    {!hasWindow && <NotebookCard><EmptyState title="Set a PYQ year range in Settings." action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}>Open Settings</Button>} /></NotebookCard>}
 
     {selected.size > 0 && <div className="jee-bulk-bar" role="region" aria-label="Bulk PYQ actions">
       <span><strong>{selected.size}</strong> selected</span>
@@ -135,7 +134,7 @@ export default function PyqPage() {
     </div>}
 
     <SectionHeading title="Chapters" note={`${chapters.length} shown · tap a year to toggle it · tick chapters to bulk-edit`} />
-    {chapters.length === 0 ? <NotebookCard><EmptyState icon={<Check size={22} />} title="No chapters match." description="Clear the filters to see every chapter." /></NotebookCard> : <div className="jee-pyq-grid">
+    {chapters.length === 0 ? <NotebookCard><EmptyState icon={<Check size={22} />} title="No chapters match." /></NotebookCard> : <div className="jee-pyq-grid">
       {chapters.map(chapter => {
         const rows = exams.map(item => ({ exam: item, completion: pyqCompletion(data.pyqRecords, chapter.id, item, data.settings) }))
         const isSelected = selected.has(chapter.id)

@@ -94,9 +94,8 @@ export default function BacklogPage() {
 
   return <div className="content-page backlog-page">
     <PageHeader
-      eyebrow="UNFINISHED WORK, IN ONE PLACE"
       title="Backlog"
-      subtitle="Skipped lectures, unsolved DPPs, and topics to come back to. Anything due here is considered by “What should I study now?”."
+      subtitle="Skipped lectures, unsolved DPPs and topics to revisit."
       action={<Button onClick={() => { setCreating(true); if (params.get('add')) setParams({}, { replace: true }) }}><Plus size={16} /> Add item</Button>}
     />
     <section className="jee-stat-grid" aria-label="Backlog summary">
@@ -115,16 +114,16 @@ export default function BacklogPage() {
       </div>
     </NotebookCard>
 
-    {data.backlogItems.length === 0 ? <NotebookCard><EmptyState icon={<Check size={24} />} title="The backlog is empty." description="Add a skipped lecture, an unsolved DPP, or a topic you want to revisit. Nothing is ever lost here." action={<Button variant="secondary" size="sm" onClick={() => setCreating(true)}><Plus size={15} /> Add the first item</Button>} /></NotebookCard>
+    {data.backlogItems.length === 0 ? <NotebookCard><EmptyState icon={<Check size={24} />} title="Backlog is empty." action={<Button variant="secondary" size="sm" onClick={() => setCreating(true)}><Plus size={15} /> Add the first item</Button>} /></NotebookCard>
     : <>
-      {groups.length === 0 ? <NotebookCard><EmptyState icon={<Check size={22} />} title="Nothing open in this view." description="Clear the filters, or check snoozed items below." /></NotebookCard>
+      {groups.length === 0 ? <NotebookCard><EmptyState icon={<Check size={22} />} title="Nothing open in this view." /></NotebookCard>
         : groups.map(group => <section key={group.key} className="jee-backlog-group">
           <SectionHeading title={group.title} note={`${group.items.length} item${group.items.length === 1 ? '' : 's'}`} />
           <NotebookCard><ul className="jee-backlog-list">{group.items.map(renderRow)}</ul></NotebookCard>
         </section>)}
 
       {snoozed.length > 0 && <section className="jee-backlog-group">
-        <SectionHeading title="Snoozed" note="These return automatically on their date." />
+        <SectionHeading title="Snoozed" note="Returns automatically on its date." />
         <NotebookCard><ul className="jee-backlog-list">{snoozed.map(renderRow)}</ul></NotebookCard>
       </section>}
 
@@ -207,7 +206,7 @@ function BacklogDialog({ data, existing, onClose, onSave }: {
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save the item.', 'error') }
     finally { setSaving(false) }
   }
-  return <Dialog title={existing ? 'Edit backlog item' : 'Add to backlog'} subtitle="A skipped lecture, an unsolved DPP, or something to come back to." onClose={onClose} className="jee-dialog">
+  return <Dialog title={existing ? 'Edit backlog item' : 'Add to backlog'} onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <Field label="What is it?" required error={errors.title}><input autoFocus maxLength={200} value={form.title} onChange={event => set('title', event.target.value)} placeholder="e.g. Lecture 8 — EMI" /></Field>
       <div className="form-grid two">
