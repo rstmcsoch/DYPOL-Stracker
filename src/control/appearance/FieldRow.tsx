@@ -5,6 +5,7 @@ import { INTERNAL_ROUTE_TARGETS, HOMEPAGE_ANCHOR_TARGETS, type FieldDefinition }
 import { useContentEditor } from './ContentEditor'
 import { OrderField } from './OrderField'
 import { MediaField } from './MediaField'
+import { ImageField } from './ImageField'
 
 /** Suggestions for destination fields. They are hints only: the server accepts this list and nothing else internal. */
 const LINK_SUGGESTIONS = [...INTERNAL_ROUTE_TARGETS, ...HOMEPAGE_ANCHOR_TARGETS]
@@ -74,7 +75,9 @@ export function FieldRow({ definition, showContext = true }: { definition: Field
     </div>
     {showContext && <p className="cc-copy-field__context">{definition.page} · {definition.section} · <code>{definition.key}</code></p>}
 
-    {definition.type === 'media' ? (
+    {definition.type === 'media' && definition.optional ? (
+      <ImageField definition={definition} value={value} disabled={saving} onChange={next => setValue(definition.key, next)} describedBy={describedBy} inputId={inputId} />
+    ) : definition.type === 'media' ? (
       <MediaField definition={definition} value={value} disabled={saving} onChange={next => setValue(definition.key, next)} describedBy={describedBy} inputId={inputId} />
     ) : definition.type === 'order' ? (
       <OrderField definition={definition} value={value} values={values} disabled={saving} onChange={next => setValue(definition.key, next)} describedBy={describedBy} />

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { SiteContentProvider } from '../../contexts/SiteContentContext'
 import { validateFieldValue } from '../../lib/site-content/content'
 import { SITE_CONTENT_DEFAULTS, fieldDefinition } from '../../lib/site-content/registry'
-import { FeatureSection } from './LandingSections'
+import { FeatureSection, PrincipleSection } from './LandingSections'
 
 afterEach(cleanup)
 
@@ -29,7 +29,7 @@ describe('owner feature card order, visibility and icons', () => {
   })
 
   it('falls back to the full default order for an invalid stored value', () => {
-    expect(titles({ 'public.features.order': '1,1,9' }).list).toHaveLength(8)
+    expect(titles({ 'public.features.order': '1,1,13' }).list).toHaveLength(8)
   })
 
   it('validates order values strictly', () => {
@@ -37,8 +37,34 @@ describe('owner feature card order, visibility and icons', () => {
     expect(validateFieldValue(order, ' 2, 1 ')).toEqual({ ok: true, value: '2,1' })
     expect(validateFieldValue(order, '1').ok).toBe(false)
     expect(validateFieldValue(order, '1,1').ok).toBe(false)
-    expect(validateFieldValue(order, '1,9').ok).toBe(false)
+    expect(validateFieldValue(order, '1,13').ok).toBe(false)
     expect(validateFieldValue(order, '1;2').ok).toBe(false)
+  })
+
+  it('adds a new card by showing an extra slot, up to the limit', () => {
+    const { list } = titles({ 'public.features.order': '1,9', 'public.features.item_9.title': 'Doubt log' })
+    expect(list).toEqual([SITE_CONTENT_DEFAULTS['public.features.item_1.title'], 'Doubt log'])
+    expect(fieldDefinition('public.features.item_13.title')).toBeUndefined()
+    expect(validateFieldValue(fieldDefinition('public.features.order')!, '1,13').ok).toBe(false)
+  })
+
+  it('shows an optional card image only when one is set', () => {
+    const url = 'https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/public/homepage-media/site/image/0f8fad5b-d9cb-469f-a165-70867728950e.webp'
+    expect(titles({}).container.querySelector('.feature-image')).toBeNull()
+    cleanup()
+    const img = titles({ 'public.features.item_2.image': url }).container.querySelector('.feature-image')
+    expect(img?.getAttribute('src')).toBe(url)
+    expect(img?.getAttribute('alt')).toBe(SITE_CONTENT_DEFAULTS['public.features.item_2.title'])
+    expect(validateFieldValue(fieldDefinition('public.features.item_2.image')!, 'https://evil.example/a.png').ok).toBe(false)
+  })
+
+  it('reorders, adds and re-icons principle items', () => {
+    const { container } = render(<SiteContentProvider overrides={{}}><PrincipleSection /></SiteContentProvider>)
+    expect(container.querySelectorAll('.principle-list > li')).toHaveLength(6)
+    cleanup()
+    const second = render(<SiteContentProvider overrides={{ 'public.principles.order': '7,2', 'public.principles.item_7.title': 'Exam-agnostic' }}><PrincipleSection /></SiteContentProvider>)
+    expect([...second.container.querySelectorAll('.principle-list strong')].map(node => node.textContent)).toEqual(['Exam-agnostic', SITE_CONTENT_DEFAULTS['public.principles.item_2.title']])
+    expect(validateFieldValue(fieldDefinition('public.principles.item_1.icon')!, 'target').ok).toBe(true)
   })
 
   it('only accepts icons from the allowlist', () => {
