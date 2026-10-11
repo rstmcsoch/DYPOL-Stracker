@@ -605,3 +605,26 @@ textarea.cc-input { resize: vertical; min-height: 84px; }
 .cc-exam-list > li.is-hidden { opacity: .6; }
 .cc-exam-main { min-width: 0; }
 .cc-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Analytics */
+.cc-an-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 12px; align-items: end; padding: 12px; border: 1px solid var(--cc-border); border-radius: var(--cc-radius); background: var(--cc-surface); }
+.cc-an-filters label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--cc-muted); min-width: 0; }
+.cc-an-filters .cc-an-check { display: flex; align-items: center; gap: 8px; min-height: 40px; color: var(--cc-text); }
+.cc-an-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--cc-border); -webkit-overflow-scrolling: touch; }
+.cc-an-tabs button { flex: 0 0 auto; min-height: 40px; padding: 0 12px; border: 0; background: transparent; color: var(--cc-muted); font: 600 13px var(--cc-font); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+.cc-an-tabs button:hover { color: var(--cc-text); }
+.cc-an-tabs button.is-active { color: var(--cc-text); border-bottom-color: var(--cc-accent); }
+.cc-an-status { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+.cc-an-tip { display: inline-flex; vertical-align: middle; color: var(--cc-muted); cursor: help; border-radius: 50%; }
+.cc-an-tip:focus-visible { outline: 2px solid var(--cc-accent); outline-offset: 2px; }
+.cc-an-chart { margin: 0; min-width: 0; }
+.cc-an-table { min-width: 480px; }
+.cc-an-widgets { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; border: 1px dashed var(--cc-border); border-radius: 6px; padding: 10px 12px; margin: 0 0 14px; }
+.cc-an-widgets label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.cc-an-builder { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; align-items: end; margin-top: 12px; }
+.cc-an-builder label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--cc-muted); }
+.cc-an-builder > .cc-badges, .cc-an-builder > .cc-note { grid-column: 1 / -1; }
+.cc-an-note { display: flex; gap: 6px; align-items: center; min-width: 260px; }
+.cc-an-note .cc-input { min-height: 32px; padding: 4px 8px; font-size: 13px; }
+.cc-an-foot { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+@media (max-width: 640px) { .cc-an-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

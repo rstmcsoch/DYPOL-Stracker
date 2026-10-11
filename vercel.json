@@ -152,6 +152,10 @@
       "destination": "/api/control/operations?route=analytics-ingest"
     },
     {
+      "source": "/api/control/analytics",
+      "destination": "/api/control/operations?route=analytics"
+    },
+    {
       "source": "/api/control/(.*)",
       "destination": "/api/control/system?route=not-found"
     },
