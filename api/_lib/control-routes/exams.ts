@@ -22,6 +22,8 @@ const examBody = z.object({
     sessions: z.array(label(40)).max(24),
     boards: z.array(label(40)).max(24),
     boards_addon: z.boolean(),
+    subjects: z.array(label(60)).max(30).optional(),
+    session_label: z.string().trim().max(30).optional(),
     sort_order: z.number().int().min(0).max(100_000).optional(),
     hidden: z.boolean()
   }).strict()
@@ -56,6 +58,7 @@ export async function examsHandler(req: ApiRequest, res: ApiResponse): Promise<v
         years: [...new Set(input.years)].sort((a, b) => a - b),
         sessions: [...new Set(input.sessions)],
         boards: [...new Set(input.boards)],
+        ...(input.subjects ? { subjects: [...new Set(input.subjects)] } : {}),
         sort_order: sortOrder,
         updated_at: new Date().toISOString(),
         updated_by: context.userId

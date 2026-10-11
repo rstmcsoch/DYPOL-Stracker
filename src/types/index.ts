@@ -1,5 +1,7 @@
+/** JEE subjects: the default list for notebooks without an exam choice. Per-exam lists live in lib/exams/subjects. */
 export const SUBJECTS = ['Physics', 'Chemistry', 'Maths'] as const
-export type Subject = (typeof SUBJECTS)[number]
+/** Any exam's subject name (validated as non-empty text, at most 60 characters). */
+export type Subject = string
 export type ChapterStatus = 'Not Started' | 'Studying' | 'Done' | 'Revised'
 export type Priority = 'High' | 'Medium' | 'Low'
 export type TestType = 'Chapter Test' | 'Subject Test' | 'Full Mock' | 'PYQ Practice'

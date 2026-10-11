@@ -19,7 +19,7 @@ describe('restored focus timer state', () => {
   it('falls back to safe defaults for malformed values and unsupported timer settings', () => {
     const timer = sanitizeTimerState({
       ...defaultTimerState, mode: 'other', running: 'true', remainingSeconds: Number.POSITIVE_INFINITY,
-      durations: { Pomodoro: 999, 'Short Break': 0, 'Long Break': 15.5, Custom: 40 }, subject: 'Biology', elapsedSeconds: -5
+      durations: { Pomodoro: 999, 'Short Break': 0, 'Long Break': 15.5, Custom: 40 }, subject: 'x'.repeat(80), elapsedSeconds: -5
     })
     expect(timer.mode).toBe('Pomodoro')
     expect(timer.running).toBe(false)

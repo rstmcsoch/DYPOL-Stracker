@@ -6,7 +6,7 @@ import { indiaDate, indiaToday, prettyDate } from './date'
 import { makeStudyBars } from './study-aggregation'
 import { fmtDuration, fmtNumber } from './format'
 import type { AppData, TestRecord } from '../types'
-import { SUBJECTS } from '../types'
+import { subjectsFor } from './exams/subjects'
 import { triggerDownload } from './backup'
 
 export interface ReportSections {
@@ -275,7 +275,7 @@ export async function createPdfReport(data: AppData, options: ReportOptions): Pr
     doc.addPage(); let y = pdfSectionTitle(doc, 'Study hours', 'Focus sessions logged in the selected report range.')
     doc.addImage(chartHours, 'PNG', 17, y, 176, 63); y += 72
     y = pdfLine(doc, `Total study time: ${fmtDuration(scoped.sessions.reduce((sum, session) => sum + session.duration_minutes, 0))}.`, 18, y, 170, 11)
-    const subjectMinutes = SUBJECTS.map(subject => [subject, fmtDuration(scoped.sessions.filter(session => session.subject === subject).reduce((sum, session) => sum + session.duration_minutes, 0))])
+    const subjectMinutes = subjectsFor(scoped).map(subject => [subject, fmtDuration(scoped.sessions.filter(session => session.subject === subject).reduce((sum, session) => sum + session.duration_minutes, 0))])
     addPdfTable(doc, subjectMinutes, 17, y + 4, [88, 88], ['Subject','Logged time'])
     pdfFooter(doc, 'STUDY HOURS')
   }
@@ -386,7 +386,7 @@ export async function createDocxReport(data: AppData, options: ReportOptions): P
     content.push(docParagraph('Study hours', { heading: HeadingLevel.HEADING_1, font: 'Kalam', size: 34, color: '354432' }))
     content.push(new Paragraph({ children: [new ImageRun({ data: hoursImage, type: 'png', transformation: { width: 600, height: 215 } })], spacing: { after: 150 } }))
     content.push(docParagraph(`Total logged study time: ${fmtDuration(scoped.sessions.reduce((sum, session) => sum + session.duration_minutes, 0))}.`))
-    content.push(docTable(['Subject','Logged time'], SUBJECTS.map(subject => [subject, fmtDuration(scoped.sessions.filter(session => session.subject === subject).reduce((sum, session) => sum + session.duration_minutes, 0))])))
+    content.push(docTable(['Subject','Logged time'], subjectsFor(scoped).map(subject => [subject, fmtDuration(scoped.sessions.filter(session => session.subject === subject).reduce((sum, session) => sum + session.duration_minutes, 0))])))
     content.push(new Paragraph({ children: [new PageBreak()] }))
   }
   if (selected.tips) {

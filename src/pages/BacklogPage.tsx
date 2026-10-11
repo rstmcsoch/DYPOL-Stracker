@@ -10,6 +10,7 @@ import { indiaToday, plusDays, prettyDate } from '../lib/date'
 import { isAwake } from '../lib/jee/reminders'
 import { validateBacklog, type BacklogFormInput, type BacklogValue } from '../lib/jee/forms'
 import { BACKLOG_TYPES, type BacklogItem, type BacklogType, type Priority, type Subject, type AppData } from '../types'
+import { useExamSubjects } from '../lib/exams/useExamSubjects'
 
 type GroupBy = 'due' | 'subject' | 'type' | 'priority'
 type TypeFilter = 'all' | BacklogType
@@ -165,7 +166,9 @@ function groupItems(items: BacklogItem[], groupBy: GroupBy, chapterById: Map<str
       else put(`d-${item.due_on}`, `Due ${prettyDate(item.due_on)}`, `2${item.due_on}`, item)
     } else if (groupBy === 'subject') {
       const subject = String(item.subject ?? (item.chapter_id ? chapterById.get(item.chapter_id)?.subject : undefined) ?? 'General')
-      put(subject, subject, String(['Physics', 'Chemistry', 'Maths', 'General'].indexOf(subject)), item)
+      const jeeIndex = ['Physics', 'Chemistry', 'Maths'].indexOf(subject)
+      // Physics, Chemistry, Maths keep their order; other subjects follow alphabetically; General is last.
+      put(subject, subject, subject === 'General' ? '~' : jeeIndex >= 0 ? String(jeeIndex) : `9${subject}`, item)
     } else if (groupBy === 'type') {
       put(item.type, item.type === 'DPP' ? 'Unsolved DPPs' : item.type === 'Lecture' ? 'Skipped lectures' : 'Come back to', String(BACKLOG_TYPES.indexOf(item.type)), item)
     } else {
@@ -181,6 +184,7 @@ function groupItems(items: BacklogItem[], groupBy: GroupBy, chapterById: Map<str
 function BacklogDialog({ data, existing, onClose, onSave }: {
   data: AppData; existing?: BacklogItem; onClose: () => void; onSave: (value: BacklogValue) => Promise<void>
 }) {
+  const backlogSubjects = useExamSubjects(existing?.subject)
   const chapter = existing?.chapter_id ? data.chapters.find(item => item.id === existing.chapter_id) : undefined
   const [form, setForm] = useState<BacklogFormInput>({
     title: existing?.title ?? '', type: existing?.type ?? 'Lecture', subject: existing?.subject ?? chapter?.subject ?? '',
@@ -211,7 +215,7 @@ function BacklogDialog({ data, existing, onClose, onSave }: {
         <Field label="Priority"><select value={form.priority} onChange={event => set('priority', event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field>
       </div>
       <div className="form-grid two">
-        <Field label="Subject"><select value={form.subject} onChange={event => { set('subject', event.target.value as Subject | ''); set('chapterId', '') }}><option value="">General</option><option>Physics</option><option>Chemistry</option><option>Maths</option></select></Field>
+        <Field label="Subject"><select value={form.subject} onChange={event => { set('subject', event.target.value as Subject | ''); set('chapterId', '') }}><option value="">General</option>{backlogSubjects.map(item => <option key={item}>{item}</option>)}</select></Field>
         <Field label="Due date (optional)" error={errors.dueOn}><input type="date" value={form.dueOn} onChange={event => set('dueOn', event.target.value)} /></Field>
       </div>
       <ChapterSelect chapters={data.chapters} value={form.chapterId} onChange={value => set('chapterId', value)} subject={form.subject || 'all'} label="Linked chapter (optional)" allowNone noneLabel="No chapter" />

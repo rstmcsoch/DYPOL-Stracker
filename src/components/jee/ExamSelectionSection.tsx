@@ -6,6 +6,7 @@ import { useData } from '../../contexts/DataContext'
 import { useToast } from '../../contexts/ToastContext'
 import { BUILT_IN_EXAMS, LEGACY_DEFAULT_EXAM_ID, SCHOOL_BOARDS, examYears, groupByCategory, isJeeExam, visibleCatalog, type ExamDefinition } from '../../lib/exams/catalog'
 import { fetchExamCatalog } from '../../lib/exams/fetch-catalog'
+import { examSubjects } from '../../lib/exams/subjects'
 
 /**
  * Student's exam, target year, attempt and board. Students set up before this existed
@@ -92,7 +93,7 @@ export function ExamSelectionSection() {
             {yearChoices.map(item => <option key={item} value={item}>{item}</option>)}
           </select>
         </Field>
-        {exam && exam.sessions.length > 0 && <Field label="Attempt / session">
+        {exam && exam.sessions.length > 0 && <Field label={exam.session_label || 'Attempt / session'}>
           <select value={session} onChange={event => setSession(event.target.value)}>
             <option value="">Not set</option>
             {exam.sessions.map(item => <option key={item} value={item}>{item}</option>)}
@@ -108,6 +109,7 @@ export function ExamSelectionSection() {
           </select>
         </Field>}
       </div>
+      {exam && <p className="jee-small jee-muted exam-subject-preview">Subjects: {examSubjects({ exam_id: exam.id, exam_session: session || null, boards_addon: addon }, options).join(', ')}</p>}
       {exam && !isJeeExam(exam.id) && <p className="jee-small jee-muted">Your existing syllabus, tests and notes are kept as they are. A new notebook for this exam starts with an empty syllabus you can fill in on the Syllabus page.</p>}
       <div className="jee-section-save"><Button variant="secondary" size="sm" onClick={() => void save()} loading={saving}><Check size={14} /> Save exam</Button></div>
     </div>

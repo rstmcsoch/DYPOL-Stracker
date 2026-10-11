@@ -10,7 +10,7 @@ import { prettyDate, indiaToday } from '../lib/date'
 import { createId } from '../lib/id'
 import { MAX_MARKS_OBTAINED, MAX_NEGATIVE_MARKS, MAX_TOTAL_MARKS, POSTGRES_INTEGER_MAX, nullableNumberInput, subjectScoreInputSchema, testFormSchema } from '../lib/test-validation'
 import type { Subject, TestRecord, TestType, TestSubjectScore, TestChapterLink } from '../types'
-import { SUBJECTS } from '../types'
+import { useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
 
 type SortKey = 'date' | 'score' | 'title'
 type TestFieldErrors = Record<string, string>
@@ -20,10 +20,10 @@ type TestFormValues = {
   mockScores: Record<Subject, { marks: string; total: string }>
 }
 const TEST_TYPES: TestType[] = ['Chapter Test', 'Subject Test', 'Full Mock', 'PYQ Practice']
-const blankValues = (): TestFormValues => ({
+const blankValues = (subjects: readonly string[]): TestFormValues => ({
   title: '', test_date: indiaToday(), test_type: 'Chapter Test', subject: '', chapter_id: '', marks: '', total: '',
   correct: '', wrong: '', skipped: '', negative: '', time: '', notes: '',
-  mockScores: { Physics: { marks: '', total: '' }, Chemistry: { marks: '', total: '' }, Maths: { marks: '', total: '' } }
+  mockScores: Object.fromEntries(subjects.map(subject => [subject, { marks: '', total: '' }]))
 })
 
 const FORM_FIELD_BY_SCHEMA_FIELD: Record<string, string> = {
@@ -46,6 +46,7 @@ function subjectScoreMax(totalText: string): number {
 }
 
 export default function TestsPage() {
+  const subjectList = useReportSubjects()
   const { data, upsert, upsertMany, remove } = useData()
   const { notify } = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -127,8 +128,7 @@ export default function TestsPage() {
     const oldScores = data.testSubjectScores.filter(score => score.test_id === testId)
     const subjectScores: TestSubjectScore[] = []
     if (values.test_type === 'Full Mock') {
-      for (const subject of SUBJECTS) {
-        const part = values.mockScores[subject]
+      for (const [subject, part] of Object.entries(values.mockScores)) {
         const result = subjectScoreInputSchema.safeParse({
           marks_obtained: nullableNumberInput(part.marks), total_marks: nullableNumberInput(part.total)
         })
@@ -151,7 +151,7 @@ export default function TestsPage() {
     }
     if (Object.keys(errors).length || !parsed.success) return errors
 
-    const completeMock = values.test_type === 'Full Mock' && SUBJECTS.every(subject => {
+    const completeMock = values.test_type === 'Full Mock' && Object.keys(values.mockScores).every(subject => {
       const score = subjectScores.find(item => item.subject === subject)
       return score?.marks_obtained != null && score.total_marks != null
     })
@@ -234,7 +234,7 @@ export default function TestsPage() {
       <div className="test-filter-row">
         <div className="search-field"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search title, notes or chapter…" aria-label="Search tests" />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div>
         <label className="filter-select"><ListFilter size={15} /><select aria-label="Filter by test type" value={typeFilter} onChange={event => setTypeFilter(event.target.value as 'all' | TestType)}><option value="all">All test types</option>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></label>
-        <label className="filter-select"><SlidersHorizontal size={15} /><select aria-label="Filter by subject" value={subjectFilter} onChange={event => setSubjectFilter(event.target.value as 'all' | Subject)}><option value="all">All subjects</option>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select></label>
+        <label className="filter-select"><SlidersHorizontal size={15} /><select aria-label="Filter by subject" value={subjectFilter} onChange={event => setSubjectFilter(event.target.value as 'all' | Subject)}><option value="all">All subjects</option>{subjectList.map(subject => <option key={subject}>{subject}</option>)}</select></label>
         <details className="date-filter-popover"><summary><CalendarDays size={15} /> Dates</summary><div><Field label="From"><input type="date" value={from} onChange={event => setFrom(event.target.value)} /></Field><Field label="To"><input type="date" value={to} onChange={event => setTo(event.target.value)} /></Field></div></details>
       </div>
       <div className="table-scroll-wrap">
@@ -275,12 +275,14 @@ function TestRow({ test, onView, onEdit, onDelete }: { test: TestRecord; onView:
 }
 
 function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initial: TestRecord | null; presetChapterId?: string | null; data: ReturnType<typeof useData>['data']; onClose: () => void; onSave: (values: TestFormValues, stableId: string) => Promise<TestFieldErrors | null> }) {
+  const mockSubjects = useExamSubjects()
+  const formSubjects = useExamSubjects(initial?.subject)
   const { notify } = useToast()
   const [stableId] = useState(() => initial?.id ?? createId())
   const oldScores = initial ? data.testSubjectScores.filter(score => score.test_id === initial.id) : []
   const presetChapter = !initial && presetChapterId ? data.chapters.find(chapter => chapter.id === presetChapterId) ?? null : null
   const [values, setValues] = useState<TestFormValues>(() => {
-    const base = blankValues()
+    const base = blankValues([...new Set([...mockSubjects, ...oldScores.map(score => score.subject)])])
     if (!initial) {
       // Opened from a chapter chip: the chapter (and its subject) arrive preselected.
       if (presetChapter) return { ...base, subject: presetChapter.subject, chapter_id: presetChapter.id }
@@ -303,7 +305,7 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
     setErrors(current => { const next = { ...current }; delete next[String(key)]; delete next._form; return next })
   }
   const patchScore = (subject: Subject, key: 'marks' | 'total', value: string) => {
-    setValues(prev => ({ ...prev, mockScores: { ...prev.mockScores, [subject]: { ...prev.mockScores[subject], [key]: value } } }))
+    setValues(prev => ({ ...prev, mockScores: { ...prev.mockScores, [subject]: { marks: prev.mockScores[subject]?.marks ?? '', total: prev.mockScores[subject]?.total ?? '', [key]: value } } }))
     setErrors(current => { const next = { ...current }; delete next[`${subject}.${key}`]; delete next._form; return next })
   }
   const chapterOptions = data.chapters.filter(chapter => !values.subject || chapter.subject === values.subject)
@@ -325,15 +327,15 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
     <form className="form-stack" noValidate onSubmit={handleSubmit}>
       {errors._form && <div className="form-error" role="alert">{errors._form}</div>}
       <div className="form-grid two"><Field label="Test title" required error={errors.title} hint={values.title.length >= 120 ? `${values.title.length}/160 characters — long titles are trimmed with an ellipsis in lists` : undefined}><input autoFocus required maxLength={160} value={values.title} onChange={event => patch('title', event.target.value)} placeholder="e.g. Electrostatics weekly test" /></Field><Field label="Date" required error={errors.test_date}><input type="date" required value={values.test_date} onChange={event => patch('test_date', event.target.value)} /></Field></div>
-      <div className="form-grid two"><Field label="Test type"><select value={values.test_type} onChange={event => patch('test_type', event.target.value as TestType)}>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field><Field label="Subject"><select value={values.subject} onChange={event => { patch('subject', event.target.value as Subject | ''); patch('chapter_id', '') }}><option value="">— choose subject —</option>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
+      <div className="form-grid two"><Field label="Test type"><select value={values.test_type} onChange={event => patch('test_type', event.target.value as TestType)}>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field><Field label="Subject"><select value={values.subject} onChange={event => { patch('subject', event.target.value as Subject | ''); patch('chapter_id', '') }}><option value="">— choose subject —</option>{formSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
       {presetChapter && <div className="preset-chapter-note" role="status"><BookOpen size={15} aria-hidden="true" /><span>Chapter preselected from Weak areas: <strong>{presetChapter.name}</strong><SubjectBadge subject={presetChapter.subject} /></span></div>}
       <Field label="Chapter (optional)" error={errors.chapter_id}><select value={values.chapter_id} onChange={event => patch('chapter_id', event.target.value)}><option value="">— choose chapter —</option>{chapterOptions.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field>
-      {values.test_type === 'Full Mock' ? <div className="mock-score-section"><div><span className="field-label">Subject scores <small>(enter each result that you have)</small></span><span className="field-hint">The overall result sums all three subjects. Each subject score is checked against its own total; leave unknown scores blank.</span></div><div className="mock-score-grid">{SUBJECTS.map(subject => {
+      {values.test_type === 'Full Mock' ? <div className="mock-score-section"><div><span className="field-label">Subject scores <small>(enter each result that you have)</small></span><span className="field-hint">The overall result sums every subject. Each subject score is checked against its own total; leave unknown scores blank.</span></div><div className="mock-score-grid">{Object.entries(values.mockScores).map(([subject, part]) => {
         const marksError = errors[`${subject}.marks`]
         const totalError = errors[`${subject}.total`]
         const marksErrorId = `mock-${subject.toLowerCase()}-marks-error`
         const totalErrorId = `mock-${subject.toLowerCase()}-total-error`
-        return <div className={`mock-score-entry mock-${subject.toLowerCase()} ${marksError || totalError ? 'has-error' : ''}`} key={subject}><SubjectBadge subject={subject} /><div><input type="number" min="0" max={subjectScoreMax(values.mockScores[subject].total)} step="0.5" aria-label={`${subject} marks`} aria-invalid={marksError ? 'true' : undefined} aria-describedby={marksError ? marksErrorId : undefined} placeholder="Marks" value={values.mockScores[subject].marks} onChange={event => patchScore(subject, 'marks', event.target.value)} /><span>/</span><input type="number" min="1" max={MAX_TOTAL_MARKS} step="1" aria-label={`${subject} total marks`} aria-invalid={totalError ? 'true' : undefined} aria-describedby={totalError ? totalErrorId : undefined} placeholder="Total" value={values.mockScores[subject].total} onChange={event => patchScore(subject, 'total', event.target.value)} /></div>{marksError && <span className="field-error mock-score-error" id={marksErrorId} role="alert">{marksError}</span>}{totalError && <span className="field-error mock-score-error" id={totalErrorId} role="alert">{totalError}</span>}</div>
+        return <div className={`mock-score-entry mock-${subject.toLowerCase()} ${marksError || totalError ? 'has-error' : ''}`} key={subject}><SubjectBadge subject={subject} /><div><input type="number" min="0" max={subjectScoreMax(part.total)} step="0.5" aria-label={`${subject} marks`} aria-invalid={marksError ? 'true' : undefined} aria-describedby={marksError ? marksErrorId : undefined} placeholder="Marks" value={part.marks} onChange={event => patchScore(subject, 'marks', event.target.value)} /><span>/</span><input type="number" min="1" max={MAX_TOTAL_MARKS} step="1" aria-label={`${subject} total marks`} aria-invalid={totalError ? 'true' : undefined} aria-describedby={totalError ? totalErrorId : undefined} placeholder="Total" value={part.total} onChange={event => patchScore(subject, 'total', event.target.value)} /></div>{marksError && <span className="field-error mock-score-error" id={marksErrorId} role="alert">{marksError}</span>}{totalError && <span className="field-error mock-score-error" id={totalErrorId} role="alert">{totalError}</span>}</div>
       })}</div></div> : <div className="form-grid two"><Field label="Marks obtained" error={errors.marks}><input type="number" min="0" max={subjectScoreMax(values.total)} step="0.5" value={values.marks} onChange={event => patch('marks', event.target.value)} placeholder="Leave blank if unknown" /></Field><Field label="Total marks" error={errors.total}><input type="number" min="1" max={MAX_TOTAL_MARKS} step="1" value={values.total} onChange={event => patch('total', event.target.value)} placeholder="e.g. 120" /></Field></div>}
       <div className="form-grid three"><Field label="Correct" error={errors.correct}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.correct} onChange={event => patch('correct', event.target.value)} placeholder="—" /></Field><Field label="Wrong" error={errors.wrong}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.wrong} onChange={event => patch('wrong', event.target.value)} placeholder="—" /></Field><Field label="Skipped" error={errors.skipped}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.skipped} onChange={event => patch('skipped', event.target.value)} placeholder="—" /></Field></div>
       <div className="form-grid two"><Field label="Negative marks" error={errors.negative_marks}><input type="number" min="0" max={MAX_NEGATIVE_MARKS} step="0.25" value={values.negative} onChange={event => patch('negative', event.target.value)} placeholder="No estimate" /></Field><Field label="Time taken (minutes)" error={errors.time_minutes}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.time} onChange={event => patch('time', event.target.value)} placeholder="Optional" /></Field></div>

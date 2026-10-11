@@ -14,13 +14,13 @@ const dateValue = z.iso.date()
 const timestampValue = z.iso.datetime({ offset: true })
 const optionalDateValue = dateValue.nullable()
 const baseFields = { id: z.string().uuid(), created_at: timestampValue, updated_at: timestampValue, user_id: z.string().uuid().optional() }
-const chapterSchema = z.object({ ...baseFields, subject: z.enum(['Physics','Chemistry','Maths']), name: z.string().min(1).max(140), position: z.number().finite().int().min(0).max(POSTGRES_INTEGER_MAX), status: z.enum(['Not Started','Studying','Done','Revised']), priority: z.enum(['High','Medium','Low']), importance: z.enum(['high','medium','low']).default('medium'), weightage: z.string().max(80).nullable(), notes: z.string().max(20000), formula_notes: z.string().max(20000), completed_on: optionalDateValue })
+const chapterSchema = z.object({ ...baseFields, subject: z.string().trim().min(1).max(60), name: z.string().min(1).max(140), position: z.number().finite().int().min(0).max(POSTGRES_INTEGER_MAX), status: z.enum(['Not Started','Studying','Done','Revised']), priority: z.enum(['High','Medium','Low']), importance: z.enum(['high','medium','low']).default('medium'), weightage: z.string().max(80).nullable(), notes: z.string().max(20000), formula_notes: z.string().max(20000), completed_on: optionalDateValue })
 const revisionSchema = z.object({ ...baseFields, chapter_id: z.string().uuid(), revision_number: z.number().finite().int().positive().max(POSTGRES_INTEGER_MAX), due_on: dateValue, completed_at: timestampValue.nullable() })
-const testSchema = z.object({ ...baseFields, ...testFormSchema.shape, subject: z.enum(['Physics','Chemistry','Maths']).nullable(), chapter_id: z.string().uuid().nullable() }).superRefine((value, context) => {
+const testSchema = z.object({ ...baseFields, ...testFormSchema.shape, subject: z.string().trim().min(1).max(60).nullable(), chapter_id: z.string().uuid().nullable() }).superRefine((value, context) => {
   const result = testFormSchema.safeParse(value)
   if (!result.success) for (const issue of result.error.issues) context.addIssue({ ...issue, path: issue.path })
 })
-const subjectScoreSchema = z.object({ ...baseFields, test_id: z.string().uuid(), subject: z.enum(['Physics','Chemistry','Maths']), marks_obtained: marksObtainedSchema, total_marks: totalMarksSchema }).superRefine((value, context) => {
+const subjectScoreSchema = z.object({ ...baseFields, test_id: z.string().uuid(), subject: z.string().trim().min(1).max(60), marks_obtained: marksObtainedSchema, total_marks: totalMarksSchema }).superRefine((value, context) => {
   const result = subjectScoreInputSchema.safeParse(value)
   if (!result.success) for (const issue of result.error.issues) context.addIssue({ ...issue, path: issue.path })
 })
@@ -29,12 +29,12 @@ const chapterLinkSchema = z.object({ ...baseFields, test_id: z.string().uuid(), 
   if (!result.success) for (const issue of result.error.issues) context.addIssue({ ...issue, path: issue.path })
 })
 const mistakeSchema = z.object({ ...baseFields, chapter_id: z.string().uuid(), test_id: z.string().uuid().nullable(), mistake_type: z.enum(['Concept','Silly','Calculation','Time','Guess']), question_note: z.string().min(1).max(10000), solution_note: z.string().max(10000), image_path: z.string().max(500).nullable(), image_data: z.string().max(7_000_000).regex(/^data:image\/(?:webp|png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/).nullable().optional(), retry_later: z.boolean(), retry_status: z.enum(['pending','retried']) })
-const taskSchema = z.object({ ...baseFields, title: z.string().min(1).max(200), subject: z.enum(['Physics','Chemistry','Maths']).nullable(), chapter_id: z.string().uuid().nullable(), estimated_minutes: z.number().finite().int().nonnegative().max(1440), priority: z.enum(['High','Medium','Low']), is_completed: z.boolean(), task_date: dateValue, position: z.number().finite().int().nonnegative().max(POSTGRES_INTEGER_MAX) })
+const taskSchema = z.object({ ...baseFields, title: z.string().min(1).max(200), subject: z.string().trim().min(1).max(60).nullable(), chapter_id: z.string().uuid().nullable(), estimated_minutes: z.number().finite().int().nonnegative().max(1440), priority: z.enum(['High','Medium','Low']), is_completed: z.boolean(), task_date: dateValue, position: z.number().finite().int().nonnegative().max(POSTGRES_INTEGER_MAX) })
 const goalSchema = z.preprocess(value => {
   if (value && typeof value === 'object' && !Array.isArray(value) && !('progress_value' in value)) return { ...value, progress_value: 0 }
   return value
 }, appGoalSchema.extend(baseFields))
-const sessionSchema = z.object({ ...baseFields, subject: z.enum(['Physics','Chemistry','Maths']).nullable(), chapter_id: z.string().uuid().nullable(), started_at: timestampValue, ended_at: timestampValue.nullable(), duration_minutes: z.number().finite().int().nonnegative().max(1440), completion_state: z.enum(['completed','interrupted']), mode: z.enum(['Pomodoro','Short Break','Long Break','Custom']), activity: z.enum(STUDY_ACTIVITIES).default('Practice') })
+const sessionSchema = z.object({ ...baseFields, subject: z.string().trim().min(1).max(60).nullable(), chapter_id: z.string().uuid().nullable(), started_at: timestampValue, ended_at: timestampValue.nullable(), duration_minutes: z.number().finite().int().nonnegative().max(1440), completion_state: z.enum(['completed','interrupted']), mode: z.enum(['Pomodoro','Short Break','Long Break','Custom']), activity: z.enum(STUDY_ACTIVITIES).default('Practice') })
 const settingsSchema = appSettingsSchema.extend({ ...baseFields, last_backup_at: timestampValue.nullable() })
 const profileSchema = z.object({ ...baseFields, display_name: z.string().max(100), email: z.string().max(320) })
 const envelopeSchema = z.object({

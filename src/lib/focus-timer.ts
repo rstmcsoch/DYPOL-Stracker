@@ -25,7 +25,6 @@ export const defaultTimerState: TimerState = {
 }
 
 const FOCUS_MODES: FocusMode[] = ['Pomodoro', 'Short Break', 'Long Break', 'Custom']
-const SUBJECTS: Subject[] = ['Physics', 'Chemistry', 'Maths']
 const FOCUS_ACTIVITIES: StudyActivity[] = ['Lecture', 'Practice', 'Revision', 'Mock/Test', 'PYQ practice']
 const MAX_TIMER_MINUTES = 180
 
@@ -60,7 +59,7 @@ export function sanitizeTimerState(input: unknown, now = Date.now()): TimerState
     segmentStartedAt: shouldRun ? segmentStartedAt : null,
     elapsedSeconds: typeof rawElapsed === 'number' && Number.isFinite(rawElapsed) ? Math.max(0, Math.min(MAX_TIMER_MINUTES * 60, rawElapsed)) : 0,
     focusStartedAt: typeof parsed.focusStartedAt === 'string' && Number.isFinite(Date.parse(parsed.focusStartedAt)) ? parsed.focusStartedAt : null,
-    subject: SUBJECTS.includes(parsed.subject as Subject) ? parsed.subject as Subject : null,
+    subject: typeof parsed.subject === 'string' && parsed.subject.trim() && parsed.subject.length <= 60 ? parsed.subject as Subject : null,
     chapterId: typeof parsed.chapterId === 'string' ? parsed.chapterId : null,
     taskId: typeof parsed.taskId === 'string' ? parsed.taskId : null,
     finished: parsed.finished === true,

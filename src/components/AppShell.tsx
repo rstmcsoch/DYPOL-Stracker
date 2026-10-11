@@ -19,6 +19,7 @@ import type { AppData, DailyTask, Priority, Subject } from '../types'
 import { useSiteValues } from '../contexts/SiteContentContext'
 import { navCaptionFor, navLabelFor } from '../lib/site-content/nav'
 import type { SiteValues } from '../lib/site-content/content'
+import { useExamSubjects } from '../lib/exams/useExamSubjects'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
 interface NavigationGroup { caption: string; items: NavigationItem[] }
@@ -245,6 +246,7 @@ function PageLoading() {
 }
 
 function QuickTaskDialog({ data, onClose }: { data: AppData; onClose: () => void }) {
+  const quickSubjects = useExamSubjects()
   const { upsert } = useData()
   const { notify } = useToast()
   const [taskId] = useState(() => createId())
@@ -291,7 +293,7 @@ function QuickTaskDialog({ data, onClose }: { data: AppData; onClose: () => void
   return <Dialog title="A small step for today" subtitle="Add a task to your study plan." onClose={onClose}>
     <form className="form-stack" noValidate onSubmit={save}>
       <Field label="What do you want to do?" required error={fieldErrors.title}><input autoFocus required maxLength={200} placeholder="e.g. Revise Kirchhoff's laws" value={title} onChange={event => { setTitle(event.target.value); setFieldErrors(current => { const next = { ...current }; delete next.title; return next }) }} /></Field>
-      <div className="form-grid two"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option><option>Physics</option><option>Chemistry</option><option>Maths</option></select></Field>
+      <div className="form-grid two"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{quickSubjects.map(item => <option key={item}>{item}</option>)}</select></Field>
         <Field label="Chapter"><select value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="">Choose chapter</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field></div>
       <div className="form-grid two"><Field label="Estimated time (min)" error={fieldErrors.estimated_minutes}><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => { setMinutes(event.target.value); setFieldErrors(current => { const next = { ...current }; delete next.estimated_minutes; return next }) }} /></Field>
         <Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>

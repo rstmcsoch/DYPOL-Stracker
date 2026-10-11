@@ -8,7 +8,8 @@ import { createId } from '../lib/id'
 import { indiaToday, plusDays } from '../lib/date'
 import type { Chapter, ChapterImportance, ChapterStatus, Priority, Subject } from '../types'
 import { ChapterStageEditor } from '../components/jee/ChapterStageEditor'
-import { SUBJECTS } from '../types'
+import { useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
+import { subjectColor, subjectSlug } from '../lib/exams/subjects'
 
 const STATUSES: ChapterStatus[] = ['Not Started', 'Studying', 'Done', 'Revised']
 const PRIORITIES: Priority[] = ['High', 'Medium', 'Low']
@@ -16,6 +17,8 @@ const PRIORITIES: Priority[] = ['High', 'Medium', 'Low']
 type StrengthFilter = 'all' | 'Weak' | 'Okay' | 'Strong'
 
 export default function SyllabusPage() {
+  const subjectList = useReportSubjects()
+  const examSubjectList = useExamSubjects()
   const { data, upsert, upsertMany, remove } = useData()
   const { notify } = useToast()
   const performance = useMemo(() => getChapterPerformance(data), [data])
@@ -214,22 +217,21 @@ export default function SyllabusPage() {
     finally { deletingChapterRef.current = false; setDeletingChapter(false) }
   }
 
-  const subjectCounts = SUBJECTS.map(subject => {
+  const subjectCounts = subjectList.map(subject => {
     const rows = data.chapters.filter(item => item.subject === subject)
     const complete = rows.filter(item => item.status === 'Done' || item.status === 'Revised').length
-    const colors: Record<Subject, string> = { Physics: 'var(--subject-physics)', Chemistry: 'var(--subject-chemistry)', Maths: 'var(--subject-maths)' }
-    return { subject, total: rows.length, complete, color: colors[subject] }
+    return { subject, total: rows.length, complete, color: subjectColor(subject) }
   })
 
   return <div className="content-page syllabus-page">
-    <PageHeader eyebrow="THE MAP, NOT THE DESTINATION" title="Syllabus" subtitle="Make the big list feel smaller. Keep track of what’s next." doodle={<span>✎</span>} action={<Button onClick={() => setCreateSubject('Physics')}><Plus size={17} /> Add chapter</Button>} />
-    <div className="syllabus-progress-strip">{subjectCounts.map(item => <NotebookCard key={item.subject} className={`subject-progress-card subject-progress-${item.subject.toLowerCase()}`}><div className="subject-progress-top"><SubjectBadge subject={item.subject} withMark /><span><strong>{item.complete}</strong> / {item.total} done</span></div><ProgressBar value={item.total ? item.complete / item.total * 100 : 0} color={item.color} /><span className="subject-progress-foot">{item.total ? Math.round(item.complete / item.total * 100) : 0}% mapped</span></NotebookCard>)}</div>
+    <PageHeader eyebrow="THE MAP, NOT THE DESTINATION" title="Syllabus" subtitle="Make the big list feel smaller. Keep track of what’s next." doodle={<span>✎</span>} action={<Button onClick={() => setCreateSubject(examSubjectList[0] ?? 'Physics')}><Plus size={17} /> Add chapter</Button>} />
+    <div className="syllabus-progress-strip">{subjectCounts.map(item => <NotebookCard key={item.subject} className={`subject-progress-card subject-progress-${subjectSlug(item.subject)}`}><div className="subject-progress-top"><SubjectBadge subject={item.subject} withMark /><span><strong>{item.complete}</strong> / {item.total} done</span></div><ProgressBar value={item.total ? item.complete / item.total * 100 : 0} color={item.color} /><span className="subject-progress-foot">{item.total ? Math.round(item.complete / item.total * 100) : 0}% mapped</span></NotebookCard>)}</div>
     <NotebookCard className="syllabus-board">
       <div className="board-heading"><div><span className="handwriting-label">Your study map</span><p>{data.chapters.length} chapters across three subjects. Move at your own pace.</p></div><span className="board-doodle" aria-hidden="true">✳</span></div>
       <div className="syllabus-filters">
         <div className="search-field syllabus-search"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Find a chapter or note…" aria-label="Search chapters and notes" />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div>
         <div className="filter-controls">
-          <select aria-label="Filter subject" value={subjectFilter} onChange={event => setSubjectFilter(event.target.value as 'all' | Subject)}><option value="all">All subjects</option>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select>
+          <select aria-label="Filter subject" value={subjectFilter} onChange={event => setSubjectFilter(event.target.value as 'all' | Subject)}><option value="all">All subjects</option>{subjectList.map(subject => <option key={subject}>{subject}</option>)}</select>
           <select aria-label="Filter status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as 'all' | ChapterStatus)}><option value="all">All statuses</option>{STATUSES.map(status => <option key={status}>{status}</option>)}</select>
           <details className="filter-popover"><summary><Filter size={15} /> More filters <ChevronDown size={13} /></summary><div className="filter-popover-body"><label>Priority<select value={priorityFilter} onChange={event => setPriorityFilter(event.target.value as 'all' | Priority)}><option value="all">Any priority</option>{PRIORITIES.map(item => <option key={item}>{item}</option>)}</select></label><label>Performance<select value={strengthFilter} onChange={event => setStrengthFilter(event.target.value as StrengthFilter)}><option value="all">Any performance</option><option>Weak</option><option>Okay</option><option>Strong</option></select></label><label>Test history<select value={testedFilter} onChange={event => setTestedFilter(event.target.value as 'all' | 'tested' | 'untested')}><option value="all">Any</option><option value="tested">Tested</option><option value="untested">Untested</option></select></label></div></details>
           {(search || subjectFilter !== 'all' || statusFilter !== 'all' || priorityFilter !== 'all' || strengthFilter !== 'all' || testedFilter !== 'all') && <button className="clear-filter" onClick={clearFilters}>Clear</button>}
@@ -315,6 +317,7 @@ function ChapterRow({ item, dragged, dropTarget, busy, canMoveUp, canMoveDown, o
 }
 
 function ChapterDialog({ chapter: initial, onClose, onSave, isNew = false }: { chapter: Chapter; onClose: () => void; onSave: (chapter: Chapter) => Promise<void>; isNew?: boolean }) {
+  const dialogSubjects = useExamSubjects(initial.subject)
   const [chapter, setChapter] = useState(initial)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
@@ -328,7 +331,7 @@ function ChapterDialog({ chapter: initial, onClose, onSave, isNew = false }: { c
   }
   return <Dialog title={isNew ? 'Add a chapter' : 'Chapter notes'} subtitle="A good study map leaves space for your own thinking." onClose={onClose} className="chapter-dialog">
     <div className="form-stack">
-      <div className="form-grid two"><Field label="Chapter name" required><input autoFocus maxLength={140} value={chapter.name} onChange={event => set('name', event.target.value)} placeholder="e.g. Centre of Mass" /></Field><Field label="Subject"><select value={chapter.subject} onChange={event => set('subject', event.target.value as Subject)}>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
+      <div className="form-grid two"><Field label="Chapter name" required><input autoFocus maxLength={140} value={chapter.name} onChange={event => set('name', event.target.value)} placeholder="e.g. Centre of Mass" /></Field><Field label="Subject"><select value={chapter.subject} onChange={event => set('subject', event.target.value as Subject)}>{dialogSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
       <div className="form-grid three"><Field label="Status"><select value={chapter.status} onChange={event => set('status', event.target.value as ChapterStatus)}>{STATUSES.map(status => <option key={status}>{status}</option>)}</select></Field><Field label="Priority"><select value={chapter.priority} onChange={event => set('priority', event.target.value as Priority)}>{PRIORITIES.map(priority => <option key={priority}>{priority}</option>)}</select></Field><Field label="Weightage (optional)"><input maxLength={80} value={chapter.weightage ?? ''} onChange={event => set('weightage', event.target.value || null)} placeholder="e.g. 4–6 questions" /></Field></div>
       <Field label="Importance (drives weighted progress)" hint="Set in Settings → Exam → Weighted progress. Medium is the default for every chapter."><select value={chapter.importance ?? 'medium'} onChange={event => set('importance', event.target.value as ChapterImportance)}><option value="high">High importance</option><option value="medium">Medium importance</option><option value="low">Low importance</option></select></Field>
       <Field label="Study notes"><textarea rows={3} maxLength={20000} value={chapter.notes} onChange={event => set('notes', event.target.value)} placeholder="What do you want to remember about this chapter?" /></Field>

@@ -3,7 +3,7 @@ import { indiaDate } from '../date.js'
 import { studyMinutesByActivity, previousWeekRange, weekRange, type ActivityMinutes } from './study-time.js'
 import { aggregatePractice } from './progress.js'
 import type { AppData, Subject } from '../../types/index.js'
-import { SUBJECTS } from '../../types/index.js'
+import { subjectsFor } from '../exams/subjects.js'
 
 export interface SubjectSignal { subject: Subject; value: number; samples: number }
 
@@ -13,7 +13,8 @@ export interface SubjectSignal { subject: Subject; value: number; samples: numbe
  * of that subject. Returns null per subject when the range holds no usable data.
  */
 export function subjectSignals(data: AppData, from: string, to: string): Map<Subject, SubjectSignal | null> {
-  const values = new Map<Subject, number[]>(SUBJECTS.map(subject => [subject, []]))
+  const subjects = subjectsFor(data)
+  const values = new Map<Subject, number[]>(subjects.map(subject => [subject, []]))
   for (const test of data.tests) {
     if (test.test_date < from || test.test_date > to) continue
     if (test.test_type === 'Full Mock') {
@@ -27,12 +28,12 @@ export function subjectSignals(data: AppData, from: string, to: string): Map<Sub
     }
   }
   const chapterSubject = new Map(data.chapters.map(chapter => [chapter.id, chapter.subject]))
-  for (const subject of SUBJECTS) {
+  for (const subject of subjects) {
     const sessions = data.practiceSessions.filter(item => item.practice_date >= from && item.practice_date <= to && chapterSubject.get(item.chapter_id) === subject)
     const aggregate = aggregatePractice(sessions)
     if (aggregate.accuracy !== null && aggregate.attempted > 0) values.get(subject)?.push(aggregate.accuracy)
   }
-  return new Map(SUBJECTS.map(subject => {
+  return new Map(subjects.map(subject => {
     const list = values.get(subject) ?? []
     return [subject, list.length ? { subject, value: list.reduce((sum, value) => sum + value, 0) / list.length, samples: list.length } : null]
   }))
@@ -84,7 +85,7 @@ export function buildWeeklyReport(data: AppData, today: string): WeeklyReport {
     })()
 
   const comparisons: string[] = []
-  for (const subject of SUBJECTS) {
+  for (const subject of current.keys()) {
     const now = current.get(subject)
     const before = prior.get(subject)
     if (now && before) {

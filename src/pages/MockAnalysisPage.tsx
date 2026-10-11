@@ -9,7 +9,8 @@ import { createId, stableId } from '../lib/id'
 import { prettyDate } from '../lib/date'
 import { categoryTotals, mockInsights, mockSummary, subjectTimeRows } from '../lib/jee/mock-analysis'
 import { validateErrorLog, type ErrorLogFormInput, type ErrorLogValue } from '../lib/jee/forms'
-import { ERROR_CATEGORIES, SUBJECTS, type AppData, type ErrorCategory, type Subject, type TestErrorLog, type TestRecord, type TestTimeEntry } from '../types'
+import { ERROR_CATEGORIES, type AppData, type ErrorCategory, type Subject, type TestErrorLog, type TestRecord, type TestTimeEntry } from '../types'
+import { useExamSubjects } from '../lib/exams/useExamSubjects'
 
 export default function MockAnalysisPage() {
   const { data, upsert, upsertMany, remove } = useData()
@@ -144,6 +145,7 @@ export default function MockAnalysisPage() {
 function ClassifyDialog({ test, existing, onClose, onSave }: {
   test: TestRecord; existing?: TestErrorLog; onClose: () => void; onSave: (value: ErrorLogValue) => Promise<void>
 }) {
+  const classifySubjects = useExamSubjects(existing?.subject)
   const [form, setForm] = useState<ErrorLogFormInput>({
     testId: test.id, subject: existing?.subject ?? '', category: existing?.category ?? 'Silly mistake',
     marksLost: existing?.marks_lost != null ? String(existing.marks_lost) : '', questions: existing?.questions != null ? String(existing.questions) : '',
@@ -169,7 +171,7 @@ function ClassifyDialog({ test, existing, onClose, onSave }: {
   return <Dialog title={existing ? 'Edit classification' : 'Classify lost marks'} subtitle="What went wrong on this question or chunk of marks?" onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <div className="form-grid two">
-        <Field label="Subject"><select value={form.subject} onChange={event => set('subject', event.target.value as Subject | '')}><option value="">Not specified</option>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select></Field>
+        <Field label="Subject"><select value={form.subject} onChange={event => set('subject', event.target.value as Subject | '')}><option value="">Not specified</option>{classifySubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field>
         <Field label="Why did it happen?" error={errors.category} required><select value={form.category} onChange={event => set('category', event.target.value as ErrorCategory)}>{ERROR_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></Field>
       </div>
       <div className="form-grid two">
@@ -183,8 +185,9 @@ function ClassifyDialog({ test, existing, onClose, onSave }: {
 }
 
 function TimeDialog({ data, test, onClose, onSave }: { data: AppData; test: TestRecord; onClose: () => void; onSave: (entries: TestTimeEntry[]) => Promise<void> }) {
+  const timeSubjects = useExamSubjects()
   const existing = data.testTimeEntries.filter(entry => entry.test_id === test.id)
-  const [rows, setRows] = useState(() => SUBJECTS.map(subject => {
+  const [rows, setRows] = useState(() => [...new Set([...timeSubjects, ...existing.map(entry => entry.subject).filter((subject): subject is string => Boolean(subject))])].map(subject => {
     const row = existing.find(entry => entry.subject === subject)
     return { subject, minutes: row?.minutes != null ? String(row.minutes) : '', attempted: row?.attempted != null ? String(row.attempted) : '', unattempted: row?.unattempted != null ? String(row.unattempted) : '' }
   }))

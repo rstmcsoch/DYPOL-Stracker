@@ -7,7 +7,7 @@ import { useData } from '../contexts/DataContext'
 import { indiaToday } from '../lib/date'
 import type { StudyActivity, Subject } from '../types'
 import { STUDY_ACTIVITIES } from '../types'
-import { SUBJECTS } from '../types'
+import { useExamSubjects } from '../lib/exams/useExamSubjects'
 
 const MODES: { name: FocusMode; minutes: number; label: string; icon: React.ReactNode }[] = [
   { name: 'Pomodoro', minutes: 25, label: 'Focus', icon: <Focus size={15} /> },
@@ -18,6 +18,7 @@ const MODES: { name: FocusMode; minutes: number; label: string; icon: React.Reac
 
 export default function FocusPage() {
   const timer = useFocus()
+  const focusSubjects = useExamSubjects(timer.subject)
   const { running: timerRunning, pause: pauseTimer, start: startTimer } = timer
   const { data } = useData()
   const navigate = useNavigate()
@@ -65,7 +66,7 @@ export default function FocusPage() {
       <div className="focus-primary-actions">{timer.running ? <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.pause}><Pause size={18} /> Pause <kbd>Space</kbd></Button> : <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.start}><Play size={17} fill="currentColor" /> {timer.finished ? 'Start another block' : timer.remainingSeconds < timer.focusMinutes * 60 ? 'Resume focus' : 'Begin focus'} <kbd>Space</kbd></Button>}{(timer.running || timer.elapsedSeconds > 0 || timer.finished) && <button className="focus-reset-button" onClick={timer.reset} aria-label="Reset timer"><RotateCcw size={16} /> Reset</button>}</div>
       <div className="focus-context-card"><div className="focus-context-head"><BookOpen size={15} /><span>KEEP THIS BLOCK GROUNDED</span><span className="context-free-note">Optional</span></div><div className="focus-context-fields">
         <label><span>Activity</span><select value={timer.activity} disabled={timer.running} onChange={event => timer.setActivity(event.target.value as StudyActivity)} aria-describedby="focus-activity-note">{STUDY_ACTIVITIES.map(item => <option key={item} value={item}>{item}</option>)}</select><small id="focus-activity-note" className="jee-small jee-muted">Lecture, practice, revision — tracked separately.</small></label>
-        <label><span>Subject</span><select value={timer.subject ?? ''} disabled={timer.running} onChange={event => chooseSubject(event.target.value)}><option value="">Choose a subject</option>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select></label>
+        <label><span>Subject</span><select value={timer.subject ?? ''} disabled={timer.running} onChange={event => chooseSubject(event.target.value)}><option value="">Choose a subject</option>{focusSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></label>
         <div className="focus-picker-field"><span id="focus-chapter-label">Chapter</span>
           <button type="button" className="focus-picker-trigger" disabled={timer.running} aria-haspopup="dialog" aria-labelledby="focus-chapter-label" onClick={() => setChapterPickerOpen(true)}>
             {selectedChapter ? <><span className="focus-picker-value">{selectedChapter.name}</span><SubjectBadge subject={selectedChapter.subject} /></> : <span className="focus-picker-placeholder">Search chapters…</span>}

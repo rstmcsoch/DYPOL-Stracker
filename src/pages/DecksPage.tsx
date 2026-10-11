@@ -9,10 +9,12 @@ import { createId } from '../lib/id'
 import { indiaToday, prettyDate } from '../lib/date'
 import { reviewCard, dueCards, type CardRating } from '../lib/jee/cards'
 import type { CardKind, StudyCard } from '../types'
+import { useReportSubjects } from '../lib/exams/useExamSubjects'
 
 type KindFilter = 'all' | CardKind
 
 export default function DecksPage() {
+  const deckSubjects = useReportSubjects()
   const { data, upsert, remove, upsertMany } = useData()
   const { notify } = useToast()
   const [params] = useSearchParams()
@@ -20,7 +22,7 @@ export default function DecksPage() {
   const dueOverall = useMemo(() => dueCards(data.studyCards, today), [data.studyCards, today])
   const defaultChapter = params.get('chapter') ?? dueOverall[0]?.chapter_id ?? data.chapters.find(chapter => chapter.formula_notes.trim())?.id ?? data.chapters[0]?.id ?? ''
   const [chapterId, setChapterId] = useState(defaultChapter)
-  const [subject, setSubject] = useState<'all' | 'Physics' | 'Chemistry' | 'Maths'>('all')
+  const [subject, setSubject] = useState<string>('all')
   const [kind, setKind] = useState<KindFilter>('all')
   const [reviewing, setReviewing] = useState(false)
   const [editing, setEditing] = useState<StudyCard | 'new' | null>(null)
@@ -69,7 +71,7 @@ export default function DecksPage() {
 
     <NotebookCard className="jee-filter-card">
       <div className="jee-filter-grid">
-        <label className="jee-select"><span>Subject</span><select value={subject} onChange={event => setSubject(event.target.value as typeof subject)}><option value="all">All subjects</option><option>Physics</option><option>Chemistry</option><option>Maths</option></select></label>
+        <label className="jee-select"><span>Subject</span><select value={subject} onChange={event => setSubject(event.target.value as typeof subject)}><option value="all">All subjects</option>{deckSubjects.map(item => <option key={item}>{item}</option>)}</select></label>
         <ChapterSelect chapters={data.chapters} value={chapterId} onChange={setChapterId} subject={subject} label="Chapter" />
       </div>
       <ChipFilter<KindFilter> label="Deck" value={kind} onChange={setKind} options={[{ value: 'all', label: 'Both' }, { value: 'formula', label: 'Formulas' }, { value: 'flashcard', label: 'Flashcards' }]} />

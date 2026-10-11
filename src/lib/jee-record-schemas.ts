@@ -12,7 +12,7 @@ import { POSTGRES_INTEGER_MAX } from './test-validation.js'
 const dateValue = z.iso.date()
 const timestampValue = z.iso.datetime({ offset: true })
 const uuid = z.string().uuid()
-const subjectValue = z.enum(['Physics', 'Chemistry', 'Maths'])
+const subjectValue = z.string().trim().min(1).max(60)
 const baseFields = {
   id: uuid, created_at: timestampValue, updated_at: timestampValue, user_id: uuid.optional()
 }

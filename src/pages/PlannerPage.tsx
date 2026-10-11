@@ -11,7 +11,7 @@ import { taskInputSchema } from '../lib/task-validation'
 import { indiaDate, indiaToday, prettyDate } from '../lib/date'
 import { fmtDuration, fmtNumber } from '../lib/format'
 import type { DailyTask, GoalType, Priority, Subject, WeeklyGoal } from '../types'
-import { SUBJECTS } from '../types'
+import { useExamSubjects } from '../lib/exams/useExamSubjects'
 
 const goalTypes: { type: GoalType; title: string; unit: string }[] = [
   { type: 'study_hours', title: 'Study hours', unit: 'hours' }, { type: 'tests', title: 'Tests', unit: 'tests' },
@@ -156,6 +156,7 @@ function PlannerTaskRow({ task, chapter, dragged, onToggle, onEdit, onDuplicate,
 }
 
 function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: DailyTask | null; defaultDate: string; data: ReturnType<typeof useData>['data']; onClose: () => void; onSave: (task: DailyTask) => Promise<void> }) {
+  const taskSubjects = useExamSubjects(initial?.subject)
   const { notify } = useToast()
   const now = new Date().toISOString()
   const [taskId] = useState(() => initial?.id ?? createId())
@@ -202,7 +203,7 @@ function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: 
   return <Dialog title={initial ? 'Edit your task' : 'Plan a study task'} subtitle="You can change the day later. A plan should flex with you." onClose={onClose}>
     <form className="form-stack" noValidate onSubmit={submit}><Field label="Task" required error={errors.title}><input autoFocus required maxLength={200} value={title} onChange={event => { setTitle(event.target.value); clearError('title') }} placeholder="e.g. Practice 15 integration problems" /></Field>
       <div className="form-grid two"><Field label="Date" error={errors.task_date}><input type="date" required value={date} onChange={event => { setDate(event.target.value); clearError('task_date') }} /></Field><Field label="Estimated minutes" error={errors.estimated_minutes}><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => { setMinutes(event.target.value); clearError('estimated_minutes') }} /></Field></div>
-      <div className="form-grid three"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{SUBJECTS.map(item => <option key={item}>{item}</option>)}</select></Field><Field label="Chapter" error={errors.chapter_id}><select value={chapterId} onChange={event => { setChapterId(event.target.value); clearError('chapter_id') }}><option value="">None</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field><Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
+      <div className="form-grid three"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{taskSubjects.map(item => <option key={item}>{item}</option>)}</select></Field><Field label="Chapter" error={errors.chapter_id}><select value={chapterId} onChange={event => { setChapterId(event.target.value); clearError('chapter_id') }}><option value="">None</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field><Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button><Button type="submit" loading={saving}>{initial ? 'Save task' : 'Add task'}</Button></div>
     </form>
   </Dialog>

@@ -1,7 +1,8 @@
 import type {
   AppData, AppSettings, Chapter, ChapterImportance, ChapterStageKey, PracticeSession, PYQExam, PyqRecord, Subject
 } from '../../types/index.js'
-import { CHAPTER_STAGE_KEYS, SUBJECTS } from '../../types/index.js'
+import { CHAPTER_STAGE_KEYS } from '../../types/index.js'
+import { examSubjects } from '../exams/subjects.js'
 
 /* ------------------------------------------------------------------ */
 /* Importance weights — configurable in Settings, never hardcoded here */
@@ -48,7 +49,7 @@ export function syllabusProgress(chapters: Chapter[], settings: AppSettings): Sy
   const overall = ratio(chapters)
   return {
     raw: overall.raw, weighted: overall.weighted, completedChapters: overall.completed, totalChapters: overall.total,
-    bySubject: SUBJECTS.map(subject => ({ subject, ...ratio(chapters.filter(chapter => chapter.subject === subject)) }))
+    bySubject: [...new Set([...examSubjects(settings), ...chapters.map(chapter => chapter.subject)])].map(subject => ({ subject, ...ratio(chapters.filter(chapter => chapter.subject === subject)) }))
   }
 }
 

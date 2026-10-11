@@ -14,12 +14,13 @@ import type { Subject } from '../../types'
  */
 const SAMPLE = {
   streakDays: 7,
-  done: { Physics: 12, Chemistry: 11, Maths: 13 } as Record<Subject, number>,
+  done: { Physics: 12, Chemistry: 11, Maths: 13 } as Record<SampleSubject, number>,
   test: { title: 'Rotational Motion · Chapter Test', marks: 41, totalMarks: 60, correct: 11, wrong: 3, skipped: 1 },
   revision: { chapter: 'Current Electricity', number: 2 }
 }
 
-const SUBJECTS: Subject[] = ['Physics', 'Chemistry', 'Maths']
+type SampleSubject = 'Physics' | 'Chemistry' | 'Maths'
+const SUBJECTS: SampleSubject[] = ['Physics', 'Chemistry', 'Maths']
 
 const TASKS = [
   { title: 'Current Electricity — formulas + PYQs', subject: 'Physics' as Subject, minutes: 45, done: true },
@@ -28,7 +29,7 @@ const TASKS = [
 ]
 
 export function NotebookPreview() {
-  const totals = SUBJECTS.map(subject => ({ subject, total: SYLLABUS[subject].length, done: SAMPLE.done[subject] }))
+  const totals = SUBJECTS.map(subject => ({ subject, total: SYLLABUS[subject]?.length ?? 0, done: SAMPLE.done[subject] }))
   const chaptersDone = totals.reduce((sum, item) => sum + item.done, 0)
   const chaptersTotal = totals.reduce((sum, item) => sum + item.total, 0)
   const covered = Math.round(chaptersDone / chaptersTotal * 100)
