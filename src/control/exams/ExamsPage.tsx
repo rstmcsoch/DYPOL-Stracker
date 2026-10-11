@@ -26,7 +26,7 @@ export default function ExamsPage() {
   const refresh = () => client.invalidateQueries({ queryKey: ['control', 'exams'] })
   const fail = (error: unknown) => setProblem(error instanceof Error ? error.message : 'That did not work. Nothing changed.')
   const save = useMutation({
-    mutationFn: (exam: Omit<ExamDefinition, 'sort_order'> & { sort_order?: number }) => controlFetch('exams', { method: 'PUT', body: { exam } }),
+    mutationFn: (exam: Omit<ExamDefinition, 'sort_order' | 'subjects' | 'session_label'> & { sort_order?: number }) => controlFetch('exams', { method: 'PUT', body: { exam } }),
     onSuccess: () => { setDraft(null); setProblem(null); setNotice('Saved. Students see the change the next time the exam list loads.'); void refresh() },
     onError: fail
   })
@@ -61,7 +61,7 @@ export default function ExamsPage() {
     reorder.mutate(order)
   }
 
-  const toggleHidden = (exam: ExamDefinition) => save.mutate({ ...exam, hidden: !exam.hidden })
+  const toggleHidden = (exam: ExamDefinition) => save.mutate({ id: exam.id, name: exam.name, category: exam.category, years: exam.years, sessions: exam.sessions, boards: exam.boards, boards_addon: exam.boards_addon, sort_order: exam.sort_order, hidden: !exam.hidden })
   const busy = save.isPending || reorder.isPending
 
   return <>

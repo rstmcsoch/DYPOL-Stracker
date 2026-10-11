@@ -19,6 +19,10 @@ export interface ExamDefinition {
   boards: string[]
   /** Student may add Class 12 boards as an extra track alongside this exam. */
   boards_addon: boolean
+  /** Subjects/sections shown in every subject picker for this exam (owner-editable). */
+  subjects: string[]
+  /** Label for `sessions`, e.g. "Attempt" or "Stream". Empty = "Attempt / session". */
+  session_label: string
   sort_order: number
   hidden: boolean
 }
@@ -30,43 +34,63 @@ export const SCHOOL_BOARDS = ['CBSE', 'ICSE / ISC', 'State board', 'Other board'
 const CA_INTER_MONTHS = ['January', 'May', 'September']
 const TWICE_A_YEAR_JUNE_DEC = ['June', 'December']
 
-type Seed = [id: string, name: string, category: string, options?: Partial<Pick<ExamDefinition, 'sessions' | 'boards' | 'boards_addon'>>]
+/** Class 11/12 streams. Subject lists follow the CBSE senior-secondary scheme (core + common electives). */
+export const SCHOOL_STREAMS: Record<string, string[]> = {
+  'Science (PCM)': ['English', 'Physics', 'Chemistry', 'Maths'],
+  'Science (PCB)': ['English', 'Physics', 'Chemistry', 'Biology'],
+  'Science (PCMB)': ['English', 'Physics', 'Chemistry', 'Maths', 'Biology'],
+  Commerce: ['English', 'Accountancy', 'Business Studies', 'Economics', 'Maths'],
+  Humanities: ['English', 'History', 'Political Science', 'Geography', 'Economics', 'Psychology', 'Sociology']
+}
+const STREAMS = Object.keys(SCHOOL_STREAMS)
+const SENIOR_SECONDARY = [...new Set(Object.values(SCHOOL_STREAMS).flat())]
+/** Existing JEE notebooks use these exact names, so PCM exams reuse them ("Maths", not "Mathematics"). */
+const PCM = ['Physics', 'Chemistry', 'Maths']
+
+type Seed = [id: string, name: string, category: string, subjects: string[], options?: Partial<Pick<ExamDefinition, 'sessions' | 'boards' | 'boards_addon' | 'session_label'>>]
 const ADDON = { boards_addon: true }
+/* Subjects verified against the 2026 official bulletins/syllabi (NTA, State CET Cell, BITS, VIT,
+   COMEDK, WBJEEB, KEA, Consortium of NLUs, UPSC, CBSE, ICAI, ICSI, ICMAI, IIT GATE, IIM CAT, SSC,
+   IBPS, SBI). Owners can edit them in Control Center > Exams. */
 const SEEDS: Seed[] = [
-  ['jee', 'JEE (Main + Advanced)', 'Engineering', ADDON],
-  ['mht-cet', 'MHT CET', 'Engineering', ADDON],
-  ['bitsat', 'BITSAT', 'Engineering', ADDON],
-  ['viteee', 'VITEEE', 'Engineering', ADDON],
-  ['comedk-uget', 'COMEDK UGET', 'Engineering', ADDON],
-  ['wbjee', 'WBJEE', 'Engineering', ADDON],
-  ['kcet', 'KCET', 'Engineering', ADDON],
-  ['neet-ug', 'NEET UG', 'Medical', ADDON],
-  ['cuet-ug', 'CUET UG', 'University admission', ADDON],
-  ['clat', 'CLAT', 'Law', ADDON],
-  ['nda', 'NDA & NA', 'Defence', { boards_addon: true, sessions: ['NDA I', 'NDA II'] }],
-  ['class-9', 'Class 9', 'School', { boards: SCHOOL_BOARDS }],
-  ['class-10', 'Class 10', 'School', { boards: SCHOOL_BOARDS }],
-  ['class-11', 'Class 11', 'School', { boards: SCHOOL_BOARDS }],
-  ['class-12', 'Class 12', 'School', { boards: SCHOOL_BOARDS }],
-  ['ca-foundation', 'CA Foundation', 'Commerce & professional', { sessions: CA_INTER_MONTHS }],
-  ['ca-intermediate', 'CA Intermediate', 'Commerce & professional', { sessions: CA_INTER_MONTHS }],
-  ['ca-final', 'CA Final', 'Commerce & professional', { sessions: ['May', 'November'] }],
-  ['cs-executive', 'CS Executive', 'Commerce & professional', { sessions: TWICE_A_YEAR_JUNE_DEC }],
-  ['cs-professional', 'CS Professional', 'Commerce & professional', { sessions: TWICE_A_YEAR_JUNE_DEC }],
-  ['cma-intermediate', 'CMA Intermediate', 'Commerce & professional', { sessions: TWICE_A_YEAR_JUNE_DEC }],
-  ['cma-final', 'CMA Final', 'Commerce & professional', { sessions: TWICE_A_YEAR_JUNE_DEC }],
-  ['gate', 'GATE', 'Postgraduate'],
-  ['cat', 'CAT', 'Postgraduate'],
-  ['upsc-cse', 'UPSC Civil Services', 'Government jobs'],
-  ['ssc-cgl', 'SSC CGL', 'Government jobs'],
-  ['ibps-po', 'IBPS PO', 'Banking'],
-  ['sbi-po', 'SBI PO', 'Banking']
+  ['jee', 'JEE (Main + Advanced)', 'Engineering', PCM, ADDON],
+  ['mht-cet', 'MHT CET', 'Engineering', [...PCM, 'Biology'], ADDON],
+  ['bitsat', 'BITSAT', 'Engineering', [...PCM, 'Biology', 'English Proficiency', 'Logical Reasoning'], ADDON],
+  ['viteee', 'VITEEE', 'Engineering', [...PCM, 'Biology', 'Aptitude', 'English'], ADDON],
+  ['comedk-uget', 'COMEDK UGET', 'Engineering', PCM, ADDON],
+  ['wbjee', 'WBJEE', 'Engineering', PCM, ADDON],
+  ['kcet', 'KCET', 'Engineering', [...PCM, 'Biology'], ADDON],
+  ['neet-ug', 'NEET UG', 'Medical', ['Physics', 'Chemistry', 'Botany', 'Zoology'], ADDON],
+  ['cuet-ug', 'CUET UG', 'University admission', ['Language', 'General Aptitude Test', 'Physics', 'Chemistry', 'Maths', 'Biology', 'Accountancy', 'Business Studies', 'Economics', 'History', 'Political Science', 'Geography', 'Psychology', 'Sociology', 'Computer Science'], ADDON],
+  ['clat', 'CLAT', 'Law', ['English Language', 'Current Affairs & GK', 'Legal Reasoning', 'Logical Reasoning', 'Quantitative Techniques'], ADDON],
+  ['nda', 'NDA & NA', 'Defence', ['Maths', 'English', 'General Knowledge'], { boards_addon: true, sessions: ['NDA I', 'NDA II'] }],
+  ['class-9', 'Class 9', 'School', ['English', 'Hindi', 'Maths', 'Science', 'Social Science'], { boards: SCHOOL_BOARDS }],
+  ['class-10', 'Class 10', 'School', ['English', 'Hindi', 'Maths', 'Science', 'Social Science'], { boards: SCHOOL_BOARDS }],
+  ['class-11', 'Class 11', 'School', SENIOR_SECONDARY, { boards: SCHOOL_BOARDS, sessions: STREAMS, session_label: 'Stream' }],
+  ['class-12', 'Class 12', 'School', SENIOR_SECONDARY, { boards: SCHOOL_BOARDS, sessions: STREAMS, session_label: 'Stream' }],
+  ['ca-foundation', 'CA Foundation', 'Commerce & professional', ['Accounting', 'Business Laws', 'Quantitative Aptitude', 'Business Economics'], { sessions: CA_INTER_MONTHS, session_label: 'Attempt' }],
+  ['ca-intermediate', 'CA Intermediate', 'Commerce & professional', ['Advanced Accounting', 'Corporate and Other Laws', 'Taxation', 'Cost and Management Accounting', 'Auditing and Ethics', 'Financial Management and Strategic Management'], { sessions: CA_INTER_MONTHS, session_label: 'Attempt' }],
+  ['ca-final', 'CA Final', 'Commerce & professional', ['Financial Reporting', 'Advanced Financial Management', 'Advanced Auditing and Professional Ethics', 'Direct Tax Laws and International Taxation', 'Indirect Tax Laws', 'Integrated Business Solutions'], { sessions: ['May', 'November'], session_label: 'Attempt' }],
+  ['cs-executive', 'CS Executive', 'Commerce & professional', ['Jurisprudence, Interpretation and General Laws', 'Company Law and Practice', 'Setting up of Business, Industrial and Labour Laws', 'Corporate Accounting and Financial Management', 'Capital Market and Securities Laws', 'Economic, Commercial and IP Laws', 'Tax Laws and Practice'], { sessions: TWICE_A_YEAR_JUNE_DEC, session_label: 'Attempt' }],
+  ['cs-professional', 'CS Professional', 'Commerce & professional', ['ESG: Principles and Practice', 'Drafting, Pleadings and Appearances', 'Compliance Management, Audit and Due Diligence', 'Strategic Management and Corporate Finance', 'Corporate Restructuring, Valuation and Insolvency', 'Elective 1', 'Elective 2'], { sessions: TWICE_A_YEAR_JUNE_DEC, session_label: 'Attempt' }],
+  ['cma-intermediate', 'CMA Intermediate', 'Commerce & professional', ['Business Laws and Ethics', 'Financial Accounting', 'Direct and Indirect Taxation', 'Cost Accounting', 'Operations and Strategic Management', 'Corporate Accounting and Auditing', 'Financial Management and Business Data Analytics', 'Management Accounting'], { sessions: TWICE_A_YEAR_JUNE_DEC, session_label: 'Attempt' }],
+  ['cma-final', 'CMA Final', 'Commerce & professional', ['Corporate and Economic Laws', 'Strategic Financial Management', 'Direct Tax Laws and International Taxation', 'Strategic Cost Management', 'Cost and Management Audit', 'Corporate Financial Reporting', 'Indirect Tax Laws and Practice', 'Elective'], { sessions: TWICE_A_YEAR_JUNE_DEC, session_label: 'Attempt' }],
+  ['gate', 'GATE', 'Postgraduate', ['General Aptitude', 'Engineering Maths', 'Core Subject'], {}],
+  ['cat', 'CAT', 'Postgraduate', ['Verbal Ability and Reading Comprehension', 'Data Interpretation and Logical Reasoning', 'Quantitative Ability'], {}],
+  ['upsc-cse', 'UPSC Civil Services', 'Government jobs', ['GS Paper I (Prelims)', 'CSAT (Prelims)', 'Essay', 'GS I', 'GS II', 'GS III', 'GS IV', 'Optional Subject'], {}],
+  ['ssc-cgl', 'SSC CGL', 'Government jobs', ['Quantitative Aptitude', 'Reasoning', 'English', 'General Awareness', 'Computer Knowledge'], {}],
+  ['ibps-po', 'IBPS PO', 'Banking', ['English', 'Quantitative Aptitude', 'Reasoning', 'Data Analysis and Interpretation', 'General, Economy and Banking Awareness'], {}],
+  ['sbi-po', 'SBI PO', 'Banking', ['English', 'Quantitative Aptitude', 'Reasoning and Computer Aptitude', 'Data Analysis and Interpretation', 'General, Economy and Banking Awareness'], {}]
 ]
 
-export const BUILT_IN_EXAMS: readonly ExamDefinition[] = SEEDS.map(([id, name, category, options], index) => ({
+export const BUILT_IN_EXAMS: readonly ExamDefinition[] = SEEDS.map(([id, name, category, subjects, options], index) => ({
   id, name, category, years: [], sessions: options?.sessions ?? [], boards: options?.boards ?? [],
-  boards_addon: options?.boards_addon ?? false, sort_order: (index + 1) * 10, hidden: false
+  boards_addon: options?.boards_addon ?? false, subjects, session_label: options?.session_label ?? '',
+  sort_order: (index + 1) * 10, hidden: false
 }))
+
+/** The subject list every pre-exam-choice notebook uses (JEE). */
+export const LEGACY_SUBJECTS = PCM
 
 /** Target years offered when an exam has none configured: this year and the next three. */
 export function examYears(exam: Pick<ExamDefinition, 'years'>, now: Date = new Date()): number[] {
@@ -96,6 +120,9 @@ export function normalizeExam(row: unknown): ExamDefinition | null {
     sessions: textList(record.sessions, 40),
     boards: textList(record.boards, 40),
     boards_addon: record.boards_addon === true,
+    // Rows from before subjects existed fall back to the built-in list for the same id.
+    subjects: textList(record.subjects, 60).length ? textList(record.subjects, 60) : BUILT_IN_EXAMS.find(exam => exam.id === id)?.subjects ?? [],
+    session_label: text(record.session_label, 30) ?? BUILT_IN_EXAMS.find(exam => exam.id === id)?.session_label ?? '',
     sort_order: Number.isInteger(record.sort_order) ? record.sort_order as number : 0,
     hidden: record.hidden === true
   }
