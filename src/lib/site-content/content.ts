@@ -6,6 +6,7 @@ import {
   fieldDefinition,
   type FieldDefinition
 } from './registry.js'
+import { isUploadedMediaUrl } from './media.js'
 
 /**
  * Validation, resolution and diffing for owner-editable copy.
@@ -61,6 +62,11 @@ function validateLink(value: string): string | null {
 /** Validates one value against its field definition. Pure: no I/O. */
 export function validateFieldValue(definition: FieldDefinition, raw: unknown): FieldValidation {
   if (typeof raw !== 'string') return { ok: false, message: 'Enter text for this field.' }
+  if (definition.type === 'media') {
+    const source = raw.trim()
+    if (source === definition.defaultValue || isUploadedMediaUrl(definition.mediaKind ?? 'image', source)) return { ok: true, value: source }
+    return { ok: false, message: 'Upload a file here or use the built-in default.' }
+  }
   if (definition.type === 'order') {
     const items = parseOrder(raw, definition.itemCount ?? 0)
     if (!items) return { ok: false, message: 'Use card numbers separated by commas, each once.' }

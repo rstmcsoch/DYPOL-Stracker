@@ -147,6 +147,8 @@
   "public.promo.body",
   "public.promo.size",
   "public.promo.aspect",
+  "public.promo.video_src",
+  "public.promo.poster_src",
   "public.promo.position",
   "public.footer.features.label",
   "public.footer.ai.label",

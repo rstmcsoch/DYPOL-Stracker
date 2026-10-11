@@ -18,7 +18,7 @@ import { SYLLABUS } from '../syllabus.js'
 
 export type ContentArea = 'public' | 'user'
 
-export type FieldType = 'text' | 'multiline' | 'link' | 'select' | 'order'
+export type FieldType = 'text' | 'multiline' | 'link' | 'select' | 'order' | 'media'
 
 /** One allowed value of a `select` field and the words the editor shows for it. */
 export interface FieldOption {
@@ -47,6 +47,8 @@ export interface FieldDefinition {
   minItems?: number
   /** `order` fields: key template naming each item, with `{n}` for its number. */
   itemLabelKey?: string
+  /** `media` fields: the built-in file (default) or an upload of this kind from the homepage-media bucket. */
+  mediaKind?: 'image' | 'video'
 }
 
 /** Bump when the stored shape or the meaning of a key changes; stored rows carry it. */
@@ -72,7 +74,7 @@ function field(
   label: string,
   type: FieldType,
   defaultValue: string,
-  options: { help?: string; maxLength?: number; options?: readonly FieldOption[]; itemCount?: number; minItems?: number; itemLabelKey?: string } = {}
+  options: { help?: string; maxLength?: number; options?: readonly FieldOption[]; itemCount?: number; minItems?: number; itemLabelKey?: string; mediaKind?: 'image' | 'video' } = {}
 ) {
   const maxLength = options.maxLength ?? (type === 'multiline' ? 600 : type === 'link' ? 500 : 160)
   if (type === 'select' && !options.options?.some(option => option.value === defaultValue)) {
@@ -82,7 +84,8 @@ function field(
   fields.push({
     key, area, page, section, label, type, defaultValue, maxLength, help: options.help,
     ...(options.options ? { options: options.options } : {}),
-    ...(type === 'order' ? { itemCount: options.itemCount, minItems: options.minItems ?? 1, itemLabelKey: options.itemLabelKey } : {})
+    ...(type === 'order' ? { itemCount: options.itemCount, minItems: options.minItems ?? 1, itemLabelKey: options.itemLabelKey } : {}),
+    ...(type === 'media' ? { mediaKind: options.mediaKind ?? 'image' } : {})
   })
 }
 
@@ -368,6 +371,14 @@ field('public', HOME, PROMO, 'public.promo.size', 'Player size', 'select', 'medi
 field('public', HOME, PROMO, 'public.promo.aspect', 'Frame shape', 'select', '9:16', {
   options: [{ value: '9:16', label: 'Portrait 9:16 (matches the current video)' }, { value: '4:5', label: 'Portrait 4:5' }, { value: '1:1', label: 'Square 1:1' }, { value: '16:9', label: 'Landscape 16:9' }],
   help: 'Shapes other than the video\'s own crop its edges.'
+})
+field('public', HOME, PROMO, 'public.promo.video_src', 'Video file', 'media', '/videos/stracker-ad1-web.mp4', {
+  mediaKind: 'video', maxLength: 300,
+  help: 'MP4 (H.264), ideally under 8 MB. The built-in clip stays available as a fallback.'
+})
+field('public', HOME, PROMO, 'public.promo.poster_src', 'Poster image', 'media', '/videos/stracker-ad1-poster.jpg', {
+  mediaKind: 'image', maxLength: 300,
+  help: 'Still shown before playback. JPEG, PNG or WebP under 5 MB, same shape as the video.'
 })
 field('public', HOME, PROMO, 'public.promo.position', 'Position on wide screens', 'select', 'center', {
   options: [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Centre' }, { value: 'right', label: 'Right' }],

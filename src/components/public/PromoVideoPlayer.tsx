@@ -53,6 +53,10 @@ function PromoVideoBody() {
   const size = useSiteText('public.promo.size')
   const aspect = PROMO_ASPECTS[useSiteText('public.promo.aspect')] ?? 'portrait'
   const position = useSiteText('public.promo.position')
+  const videoSrc = useSiteText('public.promo.video_src')
+  const posterSrc = useSiteText('public.promo.poster_src') || POSTER
+  // An owner upload plays first; the built-in web cut and original stay as fallbacks.
+  const customVideo = videoSrc && videoSrc !== WEB_SOURCE ? videoSrc : null
   const frameRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const userPaused = useRef(false)
@@ -192,7 +196,7 @@ function PromoVideoBody() {
           <video
             ref={videoRef}
             className="promo-video-media"
-            poster={POSTER}
+            poster={posterSrc}
             preload={armed ? 'auto' : 'none'}
             playsInline
             muted={muted}
@@ -202,6 +206,7 @@ function PromoVideoBody() {
             onPause={() => setPlaying(false)}
             onError={() => setFailed(true)}
           >
+            {armed && customVideo && <source src={customVideo} type="video/mp4" />}
             {armed && <source src={WEB_SOURCE} type="video/mp4" />}
             {armed && <source src={ORIGINAL_SOURCE} type="video/mp4" />}
           </video>

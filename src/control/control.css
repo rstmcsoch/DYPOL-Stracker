@@ -589,3 +589,9 @@ textarea.cc-input { resize: vertical; min-height: 84px; }
 .cc-order-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cc-order-actions { display: inline-flex; flex: none; gap: 2px; }
 .cc-order-hidden > p { margin: 0 0 6px; }
+
+/* Media upload field (Appearance → promotional video). */
+.cc-media-field { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+.cc-media-preview { flex: none; width: 120px; max-height: 214px; overflow: hidden; border: 1px solid var(--cc-border); border-radius: 8px; background: var(--cc-border-soft); }
+.cc-media-preview video, .cc-media-preview img { display: block; width: 100%; height: auto; max-height: 214px; object-fit: contain; }
+.cc-media-meta { display: grid; gap: 8px; justify-items: start; min-width: 0; }
