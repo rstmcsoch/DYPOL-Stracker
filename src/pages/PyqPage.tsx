@@ -9,6 +9,9 @@ import { pyqCompletion, pyqYears, PYQ_EXAM_LABEL } from '../lib/jee/progress'
 import { pyqRecordId } from '../lib/jee/ids'
 import type { Chapter, PYQExam, PyqRecord, Subject } from '../types'
 import { PYQ_EXAMS } from '../types'
+import { isJeeSettings } from '../lib/jee/exam'
+import { examName } from '../lib/exams/catalog'
+import { currentSubjectCatalog } from '../lib/exams/subjects'
 
 type ExamFilter = 'all' | PYQExam
 type StatusFilter = 'all' | 'pending' | 'done'
@@ -18,16 +21,20 @@ export default function PyqPage() {
   const { notify } = useToast()
   const navigate = useNavigate()
   const [exam, setExam] = useState<ExamFilter>('all')
+  // JEE keeps separate Main / Advanced columns; every other exam uses one PYQ column labelled with its own name.
+  const jee = isJeeSettings(data.settings)
+  const examList: PYQExam[] = jee ? [...PYQ_EXAMS] : ['Main']
+  const pyqLabel = (value: PYQExam) => jee ? PYQ_EXAM_LABEL[value] : examName(data.settings.exam_id, currentSubjectCatalog())
   const [status, setStatus] = useState<StatusFilter>('all')
   const [subject, setSubject] = useState<Subject | 'all'>('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
   const years = useMemo(() => pyqYears(data.settings), [data.settings])
-  const exams = useMemo<PYQExam[]>(() => exam === 'all' ? [...PYQ_EXAMS] : [exam], [exam])
+  const exams = useMemo<PYQExam[]>(() => !jee ? ['Main'] : exam === 'all' ? [...PYQ_EXAMS] : [exam], [exam, jee])
   const userId = data.settings.user_id ?? data.settings.id
 
-  const overall = PYQ_EXAMS.map(item => pyqCompletion(data.pyqRecords, null, item, data.settings))
+  const overall = examList.map(item => pyqCompletion(data.pyqRecords, null, item, data.settings))
   const chapters = useMemo(() => data.chapters.filter(chapter => {
     if (subject !== 'all' && chapter.subject !== subject) return false
     if (search.trim() && !chapter.name.toLowerCase().includes(search.trim().toLowerCase())) return false
@@ -64,14 +71,14 @@ export default function PyqPage() {
     const done = current?.status !== 'done'
     try {
       await writeYears([{ chapter, exam: examValue, year, done }])
-      if (done) notify(`${chapter.name} · ${PYQ_EXAM_LABEL[examValue]} ${year} marked done.`)
+      if (done) notify(`${chapter.name} · ${pyqLabel(examValue)} ${year} marked done.`)
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not update this PYQ year.', 'error') }
   }
 
   const setAllForChapter = async (chapter: Chapter, examValue: PYQExam, done: boolean) => {
     try {
       await writeYears(years.map(year => ({ chapter, exam: examValue, year, done })))
-      notify(done ? `All ${PYQ_EXAM_LABEL[examValue]} years marked done for ${chapter.name}.` : `${PYQ_EXAM_LABEL[examValue]} years reset for ${chapter.name}.`)
+      notify(done ? `All ${pyqLabel(examValue)} years marked done for ${chapter.name}.` : `${pyqLabel(examValue)} years reset for ${chapter.name}.`)
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not update PYQs.', 'error') }
   }
 
@@ -81,7 +88,7 @@ export default function PyqPage() {
     setBulkBusy(true)
     try {
       await writeYears(targets.flatMap(chapter => years.map(year => ({ chapter, exam: examValue, year, done }))))
-      notify(`${targets.length} chapter${targets.length === 1 ? '' : 's'} updated for ${PYQ_EXAM_LABEL[examValue]}.`)
+      notify(`${targets.length} chapter${targets.length === 1 ? '' : 's'} updated for ${pyqLabel(examValue)}.`)
       setSelected(new Set())
     } catch (error) { notify(error instanceof Error ? error.message : 'Bulk update failed. Nothing was half-applied; retry.', 'error') }
     finally { setBulkBusy(false) }
@@ -102,11 +109,11 @@ export default function PyqPage() {
       action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} /> Year range</Button>}
     />
 
-    <section className="jee-stat-grid two" aria-label="PYQ completion overall">
+    <section className={`jee-stat-grid ${examList.length === 2 ? 'two' : 'one'}`} aria-label="PYQ completion overall">
       {overall.map(item => <NotebookCard key={item.exam} className="jee-stat">
-        <span>{PYQ_EXAM_LABEL[item.exam]} PYQs</span>
+        <span>{pyqLabel(item.exam)} PYQs</span>
         <strong>{item.done}/{item.total}<small> years</small></strong>
-        <Meter value={item.percent} label={`${PYQ_EXAM_LABEL[item.exam]} PYQ completion`} tone={item.exam === 'Main' ? 'blue' : 'orange'} />
+        <Meter value={item.percent} label={`${pyqLabel(item.exam)} PYQ completion`} tone={item.exam === 'Main' ? 'blue' : 'orange'} />
         <small>{item.percent === null ? 'Set a year range in Settings' : `${Math.round(item.percent)}% complete across all chapters`}</small>
       </NotebookCard>)}
     </section>
@@ -116,7 +123,7 @@ export default function PyqPage() {
         <label className="jee-search"><Search size={16} aria-hidden="true" /><input type="search" placeholder="Find a chapter" value={search} onChange={event => setSearch(event.target.value)} aria-label="Find a chapter" /></label>
         <SubjectSelect value={subject} onChange={value => setSubject(value as Subject | 'all')} />
       </div>
-      <ChipFilter<ExamFilter> label="Exam" value={exam} onChange={setExam} options={[{ value: 'all', label: 'Both' }, { value: 'Main', label: 'JEE Main' }, { value: 'Advanced', label: 'JEE Advanced' }]} />
+      {jee && <ChipFilter<ExamFilter> label="Exam" value={exam} onChange={setExam} options={[{ value: 'all', label: 'Both' }, { value: 'Main', label: 'JEE Main' }, { value: 'Advanced', label: 'JEE Advanced' }]} />}
       <ChipFilter<StatusFilter> label="Status" value={status} onChange={setStatus} options={[{ value: 'all', label: 'All' }, { value: 'pending', label: 'Has pending years' }, { value: 'done', label: 'Complete' }]} />
     </NotebookCard>
 
@@ -125,8 +132,8 @@ export default function PyqPage() {
     {selected.size > 0 && <div className="jee-bulk-bar" role="region" aria-label="Bulk PYQ actions">
       <span><strong>{selected.size}</strong> selected</span>
       <div className="jee-bulk-actions">
-        {(exam === 'all' ? [...PYQ_EXAMS] : [exam]).map(item => <span key={item} className="jee-bulk-pair">
-          <Button size="sm" variant="secondary" onClick={() => void bulk(item, true)} loading={bulkBusy}><CheckCheck size={14} /> {PYQ_EXAM_LABEL[item]}: all done</Button>
+        {(!jee ? examList : exam === 'all' ? [...PYQ_EXAMS] : [exam]).map(item => <span key={item} className="jee-bulk-pair">
+          <Button size="sm" variant="secondary" onClick={() => void bulk(item, true)} loading={bulkBusy}><CheckCheck size={14} /> {pyqLabel(item)}: all done</Button>
           <Button size="sm" variant="quiet" onClick={() => void bulk(item, false)} disabled={bulkBusy}>Reset</Button>
         </span>)}
       </div>
@@ -147,13 +154,13 @@ export default function PyqPage() {
           </div>
           {rows.map(({ exam: examValue, completion }) => <div key={examValue} className="jee-pyq-exam">
             <div className="jee-pyq-exam-head">
-              <span>{PYQ_EXAM_LABEL[examValue]} PYQs: <b>{completion.done}/{completion.total}</b> complete{completion.percent !== null && <> — <b>{Math.round(completion.percent)}%</b></>}</span>
+              <span>{pyqLabel(examValue)} PYQs: <b>{completion.done}/{completion.total}</b> complete{completion.percent !== null && <> — <b>{Math.round(completion.percent)}%</b></>}</span>
               <span className="jee-pyq-exam-actions">
-                <button type="button" onClick={() => void setAllForChapter(chapter, examValue, true)} disabled={completion.pendingYears.length === 0} aria-label={`Mark all ${PYQ_EXAM_LABEL[examValue]} years done for ${chapter.name}`}>All</button>
-                <button type="button" onClick={() => void setAllForChapter(chapter, examValue, false)} disabled={completion.doneYears.length === 0} aria-label={`Reset ${PYQ_EXAM_LABEL[examValue]} years for ${chapter.name}`}>Reset</button>
+                <button type="button" onClick={() => void setAllForChapter(chapter, examValue, true)} disabled={completion.pendingYears.length === 0} aria-label={`Mark all ${pyqLabel(examValue)} years done for ${chapter.name}`}>All</button>
+                <button type="button" onClick={() => void setAllForChapter(chapter, examValue, false)} disabled={completion.doneYears.length === 0} aria-label={`Reset ${pyqLabel(examValue)} years for ${chapter.name}`}>Reset</button>
               </span>
             </div>
-            <div className="jee-year-row" role="group" aria-label={`${PYQ_EXAM_LABEL[examValue]} years for ${chapter.name}`}>
+            <div className="jee-year-row" role="group" aria-label={`${pyqLabel(examValue)} years for ${chapter.name}`}>
               {years.map(year => {
                 const done = completion.doneYears.includes(year)
                 return <button key={year} type="button" className={`jee-year ${done ? 'done' : 'pending'}`} aria-pressed={done} onClick={() => void toggleYear(chapter, examValue, year)} aria-label={`${year} ${done ? 'done' : 'pending'} — tap to mark ${done ? 'pending' : 'done'}`}>

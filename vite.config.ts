@@ -11,9 +11,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/favicon-32.png', 'icons/icon-192.png', 'icons/icon-maskable-512.png'],
       manifest: {
-        name: 'Stracker — JEE 2027 Study Notebook',
+        name: 'Stracker — Exam Study Notebook',
         short_name: 'Stracker',
-        description: 'A private study notebook for JEE 2027 plans, revision, tests and focus sessions — by DYPOL LABS.',
+        description: 'A private study notebook for exam plans, revision, tests and focus sessions — by DYPOL LABS.',
         theme_color: '#f7f4ec',
         background_color: '#f7f4ec',
         display: 'standalone',

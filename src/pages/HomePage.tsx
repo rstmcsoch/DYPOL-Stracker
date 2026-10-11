@@ -21,9 +21,13 @@ import { useReportSubjects } from '../lib/exams/useExamSubjects'
 import { subjectColor } from '../lib/exams/subjects'
 import { chosenExamTitle, isJeeSettings, trackExamDate } from '../lib/jee/exam'
 
+const HOME_SUBJECT_LIMIT = 5
+
 export default function HomePage() {
   const homeSubjects = useReportSubjects()
   const { data, upsert, upsertMany } = useData()
+  // Only subjects the student actually has chapters in; a long catalogue (CUET, school) would otherwise list every option.
+  const trackedSubjects = homeSubjects.filter(subject => data.chapters.some(item => item.subject === subject))
   const { notify } = useToast()
   const navigate = useNavigate()
   const [reordering, setReordering] = useState(false)
@@ -171,12 +175,12 @@ export default function HomePage() {
       </NotebookCard>
       <NotebookCard className="syllabus-mini-card">
         <div className="syllabus-mini-head"><div><span className="eyebrow">THE LONG GAME</span><h3>Syllabus progress</h3></div><ProgressRing value={totalChapters ? completedChapters / totalChapters * 100 : 0} size={62} label={<span className="ring-value small">{Math.round(totalChapters ? completedChapters / totalChapters * 100 : 0)}<small>%</small></span>} /></div>
-        <div className="subject-mini-bars">{homeSubjects.map(subject => {
+        {trackedSubjects.length === 0 ? <p className="subject-mini-hint">Add chapters in Syllabus to track a subject.</p> : <div className="subject-mini-bars">{trackedSubjects.slice(0, HOME_SUBJECT_LIMIT).map(subject => {
           const total = data.chapters.filter(item => item.subject === subject).length
           const done = data.chapters.filter(item => item.subject === subject && (item.status === 'Done' || item.status === 'Revised')).length
           return <div className="subject-mini-row" key={subject}><SubjectBadge subject={subject} /><ProgressBar value={total ? done / total * 100 : 0} color={subjectColor(subject)} /><span>{done}/{total}</span></div>
-        })}</div>
-        <button className="syllabus-mini-link" onClick={() => navigate('/syllabus')}>See all chapters <ChevronRight size={15} /></button>
+        })}</div>}
+        <button className="syllabus-mini-link" onClick={() => navigate('/syllabus')}>{trackedSubjects.length > HOME_SUBJECT_LIMIT ? `See all ${trackedSubjects.length} subjects` : trackedSubjects.length ? 'See all chapters' : 'Open Syllabus'} <ChevronRight size={15} /></button>
       </NotebookCard>
     </section>
   </div>

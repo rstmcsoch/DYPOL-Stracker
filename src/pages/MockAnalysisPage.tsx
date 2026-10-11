@@ -26,7 +26,7 @@ export default function MockAnalysisPage() {
 
   if (!selected) return <div className="content-page mock-analysis-page">
     <PageHeader title="Mock analysis" subtitle="Record a test first." />
-    <NotebookCard><EmptyState title="No tests to analyse yet." description="Log a mock or a subject test with its marks. Then you can add time per subject and tag lost marks." action={<Button variant="secondary" size="sm" onClick={() => navigate('/tests?add=1')}>Log a test</Button>} /></NotebookCard>
+    <NotebookCard><EmptyState title="No tests to analyse yet." action={<Button variant="secondary" size="sm" onClick={() => navigate('/tests?add=1')}>Log a test</Button>} /></NotebookCard>
   </div>
 
   const logs = data.testErrorLogs.filter(log => log.test_id === selected.id).sort((a, b) => a.created_at.localeCompare(b.created_at))

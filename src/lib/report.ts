@@ -153,7 +153,7 @@ function addPdfTable(doc: jsPDF, rows: string[][], x: number, y: number, widths:
     const lineHeight = 5.1
     const cellLines = values.map((value, index) => doc.splitTextToSize(value || '—', (widths[index] ?? 30) - 4) as string[])
     const rowHeight = Math.max(9, Math.max(...cellLines.map(lines => lines.length)) * lineHeight + 4)
-    if (currentY + rowHeight > doc.internal.pageSize.getHeight() - 21) { pdfFooter(doc, 'JEE STUDY REPORT'); doc.addPage(); currentY = pdfSectionTitle(doc, 'Continued') }
+    if (currentY + rowHeight > doc.internal.pageSize.getHeight() - 21) { pdfFooter(doc, 'STUDY REPORT'); doc.addPage(); currentY = pdfSectionTitle(doc, 'Continued') }
     if (header) doc.setFillColor(235, 231, 218); else if (Math.round(currentY / rowHeight) % 2 === 0) doc.setFillColor(250, 248, 241); else doc.setFillColor(255, 255, 255)
     doc.setDrawColor(222, 218, 207); doc.rect(x, currentY, widths.reduce((sum, value) => sum + value, 0), rowHeight, 'FD')
     let cellX = x
@@ -329,7 +329,7 @@ export async function createDocxReport(data: AppData, options: ReportOptions): P
   const trendImage = await svgPng(chartSvg(scoped, 'trend'))
   const hoursImage = await svgPng(chartSvg(scoped, 'hours'))
   content.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 1400, after: 260 }, children: [new TextRun({ text: 'STRACKER', bold: true, size: 56, color: '354432', font: 'Kalam' })] }))
-  content.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 800 }, children: [new TextRun({ text: 'JEE Study Progress Report', size: 34, color: '65735D', font: 'Patrick Hand' })] }))
+  content.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 800 }, children: [new TextRun({ text: 'Study Progress Report', size: 34, color: '65735D', font: 'Patrick Hand' })] }))
   content.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: options.ownerName || 'Study notebook', bold: true, size: 30, color: '30352E', font: 'Kalam' })] }))
   content.push(docParagraph(`Report date: ${reportDate}`, { alignment: AlignmentType.CENTER, size: 22, color: '777367' }))
   content.push(docParagraph(`Selected range: ${rangeLabel}`, { alignment: AlignmentType.CENTER, size: 22, color: '777367', spacing: 500 }))

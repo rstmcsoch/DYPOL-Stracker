@@ -179,7 +179,7 @@ export function AppFrame() {
 
     <main className="main-area">
       <div className="topline">
-        <div className="breadcrumb"><span>{isJeeSettings(data.settings) ? `JEE ${data.settings.exam_year ?? 2027}` : chosenExamTitle(data.settings)}</span><ChevronRight size={13} /><strong>{currentNavLabel(location.pathname, siteValues) ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
+        <div className="breadcrumb"><span>{loading || (!data.settings.exam_id && !data.settings.onboarding_completed) ? 'Stracker' : isJeeSettings(data.settings) ? `JEE ${data.settings.exam_year ?? 2027}` : chosenExamTitle(data.settings)}</span><ChevronRight size={13} /><strong>{currentNavLabel(location.pathname, siteValues) ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
         <div className="topline-right">
           {user?.isLocal && <span className="preview-pill"><span />Local preview — not synced</span>}
           <button className={`sync-pill sync-${syncState}`} onClick={() => void refresh()} title={syncError ?? 'Click to sync now'}>
