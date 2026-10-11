@@ -18,7 +18,13 @@ import { SYLLABUS } from '../syllabus.js'
 
 export type ContentArea = 'public' | 'user'
 
-export type FieldType = 'text' | 'multiline' | 'link'
+export type FieldType = 'text' | 'multiline' | 'link' | 'select'
+
+/** One allowed value of a `select` field and the words the editor shows for it. */
+export interface FieldOption {
+  value: string
+  label: string
+}
 
 export interface FieldDefinition {
   key: string
@@ -33,6 +39,8 @@ export interface FieldDefinition {
   type: FieldType
   defaultValue: string
   maxLength: number
+  /** Allowed values for `select` fields; any other value is rejected. */
+  options?: readonly FieldOption[]
 }
 
 /** Bump when the stored shape or the meaning of a key changes; stored rows carry it. */
@@ -58,10 +66,13 @@ function field(
   label: string,
   type: FieldType,
   defaultValue: string,
-  options: { help?: string; maxLength?: number } = {}
+  options: { help?: string; maxLength?: number; options?: readonly FieldOption[] } = {}
 ) {
   const maxLength = options.maxLength ?? (type === 'multiline' ? 600 : type === 'link' ? 500 : 160)
-  fields.push({ key, area, page, section, label, type, defaultValue, maxLength, help: options.help })
+  if (type === 'select' && !options.options?.some(option => option.value === defaultValue)) {
+    throw new Error(`Select field ${key} needs options that include its default.`)
+  }
+  fields.push({ key, area, page, section, label, type, defaultValue, maxLength, help: options.help, ...(options.options ? { options: options.options } : {}) })
 }
 
 /* ------------------------------------------------------------------ public site */
@@ -283,6 +294,31 @@ field('public', 'Footer', 'Column headings', 'public.footer.group_product.title'
 field('public', 'Footer', 'Column headings', 'public.footer.group_account.title', 'Column heading: Account', 'text', 'Account', { maxLength: 40 })
 field('public', 'Footer', 'Column headings', 'public.footer.group_information.title', 'Column heading: Information', 'text', 'Information', { maxLength: 40 })
 field('public', 'Footer', 'Column headings', 'public.footer.group_brand.title', 'Column heading: Brand', 'text', 'Brand', { maxLength: 40 })
+
+/* Promotional video section. Layout values are presets so no choice can break the page. */
+const PROMO = 'Promotional video'
+field('public', HOME, PROMO, 'public.promo.visibility', 'Show the video section', 'select', 'show', {
+  options: [{ value: 'show', label: 'Show' }, { value: 'hide', label: 'Hide' }],
+  help: 'Hiding removes the whole section; nothing is downloaded.'
+})
+field('public', HOME, PROMO, 'public.promo.heading_visibility', 'Visible heading', 'select', 'hidden', {
+  options: [{ value: 'hidden', label: 'Hidden (screen readers only)' }, { value: 'visible', label: 'Show eyebrow, heading and text' }]
+})
+field('public', HOME, PROMO, 'public.promo.eyebrow', 'Eyebrow line', 'text', 'SEE IT IN MOTION', { maxLength: 60 })
+field('public', HOME, PROMO, 'public.promo.heading', 'Heading', 'text', 'Stracker in motion — a ten second product preview', { maxLength: 120 })
+field('public', HOME, PROMO, 'public.promo.body', 'Supporting text', 'multiline', 'A quick look at the notebook: plan the day, log a test and see what to revise next.', { maxLength: 300 })
+field('public', HOME, PROMO, 'public.promo.size', 'Player size', 'select', 'medium', {
+  options: [{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium (default)' }, { value: 'large', label: 'Large' }],
+  help: 'Scales the player within the screen height; it never overflows the page width.'
+})
+field('public', HOME, PROMO, 'public.promo.aspect', 'Frame shape', 'select', '9:16', {
+  options: [{ value: '9:16', label: 'Portrait 9:16 (matches the current video)' }, { value: '4:5', label: 'Portrait 4:5' }, { value: '1:1', label: 'Square 1:1' }, { value: '16:9', label: 'Landscape 16:9' }],
+  help: 'Shapes other than the video\'s own crop its edges.'
+})
+field('public', HOME, PROMO, 'public.promo.position', 'Position on wide screens', 'select', 'center', {
+  options: [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Centre' }, { value: 'right', label: 'Right' }],
+  help: 'Phones and tablets always centre the player.'
+})
 field('public', 'Footer', 'Links', 'public.footer.features.label', 'Link label: Features', 'text', 'Features', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.ai.label', 'Link label: AI Assistant', 'text', 'AI Assistant', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.how.label', 'Link label: How It Works', 'text', 'How It Works', { maxLength: 40 })

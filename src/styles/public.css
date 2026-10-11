@@ -1603,3 +1603,26 @@ html[data-app-font='active'] .pub-page .pub-footer-wordmark {
   .hero-scroll svg { animation: none; }
   .pub-skip-link { transition: none; }
 }
+
+/* ----------------------------------------------------------------------------
+   Owner presets for the promotional video (public.promo.* in the site-content
+   registry). Only these fixed values exist, so no setting can push the player
+   past the page width or the height budgets above; defaults (medium, 9:16,
+   centre) reproduce the original layout exactly.
+   ------------------------------------------------------------------------- */
+.pub-section-promo { --promo-scale: 1; --promo-ratio: .5625; --promo-aspect: 9 / 16; }
+.pub-section-promo.promo-size-small { --promo-scale: .82; }
+.pub-section-promo.promo-size-large { --promo-scale: 1.15; }
+.pub-section-promo.promo-aspect-tall { --promo-ratio: .8; --promo-aspect: 4 / 5; }
+.pub-section-promo.promo-aspect-square { --promo-ratio: 1; --promo-aspect: 1 / 1; }
+.pub-section-promo.promo-aspect-landscape { --promo-ratio: 1.7778; --promo-aspect: 16 / 9; }
+.pub-section-promo .promo-video-frame {
+  width: min(100%, calc(var(--promo-height-budget) * var(--promo-ratio) * var(--promo-scale)));
+  aspect-ratio: var(--promo-aspect);
+}
+.pub-section-promo.promo-aspect-landscape .promo-video-frame { max-width: 960px; }
+.pub-section-promo .promo-head { margin-bottom: clamp(18px, 3vw, 28px); }
+@media (min-width: 1021px) {
+  .pub-section-promo.promo-pos-left .promo-shell { justify-content: flex-start; }
+  .pub-section-promo.promo-pos-right .promo-shell { justify-content: flex-end; }
+}
