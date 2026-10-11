@@ -74,6 +74,7 @@ export function OverviewTab() {
             <li>Homepage button labels and destinations (validated: public pages, homepage sections, or https addresses).</li>
             <li>Promotional video section: show or hide, optional heading and text, player size, frame shape and position.</li>
             <li>Public website appearance: default light/dark/system mode and an accent colour preset.</li>
+            <li>Feature cards: order, show or hide each card, and its icon.</li>
             <li>Notebook navigation labels and group headings. Changing a label never changes where it leads.</li>
           </ul>
         </div>
