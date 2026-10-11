@@ -14,6 +14,7 @@ import { settingsFieldErrors, settingsSchema } from '../lib/settings-validation'
 import { passwordLengthError } from '../lib/auth-rules'
 import { AISettingsSection } from '../components/ai/AISettingsSection'
 import { ExamTracksSection, ReminderSettingsSection } from '../components/jee/SettingsSections'
+import { ExamSelectionSection } from '../components/jee/ExamSelectionSection'
 import { ListChecks } from 'lucide-react'
 import type { AppSettings, Profile, ThemeMode } from '../types'
 
@@ -316,6 +317,7 @@ export default function SettingsPage() {
       </div>}
 
       {activeTab === 'exam' && <div className="settings-panel" role="tabpanel" id="settings-panel-exam" aria-labelledby="settings-tab-exam">
+        <ExamSelectionSection />
         <form className="settings-form" noValidate onSubmit={event => void saveTab('exam', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'exam'}>
             <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Exam dates & target" note="A countdown is only useful when the date is yours to choose." /><div className="settings-section-content"><div className="form-grid three">

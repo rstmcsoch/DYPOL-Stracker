@@ -345,6 +345,15 @@ export interface AppSettings extends BaseRecord {
   reminders_enabled: boolean
   reminder_time: string
   reminder_types: ReminderKind[]
+  /** Chosen exam from the catalogue; null = set up before exam choice existed (JEE). */
+  exam_id: string | null
+  exam_year: number | null
+  /** Attempt/session, e.g. a CA attempt month. */
+  exam_session: string | null
+  /** School board, or the board for the Class 12 boards add-on. */
+  exam_board: string | null
+  /** Class 12 boards tracked alongside the main exam. */
+  boards_addon: boolean
 }
 
 export interface Profile extends BaseRecord {

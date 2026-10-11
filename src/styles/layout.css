@@ -106,3 +106,7 @@
   .planner-main-grid { gap: var(--card-gap); }
   .planner-aside { gap: var(--space-2); }
 }
+
+/* Settings > Exam: exam picker sits above the existing exam form with the same gap. */
+#settings-panel-exam > .exam-selection-section { margin-bottom: var(--card-gap); }
+.exam-addon-toggle { display: flex; align-items: center; gap: var(--space-2); align-self: end; min-height: 44px; }

@@ -32,7 +32,13 @@ export const settingsSchema = z.object({
   exam_mode: z.enum(EXAM_MODES).default('auto'),
   reminders_enabled: z.boolean().default(false),
   reminder_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Choose a reminder time like 08:00.').default('08:00'),
-  reminder_types: z.array(z.enum(REMINDER_KINDS)).max(REMINDER_KINDS.length).default(['revision', 'backlog'])
+  reminder_types: z.array(z.enum(REMINDER_KINDS)).max(REMINDER_KINDS.length).default(['revision', 'backlog']),
+  // --- Exam choice (additive; older rows and exports default to "not chosen" = JEE) ---
+  exam_id: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/).nullable().default(null),
+  exam_year: z.number().int().min(2020).max(2100).nullable().default(null),
+  exam_session: z.string().trim().max(40).nullable().default(null),
+  exam_board: z.string().trim().max(40).nullable().default(null),
+  boards_addon: z.boolean().default(false)
 }).refine(value => value.weak_threshold < value.strong_threshold, {
   path: ['strong_threshold'],
   message: 'Strong above must be greater than Weak below.'
