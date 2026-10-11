@@ -51,6 +51,21 @@ describe('owner promo video controls', () => {
     expect(section?.className).toContain('promo-aspect-portrait')
   })
 
+  it('uses owner-uploaded media with the built-in clip as fallback', () => {
+    const video = 'https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/public/homepage-media/site/video/0f8fad5b-d9cb-469f-a165-70867728950e.mp4'
+    const poster = 'https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/public/homepage-media/site/image/0f8fad5b-d9cb-469f-a165-70867728950e.webp'
+    const { container } = renderWith({ 'public.promo.video_src': video, 'public.promo.poster_src': poster })
+    expect(container.querySelector('video')?.getAttribute('poster')).toBe(poster)
+  })
+
+  it('accepts only built-in or uploaded media URLs', () => {
+    const video = fieldDefinition('public.promo.video_src')!
+    expect(validateFieldValue(video, '/videos/stracker-ad1-web.mp4').ok).toBe(true)
+    expect(validateFieldValue(video, 'https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/public/homepage-media/site/video/0f8fad5b-d9cb-469f-a165-70867728950e.mp4').ok).toBe(true)
+    expect(validateFieldValue(video, 'https://evil.example/clip.mp4').ok).toBe(false)
+    expect(validateFieldValue(video, '/videos/other.mp4').ok).toBe(false)
+  })
+
   it('validates select fields strictly', () => {
     const size = fieldDefinition('public.promo.size')!
     expect(validateFieldValue(size, 'small')).toEqual({ ok: true, value: 'small' })

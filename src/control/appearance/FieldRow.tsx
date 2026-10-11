@@ -4,6 +4,7 @@ import { Button } from '../ui'
 import { INTERNAL_ROUTE_TARGETS, HOMEPAGE_ANCHOR_TARGETS, type FieldDefinition } from '../../lib/site-content/registry'
 import { useContentEditor } from './ContentEditor'
 import { OrderField } from './OrderField'
+import { MediaField } from './MediaField'
 
 /** Suggestions for destination fields. They are hints only: the server accepts this list and nothing else internal. */
 const LINK_SUGGESTIONS = [...INTERNAL_ROUTE_TARGETS, ...HOMEPAGE_ANCHOR_TARGETS]
@@ -73,7 +74,9 @@ export function FieldRow({ definition, showContext = true }: { definition: Field
     </div>
     {showContext && <p className="cc-copy-field__context">{definition.page} · {definition.section} · <code>{definition.key}</code></p>}
 
-    {definition.type === 'order' ? (
+    {definition.type === 'media' ? (
+      <MediaField definition={definition} value={value} disabled={saving} onChange={next => setValue(definition.key, next)} describedBy={describedBy} inputId={inputId} />
+    ) : definition.type === 'order' ? (
       <OrderField definition={definition} value={value} values={values} disabled={saving} onChange={next => setValue(definition.key, next)} describedBy={describedBy} />
     ) : definition.type === 'select' ? (
       <select id={inputId} className={inputClass} value={value} onChange={event => setValue(definition.key, event.target.value)} aria-invalid={error ? true : undefined} aria-describedby={describedBy} disabled={saving}>
@@ -91,7 +94,7 @@ export function FieldRow({ definition, showContext = true }: { definition: Field
       <span id={hintId} className="cc-field__hint">
         {error
           ? <span id={errorId} className="cc-field__error" role="alert">{error}</span>
-          : <>{definition.help ? `${definition.help} ` : ''}{definition.type !== 'select' && definition.type !== 'order' && <span className="cc-copy-field__count">{value.length}/{definition.maxLength}</span>}</>}
+          : <>{definition.help ? `${definition.help} ` : ''}{definition.type !== 'select' && definition.type !== 'order' && definition.type !== 'media' && <span className="cc-copy-field__count">{value.length}/{definition.maxLength}</span>}</>}
       </span>
       {value !== live && <span className="cc-copy-field__live">Live: <span>{preview(definition.options?.find(option => option.value === live)?.label ?? live, 90)}</span></span>}
     </div>
