@@ -61,6 +61,12 @@ function validateLink(value: string): string | null {
 /** Validates one value against its field definition. Pure: no I/O. */
 export function validateFieldValue(definition: FieldDefinition, raw: unknown): FieldValidation {
   if (typeof raw !== 'string') return { ok: false, message: 'Enter text for this field.' }
+  if (definition.type === 'order') {
+    const items = parseOrder(raw, definition.itemCount ?? 0)
+    if (!items) return { ok: false, message: 'Use card numbers separated by commas, each once.' }
+    if (items.length < (definition.minItems ?? 1)) return { ok: false, message: `Keep at least ${definition.minItems ?? 1} cards visible.` }
+    return { ok: true, value: items.join(',') }
+  }
   if (definition.type === 'select') {
     const choice = raw.trim()
     return definition.options?.some(option => option.value === choice)
@@ -80,6 +86,20 @@ export function validateFieldValue(definition: FieldDefinition, raw: unknown): F
     if (problem) return { ok: false, message: problem }
   }
   return { ok: true, value }
+}
+
+/**
+ * Parses an `order` value ("3,1,2") into unique item numbers within 1…itemCount.
+ * Returns null for anything malformed. Shared by validation and rendering.
+ */
+export function parseOrder(raw: unknown, itemCount: number): number[] | null {
+  if (typeof raw !== 'string') return null
+  const compact = raw.replace(/\s+/g, '')
+  if (!/^\d{1,3}(,\d{1,3})*$/.test(compact)) return null
+  const items = compact.split(',').map(Number)
+  if (new Set(items).size !== items.length) return null
+  if (items.some(item => !Number.isInteger(item) || item < 1 || item > itemCount)) return null
+  return items
 }
 
 export type OverrideValidation =

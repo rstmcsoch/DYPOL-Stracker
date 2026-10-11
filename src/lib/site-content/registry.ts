@@ -18,7 +18,7 @@ import { SYLLABUS } from '../syllabus.js'
 
 export type ContentArea = 'public' | 'user'
 
-export type FieldType = 'text' | 'multiline' | 'link' | 'select'
+export type FieldType = 'text' | 'multiline' | 'link' | 'select' | 'order'
 
 /** One allowed value of a `select` field and the words the editor shows for it. */
 export interface FieldOption {
@@ -41,6 +41,12 @@ export interface FieldDefinition {
   maxLength: number
   /** Allowed values for `select` fields; any other value is rejected. */
   options?: readonly FieldOption[]
+  /** `order` fields: how many numbered items exist (1…itemCount). */
+  itemCount?: number
+  /** `order` fields: minimum number of items that must stay visible. */
+  minItems?: number
+  /** `order` fields: key template naming each item, with `{n}` for its number. */
+  itemLabelKey?: string
 }
 
 /** Bump when the stored shape or the meaning of a key changes; stored rows carry it. */
@@ -66,13 +72,18 @@ function field(
   label: string,
   type: FieldType,
   defaultValue: string,
-  options: { help?: string; maxLength?: number; options?: readonly FieldOption[] } = {}
+  options: { help?: string; maxLength?: number; options?: readonly FieldOption[]; itemCount?: number; minItems?: number; itemLabelKey?: string } = {}
 ) {
   const maxLength = options.maxLength ?? (type === 'multiline' ? 600 : type === 'link' ? 500 : 160)
   if (type === 'select' && !options.options?.some(option => option.value === defaultValue)) {
     throw new Error(`Select field ${key} needs options that include its default.`)
   }
-  fields.push({ key, area, page, section, label, type, defaultValue, maxLength, help: options.help, ...(options.options ? { options: options.options } : {}) })
+  if (type === 'order' && !(options.itemCount && options.itemCount > 0)) throw new Error(`Order field ${key} needs an itemCount.`)
+  fields.push({
+    key, area, page, section, label, type, defaultValue, maxLength, help: options.help,
+    ...(options.options ? { options: options.options } : {}),
+    ...(type === 'order' ? { itemCount: options.itemCount, minItems: options.minItems ?? 1, itemLabelKey: options.itemLabelKey } : {})
+  })
 }
 
 /* ------------------------------------------------------------------ public site */
@@ -198,9 +209,31 @@ const FEATURES: Array<{ title: string; summary: string; points: string[] }> = [
     ]
   }
 ]
+/** Icons an owner may pick for a feature card (lucide names; rendered from a fixed map). */
+export const FEATURE_ICON_OPTIONS: readonly FieldOption[] = [
+  { value: 'book-open', label: 'Open book' },
+  { value: 'list-checks', label: 'Checklist' },
+  { value: 'notebook-pen', label: 'Notebook' },
+  { value: 'alarm-clock', label: 'Alarm clock' },
+  { value: 'calendar-check', label: 'Calendar' },
+  { value: 'timer', label: 'Timer' },
+  { value: 'trending-up', label: 'Trend' },
+  { value: 'sparkles', label: 'Sparkles' },
+  { value: 'target', label: 'Target' },
+  { value: 'shield-check', label: 'Shield' },
+  { value: 'compass', label: 'Compass' },
+  { value: 'repeat', label: 'Repeat' }
+]
+const FEATURE_DEFAULT_ICONS = ['book-open', 'list-checks', 'notebook-pen', 'alarm-clock', 'calendar-check', 'timer', 'trending-up', 'sparkles']
+
+field('public', HOME, 'Feature cards', 'public.features.order', 'Card order and visibility', 'order', FEATURES.map((_, index) => index + 1).join(','), {
+  itemCount: FEATURES.length, minItems: 2, itemLabelKey: 'public.features.item_{n}.title', maxLength: 40,
+  help: 'Move cards up or down, hide the ones you do not want, or bring hidden cards back.'
+})
 FEATURES.forEach((feature, index) => {
   const n = index + 1
   const section = `Feature cards · ${String(n).padStart(2, '0')}`
+  field('public', HOME, section, `public.features.item_${n}.icon`, 'Card icon', 'select', FEATURE_DEFAULT_ICONS[index] ?? 'sparkles', { options: FEATURE_ICON_OPTIONS })
   field('public', HOME, section, `public.features.item_${n}.title`, 'Card title', 'text', feature.title, { maxLength: 60 })
   field('public', HOME, section, `public.features.item_${n}.summary`, 'Card summary', 'multiline', feature.summary, { maxLength: 200 })
   field('public', HOME, section, `public.features.item_${n}.points`, 'Card points (one per line)', 'multiline', feature.points.join('\n'), { maxLength: 1000 })

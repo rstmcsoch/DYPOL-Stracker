@@ -5,6 +5,8 @@ import {
   TrendingUp, Timer
 } from 'lucide-react'
 import { useSiteText } from '../../contexts/SiteContentContext'
+import { parseOrder } from '../../lib/site-content/content'
+import { fieldDefinition } from '../../lib/site-content/registry'
 import { SiteLink } from './SiteLink'
 
 /** Splits a one-item-per-line field into clean list entries. */
@@ -70,14 +72,23 @@ export function StudyLoopSection() {
 
 /* ----------------------------------------------------------------- features */
 
-const FEATURE_ICONS: ReactNode[] = [
-  <BookOpen size={19} />, <ListChecks size={19} />, <NotebookPen size={19} />, <AlarmClock size={19} />,
-  <CalendarCheck size={19} />, <Timer size={19} />, <TrendingUp size={19} />, <Sparkles size={19} />
-]
+/** Fixed icon map for owner-selectable feature icons (see FEATURE_ICON_OPTIONS in the registry). */
+const FEATURE_ICONS: Record<string, ReactNode> = {
+  'book-open': <BookOpen size={19} />, 'list-checks': <ListChecks size={19} />, 'notebook-pen': <NotebookPen size={19} />,
+  'alarm-clock': <AlarmClock size={19} />, 'calendar-check': <CalendarCheck size={19} />, timer: <Timer size={19} />,
+  'trending-up': <TrendingUp size={19} />, sparkles: <Sparkles size={19} />, target: <Target size={19} />,
+  'shield-check': <ShieldCheck size={19} />, compass: <Compass size={19} />, repeat: <Repeat2 size={19} />
+}
+
+const FEATURE_COUNT = fieldDefinition('public.features.order')?.itemCount ?? 8
+const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight']
 
 export function FeatureSection() {
   const [expanded, setExpanded] = useState(false)
   const t = useSiteText
+  const order = parseOrder(t('public.features.order'), FEATURE_COUNT)
+    ?? Array.from({ length: FEATURE_COUNT }, (_, index) => index + 1)
+  const collapsible = order.length > 4
 
   return <SectionShell
     id="features"
@@ -86,11 +97,11 @@ export function FeatureSection() {
     lede={t('public.features.lede')}
   >
     <ol id="feature-list" className={`feature-list ${expanded ? 'is-expanded' : ''}`}>
-      {FEATURE_ICONS.map((icon, index) => {
-        const n = index + 1
+      {order.map((n, index) => {
+        const icon = FEATURE_ICONS[t(`public.features.item_${n}.icon`)] ?? <Sparkles size={19} />
         return <li className="feature-entry" key={n}>
           <div className="feature-entry-head">
-            <span className="feature-index" aria-hidden="true">{String(n).padStart(2, '0')}</span>
+            <span className="feature-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
             <span className="feature-icon" aria-hidden="true">{icon}</span>
             <div>
               <h3>{t(`public.features.item_${n}.title`)}</h3>
@@ -103,17 +114,17 @@ export function FeatureSection() {
         </li>
       })}
     </ol>
-    <button
+    {collapsible && <button
       className="feature-toggle"
       type="button"
       aria-controls="feature-list"
       aria-expanded={expanded}
-      aria-label={expanded ? 'Show fewer features' : 'See all eight Stracker features'}
+      aria-label={expanded ? 'Show fewer features' : `See all ${NUMBER_WORDS[order.length] ?? order.length} Stracker features`}
       onClick={() => setExpanded(value => !value)}
     >
       <span>{expanded ? 'Show fewer features' : 'See all features'}</span>
       {expanded ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
-    </button>
+    </button>}
     <p className="feature-footnote">
       <span aria-hidden="true">✎</span> {t('public.features.footnote')}
     </p>
