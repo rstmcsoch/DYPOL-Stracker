@@ -224,7 +224,7 @@ export default function SyllabusPage() {
   })
 
   return <div className="content-page syllabus-page">
-    <PageHeader eyebrow="THE MAP, NOT THE DESTINATION" title="Syllabus" subtitle="Make the big list feel smaller. Keep track of what’s next." doodle={<span>✎</span>} action={<Button onClick={() => setCreateSubject(examSubjectList[0] ?? 'Physics')}><Plus size={17} /> Add chapter</Button>} />
+    <PageHeader title="Syllabus" doodle={<span>✎</span>} action={<Button onClick={() => setCreateSubject(examSubjectList[0] ?? 'Physics')}><Plus size={17} /> Add chapter</Button>} />
     <div className="syllabus-progress-strip">{subjectCounts.map(item => <NotebookCard key={item.subject} className={`subject-progress-card subject-progress-${subjectSlug(item.subject)}`}><div className="subject-progress-top"><SubjectBadge subject={item.subject} withMark /><span><strong>{item.complete}</strong> / {item.total} done</span></div><ProgressBar value={item.total ? item.complete / item.total * 100 : 0} color={item.color} /><span className="subject-progress-foot">{item.total ? Math.round(item.complete / item.total * 100) : 0}% mapped</span></NotebookCard>)}</div>
     <NotebookCard className="syllabus-board">
       <div className="board-heading"><div><span className="handwriting-label">Your study map</span><p>{data.chapters.length} chapters across three subjects. Move at your own pace.</p></div><span className="board-doodle" aria-hidden="true">✳</span></div>
@@ -260,7 +260,7 @@ export default function SyllabusPage() {
             onDragCancel={cancelChapterDrag}
           />
         })}
-        {filtered.length === 0 && <EmptyState icon={<Search size={24} />} title="No chapters found." description="Try a different search or loosen one of the filters." action={<Button variant="secondary" size="sm" onClick={clearFilters}>Clear filters</Button>} />}
+        {filtered.length === 0 && <EmptyState icon={<Search size={24} />} title="No chapters match." action={<Button variant="secondary" size="sm" onClick={clearFilters}>Clear filters</Button>} />}
       </div>
       <div className="syllabus-board-footer"><span><GripVertical size={15} /> Drag the grip to reorder within a subject — or use ⋯ → Move up / Move down</span><span>{filtered.length} showing</span></div>
     </NotebookCard>
@@ -329,7 +329,7 @@ function ChapterDialog({ chapter: initial, onClose, onSave, isNew = false }: { c
     try { await onSave(chapter) }
     finally { savingRef.current = false; setSaving(false) }
   }
-  return <Dialog title={isNew ? 'Add a chapter' : 'Chapter notes'} subtitle="A good study map leaves space for your own thinking." onClose={onClose} className="chapter-dialog">
+  return <Dialog title={isNew ? 'Add a chapter' : 'Chapter notes'}  onClose={onClose} className="chapter-dialog">
     <div className="form-stack">
       <div className="form-grid two"><Field label="Chapter name" required><input autoFocus maxLength={140} value={chapter.name} onChange={event => set('name', event.target.value)} placeholder="e.g. Centre of Mass" /></Field><Field label="Subject"><select value={chapter.subject} onChange={event => set('subject', event.target.value as Subject)}>{dialogSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
       <div className="form-grid three"><Field label="Status"><select value={chapter.status} onChange={event => set('status', event.target.value as ChapterStatus)}>{STATUSES.map(status => <option key={status}>{status}</option>)}</select></Field><Field label="Priority"><select value={chapter.priority} onChange={event => set('priority', event.target.value as Priority)}>{PRIORITIES.map(priority => <option key={priority}>{priority}</option>)}</select></Field><Field label="Weightage (optional)"><input maxLength={80} value={chapter.weightage ?? ''} onChange={event => set('weightage', event.target.value || null)} placeholder="e.g. 4–6 questions" /></Field></div>

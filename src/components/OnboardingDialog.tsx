@@ -105,7 +105,7 @@ export function OnboardingDialog() {
     <div className="dialog-panel onboarding-panel" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" aria-describedby="onboarding-intro" ref={panel}>
       <div className="dialog-head"><div>
         <h2 className="type-h2" id="onboarding-title">Set up your notebook</h2>
-        <p className="type-body" id="onboarding-intro">Three quick choices so Stracker shows the right subjects, dates and look. You can change them later in Settings.</p>
+        <p className="type-body" id="onboarding-intro">Three quick choices. Change them anytime in Settings.</p>
       </div></div>
       <form className="dialog-content form-stack" onSubmit={event => void submit(event)} noValidate>
         <Field label="Your name" required><input value={name} maxLength={80} autoComplete="name" onChange={event => setName(event.target.value)} /></Field>
@@ -144,7 +144,7 @@ export function OnboardingDialog() {
           <label className={theme === 'light' ? 'selected' : ''}><input type="radio" name="onboarding-theme" value="light" checked={theme === 'light'} onChange={() => setTheme('light')} /><Sun size={16} aria-hidden="true" /> Light</label>
           <label className={theme === 'dark' ? 'selected' : ''}><input type="radio" name="onboarding-theme" value="dark" checked={theme === 'dark'} onChange={() => setTheme('dark')} /><Moon size={16} aria-hidden="true" /> Dark</label>
         </fieldset>
-        {user?.isLocal && <p className="jee-small jee-muted">Local preview: these choices are saved on this device only.</p>}
+        {user?.isLocal && <p className="jee-small jee-muted">Saved on this device only (local preview).</p>}
         {problem && <p className="field-error" role="alert">{problem}</p>}
         <div className="dialog-actions"><Button type="submit" loading={saving}>{saving ? 'Saving…' : 'Start studying'}</Button></div>
       </form>

@@ -14,7 +14,7 @@ export function LearningPipelineCard() {
   const progress = useMemo(() => syllabusProgress(data.chapters, data.settings), [data.chapters, data.settings])
   const total = data.chapters.length
   return <section aria-label="Learning pipeline">
-    <SectionHeading title="Learning pipeline" note="Chapters at each stage. Stages are independent, so counts need not add up to the same chapters." />
+    <SectionHeading title="Learning pipeline" note="Stages are independent; counts can overlap." />
     <NotebookCard className="jee-pipeline-card">
       <div className="jee-pipeline-counts">
         {CHAPTER_STAGE_KEYS.map(key => <div key={key} className="jee-pipeline-count">

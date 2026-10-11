@@ -55,7 +55,7 @@ export function ExamTracksSection() {
   }
 
   return <NotebookCard className="settings-section">
-    <div className="jee-settings-head"><CalendarDays size={18} aria-hidden="true" /><div><strong>Preparation tracks</strong><small className="jee-muted">One shared syllabus. Each track differs only by its date and target.</small></div></div>
+    <div className="jee-settings-head"><CalendarDays size={18} aria-hidden="true" /><div><strong>Preparation tracks</strong><small className="jee-muted">One syllabus; tracks differ by date.</small></div></div>
     <div className="settings-section-content">
       <div className="jee-track-settings">
         <div className="jee-track-setting readonly"><span>{TRACK_LABEL.main1}</span><small className="jee-muted">Date comes from “{jee ? 'JEE Main date' : `${TRACK_LABEL.main1} date`}” above.</small></div>
@@ -70,7 +70,7 @@ export function ExamTracksSection() {
       </div>
       {error && <p className="field-error" role="alert">{error}</p>}
       <div className="jee-section-save"><Button variant="secondary" size="sm" onClick={() => void save()} loading={saving}><Check size={14} /> Save track dates</Button></div>
-      <p className="jee-small jee-muted">Leave dates blank until official dates are published. Nothing here assumes a date.</p>
+      <p className="jee-small jee-muted">Leave blank until dates are official.</p>
     </div>
   </NotebookCard>
 }
@@ -92,7 +92,7 @@ export function ReminderSettingsSection({ draft, patch, errors }: {
     setPermission(await Notification.requestPermission())
   }
   return <NotebookCard className="settings-section">
-    <div className="jee-settings-head">{draft.reminders_enabled ? <Bell size={18} aria-hidden="true" /> : <BellOff size={18} aria-hidden="true" />}<div><strong>Daily reminders</strong><small className="jee-muted">Reminders only mention things that really need you.</small></div></div>
+    <div className="jee-settings-head">{draft.reminders_enabled ? <Bell size={18} aria-hidden="true" /> : <BellOff size={18} aria-hidden="true" />}<div><strong>Daily reminders</strong></div></div>
     <div className="settings-section-content">
       <label className="jee-toggle-row"><input type="checkbox" checked={draft.reminders_enabled} onChange={event => patch('reminders_enabled', event.target.checked)} /><span>Remind me once a day</span></label>
       <div className="form-grid two">
@@ -112,7 +112,7 @@ export function ReminderSettingsSection({ draft, patch, errors }: {
         </div>
         {errors.reminder_types && <p className="field-error" role="alert">{errors.reminder_types}</p>}
       </fieldset>
-      <p className="jee-small jee-muted">Stracker can only notify while the app is open or installed and running. It cannot send a reminder when the device is fully closed; that needs a push service, which is not configured here.</p>
+      <p className="jee-small jee-muted">Works only while the app is open or running.</p>
     </div>
   </NotebookCard>
 }

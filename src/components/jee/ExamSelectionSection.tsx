@@ -77,7 +77,7 @@ export function ExamSelectionSection() {
   }
 
   return <NotebookCard className="settings-section exam-selection-section">
-    <div className="jee-settings-head"><GraduationCap size={18} aria-hidden="true" /><div><strong>Your exam</strong><small className="jee-muted">Pick what you are preparing for and your target year.</small></div></div>
+    <div className="jee-settings-head"><GraduationCap size={18} aria-hidden="true" /><div><strong>Your exam</strong></div></div>
     <div className="settings-section-content">
       <div className="form-grid two">
         <Field label="Exam">

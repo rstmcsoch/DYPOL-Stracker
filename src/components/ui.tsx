@@ -1,6 +1,6 @@
 import { Children, cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowUpRight, Check, LoaderCircle, MoreHorizontal, Sparkles, X } from 'lucide-react'
+import { ArrowUpRight, Check, Info, LoaderCircle, MoreHorizontal, Sparkles, X } from 'lucide-react'
 import type { Subject } from '../types'
 import { subjectSlug } from '../lib/exams/subjects'
 
@@ -30,8 +30,7 @@ export function PageHeader({
   return <div className="page-header">
     <div className="page-header-copy">
       {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-      <h1 className="type-h1">{title}{doodle && <span className="title-doodle" aria-hidden="true">{doodle}</span>}</h1>
-      {subtitle && <p className="type-body">{subtitle}</p>}
+      <h1 className="type-h1">{title}{doodle && <span className="title-doodle" aria-hidden="true">{doodle}</span>}{subtitle && <InfoTip text={subtitle} />}</h1>
     </div>
     {action && <div className="page-header-action">{action}</div>}
   </div>
@@ -80,10 +79,10 @@ export function ProgressBar({ value, color = 'var(--accent)', label }: { value: 
   </div>
 }
 
-export function EmptyState({ icon, title, description, action }: { icon?: ReactNode; title: string; description: string; action?: ReactNode }) {
+export function EmptyState({ icon, title, description, action }: { icon?: ReactNode; title: string; description?: string; action?: ReactNode }) {
   return <div className="empty-state">
     <div className="empty-illustration">{icon ?? <span className="empty-star">✳</span>}</div>
-    <h3 className="type-empty">{title}</h3><p className="type-body">{description}</p>{action && <div className="empty-action">{action}</div>}
+    <h3 className="type-empty">{title}</h3>{description && <p className="type-body">{description}</p>}{action && <div className="empty-action">{action}</div>}
   </div>
 }
 
@@ -151,8 +150,16 @@ export function ConfirmDialog({ title, message, confirmLabel = 'Delete', danger 
   </Dialog>
 }
 
+/**
+ * Context on demand: a small (i) next to a heading. The text stays in the accessibility
+ * tree (visually hidden) and shows as a tooltip on hover, keyboard focus or tap.
+ */
+export function InfoTip({ text }: { text: string }) {
+  return <span className="info-tip" tabIndex={0} data-tip={text}><Info size={14} aria-hidden="true" /><span className="visually-hidden">{text}</span></span>
+}
+
 export function SectionHeading({ title, note, action }: { title: string; note?: string; action?: ReactNode }) {
-  return <div className="section-heading"><div><h2 className="type-h2">{title}</h2>{note && <p className="type-body">{note}</p>}</div>{action}</div>
+  return <div className="section-heading"><div><h2 className="type-h2">{title}{note && <InfoTip text={note} />}</h2></div>{action}</div>
 }
 
 export interface OverflowMenuItem {
