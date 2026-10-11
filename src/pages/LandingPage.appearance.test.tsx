@@ -52,6 +52,12 @@ describe('owner public appearance defaults', () => {
     expect(page.style.getPropertyValue('--owner-accent-dark')).toBe('#7fc49f')
   })
 
+  it('applies the owner website font and keeps the identity font by default', () => {
+    expect(renderLanding({}).hasAttribute('data-owner-font')).toBe(false)
+    cleanup()
+    expect(renderLanding({ 'public.appearance.font': 'sora' }).dataset.ownerFont).toBe('sora')
+  })
+
   it('ignores an unknown stored accent', () => {
     const page = renderLanding({ 'public.appearance.accent': 'hotpink' })
     expect(page.hasAttribute('data-owner-accent')).toBe(false)

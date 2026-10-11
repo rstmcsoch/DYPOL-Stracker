@@ -376,6 +376,17 @@ field('public', LOOK, 'Theme', 'public.appearance.accent', 'Accent colour', 'sel
   help: 'Links, buttons and highlights on the public website. Each preset has a readable light and dark shade.'
 })
 
+field('public', LOOK, 'Typography', 'public.appearance.font', 'Website font', 'select', 'identity', {
+  options: [
+    { value: 'identity', label: 'Patrick Hand — handwritten (default)' },
+    { value: 'lexend', label: 'Lexend' },
+    { value: 'poppins', label: 'Poppins' },
+    { value: 'sora', label: 'Sora' },
+    { value: 'open-sans', label: 'Open Sans' }
+  ],
+  help: 'Bundled fonts only, so pages stay fast and nothing loads from other sites.'
+})
+
 /* Promotional video section. Layout values are presets so no choice can break the page. */
 const PROMO = 'Promotional video'
 field('public', HOME, PROMO, 'public.promo.visibility', 'Show the video section', 'select', 'show', {
@@ -462,6 +473,27 @@ for (const item of USER_NAV_ITEMS) {
 for (const group of USER_NAV_GROUP_CAPTIONS) {
   field('user', NAV, 'Group headings', `user.nav.group.${group.slug}.label`, `Group heading: ${group.caption.toLowerCase()}`, 'text', group.caption, { maxLength: 30 })
 }
+
+/* Student panel theme defaults: applied once, when a new student account is set up. */
+const STUDENT = 'Student panel'
+field('user', STUDENT, 'Theme defaults', 'user.appearance.default_mode', 'Default display mode for new students', 'select', 'light', {
+  options: [{ value: 'light', label: 'Light (default)' }, { value: 'dark', label: 'Dark' }, { value: 'auto', label: "Follow the student's device" }],
+  help: 'Students can still change it in Settings; existing accounts keep their choice.'
+})
+field('user', STUDENT, 'Theme defaults', 'user.appearance.default_color', 'Default colour theme for new students', 'select', 'default', {
+  options: [
+    { value: 'default', label: 'Default' },
+    { value: 'sunset-blaze', label: 'Sunset Blaze' },
+    { value: 'forest-emerald', label: 'Forest Emerald' },
+    { value: 'sandalwood', label: 'Sandalwood' },
+    { value: 'ocean-deep', label: 'Ocean Deep' },
+    { value: 'sakura-blossom', label: 'Sakura Blossom' },
+    { value: 'dracula-midnight', label: 'Dracula Midnight' },
+    { value: 'lavender-mist', label: 'Lavender Mist' },
+    { value: 'cyberpunk-neon', label: 'Cyberpunk Neon' }
+  ],
+  help: 'Students can still change it in Settings; existing accounts keep their choice.'
+})
 
 /** Every editable item, in editor order. */
 export const SITE_CONTENT_FIELDS: readonly FieldDefinition[] = Object.freeze(fields.slice())

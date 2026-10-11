@@ -80,10 +80,11 @@ export default function LandingPage() {
   const t = useSiteText
   const [publicTheme, togglePublicTheme] = usePublicTheme(t('public.appearance.default_mode'))
   const ownerAccent = accentStyle(t('public.appearance.accent'))
+  const ownerFont = t('public.appearance.font')
 
   usePageMeta(t('public.meta.title'), t('public.meta.description'))
 
-  return <div className="pub-page" id="top" data-public-theme={publicTheme} data-owner-accent={ownerAccent ? '' : undefined} style={ownerAccent}>
+  return <div className="pub-page" id="top" data-public-theme={publicTheme} data-owner-accent={ownerAccent ? '' : undefined} data-owner-font={ownerFont !== 'identity' ? ownerFont : undefined} style={ownerAccent}>
     <a className="pub-skip-link" href="#main">Skip to content</a>
     <PublicHeader theme={publicTheme} onThemeToggle={togglePublicTheme} />
     <main id="main" className="pub-main">

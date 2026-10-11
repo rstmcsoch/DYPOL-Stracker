@@ -2,7 +2,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { CONSOLE_BASE } from '../policy'
 import { PageHeader } from '../pageParts'
 import { ContentEditorProvider } from './ContentEditor'
-import { NavigationTab, OverviewTab, PublicTab } from './EditorTabs'
+import { NavigationTab, OverviewTab, PublicTab, StudentThemeTab } from './EditorTabs'
 import { PublishingTab } from './PublishingTab'
 
 /**
@@ -14,6 +14,7 @@ const TABS = [
   { to: '', label: 'Overview', end: true },
   { to: 'public', label: 'Public website', end: false },
   { to: 'navigation', label: 'Navigation & labels', end: false },
+  { to: 'student-theme', label: 'Student panel theme', end: false },
   { to: 'publishing', label: 'Preview & publishing', end: false }
 ]
 
@@ -33,6 +34,7 @@ export default function AppearancePage() {
           <Route index element={<OverviewTab />} />
           <Route path="public" element={<PublicTab />} />
           <Route path="navigation" element={<NavigationTab />} />
+          <Route path="student-theme" element={<StudentThemeTab />} />
           <Route path="publishing" element={<PublishingTab />} />
           <Route path="*" element={<Navigate to={`${CONSOLE_BASE}/appearance`} replace />} />
         </Routes>
