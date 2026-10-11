@@ -1,0 +1,176 @@
+name: Build Android APK (current Stracker)
+
+on:
+  push:
+    branches: [apk-build-current]
+    paths:
+      - .github/workflows/build-apk.yml
+      - package.json
+      - package-lock.json
+      - index.html
+      - src/**
+      - public/**
+      - api/**
+      - vite.config.ts
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stracker-apk-current-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Check Supabase keys
+        env:
+          URL: ${{ secrets.VITE_SUPABASE_URL }}
+          KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then
+            echo "::error::Add repo secrets VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (Settings > Secrets and variables > Actions), then re-run."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Add Capacitor Android and status bar support
+        run: npm install --no-save --package-lock=false @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/status-bar@7
+
+      - name: Build web app
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npx vite build
+
+      - name: Create Android project with the correct package ID and safe system bars
+        run: |
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.stracker.dypollabs",
+            "appName": "Stracker",
+            "webDir": "dist",
+            "android": {
+              "backgroundColor": "#f7f4ec",
+              "allowMixedContent": false
+            },
+            "plugins": {
+              "StatusBar": {
+                "overlaysWebView": false,
+                "style": "LIGHT",
+                "backgroundColor": "#f7f4ec"
+              }
+            }
+          }
+          EOF
+          npx cap add android
+          npx cap sync android
+
+      - name: Keep content below the Android status bar
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          styles = Path("android/app/src/main/res/values/styles.xml")
+          source = styles.read_text()
+          theme = re.search(r'(<style\s+name="AppTheme\.NoActionBar"[^>]*>)(.*?)(</style>)', source, re.S)
+          if not theme:
+              raise SystemExit("Could not find AppTheme.NoActionBar; refusing to build without the status-bar inset fix.")
+          body = theme.group(2)
+          item = '<item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>'
+          if "windowOptOutEdgeToEdgeEnforcement" not in body:
+              body += "\n        " + item + "\n    "
+          source = source[:theme.start()] + theme.group(1) + body + theme.group(3) + source[theme.end():]
+          styles.write_text(source)
+          print("Applied status-bar inset protection to AppTheme.NoActionBar")
+          PY
+          grep -q 'windowOptOutEdgeToEdgeEnforcement' android/app/src/main/res/values/styles.xml
+          sed -i 's/targetSdkVersion 36/targetSdkVersion 35/g' android/variables.gradle android/app/build.gradle 2>/dev/null || true
+
+      - name: Apply Stracker launcher and adaptive icons
+        run: |
+          if ! command -v convert >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+          fi
+          R=android/app/src/main/res
+          for s in mdpi:48:108 hdpi:72:162 xhdpi:96:216 xxhdpi:144:324 xxxhdpi:192:432; do
+            density=${s%%:*}; rest=${s#*:}; legacy=${rest%%:*}; adaptive=${rest##*:}
+            convert public/icons/icon-512.png -resize ${legacy}x${legacy} $R/mipmap-$density/ic_launcher.png
+            cp $R/mipmap-$density/ic_launcher.png $R/mipmap-$density/ic_launcher_round.png
+            convert public/icons/icon-512.png -resize ${adaptive}x${adaptive} -resize 80% -gravity center -background none -extent ${adaptive}x${adaptive} $R/mipmap-$density/ic_launcher_foreground.png
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          res = Path("android/app/src/main/res")
+          pixel = subprocess.check_output(["convert", "public/icons/icon-512.png", "-format", "%[pixel:p{0,0}]", "info:"], text=True)
+          rgb = [int(value) for value in re.findall(r"\d+", pixel)]
+          if len(rgb) < 3 or any(value < 0 or value > 255 for value in rgb[:3]):
+              raise SystemExit(f"Could not determine logo background color from {pixel!r}")
+          background = "#" + "".join(f"{value:02x}" for value in rgb[:3])
+          (res / "values" / "stracker_icon.xml").write_text(
+              "<resources>\n    <color name=\"stracker_launcher_background\">" + background + "</color>\n</resources>\n"
+          )
+          adaptive = '''<?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/stracker_launcher_background" />
+              <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+          </adaptive-icon>
+          '''
+          folder = res / "mipmap-anydpi-v26"
+          folder.mkdir(parents=True, exist_ok=True)
+          for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
+              (folder / name).write_text(adaptive.strip() + "\n")
+          print(f"Applied Stracker logo to legacy and adaptive Android launcher icons; background={background}")
+          PY
+          grep -q '@mipmap/ic_launcher_foreground' $R/mipmap-anydpi-v26/ic_launcher.xml
+          test -s $R/mipmap-xxxhdpi/ic_launcher_foreground.png
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Rename APK and checksum
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk Stracker.apk
+          sha256sum Stracker.apk > Stracker.apk.sha256
+          ls -lh Stracker.apk
+          cat Stracker.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Stracker-Android-APK-current
+          path: |
+            Stracker.apk
+            Stracker.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "stracker-apk-current-${{ github.run_id }}" Stracker.apk Stracker.apk.sha256 \
+            --title "Stracker Android APK (updated build)" \
+            --notes "Built from commit ${{ github.sha }} on branch apk-build-current. App name: Stracker. Application ID: com.stracker.dypollabs. Debug-signed APK for direct Android installation."
