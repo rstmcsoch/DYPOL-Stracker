@@ -21,6 +21,8 @@ import { navCaptionFor, navLabelFor } from '../lib/site-content/nav'
 import type { SiteValues } from '../lib/site-content/content'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
 import { chosenExamTitle, isJeeSettings } from '../lib/jee/exam'
+import { OnboardingDialog } from './OnboardingDialog'
+import { needsOnboarding } from '../lib/defaults'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
 interface NavigationGroup { caption: string; items: NavigationItem[] }
@@ -81,7 +83,7 @@ const moreRoutes = new Set(allNav.map(item => item.to).filter(to => !mobileBar.s
 export function AppFrame() {
   const siteValues = useSiteValues()
   const { user, signOut } = useAuth()
-  const { data, syncState, pendingCount, syncError, refresh, undoAvailable, undoDelete, dismissUndo } = useData()
+  const { data, loading, syncState, pendingCount, syncError, refresh, undoAvailable, undoDelete, dismissUndo } = useData()
   const { notify } = useToast()
   const navigate = useNavigate()
   const location = useLocation()
@@ -92,6 +94,16 @@ export function AppFrame() {
   const [quickActionsOpen, setQuickActionsOpen] = useState(false)
 
   useEffect(() => { setMobileMore(false) }, [location.pathname])
+
+  // First-run setup waits for the first sync so a stale device cache never flashes it, then
+  // stays up (even through later sync states) until the student completes it.
+  const onboardingNeeded = needsOnboarding(data.settings)
+  const syncSettled = !loading && syncState !== 'loading' && syncState !== 'syncing'
+  const [onboardingShown, setOnboardingShown] = useState(false)
+  useEffect(() => { if (onboardingNeeded && syncSettled) setOnboardingShown(true) }, [onboardingNeeded, syncSettled])
+  const onboarding = onboardingNeeded && (syncSettled || onboardingShown)
+  const onboardingRef = useRef(onboarding)
+  onboardingRef.current = onboarding
 
   // Reminders: checked while the app is open. Fires at most once per IST day, and only when
   // there is a real item to mention and the browser has granted notification permission.
@@ -111,6 +123,7 @@ export function AppFrame() {
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
+      if (onboardingRef.current) return
       const isTyping = target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault(); setSearchOpen(true); return
@@ -130,7 +143,8 @@ export function AppFrame() {
   const statusLabel = syncState === 'syncing' ? 'Syncing' : syncState === 'offline' ? 'Offline' : syncState === 'error' ? 'Sync issue' : syncState === 'local' ? 'On this device' : pendingCount ? `${pendingCount} pending` : 'Synced'
   const StatusIcon = syncState === 'offline' || syncState === 'error' ? CloudOff : syncState === 'local' ? ShieldCheck : Cloud
 
-  return <div className="app-shell">
+  return <>
+  <div className="app-shell" inert={onboarding || undefined} aria-hidden={onboarding || undefined}>
     <aside className="sidebar" aria-label="Main navigation">
       <div className="sidebar-head">
         <Brand />
@@ -221,6 +235,8 @@ export function AppFrame() {
     {undoAvailable && <div className="undo-toast" role="status"><Check size={15} /><span>Deleted</span><button onClick={() => void undoDelete().then(() => notify('Deletion undone.')).catch(error => notify(error instanceof Error ? error.message : 'Could not undo deletion.', 'error'))}>Undo</button><IconButton label="Dismiss" onClick={dismissUndo}><X size={14} /></IconButton></div>}
     <AIExperience />
   </div>
+  {onboarding && <OnboardingDialog />}
+  </>
 }
 
 function NavItem({ to, label, icon: Icon, exact, onClick }: NavigationItem & { onClick?: () => void }) {

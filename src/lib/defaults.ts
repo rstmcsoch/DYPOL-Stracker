@@ -3,7 +3,7 @@ import { createId, stableId } from './id.js'
 import { indiaToday } from './date.js'
 import { normalizeReadingFont } from './fonts.js'
 import { normalizeColorTheme } from './themes.js'
-import { EXAM_ID_PATTERN } from './exams/catalog.js'
+import { EXAM_ID_PATTERN, isJeeExam } from './exams/catalog.js'
 import type {
   AppSettings, Chapter, ChapterImportance, ChapterStage, ChapterStageKey, ReminderKind, Subject,
   TrackId, UserExamTrack
@@ -44,6 +44,7 @@ export function defaultSettings(userId: string, ownerName = ''): AppSettings {
     exam_session: null,
     exam_board: null,
     boards_addon: false,
+    onboarding_completed: false,
     created_at: now,
     updated_at: now
   }
@@ -104,6 +105,7 @@ export function normalizeSettings(row: Record<string, unknown>, userId: string):
     exam_session: typeof row.exam_session === 'string' && row.exam_session.length <= 40 ? row.exam_session : null,
     exam_board: typeof row.exam_board === 'string' && row.exam_board.length <= 40 ? row.exam_board : null,
     boards_addon: row.boards_addon === true,
+    onboarding_completed: row.onboarding_completed === true,
     created_at: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : new Date().toISOString()
   }
@@ -155,4 +157,18 @@ export function defaultExamTracks(userId: string): UserExamTrack[] {
 
 export function todayTaskDate(): string {
   return indiaToday()
+}
+
+/**
+ * Seed the JEE syllabus only once JEE is actually chosen: an explicit JEE pick, or an
+ * account that finished first-run setup before exam choice existed. Brand-new accounts
+ * wait for the first-run setup, which seeds JEE itself; other exams start empty.
+ */
+export function shouldSeedJeeSyllabus(settings: Pick<AppSettings, 'exam_id' | 'onboarding_completed'>): boolean {
+  return isJeeExam(settings.exam_id) && (settings.exam_id !== null || settings.onboarding_completed === true)
+}
+
+/** Who sees first-run setup: anyone who has not finished it and has no exam chosen yet. */
+export function needsOnboarding(settings: Pick<AppSettings, 'onboarding_completed' | 'exam_id'>): boolean {
+  return settings.onboarding_completed !== true && !settings.exam_id
 }
