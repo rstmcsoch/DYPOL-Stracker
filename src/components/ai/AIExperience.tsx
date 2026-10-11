@@ -4,7 +4,6 @@ import { ArrowDown, ArrowUpRight, Check, ChevronDown, CircleAlert, Clock3, Histo
 import { useAI, type AIActionConfirmation, type AIMessage } from '../../contexts/AIContext'
 import { providerLabel } from '../../lib/ai/catalog'
 import { useAuth } from '../../contexts/AuthContext'
-import { useData } from '../../contexts/DataContext'
 import { useToast } from '../../contexts/ToastContext'
 import { Button, Dialog, IconButton, StatusBadge } from '../ui'
 import { AIProviderMark } from './AIProviderMark'
@@ -81,13 +80,11 @@ function ConversationMessages({ compact=false }: { compact?:boolean }) {
   const { messages,providers,sendMessage,activeTask,isBusy } = useAI()
   const location = useLocation()
   const { user } = useAuth()
-  const { data } = useData()
   const bottomRef = useRef<HTMLDivElement>(null)
   const [autoScroll,setAutoScroll] = useState(true)
   const configured = providers.some(provider => provider.enabled && provider.connection_status === 'connected')
   const defaultProvider = providers.find(provider => provider.is_default && provider.enabled && provider.connection_status === 'connected')
   const showWelcome = messages.length === 0
-  const contextChapters = useMemo(() => data.chapters.length,[data.chapters.length])
   useEffect(() => { if (autoScroll) bottomRef.current?.scrollIntoView({behavior:'smooth',block:'end'}) },[messages,activeTask?.progress,autoScroll])
   const prompt = (text:string) => { void sendMessage(text,location.pathname) }
   return <div className={`ai-conversation ${compact ? 'ai-conversation-compact' : ''}`}>
@@ -102,7 +99,6 @@ function ConversationMessages({ compact=false }: { compact?:boolean }) {
         <p>Ask about your saved tests, chapters, revisions, mistakes, or study plan. I’ll use your Stracker data—not invented estimates.</p>
         {!configured ? <div className="ai-connect-nudge"><KeyRoundIcon /><span><strong>Connect your own AI provider to begin.</strong><small>BYOK only · provider billing applies · no DYPOL-owned key</small></span><Link to="/settings" className="button button-secondary button-sm">Set up AI</Link></div> : <div className="ai-provider-ready"><AIProviderMark provider={defaultProvider?.provider_id ?? 'gemini'} small /><span>Using your preferred <strong>{defaultProvider ? activeProviderLabel(defaultProvider.provider_id,providers) : 'configured provider'}</strong>{defaultProvider?.model_id ? ` · ${defaultProvider.model_id}` : ''}</span></div>}
         {configured && <div className="ai-suggestion-grid">{SUGGESTIONS.map((suggestion,index) => <button key={suggestion} onClick={() => prompt(suggestion)} disabled={isBusy}><span>{index === 0 ? '01' : index === 1 ? '02' : index === 2 ? '03' : '04'}</span>{suggestion}<ArrowUpRight size={14} /></button>)}</div>}
-        {configured && <p className="ai-local-data-note">{contextChapters} chapters in your notebook · active page: {location.pathname === '/' ? 'Dashboard' : location.pathname.slice(1)}. Only the data needed for a question is sent.</p>}
       </div> : <div className="ai-messages-list">{messages.map(message => message.role === 'user' ? <UserMessage key={message.id} message={message} /> : <AssistantMessage key={message.id} message={message} />)}</div>}
       {activeTask && isBusy && <div className="ai-task-progress" role="status"><LoaderCircle size={14} className="spin" /><span>{activeTask.progress}</span>{activeTask.providerId && <small>{activeProviderLabel(activeTask.providerId,providers)}{activeTask.modelId ? ` · ${activeTask.modelId}` : ''}</small>}</div>}
       <div ref={bottomRef} />
@@ -163,7 +159,7 @@ function HistorySidebar({ onSelect,hidden=false }: { onSelect:()=>void;hidden?:b
 }
 
 export function AIExperience() {
-  const { panelOpen,minimized,largeOpen,openPanel,restorePanel,minimizePanel,closePanel,expandPanel,collapseLarge,conversationTitle,conversationId,clearConversation,newConversation,activeTask,isBusy } = useAI()
+  const { panelOpen,minimized,largeOpen,openPanel,restorePanel,minimizePanel,closePanel,expandPanel,collapseLarge,conversationTitle,conversationId,clearConversation,newConversation,isBusy } = useAI()
   const launcherExpanded = useScrollExpanded()
   // Exit animations: the floating window fades/scales out before close or minimise; the large
   // workspace fades out before it closes or returns to the floating window.
@@ -224,7 +220,6 @@ export function AIExperience() {
   </>
   return <>
     {!panelOpen && !largeOpen && <div className={`ai-launcher-wrap ${minimized ? 'ai-launcher-minimized' : ''} ${minimized || launcherExpanded ? 'ai-launcher-expanded' : ''}`}>
-      {minimized && <span className="ai-launcher-status">{isBusy ? activeTask?.progress ?? 'Working…' : 'Assistant minimized · task continues'}</span>}
       <button className={`ai-launcher ${isBusy ? 'ai-launcher-active' : ''}`} onClick={minimized ? restorePanel : openPanel} aria-label={minimized ? 'Restore AI Assistant; task continues' : 'Ask Stracker'} aria-expanded={false}><Sparkles size={20} aria-hidden="true" /><span className="ai-launcher-label" aria-hidden="true">{minimized ? 'Restore' : 'Ask Stracker'}</span>{isBusy && <i aria-label="AI task active" />}</button>
     </div>}
     {panelOpen && !largeOpen && <section className="ai-floating-window" aria-label="Stracker AI Assistant" data-state={floatingExit.state} onAnimationEnd={floatingExit.onAnimationEnd}><div className="ai-floating-shell">{content}</div></section>}

@@ -53,7 +53,7 @@ export async function discoverProviderModels(setup: ProviderSetup, apiKey: strin
   try {
     let url: string
     if (setup.providerId === 'gemini') {
-      url = 'https://generativelanguage.googleapis.com/v1beta/models'
+      url = 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000'
     } else if (setup.providerId === 'anthropic') {
       url = 'https://api.anthropic.com/v1/models?limit=100'
     } else {

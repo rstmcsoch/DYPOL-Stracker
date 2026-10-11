@@ -47,10 +47,29 @@ export function AISettingsSection() {
         baseUrl:draft.providerId === 'custom' || ['openai','deepseek'].includes(draft.providerId) ? draft.baseUrl?.trim() || null : undefined,
         organizationId:draft.providerId === 'openai' ? draft.organizationId?.trim() || null : undefined
       })
-      notify(editing ? 'Provider settings saved. Test the connection again before using changed settings.' : `${providerLabel(saved.provider_id)} saved. Test the connection to enable it.`)
       closeEditor()
+      await autoTest(saved)
     } catch (error) { notify(error instanceof Error ? error.message : 'Provider settings could not be saved.', 'error') }
     finally { setSaving(false) }
+  }
+
+  /** Every save is followed by a real connection test with the chosen model. */
+  const autoTest = async (saved:AIProviderConfig) => {
+    setWorkingId(saved.id)
+    notify(`${providerLabel(saved.provider_id)} saved. Testing “${saved.model_id}”…`, 'info')
+    try {
+      await testProvider(saved.id)
+      notify(`${providerLabel(saved.provider_id)} is connected and ready.`)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : ''
+      let suggestion = ''
+      try {
+        const result = await discoverModels({ id:saved.id,providerId:saved.provider_id,modelId:saved.model_id,apiKey:'',baseUrl:saved.base_url,protocol:saved.protocol })
+        const ids = (result.models ?? []).map(model => model.id).filter(id => id !== saved.model_id).slice(0,4)
+        if (ids.length) suggestion = ` Available for your key: ${ids.join(', ')}.`
+      } catch { /* suggestions are optional */ }
+      notify(`This model isn’t compatible or available for your key — try a different model. ${reason}${suggestion}`.trim(), 'error')
+    } finally { setWorkingId(null) }
   }
 
   const discover = async () => {

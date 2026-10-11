@@ -261,3 +261,7 @@
   .ai-launcher,.ai-history-sidebar { transition:none; }
 }
 .focus-app-shell .ai-launcher-wrap { display:none; }
+
+/* Composer footer: compact (~65% of the previous visual size). */
+.ai-window .ai-composer-disclaimer, .ai-composer-disclaimer { gap: 3px; padding-top: 3px; font-size: 8.5px /* compact-footnote: owner-requested ~65% composer footer */; line-height: 1.25; opacity: .85; }
+.ai-composer-disclaimer svg { width: 9px; height: 9px; }
