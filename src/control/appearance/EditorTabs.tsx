@@ -31,7 +31,7 @@ export function OverviewTab() {
   const { state, loading, loadError, reload, dirtyKeys, draftExists, draftChanges } = useContentEditor()
   const { zone } = useTimeZone()
   const publicFields = fieldsForArea('public')
-  const userFields = fieldsForArea('user')
+  const userFields = fieldsForArea('user').filter(definition => definition.key.startsWith('user.nav.'))
   const publicLive = Object.keys(state?.published.overrides ?? {}).filter(key => key.startsWith('public.')).length
   const userLive = Object.keys(state?.published.overrides ?? {}).filter(key => key.startsWith('user.')).length
 
@@ -73,7 +73,8 @@ export function OverviewTab() {
             <li>Public header and footer labels, footer column headings, and the homepage browser title and description.</li>
             <li>Homepage button labels and destinations (validated: public pages, homepage sections, or https addresses).</li>
             <li>Promotional video section: show or hide, optional heading and text, player size, frame shape, position, and replacing the video and poster.</li>
-            <li>Public website appearance: default light/dark/system mode and an accent colour preset.</li>
+            <li>Public website appearance: default light/dark/system mode, an accent colour preset and the website font.</li>
+            <li>Student panel: default display mode and colour theme for new student accounts.</li>
             <li>Feature cards (up to 12) and principle items (up to 8): order, show, hide or add, icons, and optional card images.</li>
             <li>Optional hero image in place of the notebook illustration.</li>
             <li>Notebook navigation labels and group headings. Changing a label never changes where it leads.</li>
@@ -132,12 +133,32 @@ export function PublicTab() {
   </>
 }
 
+/* ----------------------------------------------------------- student theme defaults */
+
+export function StudentThemeTab() {
+  const { loading, loadError, reload } = useContentEditor()
+  const [notice, setNotice] = useState<Notice>(null)
+  const fields = fieldsForArea('user').filter(definition => definition.key.startsWith('user.appearance.'))
+
+  if (loadError) return <Panel title="Student theme defaults could not be loaded"><p className="cc-muted">{loadError.message}</p><button type="button" className="cc-btn cc-btn--default cc-btn--sm" onClick={reload}>Try again</button></Panel>
+  if (loading) return <Panel title="Student panel theme"><p className="cc-muted">Loading…</p></Panel>
+
+  return <>
+    <Panel title="Theme defaults for new students" description="Applied once when a new student account is set up, after you publish. Students can change both in Settings; existing accounts are not changed.">
+      <div className="cc-stack">
+        {fields.map(definition => <FieldRow key={definition.key} definition={definition} showContext={false} />)}
+      </div>
+    </Panel>
+    <SaveBar notice={notice} onNotice={setNotice} />
+  </>
+}
+
 /* ----------------------------------------------------------- navigation labels */
 
 export function NavigationTab() {
   const { loading, loadError, reload, values } = useContentEditor()
   const [notice, setNotice] = useState<Notice>(null)
-  const fields = fieldsForArea('user')
+  const fields = fieldsForArea('user').filter(definition => definition.key.startsWith('user.nav.'))
   const groups = groupBy(fields, definition => definition.section)
   const itemLabels = fields.filter(definition => !definition.key.includes('.group.'))
 

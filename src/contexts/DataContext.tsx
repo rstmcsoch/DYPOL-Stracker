@@ -9,6 +9,9 @@ import { relatedRowsForRemoval } from '../lib/data-relations'
 import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { fetchPublishedOverrides } from './SiteContentContext'
+import { resolveSiteValues } from '../lib/site-content/content'
+import { applyOwnerThemeDefaults } from '../lib/site-content/student-defaults'
 import type {
   AppData, AppSettings, BacklogItem, Chapter, ChapterStage, DailyTask, Mistake, PracticeSession,
   Profile, PyqRecord, QueuedChange, RecordFor, Revision, StudyCard, StudySession, TableName,
@@ -329,7 +332,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
       const settingsRows = fetched.find(([table]) => table === 'app_settings')?.[1] ?? []
       if (!settingsRows.length) {
-        next.settings = defaultSettings(userId, next.profile.display_name)
+        // A new account starts from the owner's published theme defaults (if any).
+        const ownerValues = resolveSiteValues((await fetchPublishedOverrides()) ?? {})
+        next.settings = applyOwnerThemeDefaults(defaultSettings(userId, next.profile.display_name), ownerValues)
         const { error } = await cloud.from('app_settings').upsert(cleanForCloud(next.settings as unknown as Record<string, unknown>))
         if (error) throw error
         await localDb.app_settings.put(next.settings)

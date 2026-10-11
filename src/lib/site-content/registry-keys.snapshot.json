@@ -183,6 +183,7 @@
   "public.footer.group_brand.title",
   "public.appearance.default_mode",
   "public.appearance.accent",
+  "public.appearance.font",
   "public.promo.visibility",
   "public.promo.heading_visibility",
   "public.promo.eyebrow",
@@ -226,5 +227,7 @@
   "user.nav.group.tests.label",
   "user.nav.group.revision.label",
   "user.nav.group.planning.label",
-  "user.nav.group.keep-going.label"
+  "user.nav.group.keep-going.label",
+  "user.appearance.default_mode",
+  "user.appearance.default_color"
 ]

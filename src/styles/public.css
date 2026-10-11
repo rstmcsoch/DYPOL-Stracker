@@ -1636,3 +1636,9 @@ html[data-app-font='active'] .pub-page .pub-footer-wordmark {
 .feature-image { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; margin: 0 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper-muted); }
 .hero-image { display: block; width: 100%; max-width: 620px; height: auto; max-height: 70vh; aspect-ratio: 4 / 3; object-fit: cover; margin-inline: auto; border-radius: clamp(16px, 2.4vw, 24px); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .principle-tick svg { width: 13px; height: 13px; }
+
+/* Owner website font (public.appearance.font). Bundled faces only; absent = Patrick Hand identity. */
+.pub-page[data-owner-font='lexend'] { --font-identity: 'Lexend', 'Trebuchet MS', system-ui, sans-serif; }
+.pub-page[data-owner-font='poppins'] { --font-identity: 'Poppins', 'Trebuchet MS', system-ui, sans-serif; }
+.pub-page[data-owner-font='sora'] { --font-identity: 'Sora', 'Trebuchet MS', system-ui, sans-serif; }
+.pub-page[data-owner-font='open-sans'] { --font-identity: 'Open Sans', 'Trebuchet MS', system-ui, sans-serif; }
