@@ -45,9 +45,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     logAIEvent('info', 'connection_test_succeeded', { reference, userId, provider: row.provider_id, model: row.model_id, durationMs: Date.now() - started })
     const { count: defaults, error: defaultError } = await adminClient.from('ai_provider_configs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_default', true)
     if (defaultError) throw new ApiError(503, 'provider_save_failed', 'The connection worked, but Stracker could not update its preferred-provider setting.')
-    const isDefault = row.is_default || (previousStatus === 'not_tested' && (defaults ?? 0) === 0)
+    // A provider becomes usable whenever a test succeeds after it was not working (never tested,
+    // or auto-disabled by a failed test). Only a provider that was already healthy keeps the
+    // user's own enable/disable choice. Previously a failed-then-fixed provider stayed disabled.
+    const recovering = previousStatus !== 'connected'
+    const isDefault = row.is_default || (recovering && (defaults ?? 0) === 0)
     const { error: updateError } = await adminClient.from('ai_provider_configs').update({
-      connection_status: 'connected', enabled: previousStatus === 'not_tested' ? true : previousEnabled,
+      connection_status: 'connected', enabled: recovering ? true : previousEnabled,
       is_default: isDefault, last_checked_at: new Date().toISOString(), cooldown_until: null, failure_count: 0
     }).eq('user_id', userId).eq('id', row.id)
     if (updateError) throw new ApiError(503, 'provider_save_failed', 'The connection worked, but its status could not be saved. Try again.')
