@@ -148,6 +148,10 @@
       "destination": "/api/control/operations?route=exams"
     },
     {
+      "source": "/api/control/analytics-ingest",
+      "destination": "/api/control/operations?route=analytics-ingest"
+    },
+    {
       "source": "/api/control/(.*)",
       "destination": "/api/control/system?route=not-found"
     },

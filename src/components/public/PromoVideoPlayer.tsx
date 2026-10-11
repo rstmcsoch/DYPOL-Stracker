@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { useSiteText } from '../../contexts/SiteContentContext'
+import { track } from '../../lib/telemetry/client'
 
 /**
  * Public-homepage promotional player.
@@ -161,10 +162,24 @@ function PromoVideoBody() {
     if (video) video.muted = muted
   }, [muted, armed])
 
+  /* Analytics: only a deliberate play or unmute counts as a start (ambient muted autoplay
+     never does); progress milestones fire once per engagement. */
+  const engaged = useRef<Set<string> | null>(null)
+  const engage = () => { if (!engaged.current) { engaged.current = new Set(); track('video_started', { video: 'promo' }) } }
+  const onProgress = () => {
+    const video = videoRef.current
+    if (!engaged.current || !video || !video.duration) return
+    const share = video.currentTime / video.duration
+    for (const [mark, name] of [[0.25, 'video_progress_25'], [0.5, 'video_progress_50'], [0.75, 'video_progress_75'], [0.97, 'video_completed']] as const) {
+      if (share >= mark && !engaged.current.has(name)) { engaged.current.add(name); track(name, { video: 'promo' }) }
+    }
+  }
+
   const togglePlay = () => {
     const video = videoRef.current
     if (!video || failed) return
     if (video.paused) {
+      engage()
       userPaused.current = false
       userOptedIn.current = true
       setAutoplayBlocked(false)
@@ -176,7 +191,7 @@ function PromoVideoBody() {
     }
   }
 
-  const toggleMute = () => setMuted(current => !current)
+  const toggleMute = () => { if (muted) engage(); setMuted(current => !current) }
 
   return (
     <section className={`pub-section pub-section-promo promo-size-${size} promo-aspect-${aspect} promo-pos-${position}`} aria-labelledby="promo-title">
@@ -204,7 +219,8 @@ function PromoVideoBody() {
             disablePictureInPicture
             onPlay={() => { setPlaying(true); setAutoplayBlocked(false) }}
             onPause={() => setPlaying(false)}
-            onError={() => setFailed(true)}
+            onTimeUpdate={onProgress}
+            onError={() => { if (!failed) track('video_error', { video: 'promo' }); setFailed(true) }}
           >
             {armed && customVideo && <source src={customVideo} type="video/mp4" />}
             {armed && <source src={WEB_SOURCE} type="video/mp4" />}

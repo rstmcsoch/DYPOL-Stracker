@@ -9,6 +9,7 @@ import { relatedRowsForRemoval } from '../lib/data-relations'
 import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { trackStudentWrite } from '../lib/telemetry/client'
 import { fetchPublishedOverrides } from './SiteContentContext'
 import { resolveSiteValues } from '../lib/site-content/content'
 import { applyOwnerThemeDefaults } from '../lib/site-content/student-defaults'
@@ -438,6 +439,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!inputs.length) return
     let records = inputs.map(input => withOwner(table, input as unknown as Record<string, unknown>, userId))
     validatePersistedRecords(table, records)
+    const known = new Set(rowsFor(queryDataRef.current ?? emptyData(userId), table).map(row => String(row.id)))
+    const writeOp = records.some(record => known.has(String(record.id))) ? 'update' : 'create'
+    const trackWrite = (stage: 'attempted' | 'succeeded' | 'failed', _table: TableName, rows: unknown[], reason?: 'offline' | 'server') =>
+      trackStudentWrite(stage, table, writeOp, rows.length, reason)
     const localTables = table === 'mistakes' ? [localDb.table(table), localDb.assets] : [localDb.table(table)]
     await localDb.transaction('rw', localTables, async () => {
       await localDb.table(table).bulkPut(records as object[])
@@ -452,6 +457,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     })
     setData(current => records.reduce((next, row) => updateOne(next, table, row), current))
     if (supabase && !user?.isLocal && navigator.onLine) {
+      trackWrite('attempted', table, records)
       try {
         if (table === 'mistakes') {
           records = await Promise.all(records.map(row => uploadPendingImage(row, userId)))
@@ -460,6 +466,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         const { error } = await supabase.from(table).upsert(records.map(cleanForCloud))
         if (error) throw error
+        trackWrite('succeeded', table, records)
         if (table === 'mistakes') {
           records = await Promise.all(records.map(retirePreviousMistakeImage))
           await localDb.mistakes.bulkPut(records as unknown as Mistake[])
@@ -469,6 +476,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         await queueChanges(records.map(record => ({ user_id: userId, table, operation: 'upsert', id: String(record.id), record, queued_at: new Date().toISOString() })))
         const offline = isNetworkError(error)
+        trackWrite('failed', table, records, offline ? 'offline' : 'server')
         setSyncState(offline ? 'offline' : 'error')
         setSyncError(offline ? 'Offline — the edit is saved here and will sync automatically.' : 'The edit is saved locally but could not reach the cloud. Retry sync when ready.')
         if (!offline) throw new Error('Saved on this device; cloud sync failed. Use Retry sync to try again.')
@@ -581,7 +589,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       id, user_id: userId, image_path: record.image_path, image_previous_path: record.image_previous_path
     } : undefined
     if (supabase && !user?.isLocal && navigator.onLine) {
+      trackStudentWrite('attempted', table, 'delete', 1)
       const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', userId)
+      trackStudentWrite(error ? 'failed' : 'succeeded', table, 'delete', 1, error ? (isNetworkError(error) ? 'offline' : 'server') : undefined)
       if (error) {
         await queueChanges([{ user_id: userId, table, operation: 'delete', id, record: imageQueueRecord, queued_at: new Date().toISOString() }])
         setSyncState(isNetworkError(error) ? 'offline' : 'error')
