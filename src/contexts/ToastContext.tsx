@@ -4,7 +4,7 @@ import { Check, CircleAlert, Info, X } from 'lucide-react'
 import { IconButton } from '../components/ui'
 
 type ToastKind = 'success' | 'error' | 'info'
-interface ToastMessage { id: number; text: string; kind: ToastKind }
+interface ToastMessage { id: number; text: string; kind: ToastKind; leaving?: boolean }
 interface ToastContextValue { notify: (text: string, kind?: ToastKind) => void }
 const ToastContext = createContext<ToastContextValue | null>(null)
 let toastId = 0
@@ -26,7 +26,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(timer)
       timers.current.delete(id)
     }
-    setToasts(items => items.filter(item => item.id !== id))
+    // Mark as leaving so CSS can fade it out, then remove (immediately with reduced motion).
+    const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduce) { setToasts(items => items.filter(item => item.id !== id)); return }
+    setToasts(items => items.map(item => item.id === id ? { ...item, leaving: true } : item))
+    window.setTimeout(() => setToasts(items => items.filter(item => item.id !== id)), 140)
   }, [])
 
   const notify = useCallback((text: string, kind: ToastKind = 'success') => {
@@ -44,7 +48,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return <ToastContext.Provider value={value}>
     {children}
     <div className="toast-stack" aria-live="polite" aria-atomic="false">
-      {toasts.map(toast => <div key={toast.id} className={`toast type-alert toast-${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}>
+      {toasts.map(toast => <div key={toast.id} className={`toast type-alert toast-${toast.kind}`} data-state={toast.leaving ? 'closed' : 'open'} role={toast.kind === 'error' ? 'alert' : 'status'}>
         <span className="toast-icon">{toast.kind === 'success' ? <Check size={16} /> : toast.kind === 'error' ? <CircleAlert size={16} /> : <Info size={16} />}</span>
         <span>{toast.text}</span>
         <IconButton label="Dismiss notification" onClick={() => dismiss(toast.id)}><X size={15} /></IconButton>

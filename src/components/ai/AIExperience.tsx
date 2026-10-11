@@ -9,6 +9,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { Button, Dialog, IconButton, StatusBadge } from '../ui'
 import { AIProviderMark } from './AIProviderMark'
 import { useScrollExpanded } from '../../lib/ui/scroll-expand'
+import { useExit } from '../../lib/ui/use-exit'
 import { isSafeAppPath } from '../../lib/safe-path'
 
 const SUGGESTIONS = [
@@ -164,6 +165,14 @@ function HistorySidebar({ onSelect,hidden=false }: { onSelect:()=>void;hidden?:b
 export function AIExperience() {
   const { panelOpen,minimized,largeOpen,openPanel,restorePanel,minimizePanel,closePanel,expandPanel,collapseLarge,conversationTitle,conversationId,clearConversation,newConversation,activeTask,isBusy } = useAI()
   const launcherExpanded = useScrollExpanded()
+  // Exit animations: the floating window fades/scales out before close or minimise; the large
+  // workspace fades out before it closes or returns to the floating window.
+  const floatingExit = useExit(170)
+  const largeExit = useExit(170)
+  const largeExitFn = largeExit.exit
+  const closeAnimated = () => (largeOpen ? largeExit : floatingExit).exit(closePanel)
+  const minimizeAnimated = () => (largeOpen ? largeExit : floatingExit).exit(minimizePanel)
+  const collapseAnimated = () => largeExit.exit(collapseLarge)
   const { providers,backendStatus } = useAI()
   const [clearConfirmOpen,setClearConfirmOpen] = useState(false)
   const [historyOpen,setHistoryOpen] = useState(false)
@@ -190,7 +199,7 @@ export function AIExperience() {
     const onKey = (event:globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (historyOpenRef.current) { setHistoryOpen(false); window.setTimeout(() => historyToggleRef.current?.focus(),0) }
-        else collapseLarge()
+        else largeExitFn(collapseLarge)
       }
       if (event.key === 'Tab') {
         const root = document.querySelector('.ai-large-workspace')
@@ -204,10 +213,10 @@ export function AIExperience() {
     document.addEventListener('keydown',onKey)
     document.body.classList.add('modal-open')
     return () => { clearTimeout(timer); document.removeEventListener('keydown',onKey); document.body.classList.remove('modal-open'); previous?.focus?.() }
-  },[largeOpen,collapseLarge])
+  },[largeOpen,collapseLarge,largeExitFn])
 
   const content = <>
-    <header className="ai-window-header"><div className="ai-window-brand"><span className="ai-brand-mark"><Sparkles size={16} /></span><div><strong>Stracker AI</strong><span>{conversationId ? conversationTitle : configured ? `Ready${providerNames.length ? ` · ${providerNames[0]}` : ''}` : 'Your study copilot'}</span></div></div><div className="ai-window-tools">{conversationId && <IconButton label="Start a new conversation" onClick={() => newConversation()} disabled={isBusy}><MessageSquarePlus size={16} /></IconButton>}{!largeOpen && <IconButton label="Conversation history and workspace" onClick={() => { setHistoryOpen(true); expandPanel() }}><History size={16} /></IconButton>}{largeOpen && <button ref={historyToggleRef} type="button" className="icon-button" aria-label={historyOpen ? 'Hide recent chats' : 'Show recent chats'} aria-expanded={historyOpen} onClick={() => setHistoryOpen(open => !open)}><History size={16} /></button>}{largeOpen && <IconButton label="Close workspace" onClick={collapseLarge}><Minimize2 size={16} /></IconButton>}{!largeOpen && <IconButton label="Open large workspace" onClick={expandPanel}><Maximize2 size={16} /></IconButton>}<IconButton label="Minimize assistant; task continues" onClick={minimizePanel}><Minus size={17} /></IconButton><IconButton label="Close assistant; task continues" onClick={closePanel}><X size={18} /></IconButton></div></header>
+    <header className="ai-window-header"><div className="ai-window-brand"><span className="ai-brand-mark"><Sparkles size={16} /></span><div><strong>Stracker AI</strong><span>{conversationId ? conversationTitle : configured ? `Ready${providerNames.length ? ` · ${providerNames[0]}` : ''}` : 'Your study copilot'}</span></div></div><div className="ai-window-tools">{conversationId && <IconButton label="Start a new conversation" onClick={() => newConversation()} disabled={isBusy}><MessageSquarePlus size={16} /></IconButton>}{!largeOpen && <IconButton label="Conversation history and workspace" onClick={() => { setHistoryOpen(true); expandPanel() }}><History size={16} /></IconButton>}{largeOpen && <button ref={historyToggleRef} type="button" className="icon-button" aria-label={historyOpen ? 'Hide recent chats' : 'Show recent chats'} aria-expanded={historyOpen} onClick={() => setHistoryOpen(open => !open)}><History size={16} /></button>}{largeOpen && <IconButton label="Close workspace" onClick={collapseAnimated}><Minimize2 size={16} /></IconButton>}{!largeOpen && <IconButton label="Open large workspace" onClick={expandPanel}><Maximize2 size={16} /></IconButton>}<IconButton label="Minimize assistant; task continues" onClick={minimizeAnimated}><Minus size={17} /></IconButton><IconButton label="Close assistant; task continues" onClick={closeAnimated}><X size={18} /></IconButton></div></header>
     {backendStatus === 'misconfigured' && <div className="ai-service-notice" role="alert"><CircleAlert size={15} /><span><strong>The Stracker AI backend is not configured for this deployment.</strong> The administrator must finish the server setup before AI can run.</span></div>}
     {backendStatus === 'unreachable' && <div className="ai-service-notice" role="alert"><CircleAlert size={15} /><span><strong>The Stracker AI backend is unavailable.</strong> The deployed app has no <code>/api/ai/*</code> functions.</span></div>}
     {largeOpen ? <div className={`ai-workspace-body ${historyOpen ? 'history-open' : ''}`}><button className="ai-history-backdrop" aria-label="Close recent conversations" onClick={() => setHistoryOpen(false)} tabIndex={historyOpen ? 0 : -1} /><HistorySidebar hidden={smallScreen && !historyOpen} onSelect={() => { setHistoryOpen(false); if (smallScreen) historyToggleRef.current?.focus() }} /><div className="ai-workspace-chat"><div className="ai-workspace-toolbar"><div><span className="eyebrow">YOUR PRIVATE STUDY WORKSPACE</span><strong>{conversationTitle}</strong></div><div><Button variant="quiet" size="sm" onClick={() => setClearConfirmOpen(true)} disabled={!conversationId || isBusy}><Trash2 size={14} /> Clear chat</Button><Button variant="quiet" size="sm" onClick={() => navigate('/settings#ai-provider-settings')}><KeyRoundIcon /> Providers</Button></div></div><ConversationMessages /><ChatComposer /></div></div>
@@ -218,8 +227,8 @@ export function AIExperience() {
       {minimized && <span className="ai-launcher-status">{isBusy ? activeTask?.progress ?? 'Working…' : 'Assistant minimized · task continues'}</span>}
       <button className={`ai-launcher ${isBusy ? 'ai-launcher-active' : ''}`} onClick={minimized ? restorePanel : openPanel} aria-label={minimized ? 'Restore AI Assistant; task continues' : 'Ask Stracker'} aria-expanded={false}><Sparkles size={20} aria-hidden="true" /><span className="ai-launcher-label" aria-hidden="true">{minimized ? 'Restore' : 'Ask Stracker'}</span>{isBusy && <i aria-label="AI task active" />}</button>
     </div>}
-    {panelOpen && !largeOpen && <section className="ai-floating-window" aria-label="Stracker AI Assistant"><div className="ai-floating-shell">{content}</div></section>}
-    {largeOpen && <div className="ai-workspace-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) collapseLarge() }}><section className="ai-large-workspace" role="dialog" aria-modal="true" aria-label="Stracker AI workspace"><div className="ai-large-shell">{content}</div></section></div>}
+    {panelOpen && !largeOpen && <section className="ai-floating-window" aria-label="Stracker AI Assistant" data-state={floatingExit.state} onAnimationEnd={floatingExit.onAnimationEnd}><div className="ai-floating-shell">{content}</div></section>}
+    {largeOpen && <div className="ai-workspace-backdrop" data-state={largeExit.state} onAnimationEnd={largeExit.onAnimationEnd} onMouseDown={event => { if (event.target === event.currentTarget) collapseAnimated() }}><section className="ai-large-workspace" role="dialog" aria-modal="true" aria-label="Stracker AI workspace"><div className="ai-large-shell">{content}</div></section></div>}
     {clearConfirmOpen && <Dialog title="Clear this conversation?" subtitle="This removes the saved messages from your Stracker account. It does not change your study data or provider settings." onClose={() => !clearing && setClearConfirmOpen(false)} className="dialog-narrow"><div className="dialog-actions"><Button variant="secondary" onClick={() => setClearConfirmOpen(false)} disabled={clearing}>Keep conversation</Button><Button variant="danger" loading={clearing} onClick={() => { if (clearing) return; setClearing(true); void clearConversation().then(() => { setClearConfirmOpen(false); notify('Conversation cleared.') }).catch(error => notify(error instanceof Error ? error.message : 'Conversation could not be cleared.', 'error')).finally(() => setClearing(false)) }}><Trash2 size={15} /> Clear conversation</Button></div></Dialog>}
   </>
 }
