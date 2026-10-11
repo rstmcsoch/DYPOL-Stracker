@@ -254,7 +254,7 @@ function MobileNavItem({ item }: { item: NavigationItem }) {
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return <NavLink className={`brand ${compact ? 'brand-compact' : ''}`} to="/" aria-label="Stracker home">
-    <span className="brand-mark"><span>S</span><i>✳</i></span><span className="brand-type type-brand">Stracker<small className="type-overline">JEE STUDY HOME</small></span>
+    <span className="brand-mark"><span>S</span><i>✳</i></span><span className="brand-type type-brand">Stracker<small className="type-overline">STUDY HOME</small></span>
   </NavLink>
 }
 
