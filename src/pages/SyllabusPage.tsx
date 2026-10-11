@@ -222,12 +222,14 @@ export default function SyllabusPage() {
     const complete = rows.filter(item => item.status === 'Done' || item.status === 'Revised').length
     return { subject, total: rows.length, complete, color: subjectColor(subject) }
   })
+  // Summary cards only for subjects with chapters; long catalogues (CUET, school) would otherwise show every option.
+  const stripCounts = subjectCounts.filter(item => item.total > 0)
 
   return <div className="content-page syllabus-page">
     <PageHeader title="Syllabus" doodle={<span>✎</span>} action={<Button onClick={() => setCreateSubject(examSubjectList[0] ?? 'Physics')}><Plus size={17} /> Add chapter</Button>} />
-    <div className="syllabus-progress-strip">{subjectCounts.map(item => <NotebookCard key={item.subject} className={`subject-progress-card subject-progress-${subjectSlug(item.subject)}`}><div className="subject-progress-top"><SubjectBadge subject={item.subject} withMark /><span><strong>{item.complete}</strong> / {item.total} done</span></div><ProgressBar value={item.total ? item.complete / item.total * 100 : 0} color={item.color} /><span className="subject-progress-foot">{item.total ? Math.round(item.complete / item.total * 100) : 0}% mapped</span></NotebookCard>)}</div>
+    {stripCounts.length > 0 && <div className="syllabus-progress-strip">{stripCounts.map(item => <NotebookCard key={item.subject} className={`subject-progress-card subject-progress-${subjectSlug(item.subject)}`}><div className="subject-progress-top"><SubjectBadge subject={item.subject} withMark /><span><strong>{item.complete}</strong> / {item.total} done</span></div><ProgressBar value={item.total ? item.complete / item.total * 100 : 0} color={item.color} /><span className="subject-progress-foot">{item.total ? Math.round(item.complete / item.total * 100) : 0}% mapped</span></NotebookCard>)}</div>}
     <NotebookCard className="syllabus-board">
-      <div className="board-heading"><div><span className="handwriting-label">Your study map</span><p>{data.chapters.length} chapters across three subjects. Move at your own pace.</p></div><span className="board-doodle" aria-hidden="true">✳</span></div>
+      <div className="board-heading"><div><span className="handwriting-label">Your study map</span><p>{data.chapters.length} chapter{data.chapters.length === 1 ? '' : 's'} across {stripCounts.length} subject{stripCounts.length === 1 ? '' : 's'}.</p></div><span className="board-doodle" aria-hidden="true">✳</span></div>
       <div className="syllabus-filters">
         <div className="search-field syllabus-search"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Find a chapter or note…" aria-label="Search chapters and notes" />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div>
         <div className="filter-controls">
@@ -260,7 +262,7 @@ export default function SyllabusPage() {
             onDragCancel={cancelChapterDrag}
           />
         })}
-        {filtered.length === 0 && <EmptyState icon={<Search size={24} />} title="No chapters match." action={<Button variant="secondary" size="sm" onClick={clearFilters}>Clear filters</Button>} />}
+        {filtered.length === 0 && (data.chapters.length === 0 ? <EmptyState icon={<Search size={24} />} title="No chapters yet." action={<Button variant="secondary" size="sm" onClick={() => setCreateSubject(examSubjectList[0] ?? 'Physics')}><Plus size={15} /> Add chapter</Button>} /> : <EmptyState icon={<Search size={24} />} title="No chapters match." action={<Button variant="secondary" size="sm" onClick={clearFilters}>Clear filters</Button>} />)}
       </div>
       <div className="syllabus-board-footer"><span><GripVertical size={15} /> Drag the grip to reorder within a subject — or use ⋯ → Move up / Move down</span><span>{filtered.length} showing</span></div>
     </NotebookCard>

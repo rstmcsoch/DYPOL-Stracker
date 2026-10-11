@@ -129,3 +129,30 @@
 .info-tip:focus-visible { box-shadow: 0 0 0 2px var(--accent, currentColor); }
 .info-tip::after { content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); width: max-content; max-width: min(260px, 70vw); padding: 6px 9px; border-radius: 6px; background: var(--ink, #222); color: var(--paper, #fff); font: 400 12.5px/1.4 var(--font-body, inherit); letter-spacing: 0; text-transform: none; white-space: normal; z-index: 50; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
 .info-tip:hover::after, .info-tip:focus::after { opacity: 1; }
+
+/* Home syllabus card: full subject names (wrap, never truncate) and a short hint when empty. */
+.subject-mini-row { grid-template-columns: minmax(84px, max-content) minmax(60px, 1fr) 40px; }
+.subject-mini-row .subject-badge { max-width: 168px; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; text-align: left; height: auto; padding-block: 3px; }
+.subject-mini-hint { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+
+/* One notebook-style control for every native select, input and checkbox in the student
+   app, dialogs and first-run setup. Zero-specificity base so existing page rules still win. */
+:where(.app-shell, .dialog-backdrop, .onboarding-backdrop) :where(select, textarea, input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file'], [type='hidden'])) {
+  min-height: 40px; padding: 8px 11px; border: 1px solid var(--line-strong); border-radius: 8px 10px 9px 8px;
+  color: var(--ink); background-color: var(--paper-soft); font: 14px/1.35 var(--font-body); max-width: 100%;
+}
+:where(.app-shell, .dialog-backdrop, .onboarding-backdrop) :where(select, textarea, input):focus-visible { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 1px; }
+:where(.app-shell, .dialog-backdrop, .onboarding-backdrop) :where(input, select, textarea):disabled { opacity: .6; cursor: not-allowed; }
+.app-shell select, .dialog-backdrop select, .onboarding-backdrop select, .ui-select {
+  appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+.app-shell select:hover, .dialog-backdrop select:hover, .onboarding-backdrop select:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-strong)); }
+.app-shell select option, .dialog-backdrop select option { color: var(--ink); background: var(--paper); }
+:where(.app-shell, .dialog-backdrop, .onboarding-backdrop) input:where([type='checkbox'], [type='radio']) { accent-color: var(--accent); width: 18px; height: 18px; cursor: pointer; }
+:where(.app-shell, .dialog-backdrop, .onboarding-backdrop) input:where([type='date'], [type='time'])::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .65; }
+
+/* Settings: stacked cards in one tab keep the standard card gap; AI footnote reads as a footnote. */
+.settings-form-fields { display: grid; gap: var(--space-4, 16px); }
+.ai-settings-card .ai-privacy-footnote { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }

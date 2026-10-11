@@ -137,13 +137,14 @@ export interface TrackReadiness {
 export function trackReadiness(data: AppData, track: TrackId, today: string): TrackReadiness {
   const progress = syllabusProgress(data.chapters, data.settings)
   const jee = isJeeSettings(data.settings)
-  const pyqExam = jee ? TRACK_PYQ_EXAM[track] : null
+  // Non-JEE exams keep their PYQ years in the single (Main) column of the PYQ tracker.
+  const pyqExam = jee ? TRACK_PYQ_EXAM[track] : 'Main'
   const pyq = pyqExam ? pyqCompletion(data.pyqRecords, null, pyqExam, data.settings) : null
   const recent = [...data.tests].sort((a, b) => b.test_date.localeCompare(a.test_date)).slice(0, 3)
   const testAverage = getMeanTestPercentage(recent, data.testSubjectScores).average
   const components = [
     { label: 'Weighted syllabus', value: progress.weighted, note: progress.weighted === null ? 'No chapters yet' : 'Shared syllabus' },
-    { label: pyqExam ? `${pyqExam === 'Main' ? 'JEE Main' : 'JEE Advanced'} PYQs` : 'PYQs', value: pyq?.percent ?? null, note: pyq ? `${pyq.done} of ${pyq.total} years` : jee ? 'Not used for Boards' : 'JEE PYQ tracker only' },
+    { label: pyqExam && jee ? `${pyqExam === 'Main' ? 'JEE Main' : 'JEE Advanced'} PYQs` : 'PYQs', value: pyq?.percent ?? null, note: pyq ? `${pyq.done} of ${pyq.total} years` : jee ? 'Not used for Boards' : 'JEE PYQ tracker only' },
     { label: 'Recent tests', value: testAverage, note: recent.length ? `Last ${recent.length} test${recent.length === 1 ? '' : 's'}` : 'No tests yet' }
   ]
   const usable = components.map(item => item.value).filter((value): value is number => value !== null)

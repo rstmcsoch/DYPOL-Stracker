@@ -220,7 +220,7 @@ function PracticeDialog({ data, initialChapterId = '', existing, onClose, onSave
   const attempted = Number(form.attempted)
   const correct = Number(form.correct)
   const accuracy = attempted > 0 && Number.isFinite(correct) && form.correct !== '' ? (correct / attempted) * 100 : null
-  return <Dialog title={existing ? 'Edit practice block' : 'Log practice'} subtitle="Questions you attempted outside tests. Correct + incorrect can’t exceed attempted." onClose={onClose} className="jee-dialog">
+  return <Dialog title={existing ? 'Edit practice block' : 'Log practice'} subtitle="Correct + incorrect can’t exceed attempted." onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <div className="form-grid two">
         <SubjectSelect value={subject} onChange={value => { setSubject(value as Subject | 'all'); set('chapterId', '') }} allowAll label="Subject filter" />
@@ -237,7 +237,7 @@ function PracticeDialog({ data, initialChapterId = '', existing, onClose, onSave
         <Field label="Source"><select value={form.source} onChange={event => set('source', event.target.value)}>{PRACTICE_SOURCES.map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
         <Field label="Time spent (min, optional)" error={errors.minutes}><input inputMode="numeric" value={form.minutes} onChange={event => set('minutes', event.target.value)} placeholder="45" /></Field>
       </div>
-      <Field label="Notes (optional)" error={errors.notes}><textarea rows={2} maxLength={5000} value={form.notes} onChange={event => set('notes', event.target.value)} placeholder="e.g. DPP 7, Q14–20 were gauss-law heavy" /></Field>
+      <Field label="Notes (optional)" error={errors.notes}><textarea rows={2} maxLength={5000} value={form.notes} onChange={event => set('notes', event.target.value)} placeholder="e.g. DPP 7, Q14–20 were tricky" /></Field>
       <div className="jee-live-accuracy" aria-live="polite"><BarChart3 size={15} aria-hidden="true" /> Accuracy: <strong>{accuracy === null ? '—' : `${accuracy.toFixed(1)}%`}</strong>{accuracy !== null && <span className="jee-muted"> ({form.correct} of {form.attempted})</span>}</div>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>{existing ? 'Save changes' : 'Log practice'} <Check size={16} /></Button></div>
     </form>
