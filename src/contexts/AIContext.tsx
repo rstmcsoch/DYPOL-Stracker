@@ -362,7 +362,9 @@ export function AIProvider({ children }: { children:ReactNode }) {
         setMessages(current => current.map(item => item.id === assistantId ? { ...item,status:'cancelled',content:'Request stopped. No Stracker change was made.' } : item))
         setActiveTask(current => current ? { ...current,status:'cancelled',progress:'Cancelled by you.' } : current)
       } else {
-        const messageText = !navigator.onLine ? 'AI is unavailable while offline. Your Stracker notebook is still available.' : error instanceof Error ? error.message : 'The AI request could not be started.'
+        // A browser network failure surfaces as a TypeError ("Failed to fetch", "Load failed",
+        // "NetworkError…"); never show that raw text. Session errors keep their own message.
+        const messageText = !navigator.onLine ? 'AI is unavailable while offline. Your Stracker notebook is still available.' : error instanceof TypeError || !(error instanceof Error) ? 'Stracker could not reach its AI service. Check your connection and press Retry.' : error.message
         setMessages(current => current.map(item => item.id === assistantId ? { ...item,status:'failed',content:messageText,error:messageText } : item))
         setActiveTask(current => current ? { ...current,status:'failed',progress:'Request failed.' } : current)
       }

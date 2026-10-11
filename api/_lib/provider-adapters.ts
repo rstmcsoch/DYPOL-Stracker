@@ -358,18 +358,65 @@ function safeJsonValue(value: string): unknown {
   try { return JSON.parse(value) as unknown } catch { return { result: value.slice(0, 12_000) } }
 }
 
+const GEMINI_SCHEMA_KEYS = new Set(['type', 'description', 'enum', 'properties', 'required', 'items', 'minItems', 'maxItems', 'minimum', 'maximum', 'minLength', 'maxLength', 'nullable', 'propertyOrdering'])
+
+/**
+ * Gemini function declarations accept an OpenAPI subset, not full JSON Schema: keys such as
+ * additionalProperties, default, const, pattern, multipleOf or exclusiveMinimum make the whole
+ * request fail with "Invalid JSON payload … Unknown name". Convert to the supported subset.
+ */
+export function toGeminiSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(toGeminiSchema)
+  if (!schema || typeof schema !== 'object') return schema
+  const input = schema as Record<string, unknown>
+  if (Array.isArray(input.anyOf)) {
+    const branches = input.anyOf as Record<string, unknown>[]
+    const nonNull = branches.filter(branch => branch?.type !== 'null' && branch?.const !== '')
+    const base = (nonNull.length === 1 ? toGeminiSchema(nonNull[0]) : toGeminiSchema(nonNull[0] ?? { type: 'string' })) as Record<string, unknown>
+    const merged: Record<string, unknown> = { ...base }
+    if (typeof input.description === 'string') merged.description = input.description
+    if (nonNull.length !== branches.length) merged.nullable = true
+    return merged
+  }
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (key === 'properties' && value && typeof value === 'object') {
+      out.properties = Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([name, child]) => [name, toGeminiSchema(child)]))
+    } else if (key === 'items') out.items = toGeminiSchema(value)
+    else if (key === 'const') out.enum = [String(value)]
+    else if (key === 'exclusiveMinimum' && typeof value === 'number' && out.minimum === undefined) out.minimum = value
+    else if (key === 'exclusiveMaximum' && typeof value === 'number' && out.maximum === undefined) out.maximum = value
+    else if (key === 'format' && (value === 'date-time' || value === 'enum')) out.format = value
+    else if (GEMINI_SCHEMA_KEYS.has(key)) out[key] = value
+  }
+  if (Array.isArray(out.enum)) {
+    // Gemini rejects empty enum values (z.literal('') clears a field); the description still says so.
+    const values = (out.enum as unknown[]).map(String).filter(Boolean)
+    if (values.length) { out.enum = values; out.type ??= 'string' } else { delete out.enum; out.type ??= 'string' }
+  }
+  return out
+}
+
 async function callGoogle(config: ProviderCall): Promise<ProviderCompletion> {
   const model = encodeURIComponent(config.modelId)
   const base = 'https://generativelanguage.googleapis.com/v1beta'
   const generationConfig: Record<string, unknown> = { maxOutputTokens: config.maxOutputTokens ?? 1200 }
   if (!isGemini3(config.modelId)) generationConfig.temperature = 0.3
-  const body: Record<string, unknown> = {
+  // Gemma models on the Gemini API accept neither a system instruction nor function declarations:
+  // put the instructions in the first user turn and answer without tools.
+  const gemma = /^gemma-/i.test(config.modelId)
+  const contents = googleTranscript(config.messages, config.providerId)
+  if (gemma && contents[0]) {
+    const first = contents[0] as { parts?: Array<Record<string, unknown>> }
+    first.parts = [{ text: `${config.system}\n\n` }, ...(first.parts ?? [])]
+  }
+  const body: Record<string, unknown> = gemma ? { contents, generationConfig } : {
     systemInstruction: { parts: [{ text: config.system }] },
-    contents: googleTranscript(config.messages, config.providerId),
+    contents,
     generationConfig
   }
-  if (config.tools.length) {
-    body.tools = [{ functionDeclarations: config.tools.map(tool => ({ name: tool.name, description: tool.description, parameters: tool.inputSchema })) }]
+  if (config.tools.length && !gemma) {
+    body.tools = [{ functionDeclarations: config.tools.map(tool => ({ name: tool.name, description: tool.description, parameters: toGeminiSchema(tool.inputSchema) })) }]
     body.toolConfig = { functionCallingConfig: { mode: 'AUTO' } }
   }
   const response = await checkedFetch(config, `${base}/models/${model}:streamGenerateContent?alt=sse`, {

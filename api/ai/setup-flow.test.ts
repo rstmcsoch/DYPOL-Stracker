@@ -190,3 +190,44 @@ describe('AI request path', () => {
     expect(fullMockComplete([s('Economics'), s('Economics')])).toBe(false)
   })
 })
+
+describe('chat reliability', () => {
+  const sse = (text: string) => new Response(`data: {"candidates":[{"content":{"parts":[{"text":${JSON.stringify(text)}}]}}]}\n\n`, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+  async function connectedProvider() {
+    const saved = await call(await providers(), 'POST', { providerId: 'gemini', modelId: 'gemini-2.5-flash', apiKey: 'AIza-test-key-1234' })
+    await call(await testConnection(), 'POST', { configId: (saved.json.provider as Row).id })
+  }
+  const input = (message: string) => ({
+    userId: USER, conversationId: crypto.randomUUID(), taskId: crypto.randomUUID(), message, pageContext: null, priorMessages: [],
+    userClient: adminClient as never, adminClient: adminClient as never, signal: new AbortController().signal, emit: () => undefined
+  })
+
+  it('a model that rejects tool declarations still answers (retried without tools)', async () => {
+    await connectedProvider()
+    const bodies: string[] = []
+    let callNo = 0
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      bodies.push(String(init.body)); callNo += 1
+      return callNo === 1
+        ? new Response(JSON.stringify({ error: { code: 400, message: 'Invalid JSON payload received. Unknown name "additionalProperties"', status: 'INVALID_ARGUMENT' } }), { status: 400, headers: { 'content-type': 'application/json' } })
+        : sse('Your average is not available yet.')
+    }))
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input('What is my average score?'))
+    expect(result.status).toBe('completed')
+    expect(bodies[0]).toContain('functionDeclarations')
+    expect(bodies[0]).not.toContain('additionalProperties')
+    expect(bodies[1]).not.toContain('functionDeclarations')
+    expect(db.ai_provider_configs![0]).toMatchObject({ enabled: true })
+  })
+
+  it('a plain greeting is sent without the tool list (faster first token)', async () => {
+    await connectedProvider()
+    const bodies: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => { bodies.push(String(init.body)); return sse('Hello!') }))
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input('Hello'))
+    expect(result).toMatchObject({ status: 'completed', content: 'Hello!' })
+    expect(bodies[0]).not.toContain('functionDeclarations')
+  })
+})

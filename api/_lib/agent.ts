@@ -34,7 +34,9 @@ export interface AgentRunResult {
 const TOOL_ITERATION_LIMIT = 4
 const TOOL_CALL_LIMIT = 8
 const FALLBACK_LIMIT = 2
-const MODEL_TIMEOUT_MS = 20_000
+// Preview/thinking models can take well over 20 s to first token under load; the overall task
+// budget (below Vercel's 60 s maxDuration) is the real limit.
+const MODEL_TIMEOUT_MS = 45_000
 const TOTAL_BUDGET_MS = 53_000
 const MAX_CONTEXT_CHARS = 26_000
 
@@ -78,7 +80,26 @@ function taskType(message: string): 'action' | 'analytics' | 'general' {
   return 'general'
 }
 
-function requiresTools(message: string): boolean {
+export type ModelTier = 'fast' | 'standard' | 'rich'
+/** Rough speed/capability tier from the model ID, used to size context, output and tool depth. */
+export function modelTier(modelId: string): ModelTier {
+  const id = modelId.toLowerCase()
+  if (/(^|[-_.])(lite|mini|nano|haiku|8b|turbo|small)([-_.]|$)/.test(id)) return 'fast'
+  if (/(^|[-_/])pro\b|opus|reasoner|-max|^o\d|thinking/.test(id)) return 'rich'
+  return 'standard'
+}
+const TIER_LIMITS: Record<ModelTier, { history: number; rounds: number; general: number; data: number }> = {
+  fast: { history: 8, rounds: 3, general: 600, data: 900 },
+  standard: { history: 16, rounds: 5, general: 900, data: 1400 },
+  rich: { history: 20, rounds: 6, general: 1500, data: 2400 }
+}
+
+function dropLeadingNonUser(messages: AgentMessage[]): AgentMessage[] {
+  const first = messages.findIndex(message => message.role === 'user')
+  return first > 0 ? messages.slice(first) : messages
+}
+
+export function requiresTools(message: string): boolean {
   return STRACKER_INTENT.test(message) || /\b(my|mine|me)\b/i.test(message)
 }
 
@@ -178,10 +199,12 @@ function deriveCapabilities(row: ProviderConfigRow) {
   return inferCapabilities(row.provider_id,row.model_id,row.protocol,row.capabilities)
 }
 
-function selectedSystem(pageContext: string | null, taskKind: string, canUseTools: boolean, examLine = ''): string {
+function selectedSystem(pageContext: string | null, taskKind: string, canUseTools: boolean, examLine = '', toolsWithheld = false): string {
   const context = pageContext ? `\nCurrent Stracker section: ${pageContext}. This is only a navigation hint; read relevant information through the listed tools.` : ''
   const task = `\nCurrent task category: ${taskKind}.`
-  const tools = canUseTools
+  const tools = toolsWithheld
+    ? '\nThis looks like general study help, so no Stracker data tools are attached to this message. Do not claim to know the student’s saved data; if they want it, invite them to ask about their tests, chapters, mistakes or tasks.'
+    : canUseTools
     ? '\nUse the provided read tools when answering about saved Stracker data. When a user asks for an app change, call the correct write tool only after collecting required details; wait for the app confirmation.'
     : '\nNo Stracker data tools are enabled for this model. Do not claim to know the user’s saved data or perform an app action. For a personal Stracker question, explain that a tool-capable tested provider must be enabled in AI Assistant settings.'
   return `${SYSTEM_PROMPT}${examLine}${context}${task}${tools}`
@@ -240,6 +263,8 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
   }
   let toolCalls = 0
   let rounds = 0
+  // Set when a model rejects tool declarations; the same model then answers without tools.
+  const toolsRejected = new Set<string>()
   let finalText = ''
   let lastProvider: ProviderConfigRow | null = null
   const used = new Set<string>()
@@ -250,7 +275,11 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
     const selected = chosen
     used.add(selected.id)
     const caps = deriveCapabilities(selected)
-    const offerTools = caps.supportsTools
+    const limits = TIER_LIMITS[modelTier(selected.model_id)]
+    // Only send the (large) tool list when the question needs Stracker data: a plain "hello" is
+    // answered faster, and a model that rejected tools answers without them.
+    const offerTools = caps.supportsTools && intentTools && !toolsRejected.has(selected.id) && rounds < limits.rounds
+    const history = agentMessages.length > limits.history * 2 && !agentMessages.some(message => message.role === 'tool') ? dropLeadingNonUser(agentMessages.slice(-limits.history)) : agentMessages
     const onProviderDelta: string[] = []
     let completion
     const remainingMs = TOTAL_BUDGET_MS - (Date.now() - start)
@@ -259,12 +288,12 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
       completion = await withProviderTimeout(input.signal, signal => completeWithProvider(providerCallFromConfig(
         selected,
         decryptCredential(selected.encrypted_api_key),
-        selectedSystem(input.pageContext,taskType(input.message),offerTools,examLine),
-        agentMessages,
+        selectedSystem(input.pageContext,taskType(input.message),offerTools,examLine,!offerTools && caps.supportsTools && !intentTools),
+        history,
         offerTools ? MODEL_TOOLS : [],
         signal,
         text => { onProviderDelta.push(text); input.emit('delta',{ text }) },
-        taskType(input.message) === 'general' ? 800 : 1200
+        taskType(input.message) === 'general' ? limits.general : limits.data
       )),Math.min(MODEL_TIMEOUT_MS,remainingMs))
       await refreshProviderHealth(input.adminClient,input.userId,selected)
       lastProvider = selected
@@ -272,6 +301,12 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
     } catch (error) {
       if (input.signal.aborted) return { status:'cancelled',content:'',providerId:selected.provider_id,modelId:selected.model_id,fallbackFrom:fallbackFrom?.provider_id ?? null }
       const failure = safeProviderError(error,{ provider:selected.provider_id,model:selected.model_id })
+      if (offerTools && (failure.aiCode === 'UNSUPPORTED_CAPABILITY' || failure.aiCode === 'REQUEST_INVALID') && !onProviderDelta.length) {
+        // The model (or its schema dialect) rejects tool calling: answer once more without tools.
+        toolsRejected.add(selected.id)
+        logAIEvent('info','tools_rejected_retry_without_tools',{ taskId:input.taskId,userId:input.userId,provider:selected.provider_id,model:selected.model_id })
+        continue
+      }
       logAIEvent('warn','provider_failure',{ taskId:input.taskId,userId:input.userId,stage:'completion',round:rounds,provider:selected.provider_id,model:selected.model_id,durationMs:Date.now()-start,...failure.diagnostics() })
       await updateProviderHealth(input.adminClient,input.userId,selected,failure)
       const next = availableCandidates.find(row => !used.has(row.id))
