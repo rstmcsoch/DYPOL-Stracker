@@ -3,6 +3,7 @@ import { createId, stableId } from './id.js'
 import { indiaToday } from './date.js'
 import { normalizeReadingFont } from './fonts.js'
 import { normalizeColorTheme } from './themes.js'
+import { EXAM_ID_PATTERN } from './exams/catalog.js'
 import type {
   AppSettings, Chapter, ChapterImportance, ChapterStage, ChapterStageKey, ReminderKind, Subject,
   TrackId, UserExamTrack
@@ -38,6 +39,11 @@ export function defaultSettings(userId: string, ownerName = ''): AppSettings {
     reminders_enabled: false,
     reminder_time: '08:00',
     reminder_types: ['revision', 'backlog'],
+    exam_id: null,
+    exam_year: null,
+    exam_session: null,
+    exam_board: null,
+    boards_addon: false,
     created_at: now,
     updated_at: now
   }
@@ -93,6 +99,11 @@ export function normalizeSettings(row: Record<string, unknown>, userId: string):
     reminders_enabled: asBool(row.reminders_enabled, fallback.reminders_enabled),
     reminder_time: typeof row.reminder_time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(row.reminder_time) ? row.reminder_time : fallback.reminder_time,
     reminder_types: reminderTypes,
+    exam_id: typeof row.exam_id === 'string' && EXAM_ID_PATTERN.test(row.exam_id) ? row.exam_id : null,
+    exam_year: typeof row.exam_year === 'number' && Number.isInteger(row.exam_year) && row.exam_year >= 2020 && row.exam_year <= 2100 ? row.exam_year : null,
+    exam_session: typeof row.exam_session === 'string' && row.exam_session.length <= 40 ? row.exam_session : null,
+    exam_board: typeof row.exam_board === 'string' && row.exam_board.length <= 40 ? row.exam_board : null,
+    boards_addon: row.boards_addon === true,
     created_at: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : new Date().toISOString()
   }

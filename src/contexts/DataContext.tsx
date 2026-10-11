@@ -12,6 +12,7 @@ import { useAuth } from './AuthContext'
 import { fetchPublishedOverrides } from './SiteContentContext'
 import { resolveSiteValues } from '../lib/site-content/content'
 import { applyOwnerThemeDefaults } from '../lib/site-content/student-defaults'
+import { isJeeExam } from '../lib/exams/catalog'
 import type {
   AppData, AppSettings, BacklogItem, Chapter, ChapterStage, DailyTask, Mistake, PracticeSession,
   Profile, PyqRecord, QueuedChange, RecordFor, Revision, StudyCard, StudySession, TableName,
@@ -339,7 +340,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (error) throw error
         await localDb.app_settings.put(next.settings)
       }
-      if (next.chapters.length === 0) {
+      // The JEE syllabus is seeded only for JEE students (and accounts that never chose an
+      // exam). Other exams start with an empty, editable syllabus.
+      if (next.chapters.length === 0 && isJeeExam(next.settings.exam_id)) {
         const initial = seedChapters(userId)
         const { error } = await cloud.from('chapters').upsert(initial)
         if (error) throw error
@@ -399,11 +402,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const now = new Date().toISOString()
         const profile = cached.profile ?? { id: userId, user_id: userId, display_name: user?.displayName ?? 'Study notebook', email: user?.email ?? '', created_at: now, updated_at: now }
         const settings = cached.settings ?? defaultSettings(userId, profile.display_name)
-        const chapters = cached.chapters.length ? cached.chapters : seedChapters(userId)
+        const chapters = cached.chapters.length || !isJeeExam(settings.exam_id) ? cached.chapters : seedChapters(userId)
         const examTracks = cached.examTracks.length ? cached.examTracks : defaultExamTracks(userId)
         await Promise.all([
           localDb.profiles.put(profile), localDb.app_settings.put(settings),
-          cached.chapters.length ? Promise.resolve() : localDb.chapters.bulkPut(chapters),
+          cached.chapters.length || !chapters.length ? Promise.resolve() : localDb.chapters.bulkPut(chapters),
           cached.examTracks.length ? Promise.resolve() : localDb.user_exam_tracks.bulkPut(examTracks)
         ])
         queryClient.setQueryData<AppData>(['stracker-data', userId], { ...cached, profile, settings, chapters, examTracks })

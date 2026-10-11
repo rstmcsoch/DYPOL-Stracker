@@ -11,7 +11,7 @@ describe('exam catalogue', () => {
   })
 
   it('seeds the database with exactly the built-in list', () => {
-    const sql = readFileSync(new URL('../../../supabase/migrations/20261011100000_exam_catalog.sql', import.meta.url), 'utf8')
+    const sql = readFileSync(new URL('../../../supabase/migrations/20261011033818_exam_catalog.sql', import.meta.url), 'utf8')
     for (const exam of BUILT_IN_EXAMS) expect(sql).toContain(`('${exam.id}', '${exam.name}'`)
     expect(sql).toContain('force row level security')
     expect(sql).toContain('using (hidden = false)')
