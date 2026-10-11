@@ -42,6 +42,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       clearTimeout(timer)
     }
 
+    const latencyMs = Date.now() - started
     logAIEvent('info', 'connection_test_succeeded', { reference, userId, provider: row.provider_id, model: row.model_id, durationMs: Date.now() - started })
     const { count: defaults, error: defaultError } = await adminClient.from('ai_provider_configs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_default', true)
     if (defaultError) throw new ApiError(503, 'provider_save_failed', 'The connection worked, but Stracker could not update its preferred-provider setting.')
@@ -58,6 +59,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     if (isDefault) {
       await adminClient.from('ai_provider_configs').update({ is_default: false }).eq('user_id', userId).neq('id', row.id).eq('is_default', true)
     }
-    sendJson(res, 200, { status: 'connected', message: 'Connection successful. Stracker can now use this provider.' })
+    sendJson(res, 200, { status: 'connected', latencyMs, message: 'Connection successful. Stracker can now use this provider.' })
   })
 }
