@@ -67,7 +67,7 @@ export function clientKeyHash(req: ApiRequest): string {
   return createHash('sha256').update(`stracker-control:${address}`).digest('hex').slice(0, 32)
 }
 
-function serviceClient(): { url: string; admin: SupabaseClient; anonKey: string } {
+export function serviceClient(): { url: string; admin: SupabaseClient; anonKey: string } {
   const resolved = supabaseServerConfig()
   if (resolved.ok === false) {
     logAIEvent('warn', 'control_backend_not_configured', { reason: resolved.reason, missing: resolved.missing.join(','), invalid: resolved.invalid.join(',') })

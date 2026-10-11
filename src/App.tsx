@@ -10,6 +10,7 @@ import { FocusProvider } from './contexts/FocusContext'
 import { ToastProvider } from './contexts/ToastContext'
 import { AppFrame } from './components/AppShell'
 import { LoaderCircle } from 'lucide-react'
+import { TelemetryTracker } from './components/TelemetryTracker'
 
 const LandingPage = lazy(() => import('./pages/LandingPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
@@ -138,7 +139,7 @@ export default function App() {
   return <QueryClientProvider client={queryClient}>
     <ToastProvider>
       <AuthProvider>
-        <BrowserRouter><AppRoutes /></BrowserRouter>
+        <BrowserRouter><TelemetryTracker /><AppRoutes /></BrowserRouter>
       </AuthProvider>
     </ToastProvider>
   </QueryClientProvider>

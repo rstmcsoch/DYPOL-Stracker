@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { localPreviewEnabled, supabase } from '../lib/supabase'
+import { loginFailureReason, track } from '../lib/telemetry/client'
 
 export interface AppUser {
   id: string
@@ -82,8 +83,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     let mounted = true
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    // A confirmation link lands with type=signup in the URL hash; record it once.
+    let confirming = typeof window !== 'undefined' && /type=signup/.test(window.location.hash)
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return
+      if (confirming && event === 'SIGNED_IN' && session?.user?.email_confirmed_at) { confirming = false; track('email_verification_completed') }
       setUser(session?.user ? userFromSupabase(session.user) : null)
       setLoading(false)
     })
@@ -118,10 +122,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
       if (signInError) {
+        track('login_failed', { reason: loginFailureReason(signInError.message) })
         const message = friendlyAuthError(signInError.message)
         setError(message)
         throw new Error(message)
       }
+      track('login_succeeded')
     },
     signUp: async (email, password, displayName) => {
       setError(null)
@@ -130,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setError(message)
         throw new Error(message)
       }
+      track('signup_started')
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -145,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       // With email confirmation enabled Supabase returns a user but no session.
       // Without it the session arrives immediately and the route guard opens the notebook.
+      track('signup_completed', { needs_confirmation: data.session ? 'no' : 'yes' })
       return { needsEmailConfirmation: !data.session }
     },
     resendConfirmation: async email => {
@@ -193,6 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setError(message)
         throw new Error(message)
       }
+      track('password_reset_requested')
     },
     updatePassword: async password => {
       setError(null)

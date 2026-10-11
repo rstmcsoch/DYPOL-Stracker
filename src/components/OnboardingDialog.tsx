@@ -9,6 +9,7 @@ import { fetchExamCatalog } from '../lib/exams/fetch-catalog'
 import { examSubjects } from '../lib/exams/subjects'
 import { seedChapters } from '../lib/defaults'
 import type { AppSettings } from '../types'
+import { track } from '../lib/telemetry/client'
 
 const FOCUSABLE = 'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
 
@@ -93,6 +94,7 @@ export function OnboardingDialog() {
         await upsertMany('chapters', seedChapters(settings.user_id ?? settings.id))
       }
       await upsert('app_settings', next)
+      track('onboarding_completed', { exam: exam.id })
       if (data.profile && data.profile.display_name !== cleanName) await upsert('profiles', { ...data.profile, display_name: cleanName, updated_at: now })
     } catch (error) {
       setProblem(error instanceof Error ? error.message : 'Could not save. Check your connection and try again.')
