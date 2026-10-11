@@ -94,7 +94,6 @@ export default function HomePage() {
 
     {examMode.active && <div className="exam-mode-banner" role="status"><span className="exam-mode-days">{examMode.daysLeft}</span><div><strong>Exam Mode · {examMode.label}</strong><p>{examMode.reason} Revision, PYQs, mocks and weak-area fixes come first.</p></div></div>}
     <StudyNowCard />
-    <HomeSnapshot />
 
     <div className="dashboard-grid">
       <section className="today-plan-block">
@@ -150,6 +149,8 @@ export default function HomePage() {
         </NotebookCard>
       </aside>
     </div>
+
+    <HomeSnapshot />
 
     <section className="dashboard-bottom-row">
       <NotebookCard className="quick-test-card">

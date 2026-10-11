@@ -1,0 +1,81 @@
+/*
+ * Student-panel layout tokens and dashboard rhythm.
+ *
+ * Loaded last (see src/styles.css) so these equal-specificity rules settle the
+ * spacing that previously varied card to card (gaps of 12/14/17/18/21/22px and
+ * eight different card paddings). Navigation (.sidebar*, .mobile-topbar,
+ * .topline) is deliberately not touched here.
+ */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --card-pad: 16px 18px;
+  --card-pad-compact: 13px 15px;
+  --card-gap: var(--space-4);
+  --column-gap: var(--space-5);
+  --section-gap: var(--space-6);
+  --fs-card-title: 20px;
+}
+
+@media (max-width: 700px) {
+  :root {
+    --card-pad: 14px 14px;
+    --card-pad-compact: 12px 13px;
+    --card-gap: var(--space-3);
+    --column-gap: var(--space-3);
+    --section-gap: 18px;
+  }
+}
+
+/* Page rhythm: one gap between sections, no stacked margins on top of it. */
+.content-page, .dashboard-page { gap: var(--section-gap); }
+.dashboard-page > .study-now-card,
+.dashboard-page > .jee-snapshot { margin-bottom: 0; }
+
+/* Dashboard grids share one gutter so the stacked rows line up. */
+.dashboard-grid { gap: var(--card-gap) var(--column-gap); }
+.dashboard-aside { gap: var(--card-gap); }
+.dashboard-bottom-row {
+  grid-template-columns: minmax(0, 1.35fr) minmax(min(300px, 100%), .83fr);
+  gap: var(--card-gap) var(--column-gap);
+}
+.jee-snapshot { gap: var(--card-gap); }
+
+/* One padding for dashboard cards; compact padding for stat tiles. */
+.today-plan-card,
+.study-progress-card,
+.revisions-card,
+.smart-tip-card,
+.quick-test-card,
+.syllabus-mini-card,
+.study-now-card { padding: var(--card-pad); }
+.jee-snap-card { padding: var(--card-pad-compact); }
+.today-plan-block > .section-heading { margin-bottom: var(--space-3); }
+
+/* Card titles sit one clear step below section headings (26px). */
+.quick-test-card h2,
+.syllabus-mini-head h3,
+.study-now-title { font-size: var(--fs-card-title); }
+
+/* Quieter decoration: keep the notebook feel, drop the tilt on a whole card. */
+.smart-tip-card { transform: none; }
+
+@media (max-width: 960px) {
+  .dashboard-bottom-row { grid-template-columns: minmax(0, 1.2fr) minmax(min(265px, 100%), .85fr); }
+}
+
+@media (max-width: 700px) {
+  .dashboard-grid { gap: var(--card-gap); }
+  .dashboard-aside { gap: var(--card-gap); }
+  .dashboard-bottom-row { grid-template-columns: 1fr; }
+  .task-order-actions button { width: 32px; height: 36px; }
+}
+
+@media (max-width: 519px) {
+  .dashboard-aside { grid-template-columns: 1fr; }
+}
