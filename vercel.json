@@ -144,6 +144,10 @@
       "destination": "/api/control/operations?route=media"
     },
     {
+      "source": "/api/control/exams",
+      "destination": "/api/control/operations?route=exams"
+    },
+    {
       "source": "/api/control/(.*)",
       "destination": "/api/control/system?route=not-found"
     },
