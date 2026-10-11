@@ -17,6 +17,7 @@ import { ExamTracksSection, ReminderSettingsSection } from '../components/jee/Se
 import { ExamSelectionSection } from '../components/jee/ExamSelectionSection'
 import { ListChecks } from 'lucide-react'
 import type { AppSettings, Profile, ThemeMode } from '../types'
+import { availableTracks, chosenExamTitle, isJeeSettings, trackLabels } from '../lib/jee/exam'
 
 type SettingsTab = 'account' | 'exam' | 'appearance' | 'rhythm' | 'data'
 
@@ -38,6 +39,9 @@ const TAB_FIELDS: Record<Exclude<SettingsTab, 'data'>, (keyof AppSettings)[]> = 
 
 export default function SettingsPage() {
   const { data, upsert } = useData()
+  const jeeExam = isJeeSettings(data.settings)
+  const examTitle = chosenExamTitle(data.settings)
+  const examTrackLabels = trackLabels(data.settings)
   const { user, signOut } = useAuth()
   const { notify } = useToast()
   const queryClient = useQueryClient()
@@ -321,13 +325,13 @@ export default function SettingsPage() {
         <form className="settings-form" noValidate onSubmit={event => void saveTab('exam', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'exam'}>
             <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Exam dates & target" note="A countdown is only useful when the date is yours to choose." /><div className="settings-section-content"><div className="form-grid three">
-              <Field label="JEE Main date" error={errors.main_exam_date}><input type="date" value={draft.main_exam_date} onChange={event => patch('main_exam_date', event.target.value)} /></Field>
-              <Field label="JEE Advanced date" error={errors.advanced_exam_date}><input type="date" value={draft.advanced_exam_date} onChange={event => patch('advanced_exam_date', event.target.value)} /></Field>
-              <Field label="Target score" error={errors.target_score}><input type="number" min="0" max="999999.99" step="0.01" value={Number.isFinite(draft.target_score) ? draft.target_score : ''} onChange={event => patch('target_score', event.target.value === '' ? Number.NaN : Number(event.target.value))} /><span className="field-hint">Compared to a mock with all three subject totals.</span></Field>
+              <Field label={jeeExam ? 'JEE Main date' : `${examTitle} date`} error={errors.main_exam_date}><input type="date" value={draft.main_exam_date} onChange={event => patch('main_exam_date', event.target.value)} /></Field>
+              {jeeExam && <Field label="JEE Advanced date" error={errors.advanced_exam_date}><input type="date" value={draft.advanced_exam_date} onChange={event => patch('advanced_exam_date', event.target.value)} /></Field>}
+              <Field label="Target score" error={errors.target_score}><input type="number" min="0" max="999999.99" step="0.01" value={Number.isFinite(draft.target_score) ? draft.target_score : ''} onChange={event => patch('target_score', event.target.value === '' ? Number.NaN : Number(event.target.value))} /><span className="field-hint">{jeeExam ? 'Compared to a mock with all three subject totals.' : 'Compared to a full mock with every subject total.'}</span></Field>
             </div><div className="settings-note-line"><Target size={15} /> Leave dates blank until the official dates are confirmed.</div></div></NotebookCard>
 
             <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Active track & Exam Mode" note="Tracks share one syllabus. The active track sets the countdown and when Exam Mode turns on." /><div className="settings-section-content"><div className="form-grid three">
-              <Field label="Active track" error={errors.active_track}><select value={draft.active_track} onChange={event => patch('active_track', event.target.value as AppSettings['active_track'])}><option value="main1">JEE Main — Session 1</option><option value="main2">JEE Main — Session 2</option><option value="advanced">JEE Advanced</option><option value="boards">Boards</option></select></Field>
+              <Field label="Active track" error={errors.active_track}><select value={draft.active_track} onChange={event => patch('active_track', event.target.value as AppSettings['active_track'])}>{availableTracks(data.settings).map(track => <option key={track} value={track}>{examTrackLabels[track]}</option>)}{!availableTracks(data.settings).includes(draft.active_track) && <option value={draft.active_track}>{examTrackLabels.main1}</option>}</select></Field>
               <Field label="Exam Mode" error={errors.exam_mode}><select value={draft.exam_mode} onChange={event => patch('exam_mode', event.target.value as AppSettings['exam_mode'])}><option value="auto">Automatic (final 30 days)</option><option value="on">Always on</option><option value="off">Off</option></select></Field>
             </div><p className="jee-small jee-muted">Automatic Exam Mode needs a date for the active track. It favours revision, PYQs, mocks and weak-area fixes, and stops suggesting new theory.</p></div></NotebookCard>
 

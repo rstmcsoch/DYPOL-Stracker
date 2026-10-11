@@ -6,7 +6,7 @@ import { Meter, Pct, minutesLabel } from './shared'
 import { useData } from '../../contexts/DataContext'
 import { indiaToday } from '../../lib/date'
 import { aggregatePractice, pyqCompletion, syllabusProgress } from '../../lib/jee/progress'
-import { currentExamMode, trackReadiness, TRACK_LABEL } from '../../lib/jee/exam'
+import { currentExamMode, effectiveTrack, isJeeSettings, trackLabels, trackReadiness } from '../../lib/jee/exam'
 import { PRIMARY_ACTIVITIES, studyMinutesByActivity, weekRange } from '../../lib/jee/study-time'
 import { computeReminders, isAwake } from '../../lib/jee/reminders'
 import type { ActivityMinutes } from '../../lib/jee/study-time'
@@ -28,7 +28,9 @@ export function HomeSnapshot() {
   const pyqAdv = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Advanced', data.settings), [data.pyqRecords, data.settings])
   const backlogDue = data.backlogItems.filter(item => isAwake(item, today) && item.due_on !== null && item.due_on <= today).length
   const mode = currentExamMode(data, today)
-  const track = trackReadiness(data, data.settings.active_track, today)
+  const activeTrack = effectiveTrack(data.settings)
+  const track = trackReadiness(data, activeTrack, today)
+  const jee = isJeeSettings(data.settings)
   const reminders = computeReminders(data, today)
 
   return <section className="jee-snapshot" aria-label="Study snapshot">
@@ -53,16 +55,16 @@ export function HomeSnapshot() {
       <div className="jee-mini-stats">
         <div><strong>{practice.attempted.toLocaleString('en-IN')}</strong><span>questions</span></div>
         <div><strong><Pct value={practice.accuracy} /></strong><span>accuracy</span></div>
-        <div><strong><Pct value={pyqMain.percent} /></strong><span>JEE Main PYQs</span></div>
-        <div><strong><Pct value={pyqAdv.percent} /></strong><span>Advanced PYQs</span></div>
+        {jee && <div><strong><Pct value={pyqMain.percent} /></strong><span>JEE Main PYQs</span></div>}
+        {jee && <div><strong><Pct value={pyqAdv.percent} /></strong><span>Advanced PYQs</span></div>}
       </div>
       <button type="button" className="jee-link" onClick={() => navigate('/backlog')}>Backlog due: <strong>{backlogDue}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
     </NotebookCard>
 
     <NotebookCard className="jee-snap-card jee-snap-exam">
-      <div className="jee-snap-head"><span className="eyebrow">{TRACK_LABEL[data.settings.active_track].toUpperCase()}</span><button type="button" className="jee-link" onClick={() => navigate('/settings')}>Exam dates <ArrowUpRight size={13} aria-hidden="true" /></button></div>
+      <div className="jee-snap-head"><span className="eyebrow">{trackLabels(data.settings)[activeTrack].toUpperCase()}</span><button type="button" className="jee-link" onClick={() => navigate('/settings')}>Exam dates <ArrowUpRight size={13} aria-hidden="true" /></button></div>
       <p className="jee-small">{mode.active ? mode.reason : 'Exam Mode turns on automatically in the final 30 days. The big countdown lives at the top of Home.'}</p>
-      <ProgressLine label="Track readiness" value={track.percent} detail="weighted syllabus, PYQs and recent tests" />
+      <ProgressLine label="Track readiness" value={track.percent} detail={jee ? 'weighted syllabus, PYQs and recent tests' : 'weighted syllabus and recent tests'} />
     </NotebookCard>
 
     {reminders.length > 0 && <NotebookCard className="jee-snap-card jee-snap-reminders">

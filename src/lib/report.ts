@@ -8,6 +8,7 @@ import { fmtDuration, fmtNumber } from './format'
 import type { AppData, TestRecord } from '../types'
 import { subjectsFor } from './exams/subjects'
 import { triggerDownload } from './backup'
+import { chosenExamTitle, isJeeSettings } from './jee/exam'
 
 export interface ReportSections {
   summary: boolean
@@ -182,7 +183,7 @@ export async function createPdfReport(data: AppData, options: ReportOptions): Pr
   // Cover page: warm-paper treatment with no fabricated data.
   doc.setFillColor(248, 246, 238); doc.rect(0, 0, width, height, 'F')
   doc.setDrawColor(82, 105, 78); doc.setLineWidth(0.8); doc.roundedRect(12, 12, width - 24, height - 24, 4, 4, 'S')
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(86, 108, 82); doc.text('A JEE 2027 STUDY NOTEBOOK', 22, 44)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(86, 108, 82); doc.text(`A ${(isJeeSettings(scoped.settings) ? `JEE ${scoped.settings.exam_year ?? 2027}` : chosenExamTitle(scoped.settings)).toUpperCase()} STUDY NOTEBOOK`.slice(0, 60), 22, 44)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(37); doc.setTextColor(39, 45, 38); doc.text('Stracker', 22, 75)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(18); doc.setTextColor(91, 98, 83); doc.text('Study progress report', 22, 88)
   doc.setDrawColor(204, 177, 102); doc.setLineWidth(1.2); doc.line(22, 99, 93, 99)
