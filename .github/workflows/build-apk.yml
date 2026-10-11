@@ -1,4 +1,5 @@
 name: Build Android APK (current Stracker)
+# Build workflow for the current main snapshot.
 
 on:
   push:
