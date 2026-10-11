@@ -13,3 +13,6 @@ registerOfflineApplicationShell()
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><App /></React.StrictMode>
 )
+
+// Enable entrance animations only after the first paint, so nothing animates on page load.
+window.setTimeout(() => window.requestAnimationFrame(() => document.documentElement.classList.add('motion-ready')), 400)

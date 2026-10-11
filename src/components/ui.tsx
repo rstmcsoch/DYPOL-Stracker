@@ -1,5 +1,6 @@
-import { Children, cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
+import { Children, cloneElement, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useExit } from '../lib/ui/use-exit'
 import { ArrowUpRight, Check, Info, LoaderCircle, MoreHorizontal, Sparkles, X } from 'lucide-react'
 import type { Subject } from '../types'
 import { subjectSlug } from '../lib/exams/subjects'
@@ -111,11 +112,15 @@ export function Field({ label, hint, error, required, children, className = '' }
 
 export function Dialog({ title, subtitle, onClose, children, className = '', labelledBy }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; className?: string; labelledBy?: string }) {
   const ref = useRef<HTMLDivElement>(null)
+  const { state, exit, onAnimationEnd } = useExit(170)
+  const closeRef = useRef(onClose)
+  useLayoutEffect(() => { closeRef.current = onClose })
+  const close = useCallback(() => exit(() => closeRef.current()), [exit])
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     const timer = window.setTimeout(() => ref.current?.querySelector<HTMLElement>('input,select,textarea,button')?.focus(), 20)
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') close()
       if (event.key === 'Tab' && ref.current) {
         const elements = [...ref.current.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
         const first = elements[0]
@@ -132,12 +137,12 @@ export function Dialog({ title, subtitle, onClose, children, className = '', lab
       document.body.classList.remove('modal-open')
       previous?.focus?.()
     }
-  }, [onClose])
+  }, [close])
   const titleId = labelledBy ?? 'dialog-title'
   const stop = (event: FormEvent) => event.preventDefault()
-  return <div className="dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+  return <div className="dialog-backdrop" data-state={state} onAnimationEnd={onAnimationEnd} onMouseDown={event => { if (event.target === event.currentTarget) close() }}>
     <div className={`dialog-panel ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref} onSubmit={stop}>
-      <div className="dialog-head"><div><h2 className="type-h2" id={titleId}>{title}</h2>{subtitle && <p className="type-body">{subtitle}</p>}</div><IconButton label="Close dialog" onClick={onClose}><X size={19} /></IconButton></div>
+      <div className="dialog-head"><div><h2 className="type-h2" id={titleId}>{title}</h2>{subtitle && <p className="type-body">{subtitle}</p>}</div><IconButton label="Close dialog" onClick={close}><X size={19} /></IconButton></div>
       <div className="dialog-content">{children}</div>
     </div>
   </div>
