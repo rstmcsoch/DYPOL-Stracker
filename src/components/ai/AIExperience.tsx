@@ -8,6 +8,7 @@ import { useData } from '../../contexts/DataContext'
 import { useToast } from '../../contexts/ToastContext'
 import { Button, Dialog, IconButton, StatusBadge } from '../ui'
 import { AIProviderMark } from './AIProviderMark'
+import { useScrollExpanded } from '../../lib/ui/scroll-expand'
 import { isSafeAppPath } from '../../lib/safe-path'
 
 const SUGGESTIONS = [
@@ -162,6 +163,7 @@ function HistorySidebar({ onSelect,hidden=false }: { onSelect:()=>void;hidden?:b
 
 export function AIExperience() {
   const { panelOpen,minimized,largeOpen,openPanel,restorePanel,minimizePanel,closePanel,expandPanel,collapseLarge,conversationTitle,conversationId,clearConversation,newConversation,activeTask,isBusy } = useAI()
+  const launcherExpanded = useScrollExpanded()
   const { providers,backendStatus } = useAI()
   const [clearConfirmOpen,setClearConfirmOpen] = useState(false)
   const [historyOpen,setHistoryOpen] = useState(false)
@@ -212,9 +214,9 @@ export function AIExperience() {
       : <><div className="ai-compact-titlebar"><span>{conversationId ? conversationTitle : 'Ask about your studies'}</span>{configured && <span className="ai-ready-dot">Ready</span>}</div><ConversationMessages compact /><ChatComposer compact /></>}
   </>
   return <>
-    {!panelOpen && !largeOpen && <div className={`ai-launcher-wrap ${minimized ? 'ai-launcher-minimized' : ''}`}>
+    {!panelOpen && !largeOpen && <div className={`ai-launcher-wrap ${minimized ? 'ai-launcher-minimized' : ''} ${minimized || launcherExpanded ? 'ai-launcher-expanded' : ''}`}>
       {minimized && <span className="ai-launcher-status">{isBusy ? activeTask?.progress ?? 'Working…' : 'Assistant minimized · task continues'}</span>}
-      <button className={`ai-launcher ${isBusy ? 'ai-launcher-active' : ''}`} onClick={minimized ? restorePanel : openPanel} aria-label={minimized ? 'Restore AI Assistant; task continues' : 'Open Stracker AI Assistant'} aria-expanded={false}><Sparkles size={20} /><span>{minimized ? 'Restore' : 'Ask Stracker'}</span>{isBusy && <i aria-label="AI task active" />}</button>
+      <button className={`ai-launcher ${isBusy ? 'ai-launcher-active' : ''}`} onClick={minimized ? restorePanel : openPanel} aria-label={minimized ? 'Restore AI Assistant; task continues' : 'Ask Stracker'} aria-expanded={false}><Sparkles size={20} aria-hidden="true" /><span className="ai-launcher-label" aria-hidden="true">{minimized ? 'Restore' : 'Ask Stracker'}</span>{isBusy && <i aria-label="AI task active" />}</button>
     </div>}
     {panelOpen && !largeOpen && <section className="ai-floating-window" aria-label="Stracker AI Assistant"><div className="ai-floating-shell">{content}</div></section>}
     {largeOpen && <div className="ai-workspace-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) collapseLarge() }}><section className="ai-large-workspace" role="dialog" aria-modal="true" aria-label="Stracker AI workspace"><div className="ai-large-shell">{content}</div></section></div>}

@@ -156,3 +156,24 @@
 /* Settings: stacked cards in one tab keep the standard card gap; AI footnote reads as a footnote. */
 .settings-form-fields { display: grid; gap: var(--space-4, 16px); }
 .ai-settings-card .ai-privacy-footnote { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+
+/* Floating buttons: the quick-action (lightning) button's position as shared variables, so the
+   Ask Stracker launcher can sit directly above it at every breakpoint. Values mirror the existing
+   .quick-action-area rules exactly (no visual change to the lightning button). */
+:root { --fab-right: 27px; --fab-bottom: 28px; --fab-size: 58px; --fab-gap: 12px; }
+@media (max-width: 960px) { :root { --fab-right: 19px; --fab-bottom: calc(78px + var(--safe-bottom)); --fab-size: 53px; } }
+@media (max-width: 700px) { :root { --fab-right: 12px; --fab-bottom: calc(72px + var(--safe-bottom)); --fab-size: 48px; } }
+@media (max-height: 760px) { :root { --fab-right: 20px; --fab-bottom: 20px; } }
+@media (orientation: landscape) and (max-height: 480px) { :root { --fab-bottom: calc(64px + var(--safe-bottom)); --fab-size: 46px; } }
+.quick-action-area { right: var(--fab-right); bottom: var(--fab-bottom); }
+
+/* Ask Stracker: a circle above the lightning button; expands leftwards into a pill on scroll down. */
+.ai-launcher-wrap { right: var(--fab-right); bottom: calc(var(--fab-bottom) + var(--fab-size) + var(--fab-gap)); flex-direction: row-reverse; }
+.ai-launcher { height: var(--fab-size); min-height: 0; min-width: var(--fab-size); padding: 0 calc((var(--fab-size) - 20px) / 2); gap: 0; border-radius: calc(var(--fab-size) / 2); justify-content: flex-end; transition: gap .22s ease, padding .22s ease, transform .16s ease, box-shadow .16s ease; }
+.ai-launcher > svg { flex: none; order: 2; }
+.ai-launcher-label { order: 1; display: inline-block; max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; transition: max-width .24s ease, opacity .18s ease; }
+.ai-launcher-expanded .ai-launcher { gap: 7px; padding-left: 16px; }
+.ai-launcher-expanded .ai-launcher-label { max-width: 140px; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-launcher, .ai-launcher-label { transition: none; }
+}
