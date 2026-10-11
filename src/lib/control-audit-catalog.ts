@@ -23,7 +23,7 @@ export interface AuditActionDefinition {
   /** Short noun phrase for menus. */
   label: string
   /** Where it is used in the console. */
-  group: 'Access' | 'Accounts' | 'Appearance' | 'Audit log' | 'Roles' | 'Exams'
+  group: 'Access' | 'Accounts' | 'Appearance' | 'Audit log' | 'Roles' | 'Exams' | 'Analytics'
   /** Plain-language sentence per outcome; `{target}` is replaced with the target label. */
   sentence: Record<AuditOutcome, string>
 }
@@ -69,6 +69,10 @@ export const AUDIT_ACTIONS: readonly AuditActionDefinition[] = [
   { action: 'exam.update', label: 'Exam edited', group: 'Exams', sentence: { success: 'Edited exam {target}', denied: 'Editing exam {target} refused', failed: 'Editing exam {target} failed' } },
   { action: 'exam.hide', label: 'Exam removed', group: 'Exams', sentence: { success: 'Removed exam {target} from the list', denied: 'Removing exam {target} refused', failed: 'Removing exam {target} failed' } },
   { action: 'exam.show', label: 'Exam restored', group: 'Exams', sentence: { success: 'Brought back exam {target}', denied: 'Restoring exam {target} refused', failed: 'Restoring exam {target} failed' } },
+  { action: 'analytics.config', label: 'Analytics setting saved', group: 'Analytics', sentence: { success: 'Saved analytics setting {target}', denied: 'Saving analytics setting {target} refused', failed: 'Saving analytics setting {target} failed' } },
+  { action: 'analytics.error_update', label: 'Error group updated', group: 'Analytics', sentence: { success: 'Updated error group {target}', denied: 'Updating error group {target} refused', failed: 'Updating error group {target} failed' } },
+  { action: 'analytics.alert_update', label: 'Alert updated', group: 'Analytics', sentence: { success: 'Updated alert {target}', denied: 'Updating alert {target} refused', failed: 'Updating alert {target} failed' } },
+  { action: 'analytics.export', label: 'Analytics exported', group: 'Analytics', sentence: { success: 'Exported analytics report {target}', denied: 'Exporting analytics report {target} refused', failed: 'Exporting analytics report {target} failed' } },
   { action: 'exam.reorder', label: 'Exams reordered', group: 'Exams', sentence: { success: 'Changed the exam order', denied: 'Reordering exams refused', failed: 'Reordering exams failed' } },
   {
     action: 'audit.export',

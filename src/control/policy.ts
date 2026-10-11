@@ -9,7 +9,7 @@ export const RECENT_MFA_SECONDS = 15 * 60
 
 export const CONSOLE_BASE = '/control-panel'
 
-export type NavIcon = 'overview' | 'users' | 'roles' | 'security' | 'audit' | 'health' | 'about' | 'appearance' | 'exams'
+export type NavIcon = 'overview' | 'users' | 'roles' | 'security' | 'audit' | 'health' | 'about' | 'appearance' | 'exams' | 'analytics'
 
 export interface NavItem {
   to: string
@@ -43,6 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Operations',
     items: [
+      { to: 'analytics', label: 'Analytics', icon: 'analytics', description: 'Traffic, signups, student activity, performance, errors and alerts' },
       { to: 'audit', label: 'Audit log', icon: 'audit', description: 'Every privileged action and denial' },
       { to: 'health', label: 'System health', icon: 'health', description: 'Database, auth and configuration checks' }
     ]
