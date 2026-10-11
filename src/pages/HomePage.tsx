@@ -19,6 +19,7 @@ import { completeRevision as completeRevisionAction } from '../lib/revision-acti
 import type { AppData, DailyTask, Revision } from '../types'
 import { useReportSubjects } from '../lib/exams/useExamSubjects'
 import { subjectColor } from '../lib/exams/subjects'
+import { chosenExamTitle, isJeeSettings, trackExamDate } from '../lib/jee/exam'
 
 export default function HomePage() {
   const homeSubjects = useReportSubjects()
@@ -41,14 +42,21 @@ export default function HomePage() {
   const mainDays = daysUntil(data.settings.main_exam_date)
   // The prominent countdown prefers JEE Advanced, but when Advanced is unset and
   // a Main date exists, JEE Main becomes the big day instead of a tiny footnote.
-  const primaryExam = examDays !== null
+  const jee = isJeeSettings(data.settings)
+  const examTitle = chosenExamTitle(data.settings)
+  const boardsDate = jee ? null : trackExamDate(data, 'boards')
+  const otherPrimary = mainDays !== null ? { label: examTitle, days: mainDays, date: data.settings.main_exam_date, dot: 'blue' as const } : null
+  const otherSecondary = data.settings.boards_addon ? { label: 'Class 12 boards', days: daysUntil(boardsDate ?? ''), date: boardsDate ?? '', dot: 'orange' as const } : null
+  const jeePrimary = examDays !== null
     ? { label: 'JEE Advanced', days: examDays, date: data.settings.advanced_exam_date, dot: 'orange' as const }
     : mainDays !== null
       ? { label: 'JEE Main', days: mainDays, date: data.settings.main_exam_date, dot: 'blue' as const }
       : null
-  const secondaryExam = primaryExam?.label === 'JEE Main'
+  const primaryExam = jee ? jeePrimary : otherPrimary
+  const jeeSecondary = jeePrimary?.label === 'JEE Main'
     ? { label: 'JEE Advanced', days: examDays, date: data.settings.advanced_exam_date, dot: 'orange' as const }
     : { label: 'JEE Main', days: mainDays, date: data.settings.main_exam_date, dot: 'blue' as const }
+  const secondaryExam = jee ? jeeSecondary : otherSecondary
 
   const toggleTask = async (task: DailyTask) => {
     try {
@@ -80,9 +88,9 @@ export default function HomePage() {
 
     <section className="hero-row" aria-label="Exam countdown and syllabus progress">
       <NotebookCard className="countdown-card">
-        <div className="countdown-top"><span className="countdown-label"><span className="pencil-underline">THE BIG DAY</span></span><span className="countdown-badge"><Rocket size={15} /> JEE 2027</span></div>
-        {primaryExam === null ? <div className="countdown-unset"><div><span>JEE Main &amp; Advanced</span><h2>Set your date<br /><em>when you’re ready.</em></h2><p>We’ll keep the countdown honest.</p></div><Button variant="marker" size="sm" onClick={() => navigate('/settings')}>Add exam date <ArrowRight size={15} /></Button></div> : <div className="countdown-main"><div className="countdown-number">{Math.max(0, primaryExam.days)}<span>days</span></div><div className="countdown-copy"><span>until</span><strong>{primaryExam.label}</strong><small>{prettyDate(primaryExam.date)}</small></div><span className="countdown-scribble" aria-hidden="true">↗</span></div>}
-        <div className="countdown-footer"><div className="mini-exam"><span className={`mini-exam-dot ${secondaryExam.dot}`} /><span>{secondaryExam.label}</span>{secondaryExam.days === null ? <button onClick={() => navigate('/settings')}>Add date</button> : <strong>{Math.max(0, secondaryExam.days)} days</strong>}</div><div className="mini-exam"><span className="mini-exam-dot orange" /><span>Chapters covered</span><strong>{completedChapters}/{totalChapters}</strong></div></div>
+        <div className="countdown-top"><span className="countdown-label"><span className="pencil-underline">THE BIG DAY</span></span><span className="countdown-badge"><Rocket size={15} /> {jee ? `JEE ${data.settings.exam_year ?? 2027}` : examTitle}</span></div>
+        {primaryExam === null ? <div className="countdown-unset"><div><span>{jee ? 'JEE Main & Advanced' : examTitle}</span><h2>Set your date<br /><em>when you’re ready.</em></h2><p>We’ll keep the countdown honest.</p></div><Button variant="marker" size="sm" onClick={() => navigate('/settings')}>Add exam date <ArrowRight size={15} /></Button></div> : <div className="countdown-main"><div className="countdown-number">{Math.max(0, primaryExam.days)}<span>days</span></div><div className="countdown-copy"><span>until</span><strong>{primaryExam.label}</strong><small>{prettyDate(primaryExam.date)}</small></div><span className="countdown-scribble" aria-hidden="true">↗</span></div>}
+        <div className="countdown-footer">{secondaryExam && <div className="mini-exam"><span className={`mini-exam-dot ${secondaryExam.dot}`} /><span>{secondaryExam.label}</span>{secondaryExam.days === null ? <button onClick={() => navigate('/settings')}>Add date</button> : <strong>{Math.max(0, secondaryExam.days)} days</strong>}</div>}<div className="mini-exam"><span className="mini-exam-dot orange" /><span>Chapters covered</span><strong>{completedChapters}/{totalChapters}</strong></div></div>
         <div className="countdown-star" aria-hidden="true">✳</div>
       </NotebookCard>
       <NotebookCard className="streak-card accent-orange">

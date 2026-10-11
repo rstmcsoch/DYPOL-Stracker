@@ -4,7 +4,7 @@ import { Button, Field, NotebookCard } from '../ui'
 import { useData } from '../../contexts/DataContext'
 import { useToast } from '../../contexts/ToastContext'
 import { defaultExamTracks } from '../../lib/defaults'
-import { TRACK_LABEL } from '../../lib/jee/exam'
+import { isJeeSettings, trackLabels } from '../../lib/jee/exam'
 import { REMINDER_LABEL } from '../../lib/jee/reminders'
 import { stableId } from '../../lib/id'
 import { REMINDER_KINDS, type AppSettings, type ReminderKind, type TrackId, type UserExamTrack } from '../../types'
@@ -15,7 +15,9 @@ export function ExamTracksSection() {
   const { notify } = useToast()
   const userId = data.settings.user_id ?? data.settings.id
   const rows = data.examTracks.length ? data.examTracks : defaultExamTracks(userId)
-  const editable: TrackId[] = ['main2', 'boards']
+  const jee = isJeeSettings(data.settings)
+  const TRACK_LABEL = trackLabels(data.settings)
+  const editable: TrackId[] = jee ? ['main2', 'boards'] : data.settings.boards_addon ? ['boards'] : []
   const [drafts, setDrafts] = useState<Record<string, { exam_date: string; target_score: string }>>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,8 +58,8 @@ export function ExamTracksSection() {
     <div className="jee-settings-head"><CalendarDays size={18} aria-hidden="true" /><div><strong>Preparation tracks</strong><small className="jee-muted">One shared syllabus. Each track differs only by its date and target.</small></div></div>
     <div className="settings-section-content">
       <div className="jee-track-settings">
-        <div className="jee-track-setting readonly"><span>{TRACK_LABEL.main1}</span><small className="jee-muted">Date comes from “JEE Main date” above.</small></div>
-        <div className="jee-track-setting readonly"><span>{TRACK_LABEL.advanced}</span><small className="jee-muted">Date comes from “JEE Advanced date” above.</small></div>
+        <div className="jee-track-setting readonly"><span>{TRACK_LABEL.main1}</span><small className="jee-muted">Date comes from “{jee ? 'JEE Main date' : `${TRACK_LABEL.main1} date`}” above.</small></div>
+        {jee && <div className="jee-track-setting readonly"><span>{TRACK_LABEL.advanced}</span><small className="jee-muted">Date comes from “JEE Advanced date” above.</small></div>}
         {editable.map(track => <div key={track} className="jee-track-setting">
           <span>{TRACK_LABEL[track]}</span>
           <div className="form-grid two">
