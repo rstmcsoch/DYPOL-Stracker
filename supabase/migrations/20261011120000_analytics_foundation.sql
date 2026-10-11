@@ -165,6 +165,27 @@ language sql stable security definer set search_path = public as $$
   group by 1, 2;
 $$;
 
+-- Distinct accounts that created at least one row of each kind in [p_from, p_to).
+create or replace function public.analytics_feature_accounts(p_from timestamptz, p_to timestamptz)
+returns table (feature text, users bigint)
+language sql stable security definer set search_path = public as $$
+  with rows as (
+    select 'tests'::text f, user_id, created_at from public.tests
+    union all select 'mistakes', user_id, created_at from public.mistakes
+    union all select 'practice_sessions', user_id, created_at from public.practice_sessions
+    union all select 'pyq_records', user_id, created_at from public.pyq_records
+    union all select 'study_sessions', user_id, created_at from public.study_sessions
+    union all select 'study_cards', user_id, created_at from public.study_cards
+    union all select 'daily_tasks', user_id, created_at from public.daily_tasks
+    union all select 'weekly_goals', user_id, created_at from public.weekly_goals
+    union all select 'backlog_items', user_id, created_at from public.backlog_items
+    union all select 'chapter_revisions', user_id, created_at from public.chapter_revisions
+    union all select 'chapter_stages', user_id, created_at from public.chapter_stages
+    union all select 'ai_conversations', user_id, created_at from public.ai_conversations
+  )
+  select f, count(distinct user_id) from rows where created_at >= p_from and created_at < p_to group by 1;
+$$;
+
 -- Distinct (account, local day) pairs with any student write (created or last updated) — the
 -- historical basis for active users and retention. updated_at keeps only the latest edit per
 -- row, so this undercounts older activity (reported as Partial).
@@ -227,6 +248,7 @@ begin
     'analytics_business_activity(timestamptz, timestamptz, text)',
     'analytics_business_active_days(timestamptz, timestamptz, text)',
     'analytics_data_operations()',
+    'analytics_feature_accounts(timestamptz, timestamptz)',
     'analytics_signups(timestamptz, timestamptz)'
   ] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
