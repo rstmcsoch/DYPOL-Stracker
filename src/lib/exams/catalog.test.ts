@@ -17,6 +17,18 @@ describe('exam catalogue', () => {
     expect(sql).toContain('using (hidden = false)')
   })
 
+  it('gives every exam subjects and keeps the JEE names unchanged', () => {
+    for (const exam of BUILT_IN_EXAMS) {
+      expect(exam.subjects.length).toBeGreaterThan(0)
+      for (const subject of exam.subjects) expect(subject.length).toBeLessThanOrEqual(60)
+    }
+    expect(BUILT_IN_EXAMS.find(exam => exam.id === 'jee')?.subjects).toEqual(['Physics', 'Chemistry', 'Maths'])
+    expect(BUILT_IN_EXAMS.find(exam => exam.id === 'neet-ug')?.subjects).not.toContain('Maths')
+    const sql = readFileSync(new URL('../../../supabase/migrations/20261011120000_exam_subjects_onboarding.sql', import.meta.url), 'utf8')
+    for (const exam of BUILT_IN_EXAMS) expect(sql).toContain(`where id = '${exam.id}' and subjects = '{}'`)
+    expect(normalizeExam({ id: 'neet-ug', name: 'NEET UG', category: 'Medical' })?.subjects).toEqual(['Physics', 'Chemistry', 'Botany', 'Zoology'])
+  })
+
   it('derives four target years when none are configured', () => {
     expect(examYears({ years: [] }, new Date('2026-10-11T00:00:00Z'))).toEqual([2026, 2027, 2028, 2029])
     expect(examYears({ years: [2029, 2027] })).toEqual([2027, 2029])
