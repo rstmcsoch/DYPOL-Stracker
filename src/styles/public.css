@@ -1626,3 +1626,8 @@ html[data-app-font='active'] .pub-page .pub-footer-wordmark {
   .pub-section-promo.promo-pos-left .promo-shell { justify-content: flex-start; }
   .pub-section-promo.promo-pos-right .promo-shell { justify-content: flex-end; }
 }
+
+/* Owner accent preset (public.appearance.accent). Values come from the tuned
+   colour-theme palettes in src/lib/themes.ts; absent attribute = stylesheet default. */
+.pub-page[data-owner-accent] { --accent: var(--owner-accent-light); }
+.pub-page[data-owner-accent][data-public-theme='dark'] { --accent: var(--owner-accent-dark); }

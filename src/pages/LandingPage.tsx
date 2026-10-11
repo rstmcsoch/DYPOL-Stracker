@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { ArrowDown, ArrowRight, Check, LockKeyhole } from 'lucide-react'
 import { PublicHeader, type PublicTheme } from '../components/public/PublicHeader'
 import { PublicFooter } from '../components/public/PublicFooter'
@@ -10,16 +10,57 @@ import { PromoVideoSection } from '../components/public/PromoVideoPlayer'
 import { usePageMeta } from '../lib/head'
 import { useSiteText } from '../contexts/SiteContentContext'
 import { SiteLink } from '../components/public/SiteLink'
+import { COLOR_THEME_OPTIONS } from '../lib/themes'
 
 const PUBLIC_THEME_STORAGE_KEY = 'stracker-public-home-theme'
 
-function readPublicTheme(): PublicTheme {
-  if (typeof window === 'undefined') return 'light'
+/** The visitor's own saved choice, or null when they never used the toggle. */
+function readStoredPublicTheme(): PublicTheme | null {
+  if (typeof window === 'undefined') return null
   try {
-    return window.localStorage.getItem(PUBLIC_THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'
+    const stored = window.localStorage.getItem(PUBLIC_THEME_STORAGE_KEY)
+    return stored === 'dark' || stored === 'light' ? stored : null
   } catch {
-    return 'light'
+    return null
   }
+}
+
+function prefersDark(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+/** Owner default (public.appearance.default_mode) applies only until the visitor chooses. */
+function usePublicTheme(defaultMode: string): [PublicTheme, () => void] {
+  const [stored, setStored] = useState<PublicTheme | null>(readStoredPublicTheme)
+  const [systemDark, setSystemDark] = useState<boolean>(prefersDark)
+  useEffect(() => {
+    if (defaultMode !== 'system' || typeof window.matchMedia !== 'function') return undefined
+    const query = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [defaultMode])
+  const fallback: PublicTheme = defaultMode === 'dark' || (defaultMode === 'system' && systemDark) ? 'dark' : 'light'
+  const theme = stored ?? fallback
+  const toggle = () => {
+    const next: PublicTheme = theme === 'dark' ? 'light' : 'dark'
+    try {
+      window.localStorage.setItem(PUBLIC_THEME_STORAGE_KEY, next)
+    } catch {
+      // The in-memory toggle still works when storage is unavailable.
+    }
+    setStored(next)
+  }
+  return [theme, toggle]
+}
+
+/** Inline custom properties for a non-default accent preset; undefined keeps the stylesheet values. */
+function accentStyle(accent: string): CSSProperties | undefined {
+  if (accent === 'default') return undefined
+  const option = COLOR_THEME_OPTIONS.find(item => item.value === accent)
+  if (!option) return undefined
+  return { '--owner-accent-light': option.light[1], '--owner-accent-dark': option.dark[1] } as CSSProperties
 }
 
 /** One highlight per line; blank lines are ignored. */
@@ -36,24 +77,13 @@ function lines(value: string): string[] {
  * front-end, so the marketing surface and the product cannot drift apart.
  */
 export default function LandingPage() {
-  const [publicTheme, setPublicTheme] = useState<PublicTheme>(readPublicTheme)
   const t = useSiteText
-
-  const togglePublicTheme = () => {
-    setPublicTheme(current => {
-      const next: PublicTheme = current === 'dark' ? 'light' : 'dark'
-      try {
-        window.localStorage.setItem(PUBLIC_THEME_STORAGE_KEY, next)
-      } catch {
-        // The in-memory toggle still works when storage is unavailable.
-      }
-      return next
-    })
-  }
+  const [publicTheme, togglePublicTheme] = usePublicTheme(t('public.appearance.default_mode'))
+  const ownerAccent = accentStyle(t('public.appearance.accent'))
 
   usePageMeta(t('public.meta.title'), t('public.meta.description'))
 
-  return <div className="pub-page" id="top" data-public-theme={publicTheme}>
+  return <div className="pub-page" id="top" data-public-theme={publicTheme} data-owner-accent={ownerAccent ? '' : undefined} style={ownerAccent}>
     <a className="pub-skip-link" href="#main">Skip to content</a>
     <PublicHeader theme={publicTheme} onThemeToggle={togglePublicTheme} />
     <main id="main" className="pub-main">
