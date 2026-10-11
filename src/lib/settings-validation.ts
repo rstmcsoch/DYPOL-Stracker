@@ -38,7 +38,8 @@ export const settingsSchema = z.object({
   exam_year: z.number().int().min(2020).max(2100).nullable().default(null),
   exam_session: z.string().trim().max(40).nullable().default(null),
   exam_board: z.string().trim().max(40).nullable().default(null),
-  boards_addon: z.boolean().default(false)
+  boards_addon: z.boolean().default(false),
+  onboarding_completed: z.boolean().default(false)
 }).refine(value => value.weak_threshold < value.strong_threshold, {
   path: ['strong_threshold'],
   message: 'Strong above must be greater than Weak below.'

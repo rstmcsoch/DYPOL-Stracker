@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { defaultExamTracks, defaultSettings, normalizeSettings, seedChapters } from '../lib/defaults'
+import { defaultExamTracks, defaultSettings, normalizeSettings, seedChapters, shouldSeedJeeSyllabus } from '../lib/defaults'
 import { assetKey, localDb } from '../lib/database'
 import { isOwnedStoragePath } from '../lib/storage-path'
 import { createId } from '../lib/id'
@@ -12,7 +12,7 @@ import { useAuth } from './AuthContext'
 import { fetchPublishedOverrides } from './SiteContentContext'
 import { resolveSiteValues } from '../lib/site-content/content'
 import { applyOwnerThemeDefaults } from '../lib/site-content/student-defaults'
-import { isJeeExam } from '../lib/exams/catalog'
+
 import type {
   AppData, AppSettings, BacklogItem, Chapter, ChapterStage, DailyTask, Mistake, PracticeSession,
   Profile, PyqRecord, QueuedChange, RecordFor, Revision, StudyCard, StudySession, TableName,
@@ -340,9 +340,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (error) throw error
         await localDb.app_settings.put(next.settings)
       }
-      // The JEE syllabus is seeded only for JEE students (and accounts that never chose an
-      // exam). Other exams start with an empty, editable syllabus.
-      if (next.chapters.length === 0 && isJeeExam(next.settings.exam_id)) {
+      // The JEE syllabus is seeded only for JEE students. Brand-new accounts wait for the
+      // first-run setup to pick an exam (it seeds JEE itself); other exams start empty.
+      if (next.chapters.length === 0 && shouldSeedJeeSyllabus(next.settings)) {
         const initial = seedChapters(userId)
         const { error } = await cloud.from('chapters').upsert(initial)
         if (error) throw error
@@ -402,7 +402,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const now = new Date().toISOString()
         const profile = cached.profile ?? { id: userId, user_id: userId, display_name: user?.displayName ?? 'Study notebook', email: user?.email ?? '', created_at: now, updated_at: now }
         const settings = cached.settings ?? defaultSettings(userId, profile.display_name)
-        const chapters = cached.chapters.length || !isJeeExam(settings.exam_id) ? cached.chapters : seedChapters(userId)
+        const chapters = cached.chapters.length || !shouldSeedJeeSyllabus(settings) ? cached.chapters : seedChapters(userId)
         const examTracks = cached.examTracks.length ? cached.examTracks : defaultExamTracks(userId)
         await Promise.all([
           localDb.profiles.put(profile), localDb.app_settings.put(settings),

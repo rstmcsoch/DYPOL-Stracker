@@ -356,6 +356,8 @@ export interface AppSettings extends BaseRecord {
   exam_board: string | null
   /** Class 12 boards tracked alongside the main exam. */
   boards_addon: boolean
+  /** Set once the first-run setup (name, exam, light/dark) has been completed. */
+  onboarding_completed: boolean
 }
 
 export interface Profile extends BaseRecord {
