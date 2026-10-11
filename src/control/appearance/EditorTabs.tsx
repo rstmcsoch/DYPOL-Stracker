@@ -72,6 +72,7 @@ export function OverviewTab() {
             <li>Public homepage: headings, introductions, highlights, feature and principle cards, steps, AI and privacy copy, final call to action.</li>
             <li>Public header and footer labels, footer column headings, and the homepage browser title and description.</li>
             <li>Homepage button labels and destinations (validated: public pages, homepage sections, or https addresses).</li>
+            <li>Promotional video section: show or hide, optional heading and text, player size, frame shape and position.</li>
             <li>Notebook navigation labels and group headings. Changing a label never changes where it leads.</li>
           </ul>
         </div>

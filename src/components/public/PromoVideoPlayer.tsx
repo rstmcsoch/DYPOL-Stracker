@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
+import { useSiteText } from '../../contexts/SiteContentContext'
 
 /**
  * Public-homepage promotional player.
@@ -32,7 +33,26 @@ const LOAD_ROOT_MARGIN = '320px 0px'
 /** Share of the frame that must be on screen before ambient playback starts. */
 const PLAY_VISIBILITY = 0.55
 
+/**
+ * Owner-controlled wrapper: a hidden section renders nothing (and so downloads nothing).
+ * Size, frame shape and position are preset classes; see `.pub-section-promo` in public.css.
+ */
 export function PromoVideoSection() {
+  const visibility = useSiteText('public.promo.visibility')
+  if (visibility === 'hide') return null
+  return <PromoVideoBody />
+}
+
+const PROMO_ASPECTS: Record<string, string> = { '9:16': 'portrait', '4:5': 'tall', '1:1': 'square', '16:9': 'landscape' }
+
+function PromoVideoBody() {
+  const headingVisible = useSiteText('public.promo.heading_visibility') === 'visible'
+  const eyebrow = useSiteText('public.promo.eyebrow')
+  const heading = useSiteText('public.promo.heading')
+  const body = useSiteText('public.promo.body')
+  const size = useSiteText('public.promo.size')
+  const aspect = PROMO_ASPECTS[useSiteText('public.promo.aspect')] ?? 'portrait'
+  const position = useSiteText('public.promo.position')
   const frameRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const userPaused = useRef(false)
@@ -155,8 +175,18 @@ export function PromoVideoSection() {
   const toggleMute = () => setMuted(current => !current)
 
   return (
-    <section className="pub-section pub-section-promo" aria-labelledby="promo-title">
-      <h2 id="promo-title" className="visually-hidden">Stracker in motion — a ten second product preview</h2>
+    <section className={`pub-section pub-section-promo promo-size-${size} promo-aspect-${aspect} promo-pos-${position}`} aria-labelledby="promo-title">
+      {headingVisible ? (
+        <div className="pub-shell">
+          <div className="pub-section-head promo-head">
+            <p className="pub-eyebrow"><span aria-hidden="true">✎</span> {eyebrow}</p>
+            <h2 id="promo-title">{heading}</h2>
+            <p className="pub-lede">{body}</p>
+          </div>
+        </div>
+      ) : (
+        <h2 id="promo-title" className="visually-hidden">{heading}</h2>
+      )}
       <div className="pub-shell promo-shell">
         <div className="promo-video-frame" ref={frameRef}>
           <video

@@ -61,6 +61,12 @@ function validateLink(value: string): string | null {
 /** Validates one value against its field definition. Pure: no I/O. */
 export function validateFieldValue(definition: FieldDefinition, raw: unknown): FieldValidation {
   if (typeof raw !== 'string') return { ok: false, message: 'Enter text for this field.' }
+  if (definition.type === 'select') {
+    const choice = raw.trim()
+    return definition.options?.some(option => option.value === choice)
+      ? { ok: true, value: choice }
+      : { ok: false, message: 'Choose one of the listed options.' }
+  }
   const multiline = definition.type === 'multiline'
   // Normalise line endings and trim the outer whitespace; inner line breaks survive for multiline.
   let value = raw.replace(/\r\n?/g, '\n').trim()
