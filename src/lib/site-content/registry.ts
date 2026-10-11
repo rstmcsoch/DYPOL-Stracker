@@ -97,9 +97,9 @@ const HOME = 'Homepage'
 const PUBLIC_SEO = 'Page & search'
 
 field('public', PUBLIC_SEO, 'Document', 'public.meta.title', 'Browser tab title', 'text',
-  'Stracker by DYPOL LABS — a serious JEE 2027 study notebook', { maxLength: 120, help: 'Shown in the browser tab and search results.' })
+  'Stracker by DYPOL LABS — a serious exam study notebook', { maxLength: 120, help: 'Shown in the browser tab and search results.' })
 field('public', PUBLIC_SEO, 'Document', 'public.meta.description', 'Meta description', 'multiline',
-  'Stracker by DYPOL LABS is a digital study notebook for JEE preparation: syllabus tracking, test journal, mistakes and retries, spaced revision, daily planning, focus sessions and analytics.',
+  'Stracker by DYPOL LABS is a digital study notebook for exam preparation: syllabus tracking, test journal, mistakes and retries, spaced revision, daily planning, focus sessions and analytics.',
   { maxLength: 300, help: 'Used by search engines and link previews.' })
 
 field('public', 'Header', 'Navigation', 'public.header.features.label', 'Section link: Features', 'text', 'Features', { maxLength: 40 })
@@ -109,8 +109,8 @@ field('public', 'Header', 'Navigation', 'public.header.privacy.label', 'Section 
 field('public', 'Header', 'Account buttons', 'public.header.login.label', 'Log in button', 'text', 'Log In', { maxLength: 30 })
 field('public', 'Header', 'Account buttons', 'public.header.signup.label', 'Sign up button', 'text', 'Sign Up', { maxLength: 30 })
 
-field('public', HOME, 'Hero', 'public.hero.eyebrow', 'Eyebrow line', 'text', 'JEE 2027 · A DIGITAL STUDY NOTEBOOK', { maxLength: 90 })
-field('public', HOME, 'Hero', 'public.hero.title', 'Heading (first part)', 'text', 'Your JEE preparation, organized in', { maxLength: 120, help: 'The main heading is this text followed by the emphasised part below.' })
+field('public', HOME, 'Hero', 'public.hero.eyebrow', 'Eyebrow line', 'text', 'FOR EVERY EXAM · A DIGITAL STUDY NOTEBOOK', { maxLength: 90 })
+field('public', HOME, 'Hero', 'public.hero.title', 'Heading (first part)', 'text', 'Your exam preparation, organized in', { maxLength: 120, help: 'The main heading is this text followed by the emphasised part below.' })
 field('public', HOME, 'Hero', 'public.hero.title_emphasis', 'Heading (emphasised part)', 'text', 'one serious study notebook.', { maxLength: 80 })
 field('public', HOME, 'Hero', 'public.hero.lede', 'Introduction', 'multiline',
   'Stracker keeps the syllabus, the tests, the mistakes, the revision queue, the daily plan, focus sessions and the analytics on the same page — then stays quiet while you actually study.')
@@ -127,7 +127,7 @@ field('public', HOME, 'Hero', 'public.hero.cta_secondary.href', 'Secondary butto
 field('public', HOME, 'Hero', 'public.hero.scroll.label', 'Scroll link label', 'text', 'Explore how it works', { maxLength: 60 })
 field('public', HOME, 'Hero', 'public.hero.meta', 'Footnote line', 'text', 'Private to your account · Works on phone, tablet and desktop · Installable', { maxLength: 160 })
 
-field('public', HOME, 'Study loop', 'public.loop.eyebrow', 'Eyebrow line', 'text', 'BUILT FOR SERIOUS JEE PREPARATION', { maxLength: 90 })
+field('public', HOME, 'Study loop', 'public.loop.eyebrow', 'Eyebrow line', 'text', 'BUILT FOR SERIOUS EXAM PREPARATION', { maxLength: 90 })
 field('public', HOME, 'Study loop', 'public.loop.title', 'Heading', 'text', 'A study loop built on evidence.', { maxLength: 120 })
 field('public', HOME, 'Study loop', 'public.loop.lede', 'Introduction', 'multiline', 'Stracker is organised around the loop you already study in. Each pass through it leaves a record, and that record is what the next decision is made from.')
 const LOOP_BODIES = [
@@ -148,7 +148,7 @@ field('public', HOME, 'Features', 'public.features.footnote', 'Footnote', 'multi
 const FEATURES: Array<{ title: string; summary: string; points: string[] }> = [
   {
     title: 'Syllabus Notebook',
-    summary: 'The whole JEE 2027 topic list, kept like a real register.',
+    summary: 'Your whole exam topic list, kept like a real register.',
     points: [
       `Editable Physics, Chemistry and Maths chapters from the seeded ${CHAPTER_COUNT}-chapter grouping`,
       'Status and priority for each chapter: Not Started, Studying, Done or Revised',
@@ -258,8 +258,8 @@ FEATURE_SLOTS.forEach((feature, index) => {
 })
 
 field('public', HOME, 'Principles', 'public.principles.eyebrow', 'Eyebrow line', 'text', 'WHY NOT A GENERIC APP', { maxLength: 90 })
-field('public', HOME, 'Principles', 'public.principles.title', 'Heading', 'text', 'A JEE system, not a generic app.', { maxLength: 120 })
-field('public', HOME, 'Principles', 'public.principles.body', 'Paragraph', 'multiline', 'A todo list has no opinion about rotation, revision intervals, or the difference between a silly mistake and a concept gap. Stracker is built around JEE preparation itself — the syllabus, the test cycle, the mistakes, and the revision that holds it together.')
+field('public', HOME, 'Principles', 'public.principles.title', 'Heading', 'text', 'An exam system, not a generic app.', { maxLength: 120 })
+field('public', HOME, 'Principles', 'public.principles.body', 'Paragraph', 'multiline', 'A todo list has no opinion about rotation, revision intervals, or the difference between a silly mistake and a concept gap. Stracker is built around exam preparation itself — the syllabus, the test cycle, the mistakes, and the revision that holds it together.')
 field('public', HOME, 'Principles', 'public.principles.note', 'Closing note', 'text', 'Fewer places to look, and a clearer idea of what to do next.', { maxLength: 200 })
 const PRINCIPLES: Array<[string, string]> = [
   ['One place for the work', 'Syllabus, tests, mistakes, revision, planning and focus sessions in the same notebook — not five apps and a paper register.'],
@@ -341,15 +341,15 @@ field('public', HOME, 'DYPOL LABS', 'public.dypol.tag', 'Tag', 'text', 'A DYPOL 
 field('public', HOME, 'Final call to action', 'public.final.eyebrow', 'Eyebrow line', 'text', 'LAST PAGE, FIRST ENTRY', { maxLength: 90 })
 field('public', HOME, 'Final call to action', 'public.final.title', 'Heading (first part)', 'text', 'Build a system you can', { maxLength: 120 })
 field('public', HOME, 'Final call to action', 'public.final.title_emphasis', 'Heading (emphasised part)', 'text', 'actually follow.', { maxLength: 80 })
-field('public', HOME, 'Final call to action', 'public.final.body', 'Paragraph', 'multiline', 'Start organizing your JEE preparation with Stracker. Set your exam dates, work through the syllabus, log the next test — and let the notebook keep the record from there.')
+field('public', HOME, 'Final call to action', 'public.final.body', 'Paragraph', 'multiline', 'Start organizing your exam preparation with Stracker. Set your exam dates, work through the syllabus, log the next test — and let the notebook keep the record from there.')
 field('public', HOME, 'Final call to action', 'public.final.cta_primary.label', 'Primary button label', 'text', 'Create your Stracker account', { maxLength: 60 })
 field('public', HOME, 'Final call to action', 'public.final.cta_primary.href', 'Primary button destination', 'link', '/signup')
 field('public', HOME, 'Final call to action', 'public.final.cta_secondary.label', 'Secondary button label', 'text', 'I already have an account', { maxLength: 60 })
 field('public', HOME, 'Final call to action', 'public.final.cta_secondary.href', 'Secondary button destination', 'link', '/login')
-field('public', HOME, 'Final call to action', 'public.final.note', 'Note', 'multiline', 'Your notebook starts with the seeded JEE 2027 syllabus, which you can edit, reorder or replace. Set your own dates and daily goal, and the plan follows from there.')
+field('public', HOME, 'Final call to action', 'public.final.note', 'Note', 'multiline', 'Your notebook starts with a ready-made syllabus, which you can edit, reorder or replace. Set your own dates and daily goal, and the plan follows from there.')
 
-field('public', 'Footer', 'Brand', 'public.footer.tagline', 'Tagline', 'text', 'A focused digital study notebook for JEE preparation.', { maxLength: 160 })
-field('public', 'Footer', 'Brand', 'public.footer.copyright', 'Copyright line (after the year)', 'text', 'DYPOL LABS · Stracker for JEE 2027', { maxLength: 120, help: 'The year is added automatically: “© 2026 …”.' })
+field('public', 'Footer', 'Brand', 'public.footer.tagline', 'Tagline', 'text', 'A focused digital study notebook for exam preparation.', { maxLength: 160 })
+field('public', 'Footer', 'Brand', 'public.footer.copyright', 'Copyright line (after the year)', 'text', 'DYPOL LABS · Stracker', { maxLength: 120, help: 'The year is added automatically: “© 2026 …”.' })
 field('public', 'Footer', 'Column headings', 'public.footer.group_product.title', 'Column heading: Product', 'text', 'Product', { maxLength: 40 })
 field('public', 'Footer', 'Column headings', 'public.footer.group_account.title', 'Column heading: Account', 'text', 'Account', { maxLength: 40 })
 field('public', 'Footer', 'Column headings', 'public.footer.group_information.title', 'Column heading: Information', 'text', 'Information', { maxLength: 40 })

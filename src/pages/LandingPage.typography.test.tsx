@@ -30,7 +30,7 @@ describe('public homepage typography isolation', () => {
     const page = container.querySelector('.pub-page')
 
     expect(page).not.toBeNull()
-    expect(screen.getByRole('heading', { name: /Your JEE preparation, organized in/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /Your exam preparation, organized in/ })).toBeTruthy()
     expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0)
     expect(page?.querySelector('footer')).not.toBeNull()
     expect(typographyCss).toContain('.pub-page :where(*)')
