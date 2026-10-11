@@ -295,6 +295,27 @@ field('public', 'Footer', 'Column headings', 'public.footer.group_account.title'
 field('public', 'Footer', 'Column headings', 'public.footer.group_information.title', 'Column heading: Information', 'text', 'Information', { maxLength: 40 })
 field('public', 'Footer', 'Column headings', 'public.footer.group_brand.title', 'Column heading: Brand', 'text', 'Brand', { maxLength: 40 })
 
+/* Public website appearance. Presets only: every accent ships tuned light and dark values. */
+const LOOK = 'Appearance'
+field('public', LOOK, 'Theme', 'public.appearance.default_mode', 'Default display mode', 'select', 'light', {
+  options: [{ value: 'light', label: 'Light (default)' }, { value: 'dark', label: 'Dark' }, { value: 'system', label: "Follow the visitor's device" }],
+  help: 'Used until a visitor picks light or dark with the header toggle; their own choice always wins.'
+})
+field('public', LOOK, 'Theme', 'public.appearance.accent', 'Accent colour', 'select', 'default', {
+  options: [
+    { value: 'default', label: 'Stracker blue (default)' },
+    { value: 'sunset-blaze', label: 'Sunset Blaze' },
+    { value: 'forest-emerald', label: 'Forest Emerald' },
+    { value: 'sandalwood', label: 'Sandalwood' },
+    { value: 'ocean-deep', label: 'Ocean Deep' },
+    { value: 'sakura-blossom', label: 'Sakura Blossom' },
+    { value: 'dracula-midnight', label: 'Dracula Midnight' },
+    { value: 'lavender-mist', label: 'Lavender Mist' },
+    { value: 'cyberpunk-neon', label: 'Cyberpunk Neon' }
+  ],
+  help: 'Links, buttons and highlights on the public website. Each preset has a readable light and dark shade.'
+})
+
 /* Promotional video section. Layout values are presets so no choice can break the page. */
 const PROMO = 'Promotional video'
 field('public', HOME, PROMO, 'public.promo.visibility', 'Show the video section', 'select', 'show', {
