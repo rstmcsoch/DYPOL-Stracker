@@ -79,3 +79,30 @@
 @media (max-width: 519px) {
   .dashboard-aside { grid-template-columns: 1fr; }
 }
+
+/* ---- Type scale (plan C, P2): page > section > card, one clear step each. ---- */
+:root { --fs-section: 24px; --fs-card-title: 19px; --card-min-h: 120px; }
+.section-heading h2 { font-size: var(--fs-section); }
+
+/* Equal heights instead of per-card magic numbers: one minimum for the small
+   dashboard cards, and grid rows stretch so neighbouring bottoms line up. */
+.revisions-card,
+.smart-tip-card,
+.study-progress-card,
+.quick-test-card { min-height: var(--card-min-h); }
+.dashboard-bottom-row { align-items: stretch; }
+.dashboard-bottom-row > * { height: 100%; }
+.dashboard-aside { align-content: start; }
+
+/* ---- Other student pages (plan C, P4): same gutters as the dashboard. ---- */
+.test-summary-grid,
+.mistake-overview-row { gap: var(--space-3); }
+.planner-main-grid { gap: var(--card-gap) var(--column-gap); }
+.content-page > .jee-filter-card { margin-bottom: 0; }
+
+@media (max-width: 700px) {
+  .test-summary-grid,
+  .mistake-overview-row { gap: var(--space-2); }
+  .planner-main-grid { gap: var(--card-gap); }
+  .planner-aside { gap: var(--space-2); }
+}
