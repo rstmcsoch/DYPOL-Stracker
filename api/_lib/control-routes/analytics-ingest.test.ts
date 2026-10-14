@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampTimestamp, ingestBatch, userRef } from './analytics-ingest.js'
+import { clampTimestamp, ingestBatch, sanitizeUnknownEventDetail, userRef } from './analytics-ingest.js'
 
 const session = '3f2c9d1e-1111-4222-8333-444455556666'
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -34,6 +34,35 @@ describe('analytics ingest', () => {
     expect(calls.rows[0]?.user_ref).toHaveLength(32)
     expect(JSON.stringify(calls.rows)).not.toContain(user)
     expect(calls.rpc).toContainEqual(['analytics_bump_stat', { p_kind: 'unknown_event', p_detail: 'evil_event', p_count: 1 }])
+  })
+
+  it('buckets malformed or HTML/control-character unknown event names under malformed_event_name', async () => {
+    const { admin, calls } = fakeAdmin()
+    expect(sanitizeUnknownEventDetail('<script>alert(1)</script>')).toBe('malformed_event_name')
+    expect(sanitizeUnknownEventDetail('bad name with spaces')).toBe('malformed_event_name')
+    await ingestBatch(admin, batch([event(1, '<img src=x onerror=alert(1)>'), event(2, 'bad space')]))
+    expect(calls.rpc).toEqual([
+      ['analytics_bump_stat', { p_kind: 'unknown_event', p_detail: 'malformed_event_name', p_count: 2 }]
+    ])
+  })
+
+  it('caps distinct unknown event detail keys per batch to prevent table pollution', async () => {
+    const { admin, calls } = fakeAdmin()
+    const events = Array.from({ length: 12 }, (_, idx) => event(idx + 1, `unknown_kind_${idx + 1}`))
+    await ingestBatch(admin, batch(events))
+    const unknownCalls = calls.rpc.filter(([name, args]) => name === 'analytics_bump_stat' && args.p_kind === 'unknown_event')
+    expect(unknownCalls.length).toBeLessThanOrEqual(6)
+    expect(unknownCalls.some(([, args]) => args.p_detail === 'malformed_event_name')).toBe(true)
+  })
+
+  it('strips spoofed context.user_id when Authorization Bearer token fails verification', async () => {
+    const { admin, calls } = fakeAdmin()
+    const spoofedUser = '9f2c9d1e-1111-4222-8333-444455556666'
+    await ingestBatch(admin, batch([event(1)], { user_id: spoofedUser }), Date.now(), {
+      hasAuthorizationHeader: true,
+      verifiedUserId: null
+    })
+    expect(calls.rows[0]?.user_ref).toBeNull()
   })
 
   it('is idempotent: a re-sent event id is a duplicate, not a second row', async () => {
