@@ -1,6 +1,6 @@
 import { createHmac, createHash } from 'node:crypto'
 import { z } from 'zod'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { ApiRequest, ApiResponse } from '../http.js'
 import { readJson, sendJson } from '../http.js'
 import { clientKeyHash, serviceClient } from '../control.js'
@@ -8,13 +8,16 @@ import { logAIEvent } from '../diagnostics.js'
 import { SOURCES, cleanRoute, sanitizeProps } from '../../../src/lib/telemetry/taxonomy.js'
 
 /**
- * POST /api/control/analytics-ingest — public, unauthenticated, write-only.
- * Accepts a batch of ≤25 allowlisted events from the first-party tracker (sendBeacon).
- * Never returns stored data. Unknown events and properties are dropped and counted.
- * IPs are only used (hashed) for the rate limit and never stored. Always answers 202
- * so a broken analytics backend can never surface as an error in the app.
+ * POST /api/control/analytics-ingest — public, write-only.
+ * Accepts a batch of ≤25 allowlisted events from the first-party tracker (sendBeacon / fetch).
+ * Never returns stored data. Unknown events and properties are dropped and counted with strict
+ * identifier sanitization and per-batch key caps so arbitrary strings cannot pollute
+ * `analytics_ingest_stats`.
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const SAFE_UNKNOWN_EVENT_NAME = /^[a-z0-9][a-z0-9_.-]{0,59}$/i
+const MAX_DISTINCT_UNKNOWN_NAMES_PER_BATCH = 5
+
 const short = (max: number) => z.string().trim().max(max).nullable().optional()
 const batchSchema = z.object({
   context: z.object({
@@ -50,6 +53,12 @@ export function analyticsSecret(): string {
   return createHash('sha256').update(`derived:${process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'unset'}`).digest('hex')
 }
 
+/** Sanitizes unknown event names so arbitrary non-identifier strings or control/HTML chars never enter analytics_ingest_stats. */
+export function sanitizeUnknownEventDetail(rawName: string): string {
+  const trimmed = rawName.trim().slice(0, 60)
+  return SAFE_UNKNOWN_EVENT_NAME.test(trimmed) ? trimmed : 'malformed_event_name'
+}
+
 function deploymentEnv(): 'production' | 'preview' | 'development' {
   const env = process.env.VERCEL_ENV
   return env === 'production' || env === 'preview' ? env : 'development'
@@ -69,15 +78,23 @@ const cleanText = (value: string | null | undefined, max: number) => {
 }
 
 export interface IngestResult { stored: number; duplicates: number; unknown: number }
+export interface IngestOptions { verifiedUserId?: string | null; hasAuthorizationHeader?: boolean }
 
-export async function ingestBatch(admin: SupabaseClient, raw: unknown, now = Date.now()): Promise<IngestResult | null> {
+export async function ingestBatch(admin: SupabaseClient, raw: unknown, now = Date.now(), options?: IngestOptions): Promise<IngestResult | null> {
   const parsed = batchSchema.safeParse(raw)
   if (!parsed.success) { await admin.rpc('analytics_bump_stat', { p_kind: 'invalid_batch', p_detail: '', p_count: 1 }); return null }
   const { context, events } = parsed.data
   const secret = analyticsSecret()
+
+  // When an Authorization header is present (or verifiedUserId is explicitly supplied),
+  // only attribute `user_ref` if the token verified to the same user_id.
+  const effectiveUserId = options?.hasAuthorizationHeader
+    ? (options.verifiedUserId && context.user_id && options.verifiedUserId.toLowerCase() === context.user_id.toLowerCase() ? options.verifiedUserId : null)
+    : (context.user_id ?? null)
+
   const shared = {
     session_id: context.session_id,
-    user_ref: context.user_id ? userRef(context.user_id, secret) : null,
+    user_ref: effectiveUserId ? userRef(effectiveUserId, secret) : null,
     env: deploymentEnv(),
     deployment_id: cleanText(process.env.VERCEL_DEPLOYMENT_ID ?? process.env.VERCEL_URL?.split('.')[0] ?? null, 80),
     device: context.device ?? null,
@@ -91,7 +108,14 @@ export async function ingestBatch(admin: SupabaseClient, raw: unknown, now = Dat
   const rows = []
   for (const event of events) {
     const clean = sanitizeProps(event.name, event.props)
-    if (!clean) { unknown.set(event.name.slice(0, 60), (unknown.get(event.name.slice(0, 60)) ?? 0) + 1); continue }
+    if (!clean) {
+      const safeDetail = sanitizeUnknownEventDetail(event.name)
+      const detailKey = unknown.has(safeDetail) || unknown.size < MAX_DISTINCT_UNKNOWN_NAMES_PER_BATCH
+        ? safeDetail
+        : 'malformed_event_name'
+      unknown.set(detailKey, (unknown.get(detailKey) ?? 0) + 1)
+      continue
+    }
     rows.push({ ...shared, id: event.id, name: event.name, ts: clampTimestamp(event.ts, now), source: event.source, route: cleanRoute(event.route), props: clean.props, dropped_props: clean.dropped.slice(0, 10), missing_props: clean.missing.slice(0, 10) })
   }
   for (const [name, count] of unknown) await admin.rpc('analytics_bump_stat', { p_kind: 'unknown_event', p_detail: name, p_count: count })
@@ -109,19 +133,35 @@ export async function ingestBatch(admin: SupabaseClient, raw: unknown, now = Dat
   return { stored, duplicates: rows.length - stored, unknown: events.length - rows.length }
 }
 
+async function resolveBearerUserId(req: ApiRequest, url: string, anonKey: string): Promise<{ hasAuthorizationHeader: boolean; verifiedUserId: string | null }> {
+  const rawAuth = req.headers.authorization
+  const match = typeof rawAuth === 'string' ? /^Bearer\s+([^\s]+)$/i.exec(rawAuth) : null
+  if (!match?.[1]) return { hasAuthorizationHeader: false, verifiedUserId: null }
+  try {
+    const authClient = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } })
+    const { data, error } = await authClient.auth.getClaims(match[1])
+    const sub = (data?.claims as { sub?: unknown } | undefined)?.sub
+    if (error || typeof sub !== 'string' || !UUID.test(sub)) return { hasAuthorizationHeader: true, verifiedUserId: null }
+    return { hasAuthorizationHeader: true, verifiedUserId: sub }
+  } catch {
+    return { hasAuthorizationHeader: true, verifiedUserId: null }
+  }
+}
+
 export async function analyticsIngestHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
   res.setHeader('X-Robots-Tag', 'noindex')
   if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); sendJson(res, 405, { error: 'method_not_allowed', message: 'POST only.' }); return }
   try {
     const body = await readJson(req, 48_000)
-    const { admin } = serviceClient()
+    const { url, anonKey, admin } = serviceClient()
     const { data: allowed, error: rateError } = await admin.rpc('control_take_rate_slot', { actor_key: clientKeyHash(req), bucket: 'analytics-ingest', per_limit: INGEST_RATE.limit, window_seconds: INGEST_RATE.windowSeconds })
     if (rateError || allowed !== true) {
       if (!rateError) await admin.rpc('analytics_bump_stat', { p_kind: 'rate_limited', p_detail: '', p_count: 1 })
       sendJson(res, 202, { ok: true, stored: 0 })
       return
     }
-    const result = await ingestBatch(admin, body)
+    const authInfo = await resolveBearerUserId(req, url, anonKey)
+    const result = await ingestBatch(admin, body, Date.now(), authInfo)
     sendJson(res, 202, { ok: true, stored: result?.stored ?? 0 })
   } catch (error) {
     // Tolerant: before the migration is applied, or on any backend issue, drop silently.

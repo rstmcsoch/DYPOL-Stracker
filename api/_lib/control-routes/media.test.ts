@@ -5,13 +5,17 @@ const state = vi.hoisted(() => ({
   signed: { data: { token: 'tok', signedUrl: 'https://x' } as unknown, error: null as unknown },
   insertError: null as unknown,
   inserts: [] as Array<Record<string, unknown>>,
+  audits: [] as Array<Record<string, unknown>>,
   signedPaths: [] as string[]
 }))
 
 vi.mock('../control.js', () => ({
+  recordAuditEvent: async (_admin: unknown, event: Record<string, unknown>) => { state.audits.push(event); return true },
   controlHandler: async (_req: unknown, res: { statusCode?: number; body?: unknown }, _methods: string[], _options: unknown, run: (context: unknown) => Promise<void>) => {
     const context = {
       userId: 'owner-1',
+      role: 'owner',
+      requestId: 'req-media-1',
       admin: {
         storage: {
           from: () => ({
@@ -45,6 +49,7 @@ beforeEach(() => {
   state.signed = { data: { token: 'tok', signedUrl: 'https://x' }, error: null }
   state.insertError = null
   state.inserts = []
+  state.audits = []
   state.signedPaths = []
 })
 
@@ -55,6 +60,7 @@ describe('owner media upload URLs', () => {
     const body = res.body as { path: string; token: string; publicUrl: string }
     expect(body.path).toMatch(/^site\/video\/[0-9a-f-]{36}\.mp4$/)
     expect(state.inserts[0]).toMatchObject({ path: body.path, kind: 'video', mime: 'video/mp4', created_by: 'owner-1' })
+    expect(state.audits[0]).toMatchObject({ targetType: 'site_media', targetId: body.path, outcome: 'success' })
     expect(isUploadedMediaUrl('video', body.publicUrl)).toBe(true)
   })
 

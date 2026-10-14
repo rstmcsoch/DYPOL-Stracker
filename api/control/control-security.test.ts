@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { clientKeyHash } from '../_lib/control.js'
 
 /**
  * Exercises the real console endpoints against a scripted Supabase client. The fake client
@@ -148,7 +149,7 @@ beforeEach(() => {
   world.updates = []
   world.updateError = null
   world.users = {
-    [OWNER]: { id: OWNER, email: 'dypollabs@gmail.com' },
+    [OWNER]: { id: OWNER, email: 'owner@example.com' },
     [STUDENT]: { id: STUDENT, email: 'student@example.com' },
     [TARGET]: { id: TARGET, email: 'target@example.com' }
   }
@@ -160,6 +161,23 @@ describe('console authentication and authorization', () => {
     expect(res.statusCode).toBe(401)
     expect(res.headers['x-robots-tag']).toContain('noindex')
     expect(res.headers['cache-control']).toBe('no-store')
+  })
+
+  it('clientKeyHash ignores spoofed leftmost X-Forwarded-For prefix in favor of x-real-ip or rightmost proxy IP', () => {
+    const spoofedA = clientKeyHash({
+      headers: { 'x-forwarded-for': '198.51.100.1, 203.0.113.9', 'x-real-ip': '203.0.113.9' },
+      socket: { remoteAddress: '10.0.0.1' }
+    } as never)
+    const spoofedB = clientKeyHash({
+      headers: { 'x-forwarded-for': '198.51.100.254, 203.0.113.9', 'x-real-ip': '203.0.113.9' },
+      socket: { remoteAddress: '10.0.0.1' }
+    } as never)
+    const xffOnlyA = clientKeyHash({
+      headers: { 'x-forwarded-for': '192.0.2.10, 203.0.113.9' },
+      socket: { remoteAddress: '10.0.0.1' }
+    } as never)
+    expect(spoofedA).toBe(spoofedB)
+    expect(xffOnlyA).toBe(spoofedA)
   })
 
   it('answers 401 for a token the Auth server rejects, without any role lookup', async () => {
@@ -309,7 +327,7 @@ describe('account access changes', () => {
 
   it('will not let the owner suspend their own account', async () => {
     world.claims = claimsFor(OWNER, 'aal2', 60)
-    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody({ userId: OWNER, confirmEmail: 'dypollabs@gmail.com' })))
+    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody({ userId: OWNER, confirmEmail: 'owner@example.com' })))
     expect(res.statusCode).toBe(409)
     expect(res.body).toMatchObject({ error: 'self_action_blocked' })
     expect(world.updates).toHaveLength(0)

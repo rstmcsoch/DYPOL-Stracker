@@ -2,14 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { ApiRequest, ApiResponse } from '../http.js'
 import { ApiError, readJson, sendJson } from '../http.js'
-import { controlHandler } from '../control.js'
+import { controlHandler, recordAuditEvent } from '../control.js'
 import { MEDIA_BUCKET, MEDIA_LIMITS, MEDIA_EXTENSIONS } from '../../../src/lib/site-content/media.js'
 
 /**
  * POST /api/control/appearance-media  { kind, mime, bytes }
  *
  * Owner-only (aal2). Mints a single-use signed upload URL for a new object under
- * `homepage-media/site/<kind>/<uuid>.<ext>` and records it in public.site_media.
+ * `homepage-media/site/<kind>/<uuid>.<ext>` and records it in public.site_media + audit log.
  * Nothing is published here: the returned public URL only goes live when the owner saves
  * it into a draft and publishes through the usual pipeline. Existing objects are never
  * overwritten (fresh uuid per upload), so earlier versions stay restorable.
@@ -36,6 +36,18 @@ export async function mediaUploadHandler(req: ApiRequest, res: ApiResponse): Pro
 
     const { error: recordError } = await context.admin.from('site_media').insert({ path, kind, mime, bytes, created_by: context.userId })
     if (recordError) throw new ApiError(503, 'media_unavailable', 'Media uploads are not available yet. Nothing was changed.')
+
+    await recordAuditEvent(context.admin, {
+      requestId: context.requestId,
+      actorId: context.userId,
+      actorRole: context.role,
+      action: 'appearance.draft_save',
+      targetType: 'site_media',
+      targetId: path,
+      outcome: 'success',
+      severity: 'info',
+      summary: { kind, mime, bytes }
+    })
 
     const { data: publicData } = context.admin.storage.from(MEDIA_BUCKET).getPublicUrl(path)
     sendJson(res, 200, { ok: true, bucket: MEDIA_BUCKET, path, token: data.token, publicUrl: publicData.publicUrl })

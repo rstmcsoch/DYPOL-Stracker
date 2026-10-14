@@ -59,11 +59,21 @@ function bearerToken(req: ApiRequest): string | null {
   return match?.[1] ?? null
 }
 
-/** A one-way fingerprint of the client address for rate limiting. The raw IP is never stored. */
+/**
+ * A one-way fingerprint of the client address for rate limiting. The raw IP is never stored.
+ * Prefers proxy-authoritative single-IP headers (`x-real-ip`, `x-vercel-forwarded-for`) or the
+ * rightmost proxy-appended entry in `x-forwarded-for` so a client cannot rotate rate-limit buckets
+ * by prepending a spoofed `X-Forwarded-For` address.
+ */
 export function clientKeyHash(req: ApiRequest): string {
+  const realIp = typeof req.headers['x-real-ip'] === 'string' ? req.headers['x-real-ip'].trim() : ''
+  const vercelForwarded = typeof req.headers['x-vercel-forwarded-for'] === 'string'
+    ? req.headers['x-vercel-forwarded-for'].split(',').at(-1)?.trim() ?? ''
+    : ''
   const forwarded = req.headers['x-forwarded-for']
-  const first = typeof forwarded === 'string' ? forwarded.split(',')[0]?.trim() : undefined
-  const address = first || req.socket?.remoteAddress || 'unknown'
+  const forwardedRaw = Array.isArray(forwarded) ? forwarded.at(-1) ?? '' : typeof forwarded === 'string' ? forwarded : ''
+  const rightmostForwarded = forwardedRaw.split(',').map(part => part.trim()).filter(Boolean).at(-1)
+  const address = realIp || vercelForwarded || rightmostForwarded || req.socket?.remoteAddress || 'unknown'
   return createHash('sha256').update(`stracker-control:${address}`).digest('hex').slice(0, 32)
 }
 
