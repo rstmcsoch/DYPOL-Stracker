@@ -18,7 +18,7 @@ export function ExamSelectionSection() {
   const { data, upsert } = useData()
   const { notify } = useToast()
   const settings = data.settings
-  const { data: fetched } = useQuery({ queryKey: ['exam-catalog'], queryFn: fetchExamCatalog, staleTime: 10 * 60_000 })
+  const { data: fetched } = useQuery({ queryKey: ['exam-catalog'], queryFn: fetchExamCatalog, staleTime: 0 })
   const catalog = fetched ?? visibleCatalog(BUILT_IN_EXAMS)
 
   const [examId, setExamId] = useState(settings.exam_id ?? LEGACY_DEFAULT_EXAM_ID)

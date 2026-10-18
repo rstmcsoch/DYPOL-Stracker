@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, EyeOff, Eye, Pencil, Plus } from 'lucide-react'
+import { ArrowDown, ArrowUp, EyeOff, Eye, Pencil, Plus, X } from 'lucide-react'
 import { PageHeader } from '../pageParts'
 import { Button, Panel } from '../ui'
 import { controlFetch } from '../api'
@@ -10,18 +10,44 @@ import { AI_MODEL_PROVIDERS, type AIModelProvider } from '../../lib/ai/model-pre
 import { DEFAULT_MODEL_PREFERENCES } from '../../lib/ai/model-ranking'
 
 type ListResponse = { ok: true; exams: ExamDefinition[]; aiModelPreferences: Record<AIModelProvider, string[]>; aiModelPreferencesStored?: boolean }
-type Draft = { id: string; name: string; category: string; years: string; sessions: string; boards: string; boards_addon: boolean; subjects: string; session_label: string; hidden: boolean; isNew: boolean; markingFullTotal: string; markingOtherTotal: string; markingFullSubjects: string; markingOtherSubjects: string; markingFullDefault: string; markingOtherDefault: string; markingPapers: string; markingCombine: MarkingScheme['combine']; markingSource: string; markingNotes: string }
+type Draft = { id: string; name: string; category: string; years: number[]; sessions: string; boards: string; boards_addon: boolean; subjects: string; session_label: string; hidden: boolean; isNew: boolean; markingFullTotal: string; markingOtherTotal: string; markingFullSubjects: string; markingOtherSubjects: string; markingFullDefault: string; markingOtherDefault: string; markingPapers: string; markingCombine: MarkingScheme['combine']; markingSource: string; markingNotes: string }
 
 const splitList = (value: string) => value.split(/[\n,]/).map(item => item.trim()).filter(Boolean)
 const toDraft = (exam?: ExamDefinition): Draft => {
   const marking = exam?.marking_scheme ?? null
   const base = { markingFullTotal: marking?.full.total?.toString() ?? '', markingOtherTotal: marking?.other.total?.toString() ?? '', markingFullSubjects: marking ? perSubjectText(marking.full.perSubject) : '', markingOtherSubjects: marking ? perSubjectText(marking.other.perSubject) : '', markingFullDefault: marking?.full.defaultPerSubject?.toString() ?? '', markingOtherDefault: marking?.other.defaultPerSubject?.toString() ?? '', markingPapers: papersText(marking?.full.papers), markingCombine: marking?.combine ?? 'sum_subjects' as MarkingScheme['combine'], markingSource: marking?.source ?? '', markingNotes: marking?.notes ?? '' }
   return exam
-    ? { id: exam.id, name: exam.name, category: exam.category, years: exam.years.join(', '), sessions: exam.sessions.join(', '), boards: exam.boards.join(', '), boards_addon: exam.boards_addon, subjects: exam.subjects.join('\n'), session_label: exam.session_label, hidden: exam.hidden, isNew: false, ...base }
-    : { id: '', name: '', category: '', years: '', sessions: '', boards: '', boards_addon: false, subjects: '', session_label: '', hidden: false, isNew: true, ...base }
+    ? { id: exam.id, name: exam.name, category: exam.category, years: [...exam.years], sessions: exam.sessions.join(', '), boards: exam.boards.join(', '), boards_addon: exam.boards_addon, subjects: exam.subjects.join('\n'), session_label: exam.session_label, hidden: exam.hidden, isNew: false, ...base }
+    : { id: '', name: '', category: '', years: [], sessions: '', boards: '', boards_addon: false, subjects: '', session_label: '', hidden: false, isNew: true, ...base }
 }
 
 const PROVIDER_LABELS: Record<AIModelProvider, string> = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Anthropic (Claude)', deepseek: 'DeepSeek', qwen: 'Qwen' }
+
+/** Target-year editor: chips for the configured years, blank = automatic (this year + next 3). */
+function YearChips({ years, onChange }: { years: number[]; onChange: (years: number[]) => void }) {
+  const [text, setText] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const add = () => {
+    const year = Number(text.trim())
+    if (!Number.isInteger(year) || year < 2020 || year > 2100) { setError('Enter a whole year between 2020 and 2100.'); return }
+    if (years.includes(year)) { setError(`${year} is already in the list.`); return }
+    if (years.length >= 12) { setError('At most 12 target years.'); return }
+    setError(null); setText('')
+    onChange([...years, year].sort((a, b) => a - b))
+  }
+  return <div className="cc-year-editor">
+    <div className="cc-year-chips">
+      {years.length === 0
+        ? <span className="cc-muted">Automatic — students see this year and the next three.</span>
+        : years.map(year => <span key={year} className="cc-year-chip">{year}<button type="button" aria-label={`Remove year ${year}`} onClick={() => onChange(years.filter(item => item !== year))}><X size={12} aria-hidden="true" /></button></span>)}
+    </div>
+    <div className="cc-year-add">
+      <input className="cc-input" inputMode="numeric" placeholder="e.g. 2029" value={text} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); add() } }} aria-label="Year to add" />
+      <Button size="sm" onClick={add}><Plus size={13} aria-hidden="true" /> Add year</Button>
+    </div>
+    {error && <p className="cc-field__error" role="alert">{error}</p>}
+  </div>
+}
 
 function AiModelPreferencesPanel({ initial, saving, onSave }: { initial: Record<AIModelProvider, string[]>; saving: boolean; onSave: (prefs: Record<AIModelProvider, string[]>) => Promise<void> }) {
   const [lists, setLists] = useState<Record<AIModelProvider, string>>(() => Object.fromEntries(AI_MODEL_PROVIDERS.map(provider => [provider, initial[provider].join('\n')])) as Record<AIModelProvider, string>)
@@ -42,7 +68,7 @@ function AiModelPreferencesPanel({ initial, saving, onSave }: { initial: Record<
   return <Panel title="AI default models" description="Ranked lists used when a student adds a provider key. * matches a version (gemini-*-flash = newest flash first). The student's key must list the model and it must pass the timed auto-test; otherwise the next entry is tried.">
     <div className="cc-stack cc-exam-form">
       {problem && <p className="cc-field__error" role="alert">{problem}</p>}
-      {AI_MODEL_PROVIDERS.map(provider => <label key={provider}>{PROVIDER_LABELS[provider]} — best first (one per line)<textarea rows={4} value={lists[provider]} onChange={event => { setDirty(true); setLists(current => ({ ...current, [provider]: event.target.value })) }} /></label>)}
+      {AI_MODEL_PROVIDERS.map(provider => <label key={provider}>{PROVIDER_LABELS[provider]} — best first (one per line)<textarea className="cc-input" rows={4} value={lists[provider]} onChange={event => { setDirty(true); setLists(current => ({ ...current, [provider]: event.target.value })) }} /></label>)}
       <div className="cc-row">
         <Button variant="primary" size="sm" disabled={saving} onClick={submit}>{saving ? 'Saving…' : 'Save AI model lists'}</Button>
         <Button variant="ghost" size="sm" disabled={saving} onClick={() => { setDirty(true); setProblem(null); setLists(Object.fromEntries(AI_MODEL_PROVIDERS.map(provider => [provider, DEFAULT_MODEL_PREFERENCES[provider].join('\n')])) as Record<AIModelProvider, string>) }}>Reset to built-in lists</Button>
@@ -124,8 +150,8 @@ export default function ExamsPage() {
     if (!EXAM_ID_PATTERN.test(id)) { setProblem('Use 2–40 lowercase letters, numbers or dashes for the id, e.g. "neet-pg".'); return }
     if (draft.isNew && exams.some(exam => exam.id === id)) { setProblem('That id is already used. Ids are permanent, so pick another.'); return }
     if (!draft.name.trim() || !draft.category.trim()) { setProblem('Name and category are required.'); return }
-    const years = splitList(draft.years).map(Number)
-    if (years.some(year => !Number.isInteger(year) || year < 2020 || year > 2100)) { setProblem('Years must be whole years between 2020 and 2100, or leave blank.'); return }
+    const years = [...draft.years].sort((a, b) => a - b)
+    if (years.length > 12 || years.some(year => !Number.isInteger(year) || year < 2020 || year > 2100)) { setProblem('Target years must be whole years between 2020 and 2100 (at most 12), or none for automatic.'); return }
     const subjects = [...new Set(draft.subjects.split('\n').map(item => item.trim()).filter(Boolean))]
     if (!subjects.length) { setProblem('Add at least one subject (one per line).'); return }
     if (subjects.length > 30 || subjects.some(item => item.length > 60)) { setProblem('Use up to 30 subjects, each at most 60 characters.'); return }
@@ -171,29 +197,31 @@ export default function ExamsPage() {
     {notice && <p className="cc-muted" role="status">{notice}</p>}
     {draft && <div ref={editorRef}><Panel title={draft.isNew ? 'Add an exam' : `Edit ${draft.name}`} description="Years: leave blank to offer this year and the next three. Lists can be separated by commas.">
       <div className="cc-stack cc-exam-form">
-        <label>Id (permanent){' '}<input value={draft.id} disabled={!draft.isNew} onChange={event => setDraft({ ...draft, id: event.target.value.toLowerCase() })} placeholder="e.g. neet-pg" /></label>
-        <label>Name <input value={draft.name} maxLength={80} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
-        <label>Category <input value={draft.category} maxLength={40} list="cc-exam-categories" onChange={event => setDraft({ ...draft, category: event.target.value })} /></label>
+        <label>Id (permanent){' '}<input className="cc-input" value={draft.id} disabled={!draft.isNew} onChange={event => setDraft({ ...draft, id: event.target.value.toLowerCase() })} placeholder="e.g. neet-pg" /></label>
+        <label>Name <input className="cc-input" value={draft.name} maxLength={80} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
+        <label>Category <input className="cc-input" value={draft.category} maxLength={40} list="cc-exam-categories" onChange={event => setDraft({ ...draft, category: event.target.value })} /></label>
         <datalist id="cc-exam-categories">{groupByCategory(exams).map(([category]) => <option key={category} value={category} />)}</datalist>
-        <label>Target years <input value={draft.years} onChange={event => setDraft({ ...draft, years: event.target.value })} placeholder="blank = automatic" /></label>
-        <label>Attempts / sessions <input value={draft.sessions} onChange={event => setDraft({ ...draft, sessions: event.target.value })} placeholder="e.g. January, May, September" /></label>
-        <label>Label for attempts / sessions <input value={draft.session_label} maxLength={30} onChange={event => setDraft({ ...draft, session_label: event.target.value })} placeholder='blank = "Attempt / session" (e.g. Stream)' /></label>
-        <label>Subjects (one per line; add, rename or remove) <textarea rows={6} value={draft.subjects} onChange={event => setDraft({ ...draft, subjects: event.target.value })} placeholder={'Physics\nChemistry\nBiology'} /></label>
+        <div className="cc-exam-field"><span className="cc-exam-field__label">Target years students can pick</span><YearChips years={draft.years} onChange={years => setDraft({ ...draft, years })} /></div>
+        <label>Attempts / sessions <input className="cc-input" value={draft.sessions} onChange={event => setDraft({ ...draft, sessions: event.target.value })} placeholder="e.g. January, May, September" /></label>
+        <label>Label for attempts / sessions <input className="cc-input" value={draft.session_label} maxLength={30} onChange={event => setDraft({ ...draft, session_label: event.target.value })} placeholder='blank = "Attempt / session" (e.g. Stream)' /></label>
+        <label>Subjects (one per line; add, rename or remove) <textarea className="cc-input" rows={6} value={draft.subjects} onChange={event => setDraft({ ...draft, subjects: event.target.value })} placeholder={'Physics\nChemistry\nBiology'} /></label>
         <span className="cc-muted">Renaming or removing a subject does not change what students already logged; their older entries stay visible in their analytics.</span>
-        <label>Boards to choose from (school classes) <input value={draft.boards} onChange={event => setDraft({ ...draft, boards: event.target.value })} placeholder="e.g. CBSE, ICSE / ISC, State board" /></label>
+        <label>Boards to choose from (school classes) <input className="cc-input" value={draft.boards} onChange={event => setDraft({ ...draft, boards: event.target.value })} placeholder="e.g. CBSE, ICSE / ISC, State board" /></label>
         <label className="cc-check"><input type="checkbox" checked={draft.boards_addon} onChange={event => setDraft({ ...draft, boards_addon: event.target.checked })} /> Allow students to add Class 12 boards alongside this exam</label>
+        <div className="cc-exam-group">
         <strong>Marking defaults for Add Test</strong>
         <span className="cc-muted">These only pre-fill a new test form; saved tests are never changed. Leave every marking field blank to use the built-in fallback for this exam id.</span>
-        <label>Full Mock total (blank = depends on subjects/papers) <input inputMode="decimal" value={draft.markingFullTotal} onChange={event => setDraft({ ...draft, markingFullTotal: event.target.value })} placeholder="e.g. 300" /></label>
-        <label>Full Mock marks per subject (one per line, Subject = marks) <textarea rows={5} value={draft.markingFullSubjects} onChange={event => setDraft({ ...draft, markingFullSubjects: event.target.value })} placeholder={'Physics = 100\nChemistry = 100'} /></label>
-        <label>Full Mock default marks for any other subject <input inputMode="decimal" value={draft.markingFullDefault} onChange={event => setDraft({ ...draft, markingFullDefault: event.target.value })} placeholder="optional" /></label>
-        <label>Papers (optional; one per line: Paper 1 | 180 | Physics = 60; Chemistry = 60) <textarea rows={3} value={draft.markingPapers} onChange={event => setDraft({ ...draft, markingPapers: event.target.value })} placeholder="Paper 1 | 180 | Physics = 60; Chemistry = 60; Maths = 60" /></label>
-        <label>Other test types total (blank = depends on subject) <input inputMode="decimal" value={draft.markingOtherTotal} onChange={event => setDraft({ ...draft, markingOtherTotal: event.target.value })} placeholder="e.g. 180" /></label>
-        <label>Other test types marks per subject (one per line) <textarea rows={5} value={draft.markingOtherSubjects} onChange={event => setDraft({ ...draft, markingOtherSubjects: event.target.value })} placeholder={'Physics = 60\nChemistry = 60'} /></label>
-        <label>Other test types default marks for any other subject <input inputMode="decimal" value={draft.markingOtherDefault} onChange={event => setDraft({ ...draft, markingOtherDefault: event.target.value })} placeholder="optional" /></label>
-        <label>Combine rule <select value={draft.markingCombine} onChange={event => setDraft({ ...draft, markingCombine: event.target.value as MarkingScheme['combine'] })}><option value="sum_subjects">Sum entered subjects</option><option value="sum_papers">Sum papers (e.g. JEE Advanced Paper 1 + Paper 2 = 360)</option><option value="per_subject">Per subject/paper — no single combined official total</option></select></label>
-        <label>Official source <input value={draft.markingSource} maxLength={200} onChange={event => setDraft({ ...draft, markingSource: event.target.value })} placeholder="e.g. NTA, NEET (UG) 2026" /></label>
-        <label>Notes for students (optional) <textarea rows={2} maxLength={500} value={draft.markingNotes} onChange={event => setDraft({ ...draft, markingNotes: event.target.value })} /></label>
+        <label>Full Mock total (blank = depends on subjects/papers) <input className="cc-input" inputMode="decimal" value={draft.markingFullTotal} onChange={event => setDraft({ ...draft, markingFullTotal: event.target.value })} placeholder="e.g. 300" /></label>
+        <label>Full Mock marks per subject (one per line, Subject = marks) <textarea className="cc-input" rows={5} value={draft.markingFullSubjects} onChange={event => setDraft({ ...draft, markingFullSubjects: event.target.value })} placeholder={'Physics = 100\nChemistry = 100'} /></label>
+        <label>Full Mock default marks for any other subject <input className="cc-input" inputMode="decimal" value={draft.markingFullDefault} onChange={event => setDraft({ ...draft, markingFullDefault: event.target.value })} placeholder="optional" /></label>
+        <label>Papers (optional; one per line: Paper 1 | 180 | Physics = 60; Chemistry = 60) <textarea className="cc-input" rows={3} value={draft.markingPapers} onChange={event => setDraft({ ...draft, markingPapers: event.target.value })} placeholder="Paper 1 | 180 | Physics = 60; Chemistry = 60; Maths = 60" /></label>
+        <label>Other test types total (blank = depends on subject) <input className="cc-input" inputMode="decimal" value={draft.markingOtherTotal} onChange={event => setDraft({ ...draft, markingOtherTotal: event.target.value })} placeholder="e.g. 180" /></label>
+        <label>Other test types marks per subject (one per line) <textarea className="cc-input" rows={5} value={draft.markingOtherSubjects} onChange={event => setDraft({ ...draft, markingOtherSubjects: event.target.value })} placeholder={'Physics = 60\nChemistry = 60'} /></label>
+        <label>Other test types default marks for any other subject <input className="cc-input" inputMode="decimal" value={draft.markingOtherDefault} onChange={event => setDraft({ ...draft, markingOtherDefault: event.target.value })} placeholder="optional" /></label>
+        <label>Combine rule <select className="cc-input" value={draft.markingCombine} onChange={event => setDraft({ ...draft, markingCombine: event.target.value as MarkingScheme['combine'] })}><option value="sum_subjects">Sum entered subjects</option><option value="sum_papers">Sum papers (e.g. JEE Advanced Paper 1 + Paper 2 = 360)</option><option value="per_subject">Per subject/paper — no single combined official total</option></select></label>
+        <label>Official source <input className="cc-input" value={draft.markingSource} maxLength={200} onChange={event => setDraft({ ...draft, markingSource: event.target.value })} placeholder="e.g. NTA, NEET (UG) 2026" /></label>
+        <label>Notes for students (optional) <textarea className="cc-input" rows={2} maxLength={500} value={draft.markingNotes} onChange={event => setDraft({ ...draft, markingNotes: event.target.value })} /></label>
+        </div>
         <div className="cc-row">
           <Button variant="primary" size="sm" disabled={save.isPending} onClick={submit}>{save.isPending ? 'Saving…' : 'Save exam'}</Button>
           <Button variant="ghost" size="sm" onClick={() => { setDraft(null); setProblem(null) }}>Cancel</Button>
@@ -207,7 +235,7 @@ export default function ExamsPage() {
           : <ol className="cc-exam-list">
             {exams.map((exam, index) => <li key={exam.id} className={exam.hidden ? 'is-hidden' : undefined}>
               <div className="cc-exam-main">
-                <strong>{exam.name}</strong> <span className="cc-muted">{exam.category} · {examYears(exam).join(', ')}{exam.sessions.length ? ` · ${exam.sessions.join(', ')}` : ''}{exam.boards_addon ? ' · boards add-on' : ''}{exam.subjects.length ? ` · ${exam.subjects.length} subjects` : ''}{exam.marking_scheme ? ` · Full ${exam.marking_scheme.full.total ?? 'per subject'} (${exam.marking_scheme.source})` : ' · built-in marking fallback'}{exam.hidden ? ' · hidden' : ''}</span>
+                <strong>{exam.name}</strong><span className="cc-exam-meta">{exam.category} · {examYears(exam).join(', ')}{exam.sessions.length ? ` · ${exam.sessions.join(', ')}` : ''}{exam.boards_addon ? ' · boards add-on' : ''}{exam.subjects.length ? ` · ${exam.subjects.length} subjects` : ''}{exam.marking_scheme ? ` · Full ${exam.marking_scheme.full.total ?? 'per subject'} (${exam.marking_scheme.source})` : ' · built-in marking fallback'}{exam.hidden ? ' · hidden' : ''}</span>
               </div>
               <div className="cc-row">
                 <Button size="sm" variant="ghost" aria-label={`Move ${exam.name} up`} disabled={index === 0 || (reorder.isPending && reorder.variables?.movedId === exam.id)} onClick={() => move(exam.id, -1)}><ArrowUp size={13} aria-hidden="true" /></Button>
