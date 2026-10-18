@@ -1,4 +1,4 @@
-import type { AIProviderId } from './catalog'
+import type { AIProviderId } from './catalog.js'
 
 /**
  * Ranked default-model preferences per provider. Each entry is an exact model ID or a pattern in

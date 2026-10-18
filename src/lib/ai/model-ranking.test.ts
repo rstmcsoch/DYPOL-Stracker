@@ -40,3 +40,18 @@ describe('pickDefaultModel', () => {
     expect(calls).toBe(4); expect(pick.modelId).toBeNull()
   })
 })
+
+
+import { effectiveModelPreferences, normalizeModelPreferenceOverrides } from './model-preferences'
+
+describe('owner AI model preference overrides', () => {
+  it('uses valid owner lists and falls back per provider', () => {
+    const effective = effectiveModelPreferences({ gemini: ['gemini-owner-*', 'gemini-2.5-flash'], openai: ['bad model with spaces'] })
+    expect(effective.gemini).toEqual(['gemini-owner-*', 'gemini-2.5-flash'])
+    expect(effective.openai).toEqual(DEFAULT_MODEL_PREFERENCES.openai)
+    expect(effective.anthropic).toEqual(DEFAULT_MODEL_PREFERENCES.anthropic)
+  })
+  it('rejects empty, duplicate, oversized and custom-provider lists', () => {
+    expect(normalizeModelPreferenceOverrides({ gemini: [], openai: ['gpt-*', 'gpt-*'], custom: ['x-*'], deepseek: Array.from({ length: 13 }, (_, i) => `deepseek-${i}`) })).toEqual({})
+  })
+})

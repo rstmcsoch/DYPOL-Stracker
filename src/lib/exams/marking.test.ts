@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BUILT_IN_EXAMS } from './catalog'
-import { aggregateScoresBySubject, BUILT_IN_MARKING_SCHEMES, combinedSubjectTotal, defaultForSubject, defaultTotalFor, fullMockDefaults, markingSchemeFor, normalizeMarkingScheme } from './marking'
+import { aggregateScoresBySubject, BUILT_IN_MARKING_SCHEMES, combinedSubjectTotal, defaultForSubject, defaultTotalFor, fullMockDefaults, markingSchemeFor, normalizeMarkingScheme, papersText, parsePapersText, parsePerSubjectText, perSubjectText, validateMarkingScheme } from './marking'
 import { getFullMockAggregate, getSubjectPerformance } from '../analytics'
 import type { AppData } from '../../types'
 
@@ -59,5 +59,25 @@ describe('JEE Advanced analytics combine', () => {
     expect(getFullMockAggregate('adv', scores)).toEqual({ marks: 180, total: 360 })
     const data = { settings: { exam_id: 'jee' }, chapters: [], tests: [test], testSubjectScores: scores } as unknown as AppData
     expect(getSubjectPerformance(data).find(row => row.subject === 'Physics')).toEqual({ subject: 'Physics', average: 50, count: 1 })
+  })
+})
+
+describe('owner marking validation and text formats', () => {
+  it('accepts every built-in scheme', () => {
+    for (const [id, value] of Object.entries(BUILT_IN_MARKING_SCHEMES)) expect(validateMarkingScheme(value), id).toEqual([])
+  })
+  it('parses and round-trips per-subject and paper text', () => {
+    expect(parsePerSubjectText('Physics = 100\nChemistry = 100')).toEqual({ Physics: 100, Chemistry: 100 })
+    expect(perSubjectText({ Physics: 100 })).toBe('Physics = 100')
+    const papers = parsePapersText('Paper 1 | 180 | Physics = 60; Chemistry = 60; Maths = 60')
+    expect(papers).toEqual([{ id: 'paper-1', label: 'Paper 1', total: 180, perSubject: { Physics: 60, Chemistry: 60, Maths: 60 } }])
+    expect(papersText(papers)).toContain('Paper 1 | 180')
+    expect(() => parsePerSubjectText('Physics 100')).toThrow('Subject = marks')
+  })
+  it('rejects paper totals that do not add up and bad combine rules', () => {
+    const bad = { ...scheme('jee'), full: { ...scheme('jee').full, papers: [{ id: 'paper-1', label: 'Paper 1', total: 180, perSubject: { Physics: 50 } }] } }
+    expect(validateMarkingScheme(bad).join(' ')).toContain('add to 50, not 180')
+    expect(validateMarkingScheme({ ...scheme('jee'), combine: 'multiply' }).length).toBeGreaterThan(0)
+    expect(validateMarkingScheme({ ...scheme('jee'), source: '' }).length).toBeGreaterThan(0)
   })
 })

@@ -200,3 +200,81 @@ export function aggregateScoresBySubject<T extends { subject: string; marks_obta
   }
   return grouped
 }
+
+/** Human-readable validation issues for an owner-entered scheme (empty = valid). */
+export function validateMarkingScheme(value: unknown): string[] {
+  const issues: string[] = []
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ['Marking scheme must be an object.']
+  const record = value as Record<string, unknown>
+  if (!label(record.source, 200)) issues.push('Marking source is required (up to 200 characters).')
+  if (record.notes !== undefined && !label(record.notes, 500)) issues.push('Marking notes must be up to 500 characters.')
+  if (!['sum_subjects', 'sum_papers', 'per_subject'].includes(String(record.combine))) issues.push('Choose a valid combine rule.')
+  const checkPattern = (raw: unknown, name: string) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { issues.push(`${name} pattern is required.`); return }
+    const item = raw as Record<string, unknown>
+    if (item.total !== null && positive(item.total) === null) issues.push(`${name} total must be blank or a positive number.`)
+    if (!item.perSubject || typeof item.perSubject !== 'object' || Array.isArray(item.perSubject)) issues.push(`${name} subjects must be an object.`)
+    else {
+      const entries = Object.entries(item.perSubject as Record<string, unknown>)
+      if (entries.length > 40) issues.push(`${name} has too many subjects (maximum 40).`)
+      for (const [subject, marks] of entries) if (!label(subject) || positive(marks) === null) issues.push(`${name} subject “${subject}” needs a name and positive marks.`)
+    }
+    if (item.defaultPerSubject !== undefined && positive(item.defaultPerSubject) === null) issues.push(`${name} default per subject must be positive.`)
+    if (item.papers !== undefined) {
+      if (!Array.isArray(item.papers) || item.papers.length > 6) issues.push(`${name} papers must be a list of at most 6 papers.`)
+      else {
+        const ids = new Set<string>()
+        for (const rawPaper of item.papers) {
+          if (!rawPaper || typeof rawPaper !== 'object') { issues.push(`${name} paper entries must be objects.`); continue }
+          const paper = rawPaper as Record<string, unknown>
+          const id = label(paper.id, 40); const paperLabel = label(paper.label, 60); const total = positive(paper.total)
+          if (!id || !/^[a-z0-9][a-z0-9-]{1,39}$/.test(id) || ids.has(id)) issues.push(`${name} paper ids must be unique slugs.`)
+          if (id) ids.add(id)
+          if (!paperLabel || total === null) issues.push(`${name} paper “${String(paper.label ?? '')}” needs a label and positive total.`)
+          if (!paper.perSubject || typeof paper.perSubject !== 'object') { issues.push(`${name} paper subjects are required.`); continue }
+          const entries = Object.entries(paper.perSubject as Record<string, unknown>)
+          for (const [subject, marks] of entries) if (!label(subject) || positive(marks) === null) issues.push(`${name} paper subject “${subject}” needs positive marks.`)
+          const sum = entries.reduce((sumValue, [, marks]) => sumValue + (positive(marks) ?? 0), 0)
+          if (total !== null && Math.abs(sum - total) > 0.01) issues.push(`${name} paper “${String(paper.label ?? '')}” subject marks add to ${sum}, not ${total}.`)
+        }
+      }
+    }
+  }
+  checkPattern(record.full, 'Full')
+  checkPattern(record.other, 'Other')
+  return [...new Set(issues)]
+}
+
+export function perSubjectText(perSubject: Record<string, number>): string {
+  return Object.entries(perSubject).map(([subject, marks]) => `${subject} = ${marks}`).join('\n')
+}
+
+/** Parse lines such as `Physics = 100`; semicolons also separate entries. */
+export function parsePerSubjectText(text: string): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const part of text.split(/[\n;]/).map(item => item.trim()).filter(Boolean)) {
+    const index = part.lastIndexOf('=')
+    const subject = index > 0 ? part.slice(0, index).trim() : ''
+    const marks = index > 0 ? Number(part.slice(index + 1).trim()) : NaN
+    if (!subject || subject.length > 60 || !Number.isFinite(marks) || marks <= 0) throw new Error(`Check the subject marks line “${part}”. Use Subject = marks.`)
+    out[subject] = marks
+  }
+  return out
+}
+
+export function papersText(papers: readonly MarkingPaper[] | undefined): string {
+  return (papers ?? []).map(paper => `${paper.label} | ${paper.total} | ${perSubjectText(paper.perSubject).replaceAll('\n', '; ')}`).join('\n')
+}
+
+/** Parse lines such as `Paper 1 | 180 | Physics = 60; Chemistry = 60`. */
+export function parsePapersText(text: string): MarkingPaper[] {
+  const papers: MarkingPaper[] = []
+  for (const line of text.split('\n').map(item => item.trim()).filter(Boolean)) {
+    const [labelText, totalText, subjectsText] = line.split('|').map(item => item?.trim() ?? '')
+    const total = Number(totalText)
+    if (!labelText || !subjectsText || !Number.isFinite(total) || total <= 0) throw new Error(`Check the paper line “${line}”. Use Paper 1 | 180 | Physics = 60; Chemistry = 60.`)
+    const id = labelText.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    papers.push({ id, label: labelText, total, perSubject: parsePerSubjectText(subjectsText) })
+  }
+  return papers
+}

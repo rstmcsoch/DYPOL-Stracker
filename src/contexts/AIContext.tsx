@@ -79,7 +79,7 @@ interface AIContextValue {
   backendHealth:AIBackendHealth|null
   checkBackendHealth:()=>Promise<void>
   refreshProviders:()=>Promise<void>
-  discoverModels:(draft:AIProviderDraft)=>Promise<{models:AIModelOption[];discoveryAvailable:boolean;message?:string}>
+  discoverModels:(draft:AIProviderDraft)=>Promise<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>}>
   saveProvider:(draft:AIProviderDraft)=>Promise<AIProviderConfig>
   testProvider:(id:string)=>Promise<{latencyMs?:number}>
   patchProvider:(id:string,action:'enable'|'disable'|'default')=>Promise<void>
@@ -265,7 +265,7 @@ export function AIProvider({ children }: { children:ReactNode }) {
   const discoverModels = useCallback(async (draft:AIProviderDraft) => {
     const { id,...setup } = draft
     const useSavedConfiguration = Boolean(id && !draft.apiKey)
-    return apiFetch<{models:AIModelOption[];discoveryAvailable:boolean;message?:string}>('/api/ai/models',{method:'POST',body:JSON.stringify(useSavedConfiguration ? { configId:id } : setup)})
+    return apiFetch<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>}>('/api/ai/models',{method:'POST',body:JSON.stringify(useSavedConfiguration ? { configId:id } : setup)})
   },[apiFetch])
 
   const saveProvider = useCallback(async (draft:AIProviderDraft) => {
