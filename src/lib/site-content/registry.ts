@@ -462,8 +462,7 @@ export const USER_NAV_GROUP_CAPTIONS: ReadonlyArray<{ slug: string; caption: str
   { slug: 'syllabus', caption: 'SYLLABUS' },
   { slug: 'tests', caption: 'TESTS' },
   { slug: 'revision', caption: 'REVISION' },
-  { slug: 'planning', caption: 'PLANNING' },
-  { slug: 'keep-going', caption: 'KEEP GOING' }
+  { slug: 'planning', caption: 'PLANNING' }
 ]
 
 const NAV = 'Navigation'

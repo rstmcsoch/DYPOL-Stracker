@@ -19,7 +19,7 @@
   --card-gap: var(--space-4);
   --column-gap: var(--space-5);
   --section-gap: var(--space-6);
-  --fs-card-title: 20px;
+  --fs-card-title: 19px;
 }
 
 @media (max-width: 700px) {
@@ -81,7 +81,7 @@
 }
 
 /* ---- Type scale (plan C, P2): page > section > card, one clear step each. ---- */
-:root { --fs-section: 24px; --fs-card-title: 19px; --card-min-h: 120px; }
+:root { --fs-section: 22px; --fs-card-title: 18px; --card-min-h: 120px; }
 .section-heading h2 { font-size: var(--fs-section); }
 
 /* Equal heights instead of per-card magic numbers: one minimum for the small

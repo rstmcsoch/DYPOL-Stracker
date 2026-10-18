@@ -1,17 +1,17 @@
 /* STRACKER typography system
    --------------------------------------------------------------------------
-   Identity is fixed Patrick Hand. --font-body / --body-scale are the only values
+   Identity is fixed Patrick Hand (sizes reduced 5-10% Oct 2026: display/h1/metric -10%, h2 -8%, h3 -5%). --font-body / --body-scale are the only values
    selected from Reading font settings. Legacy component styles may still size and
    space elements, but family and role rules below keep them in the right layer. */
 
 :root {
-  --type-brand-size: 1.75rem;
-  --type-display-size: 2.25rem;
-  --type-h1-size: 2rem;
-  --type-h2-size: 1.5rem;
-  --type-h3-size: 1.25rem;
-  --type-empty-size: 1.25rem;
-  --type-metric-size: 2rem;
+  --type-brand-size: 1.575rem;
+  --type-display-size: 2.025rem;
+  --type-h1-size: 1.8rem;
+  --type-h2-size: 1.38rem;
+  --type-h3-size: 1.1875rem;
+  --type-empty-size: 1.1875rem;
+  --type-metric-size: 1.8rem;
   --type-body-size: 1rem;
   --type-nav-size: .9375rem;
   --type-button-size: .9375rem;
@@ -384,11 +384,11 @@ html[data-app-font='active'] .pub-page :where(*) {
 .app-shell .task-row-copy > strong { white-space: normal; text-overflow: clip; }
 
 @media (max-width: 640px) {
-  .type-brand, .app-shell .type-brand { font-size: 1.5rem !important; }
-  .type-display, .app-shell .type-display { font-size: 1.9rem !important; }
-  .type-h1, .app-shell h1:not(.type-display), .app-shell .type-h1 { font-size: 1.75rem !important; }
-  .type-h2, .app-shell h2, .app-shell .type-h2 { font-size: 1.375rem !important; }
-  .type-h3, .type-empty, .app-shell h3, .app-shell .type-h3, .app-shell .type-empty { font-size: 1.125rem !important; }
+  .type-brand, .app-shell .type-brand { font-size: 1.38rem !important; }
+  .type-display, .app-shell .type-display { font-size: 1.71rem !important; }
+  .type-h1, .app-shell h1:not(.type-display), .app-shell .type-h1 { font-size: 1.575rem !important; }
+  .type-h2, .app-shell h2, .app-shell .type-h2 { font-size: 1.265rem !important; }
+  .type-h3, .type-empty, .app-shell h3, .app-shell .type-h3, .app-shell .type-empty { font-size: 1.06875rem !important; }
   .type-metric,
   .app-shell :is(.stat-value, .progress-ring-label, .ring-value, .countdown-number,
     .streak-number, .streak-number span, .streak-bottom strong, .study-time-value,
@@ -396,11 +396,11 @@ html[data-app-font='active'] .pub-page :where(*) {
     .jee-track-percent, .exam-mode-days, .jee-split-item strong, .jee-streak-numbers strong,
     .jee-mini-stats strong, .jee-countdown strong, .jee-weekly-grid strong,
     .jee-pipeline-count strong, .jee-progress-compare strong) {
-    font-size: 1.75rem !important;
+    font-size: 1.575rem !important;
   }
   .app-shell .focus-clock { font-size: clamp(46px, 24cqw, 88px) !important; }
-  .auth-page-public h2 { font-size: 1.375rem !important; }
-  .auth-page-public h3 { font-size: 1.125rem !important; }
+  .auth-page-public h2 { font-size: 1.265rem !important; }
+  .auth-page-public h3 { font-size: 1.06875rem !important; }
   .typography-live-preview { align-items: flex-start; flex-direction: column; gap: 12px; padding: 14px; }
   .typography-preview-button { width: 100%; }
 }

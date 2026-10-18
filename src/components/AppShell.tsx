@@ -57,9 +57,7 @@ const navGroups: NavigationGroup[] = [
   ] },
   { caption: 'PLANNING', items: [
     { to: '/study-now', label: 'Study now', icon: Compass },
-    { to: '/planner', label: 'Study plan', icon: CalendarDays }
-  ] },
-  { caption: 'KEEP GOING', items: [
+    { to: '/planner', label: 'Study plan', icon: CalendarDays },
     { to: '/settings', label: 'Settings', icon: Settings }
   ] }
 ]
