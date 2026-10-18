@@ -10,20 +10,21 @@ import { prettyDate, indiaToday } from '../lib/date'
 import { createId } from '../lib/id'
 import { MAX_MARKS_OBTAINED, MAX_NEGATIVE_MARKS, MAX_TOTAL_MARKS, POSTGRES_INTEGER_MAX, nullableNumberInput, subjectScoreInputSchema, testFormSchema } from '../lib/test-validation'
 import type { Subject, TestRecord, TestType, TestSubjectScore, TestChapterLink } from '../types'
-import { useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
+import { useCurrentExam, useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
+import { defaultTotalFor, fullMockDefaults, markingSchemeFor, scoreSubjectBase, type JeeFullPattern } from '../lib/exams/marking'
 
 type SortKey = 'date' | 'score' | 'title'
 type TestFieldErrors = Record<string, string>
 type TestFormValues = {
   title: string; test_date: string; test_type: TestType; subject: Subject | ''; chapter_id: string;
   marks: string; total: string; correct: string; wrong: string; skipped: string; negative: string; time: string; notes: string;
-  mockScores: Record<Subject, { marks: string; total: string }>
+  mockScores: Record<Subject, { marks: string; total: string }>; jeePattern: JeeFullPattern
 }
 const TEST_TYPES: TestType[] = ['Chapter Test', 'Subject Test', 'Full Mock', 'PYQ Practice']
-const blankValues = (subjects: readonly string[]): TestFormValues => ({
+const blankValues = (subjects: readonly string[], schemeValue: ReturnType<typeof markingSchemeFor> = null, jeePattern: JeeFullPattern = 'main'): TestFormValues => ({
   title: '', test_date: indiaToday(), test_type: 'Chapter Test', subject: '', chapter_id: '', marks: '', total: '',
-  correct: '', wrong: '', skipped: '', negative: '', time: '', notes: '',
-  mockScores: Object.fromEntries(subjects.map(subject => [subject, { marks: '', total: '' }]))
+  correct: '', wrong: '', skipped: '', negative: '', time: '', notes: '', jeePattern,
+  mockScores: fullMockDefaults(schemeValue, subjects, jeePattern)
 })
 
 const FORM_FIELD_BY_SCHEMA_FIELD: Record<string, string> = {
@@ -162,7 +163,7 @@ export default function TestsPage() {
       !Number.isFinite(mockMarks) || !Number.isFinite(mockTotal) || mockMarks > mockTotal ||
       mockMarks > MAX_MARKS_OBTAINED || mockTotal > MAX_TOTAL_MARKS
     )) {
-      return { _form: 'The combined Full Mock result is outside the supported total-mark range. Check the three subject totals.' }
+      return { _form: 'The combined Full Mock result is outside the supported total-mark range. Check the subject totals.' }
     }
 
     const test: TestRecord = {
@@ -275,6 +276,9 @@ function TestRow({ test, onView, onEdit, onDelete }: { test: TestRecord; onView:
 }
 
 function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initial: TestRecord | null; presetChapterId?: string | null; data: ReturnType<typeof useData>['data']; onClose: () => void; onSave: (values: TestFormValues, stableId: string) => Promise<TestFieldErrors | null> }) {
+  const currentExam = useCurrentExam()
+  const schemeValue = markingSchemeFor(currentExam)
+  const isJee = (currentExam?.id ?? 'jee') === 'jee'
   const mockSubjects = useExamSubjects()
   const formSubjects = useExamSubjects(initial?.subject)
   const { notify } = useToast()
@@ -282,10 +286,13 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
   const oldScores = initial ? data.testSubjectScores.filter(score => score.test_id === initial.id) : []
   const presetChapter = !initial && presetChapterId ? data.chapters.find(chapter => chapter.id === presetChapterId) ?? null : null
   const [values, setValues] = useState<TestFormValues>(() => {
-    const base = blankValues([...new Set([...mockSubjects, ...oldScores.map(score => score.subject)])])
+    const inferredPattern: JeeFullPattern = oldScores.some(score => /\s—\sPaper\s[12]$/i.test(score.subject)) ? 'advanced-both'
+      : initial?.test_type === 'Full Mock' && oldScores.length > 0 && oldScores.every(score => score.total_marks === 60) ? 'advanced-paper-1' : 'main'
+    const baseSubjects = inferredPattern === 'advanced-both' ? mockSubjects : [...new Set([...mockSubjects, ...oldScores.map(score => score.subject)])]
+    const base = blankValues(baseSubjects, schemeValue, inferredPattern)
     if (!initial) {
       // Opened from a chapter chip: the chapter (and its subject) arrive preselected.
-      if (presetChapter) return { ...base, subject: presetChapter.subject, chapter_id: presetChapter.id }
+      if (presetChapter) return { ...base, subject: presetChapter.subject, chapter_id: presetChapter.id, total: defaultTotalFor(schemeValue, base.test_type, presetChapter.subject) }
       return base
     }
     const scores = { ...base.mockScores }
@@ -308,6 +315,27 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
     setValues(prev => ({ ...prev, mockScores: { ...prev.mockScores, [subject]: { marks: prev.mockScores[subject]?.marks ?? '', total: prev.mockScores[subject]?.total ?? '', [key]: value } } }))
     setErrors(current => { const next = { ...current }; delete next[`${subject}.${key}`]; delete next._form; return next })
   }
+  const changeTestType = (type: TestType) => {
+    setValues(prev => type === 'Full Mock'
+      ? { ...prev, test_type: type, mockScores: fullMockDefaults(schemeValue, mockSubjects, prev.jeePattern) }
+      : { ...prev, test_type: type, total: initial ? prev.total : defaultTotalFor(schemeValue, type, prev.subject) })
+    setErrors(current => { const next = { ...current }; delete next._form; return next })
+  }
+  const changeSubject = (subject: Subject | '') => {
+    setValues(prev => ({ ...prev, subject, chapter_id: '', total: !initial && prev.test_type !== 'Full Mock' ? defaultTotalFor(schemeValue, prev.test_type, subject) : prev.total }))
+    setErrors(current => { const next = { ...current }; delete next._form; return next })
+  }
+  const changeJeePattern = (jeePattern: JeeFullPattern) => {
+    setValues(prev => {
+      const defaults = fullMockDefaults(schemeValue, mockSubjects, jeePattern)
+      for (const [subject, entry] of Object.entries(defaults)) {
+        const previous = prev.mockScores[subject] ?? (jeePattern === 'advanced-both' ? prev.mockScores[scoreSubjectBase(subject)] : prev.mockScores[`${subject} — Paper 1`])
+        if (previous) entry.marks = previous.marks
+      }
+      return { ...prev, jeePattern, mockScores: defaults }
+    })
+    setErrors(current => { const next = { ...current }; delete next._form; return next })
+  }
   const chapterOptions = data.chapters.filter(chapter => !values.subject || chapter.subject === values.subject)
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -327,9 +355,11 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
     <form className="form-stack" noValidate onSubmit={handleSubmit}>
       {errors._form && <div className="form-error" role="alert">{errors._form}</div>}
       <div className="form-grid two"><Field label="Test title" required error={errors.title} hint={values.title.length >= 120 ? `${values.title.length}/160 characters — long titles are trimmed with an ellipsis in lists` : undefined}><input autoFocus required maxLength={160} value={values.title} onChange={event => patch('title', event.target.value)} placeholder="e.g. Electrostatics weekly test" /></Field><Field label="Date" required error={errors.test_date}><input type="date" required value={values.test_date} onChange={event => patch('test_date', event.target.value)} /></Field></div>
-      <div className="form-grid two"><Field label="Test type"><select value={values.test_type} onChange={event => patch('test_type', event.target.value as TestType)}>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field><Field label="Subject"><select value={values.subject} onChange={event => { patch('subject', event.target.value as Subject | ''); patch('chapter_id', '') }}><option value="">— choose subject —</option>{formSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
+      <div className="form-grid two"><Field label="Test type"><select value={values.test_type} onChange={event => changeTestType(event.target.value as TestType)}>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field><Field label="Subject"><select value={values.subject} onChange={event => changeSubject(event.target.value as Subject | '')}><option value="">— choose subject —</option>{formSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
       {presetChapter && <div className="preset-chapter-note" role="status"><BookOpen size={15} aria-hidden="true" /><span>Chapter preselected from Weak areas: <strong>{presetChapter.name}</strong><SubjectBadge subject={presetChapter.subject} /></span></div>}
       <Field label="Chapter (optional)" error={errors.chapter_id}><select value={values.chapter_id} onChange={event => patch('chapter_id', event.target.value)}><option value="">— choose chapter —</option>{chapterOptions.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field>
+      {isJee && values.test_type === 'Full Mock' && <Field label="JEE paper pattern"><select value={values.jeePattern} onChange={event => changeJeePattern(event.target.value as JeeFullPattern)} aria-label="JEE paper pattern"><option value="main">JEE Main — 300 total</option><option value="advanced-paper-1">JEE Advanced — Paper 1 only (180)</option><option value="advanced-both">JEE Advanced — Both papers (360 combined)</option></select></Field>}
+      {schemeValue && values.test_type === 'Full Mock' && <p className="field-hint">Marking defaults: {schemeValue.source}. Totals are pre-filled and can be edited.{schemeValue.notes ? ` ${schemeValue.notes}` : ''}</p>}
       {values.test_type === 'Full Mock' ? <div className="mock-score-section"><div><span className="field-label">Subject scores <small>(enter each result that you have)</small></span><span className="field-hint">The overall result sums every subject. Each subject score is checked against its own total; leave unknown scores blank.</span></div><div className="mock-score-grid">{Object.entries(values.mockScores).map(([subject, part]) => {
         const marksError = errors[`${subject}.marks`]
         const totalError = errors[`${subject}.total`]
@@ -357,7 +387,7 @@ function TestDetails({ test, onClose, onEdit }: { test: TestRecord; onClose: () 
   const subjectRows = scores.length > 0 ? <div className="mock-detail-grid">{scores.map(score => <div key={score.id}><SubjectBadge subject={score.subject} /><strong>{score.marks_obtained == null ? '—' : `${fmtNumber(score.marks_obtained, 1)} / ${fmtNumber(score.total_marks, 1)}`}</strong>{score.marks_obtained !== null && score.total_marks !== null && <small>{subjectPercentageText(score.marks_obtained, score.total_marks)}</small>}</div>)}</div> : null
   return <Dialog title={test.title} subtitle={`${test.test_type} · ${prettyDate(test.test_date)}`} onClose={onClose}>
     <div className="test-detail-content"><div className="test-detail-badges">{test.test_type === 'Full Mock' ? <StatusBadge tone="muted">All subjects</StatusBadge> : <SubjectBadge subject={test.subject} />}<StatusBadge>{test.test_type}</StatusBadge>{chapter && <StatusBadge tone="muted">{chapter.name}</StatusBadge>}</div>
-      {test.test_type === 'Full Mock' ? <><div className="detail-score-box"><strong>{overallScore ? parentScoreLabel : scores.length ? 'Overall result incomplete' : parentScoreLabel}</strong><span>{overallPercentage === null ? scores.length ? 'A comparable percentage needs valid marks and totals for all three subjects.' : parentResultMessage : `${Math.round(overallPercentage)}% of combined subject totals`}</span></div>{subjectRows}</> : subjectRows ?? <div className="detail-score-box"><strong>{parentScoreLabel}</strong><span>{overallPercentage === null ? parentResultMessage : `${Math.round(overallPercentage)}% of total marks`}</span></div>}
+      {test.test_type === 'Full Mock' ? <><div className="detail-score-box"><strong>{overallScore ? parentScoreLabel : scores.length ? 'Overall result incomplete' : parentScoreLabel}</strong><span>{overallPercentage === null ? scores.length ? 'A comparable percentage needs valid marks and totals for every subject score.' : parentResultMessage : `${Math.round(overallPercentage)}% of combined subject totals`}</span></div>{subjectRows}</> : subjectRows ?? <div className="detail-score-box"><strong>{parentScoreLabel}</strong><span>{overallPercentage === null ? parentResultMessage : `${Math.round(overallPercentage)}% of total marks`}</span></div>}
       <div className="test-detail-facts">{[['Correct', test.correct], ['Wrong', test.wrong], ['Skipped', test.skipped], ['Negative marks', test.negative_marks], ['Time taken', test.time_minutes == null ? null : `${test.time_minutes} min`]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value ?? '—'}</strong></div>)}</div>
       {test.notes && <div className="test-detail-notes"><span className="eyebrow">AFTER-TEST NOTES</span><p>{test.notes}</p></div>}
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Close</Button><Button onClick={onEdit}>Edit record</Button></div>

@@ -39,7 +39,7 @@ export function ExamSelectionSection() {
   const options = useMemo(() => {
     if (catalog.some(exam => exam.id === examId)) return catalog
     const kept = BUILT_IN_EXAMS.find(exam => exam.id === examId)
-    const legacy: ExamDefinition = kept ?? { id: examId, name: examId, category: 'Your exam', years: [], sessions: [], boards: [], boards_addon: false, subjects: [], session_label: '', sort_order: 0, hidden: true }
+    const legacy: ExamDefinition = kept ?? { id: examId, name: examId, category: 'Your exam', years: [], sessions: [], boards: [], boards_addon: false, subjects: [], session_label: '', marking_scheme: null, sort_order: 0, hidden: true }
     return [{ ...legacy, name: `${legacy.name} (no longer listed)` }, ...catalog]
   }, [catalog, examId])
   const exam = options.find(item => item.id === examId) ?? options[0]

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { installTelemetry, setTelemetryUser, track, trackingAllowed } from '../lib/telemetry/client'
-import { cleanRoute, featureForRoute } from '../lib/telemetry/taxonomy'
+import { cleanRoute, featureForRoute, isControlRoute } from '../lib/telemetry/taxonomy'
 
 /**
  * Records page views, notebook feature opens, homepage CTA clicks and section views.
@@ -23,7 +23,7 @@ export function TelemetryTracker() {
     if (lastPath.current === route) return
     lastPath.current = route
     track('page_view', { title: document.title.slice(0, 80) })
-    if (user && !/^\/control-panel(\/|$)/.test(route) && !/^\/(login|signup|reset-password)/.test(route)) {
+    if (user && !isControlRoute(route) && !/^\/(login|signup|reset-password)/.test(route)) {
       track('feature_opened', { feature: featureForRoute(route) })
       if (route === '/') track('dashboard_viewed')
     }

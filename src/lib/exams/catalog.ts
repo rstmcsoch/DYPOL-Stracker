@@ -6,6 +6,8 @@
  * fallback when it cannot be read, so the exam picker never ends up empty.
  */
 
+import { builtInMarkingScheme, normalizeMarkingScheme, type MarkingScheme } from './marking.js'
+
 export interface ExamDefinition {
   /** Stable id stored on a student's settings. Never reused for a different exam. */
   id: string
@@ -23,6 +25,8 @@ export interface ExamDefinition {
   subjects: string[]
   /** Label for `sessions`, e.g. "Attempt" or "Stream". Empty = "Attempt / session". */
   session_label: string
+  /** Researched Add Test marking defaults; null = no researched defaults. */
+  marking_scheme: MarkingScheme | null
   sort_order: number
   hidden: boolean
 }
@@ -85,7 +89,7 @@ const SEEDS: Seed[] = [
 
 export const BUILT_IN_EXAMS: readonly ExamDefinition[] = SEEDS.map(([id, name, category, subjects, options], index) => ({
   id, name, category, years: [], sessions: options?.sessions ?? [], boards: options?.boards ?? [],
-  boards_addon: options?.boards_addon ?? false, subjects, session_label: options?.session_label ?? '',
+  boards_addon: options?.boards_addon ?? false, subjects, session_label: options?.session_label ?? '', marking_scheme: builtInMarkingScheme(id),
   sort_order: (index + 1) * 10, hidden: false
 }))
 
@@ -123,6 +127,7 @@ export function normalizeExam(row: unknown): ExamDefinition | null {
     // Rows from before subjects existed fall back to the built-in list for the same id.
     subjects: textList(record.subjects, 60).length ? textList(record.subjects, 60) : BUILT_IN_EXAMS.find(exam => exam.id === id)?.subjects ?? [],
     session_label: text(record.session_label, 30) ?? BUILT_IN_EXAMS.find(exam => exam.id === id)?.session_label ?? '',
+    marking_scheme: normalizeMarkingScheme(record.marking_scheme) ?? builtInMarkingScheme(id),
     sort_order: Number.isInteger(record.sort_order) ? record.sort_order as number : 0,
     hidden: record.hidden === true
   }

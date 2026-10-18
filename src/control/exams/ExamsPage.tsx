@@ -26,7 +26,7 @@ export default function ExamsPage() {
   const refresh = () => client.invalidateQueries({ queryKey: ['control', 'exams'] })
   const fail = (error: unknown) => setProblem(error instanceof Error ? error.message : 'That did not work. Nothing changed.')
   const save = useMutation({
-    mutationFn: (exam: Omit<ExamDefinition, 'sort_order' | 'subjects' | 'session_label'> & { sort_order?: number; subjects?: string[]; session_label?: string }) => controlFetch('exams', { method: 'PUT', body: { exam } }),
+    mutationFn: (exam: Omit<ExamDefinition, 'sort_order' | 'subjects' | 'session_label' | 'marking_scheme'> & { sort_order?: number; subjects?: string[]; session_label?: string; marking_scheme?: unknown }) => controlFetch('exams', { method: 'PUT', body: { exam } }),
     onSuccess: () => { setDraft(null); setProblem(null); setNotice('Saved. Students see the change the next time the exam list loads.'); void refresh() },
     onError: fail
   })
