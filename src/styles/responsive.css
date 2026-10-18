@@ -367,3 +367,134 @@ body.modal-open .quick-action-area { display: none; }
   .font-choice-copy small { font-size: max(.8125rem, calc(10px * var(--body-scale))); }
   .theme-toggle { padding: 4px 8px 4px 5px; }
 }
+
+/* ------------------------------------------------- mobile shell (Phase 1) */
+
+/* Floating bars + left drawer for phones. Everything in this block is scoped to the
+   existing <=960px shell breakpoint; the desktop layout never sees it. Surfaces always
+   use --paper with a border and shadow, so the bars stay distinct from the page
+   background in light, dark, auto and every custom colour palette. */
+@media (max-width: 960px) {
+  .mobile-topbar {
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    margin: 8px 10px 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 18px;
+    background: var(--paper);
+    box-shadow: var(--shadow-float);
+    padding: 6px 8px 6px 12px;
+    backdrop-filter: none;
+  }
+
+  .mobile-exam-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-inline: 8px;
+    color: var(--ink-soft);
+    font: 600 clamp(.8rem, .7rem + 1.4vw, .95rem)/1.2 var(--font-body);
+  }
+
+  .mobile-menu-btn {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .mobile-menu-btn:hover { background: var(--paper-muted); }
+
+  /* Two-line hamburger that folds into an X while the drawer is open. */
+  .mobile-menu-lines { display: grid; gap: 6px; width: 20px; }
+  .mobile-menu-lines i {
+    display: block;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+    transition: transform .22s ease, opacity .22s ease;
+  }
+  .mobile-menu-lines.is-open i:first-child { transform: translateY(4px) rotate(45deg); }
+  .mobile-menu-lines.is-open i:last-child { transform: translateY(-4px) rotate(-45deg); }
+
+  .mobile-nav {
+    right: 10px;
+    left: 10px;
+    bottom: calc(10px + var(--safe-bottom));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-height: 0;
+    padding: 6px;
+    border: 1px solid var(--line-strong);
+    border-radius: 22px;
+    background: var(--paper);
+    box-shadow: var(--shadow-float);
+    backdrop-filter: none;
+  }
+
+  .mobile-nav-item {
+    min-height: 54px;
+    border-radius: 16px;
+    gap: 3px;
+    font-size: clamp(.72rem, .6rem + 1.6vw, .82rem);
+  }
+
+  .mobile-nav-item svg { width: clamp(20px, 5.6vw, 24px); height: clamp(20px, 5.6vw, 24px); }
+
+  /* Content must clear the floating bottom bar (bar + its 10px float gap). */
+  .page-wrap { padding-bottom: calc(104px + var(--safe-bottom)); }
+  .app-footer { margin-bottom: calc(92px + var(--safe-bottom)); }
+  .quick-action-area { bottom: calc(96px + var(--safe-bottom)); }
+  .undo-toast { bottom: calc(96px + var(--safe-bottom)); }
+
+  .mobile-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    background: rgba(27, 31, 28, .45);
+    backdrop-filter: blur(2px);
+    animation: mobile-fade .18s ease-out;
+  }
+
+  .mobile-drawer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(302px, 84vw);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(18px + var(--safe-bottom));
+    border-right: 1px solid var(--line-strong);
+    background: var(--paper);
+    box-shadow: var(--shadow-float);
+    animation: mobile-drawer-in .24s ease-out;
+  }
+
+  .mobile-drawer-head { padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .mobile-drawer-nav { display: grid; gap: 14px; margin-top: 12px; }
+  .mobile-drawer-group { display: grid; gap: 3px; }
+  .mobile-drawer .sheet-brand-credit { margin-top: 16px; }
+
+  @keyframes mobile-fade { from { opacity: 0; } }
+  @keyframes mobile-drawer-in { from { transform: translateX(-42px); opacity: .4; } }
+}
+
+@media (max-width: 960px) and (prefers-reduced-motion: reduce) {
+  .mobile-drawer, .mobile-drawer-backdrop { animation: none; }
+  .mobile-menu-lines i { transition: none; }
+}
+
+/* Profile (mobile destination; grows in the profile phase) */
+.profile-identity { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.profile-avatar { flex: none; }
+.profile-identity-copy { display: grid; gap: 2px; min-width: 0; flex: 1 1 180px; }
+.profile-identity-copy strong { overflow-wrap: anywhere; }
+.profile-identity-copy span { color: var(--muted); }
+.profile-settings-link { margin-left: auto; }
