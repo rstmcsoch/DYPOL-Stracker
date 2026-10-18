@@ -2,6 +2,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useData } from '../../contexts/DataContext'
 import type { AppData } from '../../types'
 import { fetchExamCatalog } from './fetch-catalog'
+import { BUILT_IN_EXAMS, LEGACY_DEFAULT_EXAM_ID, type ExamDefinition } from './catalog'
 import { currentSubjectCatalog, examSubjects, subjectsFor, subscribeSubjectCatalog } from './subjects'
 
 let requested = false
@@ -32,4 +33,14 @@ export function useReportSubjects(source?: AppData): string[] {
   const catalog = useCatalog()
   const scoped = source ?? data
   return useMemo(() => subjectsFor(scoped, catalog), [scoped, catalog])
+}
+
+/** The student's current exam definition, including owner-edited marking defaults. */
+export function useCurrentExam(): ExamDefinition | null {
+  const { data } = useData()
+  const catalog = useCatalog()
+  return useMemo(() => {
+    const id = data.settings.exam_id ?? LEGACY_DEFAULT_EXAM_ID
+    return catalog.find(exam => exam.id === id) ?? BUILT_IN_EXAMS.find(exam => exam.id === id) ?? null
+  }, [data.settings.exam_id, catalog])
 }

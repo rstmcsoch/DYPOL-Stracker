@@ -6,6 +6,7 @@ import type {
 } from '../types/index.js'
 import { SUBJECTS } from '../types/index.js'
 import { subjectsFor } from './exams/subjects.js'
+import { aggregateScoresBySubject } from './exams/marking.js'
 
 export interface ChapterPerformance {
   chapter: Chapter
@@ -152,17 +153,23 @@ export function getChapterPerformance(data: AppData): ChapterPerformance[] {
  * subject score once. Zero scores are included, blank/invalid scores are excluded,
  * and a Full Mock's optional `test.subject` tag is never treated as a subject score.
  */
+function dedupeExactSubjects(scores: TestSubjectScore[]): TestSubjectScore[] {
+  const seen = new Set<string>(); const rows: TestSubjectScore[] = []
+  for (const score of scores) { if (seen.has(score.subject)) continue; seen.add(score.subject); rows.push(score) }
+  return rows
+}
+
 export function getSubjectPerformance(data: AppData): { subject: Subject; average: number | null; count: number }[] {
   const subjects = subjectsFor(data)
   const bySubject = new Map<Subject, number[]>(subjects.map(subject => [subject, []]))
   for (const test of data.tests) {
     if (test.test_type === 'Full Mock') {
-      const seen = new Set<Subject>()
-      for (const score of data.testSubjectScores.filter(row => row.test_id === test.id)) {
-        if (seen.has(score.subject)) continue
-        seen.add(score.subject)
-        const value = subjectPercentage(score)
-        if (value !== null) bySubject.get(score.subject)?.push(value)
+      // JEE Advanced Paper 1 + Paper 2 rows combine into one subject result for this test.
+      for (const [subject, aggregate] of aggregateScoresBySubject(dedupeExactSubjects(data.testSubjectScores.filter(row => row.test_id === test.id)))) {
+        const rows = aggregate.rows
+        if (rows.some(row => row.marks_obtained === null || row.total_marks === null)) continue
+        const value = validPercentage(aggregate.marks, aggregate.total)
+        if (value !== null) bySubject.get(subject)?.push(value)
       }
     } else if (test.subject) {
       const value = testPercentage(test)
@@ -288,11 +295,8 @@ export function getMarksTrend(data: AppData, rangeDays = 180): MarksTrendRow[] {
       overall: getOverallTestPercentage(test, data.testSubjectScores)
     }
     if (test.test_type === 'Full Mock') {
-      const seen = new Set<Subject>()
-      for (const score of data.testSubjectScores.filter(item => item.test_id === test.id)) {
-        if (seen.has(score.subject)) continue
-        seen.add(score.subject)
-        row[score.subject] = subjectPercentage(score)
+      for (const [subject, aggregate] of aggregateScoresBySubject(dedupeExactSubjects(data.testSubjectScores.filter(item => item.test_id === test.id)))) {
+        row[subject] = aggregate.rows.some(score => score.marks_obtained === null || score.total_marks === null) ? null : validPercentage(aggregate.marks, aggregate.total)
       }
     } else if (test.subject) {
       row[test.subject] = testPercentage(test)

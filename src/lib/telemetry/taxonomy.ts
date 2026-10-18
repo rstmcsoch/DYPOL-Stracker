@@ -87,9 +87,11 @@ export function cleanRoute(pathname: string): string {
   return (path.split('/').map(part => /^[0-9a-f-]{16,}$/i.test(part) || /\d{4,}/.test(part) ? ':id' : part.replace(/[^a-z0-9_-]/gi, '').slice(0, 40)).join('/') || '/').slice(0, 120)
 }
 
+export function isControlRoute(route: string): boolean { return /^\/control-panel(\/|$)/.test(route) }
+
 /** Which product surface a route belongs to. */
 export function sourceForRoute(route: string): EventSource {
-  if (/^\/control-panel(\/|$)/.test(route)) return 'control'
+  if (isControlRoute(route)) return 'control'
   if (/^\/(login|signup|reset-password)\b/.test(route)) return 'auth'
   return 'public'
 }
