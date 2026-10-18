@@ -30,11 +30,16 @@ async function accessToken(): Promise<string> {
  * request header only: nothing is cached in local storage by this module, and the server
  * re-verifies it on every call.
  */
+const CONTROL_REQUEST_TIMEOUT_MS = 25_000
+
 export async function controlFetch<T>(path: string, init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown } = {}): Promise<T> {
   const token = await accessToken()
   let response: Response
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), CONTROL_REQUEST_TIMEOUT_MS)
   try {
     response = await fetch(`/api/control/${path}`, {
+      signal: controller.signal,
       method: init.method ?? 'GET',
       headers: {
         Accept: 'application/json',
@@ -46,7 +51,10 @@ export async function controlFetch<T>(path: string, init: { method?: 'GET' | 'PO
       credentials: 'omit'
     })
   } catch {
+    if (controller.signal.aborted) throw new ControlApiError(0, 'timeout', 'The Control Center took too long to answer. Nothing was changed by this attempt; try again.')
     throw new ControlApiError(0, 'network', 'Could not reach the Control Center service. Check your connection and try again.')
+  } finally {
+    clearTimeout(timer)
   }
   const contentType = response.headers.get('content-type') ?? ''
   const body = contentType.includes('application/json') ? await response.json().catch(() => null) as Record<string, unknown> | null : null

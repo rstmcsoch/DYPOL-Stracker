@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { ChevronsLeft, ChevronDown, Menu, Search, LogOut, ShieldCheck, X, LayoutDashboard, Users, KeyRound, ShieldAlert, ScrollText, Activity, Info, Palette, GraduationCap, BarChart3 } from 'lucide-react'
+import { ChevronsLeft, ChevronDown, Menu, Search, LogOut, ShieldCheck, LayoutDashboard, Users, KeyRound, ShieldAlert, ScrollText, Activity, Info, Palette, GraduationCap, BarChart3 } from 'lucide-react'
 import { useControlSession } from './ControlSession'
 import { CommandLauncher } from './CommandLauncher'
 import { NAV_GROUPS, activeNavItem, breadcrumbsFor, CONSOLE_BASE, documentTitleFor, secondsUntilIdle, formatCountdown, type NavIcon } from './policy'
@@ -32,7 +32,7 @@ function useDocumentTitle(title: string) {
  * Layout modes: expanded sidebar (desktop), icon rail (tablet / collapsed), and overlay drawer (phone).
  * Controls per mode:
  *   - ≥768px: one collapse/expand toggle, in the sidebar footer (it stays visible in the rail).
- *   - <768px: a menu button in the top bar opens the drawer; the drawer has its own close button.
+ *   - <768px: a menu button in the top bar opens the drawer; the backdrop, Escape or choosing a page closes it.
  *   - Search lives in the top bar only (Ctrl/⌘ K); the shortcut hint is hidden on touch-first devices.
  */
 export function ControlLayout({ children, detailLabel, pageTitle, pageDescription }: { children: ReactNode; detailLabel?: string; pageTitle?: string; pageDescription?: string }) {
@@ -83,7 +83,6 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
       <aside className={sidebarClass} aria-label="Control Center navigation" id="cc-sidebar">
         <div className="cc-sidebar__brand">
           <BrandMark compact={collapsed} />
-          <button type="button" className="cc-icon-btn cc-sidebar__close" aria-label="Close navigation" onClick={() => setDrawerOpen(false)}><X size={18} aria-hidden="true" /></button>
         </div>
         <nav className="cc-nav">
           {NAV_GROUPS.map(group => (
