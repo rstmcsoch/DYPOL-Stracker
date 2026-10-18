@@ -498,3 +498,22 @@ body.modal-open .quick-action-area { display: none; }
 .profile-identity-copy strong { overflow-wrap: anywhere; }
 .profile-identity-copy span { color: var(--muted); }
 .profile-settings-link { margin-left: auto; }
+
+/* ------------------------------------------------- mobile cleanup (Phase 2) */
+
+@media (max-width: 960px) {
+  /* The floating top bar is the single home for theme, sync and search on phones;
+     the desktop topline (its second sync/shortcuts/theme cluster) steps aside. */
+  .topline { display: none; }
+
+  /* No keyboard-shortcut hints anywhere on touch layouts. */
+  .app-shell kbd { display: none; }
+
+  /* Narrow phones (360-430px): keep action rows and menus inside the viewport. */
+  .page-header-action { max-width: 100%; }
+  .page-header-action .button { white-space: normal; }
+  .dialog-actions { flex-wrap: wrap; }
+  .quick-action-menu { width: min(204px, calc(100vw - 24px)); }
+  .mobile-top-actions { min-width: 0; }
+  .brand-compact .brand-type small { display: none; }
+}
