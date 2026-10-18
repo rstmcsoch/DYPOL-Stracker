@@ -1,9 +1,9 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
-  Activity, AlarmClock, AlertTriangle, ArrowDownToLine, BookOpen, CalendarDays, Check,
+  Activity, AlarmClock, AlertTriangle, BookOpen, CalendarDays, Check,
   ChevronRight, CircleHelp, Cloud, CloudOff, Compass, Focus, Home, Inbox, Layers, Library, ListChecks, Microscope,
-  NotebookPen, RotateCcw, Search, Settings, ShieldCheck, Sparkles, Timer, UserRound, X, Zap, LogOut, ClipboardList, type LucideIcon
+  NotebookPen, RotateCcw, Search, Settings, ShieldCheck, Sparkles, Timer, UserRound, X, Zap, ClipboardList, type LucideIcon
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
@@ -45,7 +45,7 @@ const navGroups: NavigationGroup[] = [
     { to: '/pyqs', label: 'PYQs', icon: Library }
   ] },
   { caption: 'TESTS', items: [
-    { to: '/tests', label: 'Tests & mocks', icon: ListChecks },
+    { to: '/tests', label: 'Tests', icon: ListChecks },
     { to: '/mock-analysis', label: 'Mock analysis', icon: Microscope },
     { to: '/mistakes', label: 'Mistake notebook', icon: NotebookPen },
     { to: '/retry', label: 'Retry', icon: RotateCcw },
@@ -60,7 +60,6 @@ const navGroups: NavigationGroup[] = [
     { to: '/planner', label: 'Study plan', icon: CalendarDays }
   ] },
   { caption: 'KEEP GOING', items: [
-    { to: '/backup', label: 'Export & backup', icon: ArrowDownToLine },
     { to: '/settings', label: 'Settings', icon: Settings }
   ] }
 ]
@@ -81,7 +80,7 @@ function currentNavLabel(pathname: string, values: SiteValues): string | undefin
 
 export function AppFrame() {
   const siteValues = useSiteValues()
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const { data, loading, syncState, pendingCount, syncError, refresh, undoAvailable, undoDelete, dismissUndo } = useData()
   const { notify } = useToast()
   const navigate = useNavigate()
@@ -167,7 +166,6 @@ export function AppFrame() {
         <div className="sidebar-user">
           <div className="avatar-mark" aria-hidden="true">{(name.trim()[0] ?? 'S').toUpperCase()}</div>
           <div className="user-copy"><strong>{name}</strong><span>{user?.isLocal ? 'Local preview' : user?.email}</span></div>
-          <IconButton label="Sign out" onClick={() => { void signOut().catch(() => notify('Could not sign out. Try again.', 'error')) }}><LogOut size={16} /></IconButton>
         </div>
       </div>
     </aside>
@@ -213,9 +211,8 @@ export function AppFrame() {
         <nav className="mobile-drawer-nav" aria-label="All sections">
           {navGroups.map(group => <div key={group.caption} className="mobile-drawer-group">
             <div className="sheet-nav-caption">{(() => { const caption = navCaptionFor(group.caption, siteValues); return caption.charAt(0) + caption.slice(1).toLowerCase() })()}</div>
-            {group.items.filter(item => item.to !== '/settings').map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} onClick={() => setDrawerOpen(false)} />)}
+            {group.items.filter(item => item.to !== '/settings' && !mobileBar.some(bar => bar.to === item.to)).map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} onClick={() => setDrawerOpen(false)} />)}
           </div>)}
-          <button className="nav-link sheet-help" onClick={() => { setDrawerOpen(false); void signOut() }}><LogOut size={18} /><span>Sign out</span></button>
         </nav>
         <div className="sheet-brand-credit">Stracker <span>by DYPOL LABS</span></div>
       </aside>

@@ -555,3 +555,20 @@ body.modal-open .quick-action-area { display: none; }
   .settings-page .page-header { min-height: 0; }
   .settings-tabs { position: sticky; top: calc(76px + env(safe-area-inset-top, 0px)); z-index: 20; }
 }
+
+/* ------------------------------------------- mobile follow-ups */
+
+/* Desktop authenticated topline: the sync (cloud) pill and its neighbours never
+   shrink into each other; the cluster keeps a fixed gap at every width. */
+.topline-right { gap: 8px 12px; }
+.topline-right > * { flex: none; }
+.sync-pill { position: relative; z-index: 1; }
+
+.settings-signout { display: flex; justify-content: center; padding: 18px 0 6px; }
+
+@media (max-width: 960px) {
+  /* Cards breathe on phones: real inset padding, never flush with the screen edge. */
+  .profile-page .notebook-card { padding: 18px 16px; }
+  .profile-page { gap: 14px; }
+  .profile-identity { gap: 14px; }
+}

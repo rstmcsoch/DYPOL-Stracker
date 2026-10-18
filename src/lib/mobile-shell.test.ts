@@ -42,11 +42,12 @@ describe('mobile cleanup (Phase 2)', () => {
   })
 
   it('stacks the AI button above the lightning button above the floating bar', () => {
-    const ai = readFileSync(`${process.cwd()}/src/styles/ai.css`, 'utf8')
-    expect(ai).toContain('.ai-launcher-wrap { right:16px; bottom:calc(164px + var(--safe-bottom)); }')
-    expect(ai).not.toContain('right:70px; bottom:calc(78px')
-    const phase1 = responsive.slice(responsive.indexOf('mobile shell (Phase 1)'))
-    expect(phase1).toContain('.quick-action-area { bottom: calc(96px + var(--safe-bottom)); }')
+    // One shared position source (layout.css vars): the lightning FAB sits above the
+    // floating bar and Ask Stracker sits directly above the lightning button.
+    const layout = readFileSync(`${process.cwd()}/src/styles/layout.css`, 'utf8')
+    expect(layout).toContain('--fab-bottom: calc(96px + var(--safe-bottom))')
+    expect(layout).toContain('.ai-launcher-wrap { right: var(--fab-right); bottom: calc(var(--fab-bottom) + var(--fab-size) + var(--fab-gap));')
+    expect(layout).toContain(':root { --fab-right: 27px; --fab-bottom: 28px; --fab-size: 58px; --fab-gap: 12px; }')
   })
 })
 
@@ -61,7 +62,43 @@ describe('mobile profile (Phase 3)', () => {
   })
 
   it('Settings stays out of the mobile drawer (route reachable via Profile gear)', () => {
-    expect(shell).toContain("group.items.filter(item => item.to !== '/settings')")
+    expect(shell).toContain("item.to !== '/settings' && !mobileBar.some(bar => bar.to === item.to)")
     expect(app).toContain('path="settings"')
+  })
+})
+
+describe('mobile follow-ups', () => {
+  const settings = readFileSync(`${process.cwd()}/src/pages/SettingsPage.tsx`, 'utf8')
+  const profile = readFileSync(`${process.cwd()}/src/pages/ProfilePage.tsx`, 'utf8')
+  const layout = readFileSync(`${process.cwd()}/src/styles/layout.css`, 'utf8')
+  const registry = readFileSync(`${process.cwd()}/src/lib/site-content/registry.ts`, 'utf8')
+
+  it('drawer never repeats a bottom-bar destination, Settings, or Export & backup', () => {
+    expect(shell).toContain("!mobileBar.some(bar => bar.to === item.to)")
+    expect(shell).not.toContain("to: '/backup'")
+    expect(shell).not.toContain('Sign out')
+  })
+
+  it('Profile is read-only for identity; name editing lives in Settings', () => {
+    expect(profile).not.toContain('<input')
+    expect(profile).not.toContain('<select')
+    expect(settings).toContain('label="Display name"')
+    expect(settings).toContain('display_name: saved.owner_name')
+  })
+
+  it('the tab and section are renamed Tests (route unchanged)', () => {
+    expect(shell).toContain("label: 'Tests'")
+    expect(shell).not.toContain('Tests & mocks')
+    expect(registry).toContain("label: 'Tests'")
+    expect(app).toContain('path="tests"')
+  })
+
+  it('Settings carries Export & backup and a bottom sign-out; the FAB stack is restored via the shared vars', () => {
+    expect(settings).toContain('title="Export & backup"')
+    expect(settings).toContain('settings-signout')
+    expect(responsive).toContain('.profile-page .notebook-card { padding: 18px 16px; }')
+    expect(responsive).toContain('.topline-right > * { flex: none; }')
+    expect(layout).toContain('--fab-bottom: calc(96px + var(--safe-bottom))')
+    expect(layout).toContain('.ai-launcher-wrap { right: var(--fab-right); bottom: calc(var(--fab-bottom) + var(--fab-size) + var(--fab-gap));')
   })
 })

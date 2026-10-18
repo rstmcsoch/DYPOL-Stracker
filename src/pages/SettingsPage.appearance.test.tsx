@@ -386,7 +386,7 @@ describe('Settings → Appearance: other writers and other tabs', () => {
     chooseFont('sora')
 
     openTab('account')
-    fireEvent.change(within(panel('account')).getByLabelText(/Name in your notebook/), { target: { value: 'Aarav' } })
+    fireEvent.change(within(panel('account')).getByLabelText(/Display name/), { target: { value: 'Aarav' } })
     fireEvent.click(saveButton('account'))
 
     await waitFor(async () => expect((await persisted()).owner_name).toBe('Aarav'))
