@@ -572,3 +572,15 @@ body.modal-open .quick-action-area { display: none; }
   .profile-page { gap: 14px; }
   .profile-identity { gap: 14px; }
 }
+
+/* Sync pill placement (sidebar/drawer header) */
+.sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.sidebar-sync .sync-pill { width: 36px; min-width: 36px; min-height: 34px; justify-content: center; padding: 4px; }
+.sidebar-sync .sync-pill span { display: none; }
+.mobile-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.drawer-sync { flex: none; }
+
+@media (max-width: 960px) {
+  /* The quick-action pair always floats above the bottom bar, never behind it. */
+  .quick-action-area { z-index: 65; }
+}

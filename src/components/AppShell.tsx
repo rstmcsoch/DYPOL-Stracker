@@ -145,12 +145,15 @@ export function AppFrame() {
   const name = data.settings.owner_name || data.profile?.display_name || user?.displayName || 'Your notebook'
   const statusLabel = syncState === 'syncing' ? 'Syncing' : syncState === 'offline' ? 'Offline' : syncState === 'error' ? 'Sync issue' : syncState === 'local' ? 'On this device' : pendingCount ? `${pendingCount} pending` : 'Synced'
   const StatusIcon = syncState === 'offline' || syncState === 'error' ? CloudOff : syncState === 'local' ? ShieldCheck : Cloud
+  const syncPill = <button className={`sync-pill sync-${syncState}`} onClick={() => void refresh()} aria-label={`Sync status: ${statusLabel}`} title={syncError ?? statusLabel}>
+    <StatusIcon size={15} className={syncState === 'syncing' ? 'sync-spin' : ''} /><span>{statusLabel}</span>{pendingCount > 0 && <small>{pendingCount}</small>}
+  </button>
 
   return <>
   <div className="app-shell" inert={onboarding || undefined} aria-hidden={onboarding || undefined}>
     <aside className="sidebar" aria-label="Main navigation">
       <div className="sidebar-head">
-        <Brand />
+        <div className="sidebar-brand-row"><Brand /><span className="sidebar-sync">{syncPill}</span></div>
         <div className="sidebar-date"><span className="date-dot" />{new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date())}</div>
       </div>
       <div className="sidebar-scroll">
@@ -175,7 +178,6 @@ export function AppFrame() {
       <span className="mobile-exam-title">{loading || (!data.settings.exam_id && !data.settings.onboarding_completed) ? 'Study home' : isJeeSettings(data.settings) ? `JEE ${data.settings.exam_year ?? 2027}` : chosenExamTitle(data.settings)}</span>
       <div className="mobile-top-actions">
         <ThemeToggle className="theme-toggle-compact" />
-        <button className="mobile-sync" onClick={() => void refresh()} aria-label={`Sync status: ${statusLabel}`} title={syncError ?? statusLabel}><StatusIcon size={16} />{pendingCount > 0 && <span className="mobile-pending-dot" />}</button>
         <IconButton label="Search notebook" onClick={() => setSearchOpen(true)}><Search size={19} /></IconButton>
         {location.pathname !== '/profile' && <button type="button" className="mobile-menu-btn" onClick={() => setDrawerOpen(open => !open)} aria-expanded={drawerOpen} aria-controls="mobile-drawer" aria-label={drawerOpen ? 'Close navigation' : 'Open navigation'}>
           <span className={`mobile-menu-lines ${drawerOpen ? 'is-open' : ''}`} aria-hidden="true"><i /><i /></span>
@@ -188,9 +190,6 @@ export function AppFrame() {
         <div className="breadcrumb"><span>{loading || (!data.settings.exam_id && !data.settings.onboarding_completed) ? 'Stracker' : isJeeSettings(data.settings) ? `JEE ${data.settings.exam_year ?? 2027}` : chosenExamTitle(data.settings)}</span><ChevronRight size={13} /><strong>{currentNavLabel(location.pathname, siteValues) ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
         <div className="topline-right">
           {user?.isLocal && <span className="preview-pill"><span />Local preview — not synced</span>}
-          <button className={`sync-pill sync-${syncState}`} onClick={() => void refresh()} title={syncError ?? 'Click to sync now'}>
-            <StatusIcon size={15} className={syncState === 'syncing' ? 'sync-spin' : ''} /><span>{statusLabel}</span>{pendingCount > 0 && <small>{pendingCount}</small>}
-          </button>
           <button className="help-pill" onClick={() => setShortcutsOpen(true)} aria-label="Show keyboard shortcuts"><CircleHelp size={16} /><span>Shortcuts</span></button>
           <ThemeToggle className="theme-toggle-topline" />
         </div>
@@ -207,7 +206,7 @@ export function AppFrame() {
     </nav>
     {drawerOpen && <div className="mobile-drawer-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setDrawerOpen(false) }}>
       <aside className="mobile-drawer" id="mobile-drawer" role="dialog" aria-modal="true" aria-label="Navigation">
-        <div className="mobile-drawer-head"><Brand compact /></div>
+        <div className="mobile-drawer-head"><Brand compact /><span className="drawer-sync">{syncPill}</span></div>
         <nav className="mobile-drawer-nav" aria-label="All sections">
           {navGroups.map(group => <div key={group.caption} className="mobile-drawer-group">
             <div className="sheet-nav-caption">{(() => { const caption = navCaptionFor(group.caption, siteValues); return caption.charAt(0) + caption.slice(1).toLowerCase() })()}</div>
