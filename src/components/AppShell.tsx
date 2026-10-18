@@ -179,9 +179,9 @@ export function AppFrame() {
         <ThemeToggle className="theme-toggle-compact" />
         <button className="mobile-sync" onClick={() => void refresh()} aria-label={`Sync status: ${statusLabel}`} title={syncError ?? statusLabel}><StatusIcon size={16} />{pendingCount > 0 && <span className="mobile-pending-dot" />}</button>
         <IconButton label="Search notebook" onClick={() => setSearchOpen(true)}><Search size={19} /></IconButton>
-        <button type="button" className="mobile-menu-btn" onClick={() => setDrawerOpen(open => !open)} aria-expanded={drawerOpen} aria-controls="mobile-drawer" aria-label={drawerOpen ? 'Close navigation' : 'Open navigation'}>
+        {location.pathname !== '/profile' && <button type="button" className="mobile-menu-btn" onClick={() => setDrawerOpen(open => !open)} aria-expanded={drawerOpen} aria-controls="mobile-drawer" aria-label={drawerOpen ? 'Close navigation' : 'Open navigation'}>
           <span className={`mobile-menu-lines ${drawerOpen ? 'is-open' : ''}`} aria-hidden="true"><i /><i /></span>
-        </button>
+        </button>}
       </div>
     </header>
 

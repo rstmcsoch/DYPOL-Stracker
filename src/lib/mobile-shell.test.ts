@@ -49,3 +49,19 @@ describe('mobile cleanup (Phase 2)', () => {
     expect(phase1).toContain('.quick-action-area { bottom: calc(96px + var(--safe-bottom)); }')
   })
 })
+
+describe('mobile profile (Phase 3)', () => {
+  it('Profile hides the two-line menu button and links the gear to Settings', () => {
+    expect(shell).toContain("location.pathname !== '/profile' && <button type=\"button\" className=\"mobile-menu-btn\"")
+    const profile = readFileSync(`${process.cwd()}/src/pages/ProfilePage.tsx`, 'utf8')
+    expect(profile).toContain('to="/settings"')
+    expect(profile).toContain('aria-label="Open settings"')
+    expect(profile).toContain('<ExamSelectionSection />')
+    expect(profile).toContain('computeStreaks')
+  })
+
+  it('Settings stays out of the mobile drawer (route reachable via Profile gear)', () => {
+    expect(shell).toContain("group.items.filter(item => item.to !== '/settings')")
+    expect(app).toContain('path="settings"')
+  })
+})
