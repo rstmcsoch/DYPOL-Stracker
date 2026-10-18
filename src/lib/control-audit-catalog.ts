@@ -73,6 +73,7 @@ export const AUDIT_ACTIONS: readonly AuditActionDefinition[] = [
   { action: 'analytics.error_update', label: 'Error group updated', group: 'Analytics', sentence: { success: 'Updated error group {target}', denied: 'Updating error group {target} refused', failed: 'Updating error group {target} failed' } },
   { action: 'analytics.alert_update', label: 'Alert updated', group: 'Analytics', sentence: { success: 'Updated alert {target}', denied: 'Updating alert {target} refused', failed: 'Updating alert {target} failed' } },
   { action: 'analytics.export', label: 'Analytics exported', group: 'Analytics', sentence: { success: 'Exported analytics report {target}', denied: 'Exporting analytics report {target} refused', failed: 'Exporting analytics report {target} failed' } },
+  { action: 'ai.model_preferences.update', label: 'AI default models edited', group: 'Exams', sentence: { success: 'Edited the AI default model lists', denied: 'Editing AI default models refused', failed: 'Editing AI default models failed' } },
   { action: 'exam.reorder', label: 'Exams reordered', group: 'Exams', sentence: { success: 'Changed the exam order', denied: 'Reordering exams refused', failed: 'Reordering exams failed' } },
   {
     action: 'audit.export',

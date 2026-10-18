@@ -73,7 +73,7 @@ export function AISettingsSection() {
     if (!draft || draft.providerId === 'custom') return []
     try {
       const result = await discoverModels({ ...draft,modelId:draft.modelId.trim() || DEFAULT_MODEL[draft.providerId],baseUrl:['openai','deepseek'].includes(draft.providerId) ? draft.baseUrl?.trim() || null : undefined })
-      return rankModels((result.models ?? []).map(model => model.id),modelPreferences(draft.providerId))
+      return result.rankedModelIds?.length ? result.rankedModelIds : rankModels((result.models ?? []).map(model => model.id),modelPreferences(draft.providerId))
     } catch { return [] }
   }
 
@@ -132,7 +132,7 @@ export function AISettingsSection() {
       })
       setModels(result.models ?? []); setDiscoveryAvailable(Boolean(result.discoveryAvailable))
       setModelsMessage(result.message ?? (result.models.length ? `Found ${result.models.length} available models.` : 'No models were listed. Enter a model ID manually.'))
-      if (result.models.length && !autoModel && !result.models.some(model => model.id === draft.modelId)) patchDraft({modelId:rankModels(result.models.map(model => model.id),draft.providerId === 'custom' ? [] : modelPreferences(draft.providerId))[0] ?? result.models[0]?.id ?? draft.modelId})
+      if (result.models.length && !autoModel && !result.models.some(model => model.id === draft.modelId)) patchDraft({modelId:(result.rankedModelIds?.[0] ?? rankModels(result.models.map(model => model.id),draft.providerId === 'custom' ? [] : modelPreferences(draft.providerId))[0]) ?? result.models[0]?.id ?? draft.modelId})
     } catch (error) { setModelsMessage(error instanceof Error ? error.message : 'Models could not be loaded. Enter a model ID manually.') }
     finally { setDiscovering(false) }
   }

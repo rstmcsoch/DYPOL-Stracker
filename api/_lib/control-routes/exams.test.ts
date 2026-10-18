@@ -103,3 +103,39 @@ describe('owner exam catalogue', () => {
     expect((await call('POST', { order: ['nope'] })).statusCode).toBe(400)
   })
 })
+
+describe('owner marking defaults and AI model lists', () => {
+  const marking = { full: { total: 300, perSubject: { Physics: 100, Chemistry: 100, Maths: 100 }, papers: [{ id: 'paper-1', label: 'Paper 1', total: 180, perSubject: { Physics: 60, Chemistry: 60, Maths: 60 } }] }, other: { total: 180, perSubject: { Physics: 60, Chemistry: 60, Maths: 60 } }, combine: 'sum_papers', source: 'Test source' }
+  it('saves a valid marking scheme and audits it', async () => {
+    const res = await call('PUT', { exam: exam({ marking_scheme: marking }) })
+    expect(res.statusCode).toBe(200)
+    expect(state.upserts[0]).toMatchObject({ marking_scheme: marking })
+    expect(state.audits[0]).toMatchObject({ action: 'exam.create', summary: { marking: 'sum_papers', fullTotal: 300 } })
+  })
+  it('rejects an invalid marking scheme without writing', async () => {
+    const bad = { ...marking, full: { ...marking.full, papers: [{ id: 'paper-1', label: 'Paper 1', total: 180, perSubject: { Physics: 50 } }] } }
+    expect((await call('PUT', { exam: exam({ marking_scheme: bad }) })).statusCode).toBe(400)
+    expect((await call('PUT', { exam: exam({ marking_scheme: { ...marking, source: '' } }) })).statusCode).toBe(400)
+    expect(state.upserts).toEqual([])
+  })
+  it('leaves the stored marking scheme untouched when omitted and clears it when null', async () => {
+    await call('PUT', { exam: exam() })
+    expect(state.upserts[0]).not.toHaveProperty('marking_scheme')
+    await call('PUT', { exam: exam({ marking_scheme: null }) })
+    expect(state.upserts[1]).toMatchObject({ marking_scheme: null })
+  })
+  it('returns built-in AI lists on GET and saves valid owner lists with audit', async () => {
+    const get = await call('GET')
+    expect((get.body as { aiModelPreferences: Record<string, string[]> }).aiModelPreferences.gemini![0]!).toBe('gemini-*-flash')
+    const res = await call('PUT', { aiModelPreferences: { gemini: ['gemini-owner-*', 'gemini-2.5-flash'] } })
+    expect(res.statusCode).toBe(200)
+    expect(state.upserts.at(-1)).toMatchObject({ id: 1, preferences: { gemini: ['gemini-owner-*', 'gemini-2.5-flash'] } })
+    expect(state.audits.at(-1)).toMatchObject({ action: 'ai.model_preferences.update', targetType: 'ai_model_preferences', outcome: 'success' })
+  })
+  it('rejects invalid AI model lists without writing', async () => {
+    expect((await call('PUT', { aiModelPreferences: { custom: ['x-*'] } })).statusCode).toBe(400)
+    expect((await call('PUT', { aiModelPreferences: { gemini: ['bad model'] } })).statusCode).toBe(400)
+    expect((await call('PUT', { aiModelPreferences: { gemini: [] } })).statusCode).toBe(400)
+    expect(state.upserts).toEqual([])
+  })
+})
