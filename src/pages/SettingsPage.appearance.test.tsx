@@ -10,8 +10,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { localDb } from '../lib/database'
 import { defaultSettings } from '../lib/defaults'
-import { INTERFACE_FONT_OPTIONS } from '../lib/fonts'
-import type { AppSettings, InterfaceFont, ThemeMode } from '../types'
+import { readingFontOption } from '../lib/fonts'
+import type { AppSettings, ReadingFont, ThemeMode } from '../types'
 
 const auth = vi.hoisted(() => ({
   user: null as null | { id: string; email: string; displayName: string; isLocal: boolean },
@@ -36,8 +36,8 @@ const OTHER_USER = 'b3f147d2-b7cf-53bd-a461-0d3cfed00002'
 const LOCAL_USER = { id: USER, email: '', displayName: 'Study notebook', isLocal: true }
 const OTHER_LOCAL_USER = { id: OTHER_USER, email: '', displayName: 'Second notebook', isLocal: true }
 
-const stackOf = (font: InterfaceFont) => INTERFACE_FONT_OPTIONS.find(option => option.value === font)!.stack
-const rootFont = () => document.documentElement.style.getPropertyValue('--app-font-family')
+const stackOf = (font: ReadingFont) => readingFontOption(font).stack
+const rootFont = () => document.documentElement.style.getPropertyValue('--reading-font-family')
 const rootTheme = () => document.documentElement.dataset.theme
 
 /** Mirrors the signed-in shell: data and appearance providers, the Settings route and the header switch. */
@@ -81,7 +81,7 @@ async function persisted(userId = USER) {
  */
 const watchSettingsWrites = () => vi.spyOn(localDb.table('app_settings'), 'bulkPut')
 
-async function waitForRootFont(font: InterfaceFont) {
+async function waitForRootFont(font: ReadingFont) {
   await waitFor(() => expect(rootFont()).toBe(stackOf(font)), { timeout: 3000 })
 }
 
@@ -91,9 +91,9 @@ const settle = () => act(async () => { await new Promise(resolve => setTimeout(r
 const tabButton = (tab: string) => document.getElementById(`settings-tab-${tab}`) as HTMLButtonElement
 const panel = (tab: string) => document.getElementById(`settings-panel-${tab}`) as HTMLElement
 const openTab = (tab: string) => fireEvent.click(tabButton(tab))
-const fontRadio = (font: InterfaceFont) => document.querySelector<HTMLInputElement>(`input[name="interface_font"][value="${font}"]`)!
+const fontRadio = (font: ReadingFont) => document.querySelector<HTMLInputElement>(`input[name="interface_font"][value="${font}"]`)!
 const themeRadio = (theme: ThemeMode) => document.querySelector<HTMLInputElement>(`input[name="theme"][value="${theme}"]`)!
-const chooseFont = (font: InterfaceFont) => fireEvent.click(fontRadio(font))
+const chooseFont = (font: ReadingFont) => fireEvent.click(fontRadio(font))
 const chooseTheme = (theme: ThemeMode) => fireEvent.click(themeRadio(theme))
 const saveButton = (tab: string) => within(panel(tab)).getByRole('button', { name: /^Save / }) as HTMLButtonElement
 const discardButton = (tab: string) => within(panel(tab)).getByRole('button', { name: 'Discard changes' })
@@ -118,7 +118,10 @@ afterEach(async () => {
   // Let the unmounted providers finish any background read before the store is cleared.
   await new Promise(resolve => setTimeout(resolve, 20))
   await Promise.all(localDb.tables.map(table => table.clear()))
-  document.documentElement.style.removeProperty('--app-font-family')
+  delete document.documentElement.dataset.appFont
+  delete document.documentElement.dataset.color
+  document.documentElement.style.removeProperty('--reading-font-family')
+  document.documentElement.style.removeProperty('--body-scale')
   document.documentElement.removeAttribute('data-theme')
   auth.signOut.mockClear()
 })
@@ -190,7 +193,7 @@ describe('Settings → Appearance: draft, preview and Save', () => {
     expect(rows.map(row => row.interface_font)).toEqual(['sora'])
   })
 
-  it('Discard restores the saved font, the saved theme and the global font, and clears the dirty state', async () => {
+  it('Discard restores the saved font and the saved theme, and clears the dirty state', async () => {
     await seedSettings({ interface_font: 'open-sans', theme: 'light' })
     renderNotebook(LOCAL_USER)
     await waitForRootFont('open-sans')
@@ -273,7 +276,7 @@ describe('Settings → Appearance: draft, preview and Save', () => {
 })
 
 describe('Settings → Appearance: other writers and other tabs', () => {
-  it('the header theme switch neither persists nor disturbs the font draft', async () => {
+  it('the header theme switch persists only the theme and does not disturb the font draft', async () => {
     await seedSettings({ interface_font: 'open-sans', theme: 'light' })
     renderNotebook(LOCAL_USER, { header: true })
     await waitForRootFont('open-sans')
@@ -329,7 +332,7 @@ describe('Settings → Appearance: other writers and other tabs', () => {
 
     openTab('exam')
     fireEvent.change(within(panel('exam')).getByLabelText(/Target score/), { target: { value: '300' } })
-    fireEvent.click(saveButton('exam'))
+    fireEvent.click(within(panel('exam')).getByRole('button', { name: 'Save exam settings' }))
     await waitFor(async () => expect((await persisted()).target_score).toBe(300))
 
     expect((await persisted()).interface_font).toBe('open-sans')
@@ -405,7 +408,7 @@ describe('Settings → Appearance: other writers and other tabs', () => {
 
     // Signing out unmounts the signed-in shell, including the draft.
     first.unmount()
-    expect(rootFont()).toBe(stackOf('default'))
+    expect(rootFont()).toBe('')
 
     renderNotebook(OTHER_LOCAL_USER)
     await waitForRootFont('poppins')

@@ -9,12 +9,13 @@ import { useToast } from '../contexts/ToastContext'
 import { indiaDate, prettyDate } from '../lib/date'
 import { createId } from '../lib/id'
 import type { Mistake, MistakeType, Subject } from '../types'
-import { SUBJECTS } from '../types'
+import { useReportSubjects } from '../lib/exams/useExamSubjects'
 
 const MISTAKE_TYPES: MistakeType[] = ['Concept', 'Silly', 'Calculation', 'Time', 'Guess']
 const mistakeSchema = z.object({ chapter_id: z.string().uuid(), mistake_type: z.enum(['Concept','Silly','Calculation','Time','Guess']), question_note: z.string().trim().min(1).max(10000), solution_note: z.string().max(10000) })
 
 export default function MistakesPage() {
+  const subjectList = useReportSubjects()
   const { data, upsert, remove } = useData()
   const { notify } = useToast()
   const navigate = useNavigate()
@@ -69,11 +70,11 @@ export default function MistakesPage() {
   }
 
   return <div className="content-page mistakes-page">
-    <PageHeader eyebrow="THE BEST LEARNING HIDES HERE" title="Mistake notebook" subtitle="Keep the question, the reason, and what you’ll remember next time." doodle={<span>✎</span>} action={<Button onClick={() => { setEditing(null); setDialogOpen(true) }}><CirclePlus size={17} /> Add a mistake</Button>} />
+    <PageHeader title="Mistake notebook" doodle={<span>✎</span>} action={<Button onClick={() => { setEditing(null); setDialogOpen(true) }}><CirclePlus size={17} /> Add a mistake</Button>} />
     <div className="mistake-overview-row"><NotebookCard className="mistake-stat-note"><div className="mistake-stat-icon"><NotebookPen size={18} /></div><div><strong>{data.mistakes.length}</strong><span>notes in your notebook</span></div><span className="note-corner-doodle">✦</span></NotebookCard><NotebookCard className="mistake-stat-note retry-stat"><div className="mistake-stat-icon"><RotateCcw size={18} /></div><div><strong>{data.mistakes.filter(item => item.retry_later && item.retry_status === 'pending').length}</strong><span>ready to retry</span></div><button onClick={() => navigate('/retry')}>Open retry list <ArrowUpRight size={14} /></button></NotebookCard><NotebookCard className="mistake-stat-note mistake-stat-help"><AlertTriangle size={17} /><p>Record the <em>why</em> as carefully as the answer. Patterns emerge with practice.</p></NotebookCard></div>
     <NotebookCard className="mistake-board">
-      <div className="mistake-toolbar"><div className="search-field"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search question notes…" aria-label="Search mistake notes" />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div><select aria-label="Filter subject" value={subject} onChange={event => setSubject(event.target.value as 'all' | Subject)}><option value="all">All subjects</option>{SUBJECTS.map(item => <option key={item}>{item}</option>)}</select><select aria-label="Filter mistake type" value={type} onChange={event => setType(event.target.value as 'all' | MistakeType)}><option value="all">All mistake types</option>{MISTAKE_TYPES.map(item => <option key={item}>{item}</option>)}</select><select aria-label="Filter retry status" value={retryFilter} onChange={event => setRetryFilter(event.target.value as 'all' | 'retry' | 'resolved')}><option value="all">All entries</option><option value="retry">Retry list</option><option value="resolved">Retried</option></select></div>
-      {filtered.length === 0 ? <EmptyState icon={<NotebookPen size={25} />} title={data.mistakes.length ? 'No notes match.' : 'Nothing here yet.'} description={data.mistakes.length ? 'Adjust a filter to find that note.' : 'Your mistake notebook will become one of your most useful study tools.'} action={<Button variant="secondary" size="sm" onClick={() => data.mistakes.length ? (setSearch(''), setSubject('all'), setType('all'), setRetryFilter('all')) : setDialogOpen(true)}>{data.mistakes.length ? 'Clear filters' : <><CirclePlus size={15} /> Add your first note</>}</Button>} /> : <div className="mistake-card-grid">{filtered.map(mistake => {
+      <div className="mistake-toolbar"><div className="search-field"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search question notes…" aria-label="Search mistake notes" />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div><select aria-label="Filter subject" value={subject} onChange={event => setSubject(event.target.value as 'all' | Subject)}><option value="all">All subjects</option>{subjectList.map(item => <option key={item}>{item}</option>)}</select><select aria-label="Filter mistake type" value={type} onChange={event => setType(event.target.value as 'all' | MistakeType)}><option value="all">All mistake types</option>{MISTAKE_TYPES.map(item => <option key={item}>{item}</option>)}</select><select aria-label="Filter retry status" value={retryFilter} onChange={event => setRetryFilter(event.target.value as 'all' | 'retry' | 'resolved')}><option value="all">All entries</option><option value="retry">Retry list</option><option value="resolved">Retried</option></select></div>
+      {filtered.length === 0 ? <EmptyState icon={<NotebookPen size={25} />} title={data.mistakes.length ? 'No notes match.' : 'No mistakes logged yet.'} action={<Button variant="secondary" size="sm" onClick={() => data.mistakes.length ? (setSearch(''), setSubject('all'), setType('all'), setRetryFilter('all')) : setDialogOpen(true)}>{data.mistakes.length ? 'Clear filters' : <><CirclePlus size={15} /> Add your first note</>}</Button>} /> : <div className="mistake-card-grid">{filtered.map(mistake => {
         const chapter = data.chapters.find(item => item.id === mistake.chapter_id)
         const linkedTest = data.tests.find(item => item.id === mistake.test_id)
         const image = mistake.image_data ?? mistake.image_preview
@@ -152,7 +153,7 @@ function MistakeDialog({ initial, data, onClose, onSave }: { initial: Mistake | 
     } finally { busyRef.current = false; setBusy(false) }
   }
 
-  return <Dialog title={initial ? 'Edit mistake note' : 'Save a learning moment'} subtitle="Small, specific notes are easier to revisit." onClose={onClose} className="mistake-dialog">
+  return <Dialog title={initial ? 'Edit mistake note' : 'Save a learning moment'} onClose={onClose} className="mistake-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <div className="form-grid two"><Field label="Chapter" required error={errors.chapter_id}><select required value={chapterId} onChange={event => { setChapterId(event.target.value); setErrors(current => { const next = { ...current }; delete next.chapter_id; return next }) }}><option value="">Choose a chapter</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.subject} · {chapter.name}</option>)}</select></Field><Field label="Mistake type"><select value={mistakeType} onChange={event => setMistakeType(event.target.value as MistakeType)}>{MISTAKE_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field></div>
       <Field label="What was the question or mistake?" required error={errors.question_note}><textarea autoFocus required maxLength={10000} rows={4} value={question} onChange={event => { setQuestion(event.target.value); setErrors(current => { const next = { ...current }; delete next.question_note; return next }) }} placeholder="Write enough to recognize the question next time…" /></Field>

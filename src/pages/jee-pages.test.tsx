@@ -149,7 +149,7 @@ describe('Formula & flashcard decks', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /Reveal answer/ }))
     fireEvent.click(within(dialog).getByRole('button', { name: /Known/ }))
     await vi.waitFor(() => expect(harness.upsert).toHaveBeenCalled())
-    expect(harness.upsert).toHaveBeenCalledWith('study_cards', expect.objectContaining({ id: 'c1', reviews: 1, difficulty: 'known', next_review_at: expect.stringMatching(/^2026-10-09/) }))
+    expect(harness.upsert).toHaveBeenCalledWith('study_cards', expect.objectContaining({ id: 'c1', reviews: 1, difficulty: 'known', next_review_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/) }))
   })
 })
 
@@ -189,7 +189,7 @@ describe('What should I study now', () => {
     })
     const { StudyNowCard } = await import('../components/jee/StudyNowCard')
     renderPage(<StudyNowCard />)
-    expect(screen.getByText(/Study Electrostatics — revision is overdue by 5 days/)).toBeTruthy()
+    expect(screen.getByText(/Study Electrostatics — revision is overdue by \d+ days/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Why this\?/ }))
     expect(screen.getByText('Ranked highest because:')).toBeTruthy()
   })

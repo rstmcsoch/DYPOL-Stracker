@@ -9,7 +9,8 @@ import { createId, stableId } from '../lib/id'
 import { prettyDate } from '../lib/date'
 import { categoryTotals, mockInsights, mockSummary, subjectTimeRows } from '../lib/jee/mock-analysis'
 import { validateErrorLog, type ErrorLogFormInput, type ErrorLogValue } from '../lib/jee/forms'
-import { ERROR_CATEGORIES, SUBJECTS, type AppData, type ErrorCategory, type Subject, type TestErrorLog, type TestRecord, type TestTimeEntry } from '../types'
+import { ERROR_CATEGORIES, type AppData, type ErrorCategory, type Subject, type TestErrorLog, type TestRecord, type TestTimeEntry } from '../types'
+import { useExamSubjects } from '../lib/exams/useExamSubjects'
 
 export default function MockAnalysisPage() {
   const { data, upsert, upsertMany, remove } = useData()
@@ -24,8 +25,8 @@ export default function MockAnalysisPage() {
   const choose = (id: string) => { setSelectedId(id); setParams({ test: id }, { replace: true }) }
 
   if (!selected) return <div className="content-page mock-analysis-page">
-    <PageHeader eyebrow="WHY DID I LOSE MARKS?" title="Mock analysis" subtitle="Record a test first, then come back to classify what went wrong." />
-    <NotebookCard><EmptyState title="No tests to analyse yet." description="Log a mock or a subject test with its marks. Then you can add time per subject and tag lost marks." action={<Button variant="secondary" size="sm" onClick={() => navigate('/tests?add=1')}>Log a test</Button>} /></NotebookCard>
+    <PageHeader title="Mock analysis" subtitle="Record a test first." />
+    <NotebookCard><EmptyState title="No tests to analyse yet." action={<Button variant="secondary" size="sm" onClick={() => navigate('/tests?add=1')}>Log a test</Button>} /></NotebookCard>
   </div>
 
   const logs = data.testErrorLogs.filter(log => log.test_id === selected.id).sort((a, b) => a.created_at.localeCompare(b.created_at))
@@ -42,9 +43,8 @@ export default function MockAnalysisPage() {
 
   return <div className="content-page mock-analysis-page">
     <PageHeader
-      eyebrow="WHAT SHOULD I FIX BEFORE THE NEXT MOCK?"
       title="Mock analysis"
-      subtitle="Recorded numbers, your own classifications, and derived insights are kept separate, so every claim shows its basis."
+      subtitle="Recorded, classified and derived data, kept separate."
     />
 
     <NotebookCard className="jee-filter-card">
@@ -79,9 +79,9 @@ export default function MockAnalysisPage() {
           </div>}
         </NotebookCard>
 
-        <SectionHeading title="Lost marks, classified" note="Tag each lost question or chunk of marks with why it happened." action={<Button size="sm" onClick={() => setClassifying('new')}><Plus size={15} /> Classify</Button>} />
+        <SectionHeading title="Lost marks, classified" note="Tag why marks were lost." action={<Button size="sm" onClick={() => setClassifying('new')}><Plus size={15} /> Classify</Button>} />
         <NotebookCard>
-          {logs.length === 0 ? <div className="jee-pad"><p className="jee-muted">No classifications yet. Try tagging the three biggest causes — that is usually enough to see a pattern.</p></div> : <ul className="jee-log-list">
+          {logs.length === 0 ? <div className="jee-pad"><p className="jee-muted">No classifications yet.</p></div> : <ul className="jee-log-list">
             {logs.map(log => <li key={log.id} className="jee-log-row">
               <div>
                 <strong>{log.category}</strong>
@@ -112,9 +112,9 @@ export default function MockAnalysisPage() {
           </div>}
         </NotebookCard>
 
-        <SectionHeading title="Fix before your next mock" note="Derived from the data above — each line says what it is based on." />
+        <SectionHeading title="Fix before your next mock" note="Each line shows its basis." />
         <NotebookCard className="jee-insights">
-          {insights.length === 0 ? <div className="jee-pad"><Lightbulb size={18} aria-hidden="true" /><p className="jee-muted">Not enough recorded detail to draw a conclusion. Add subject marks, time, or a few classifications.</p></div> : <ul>
+          {insights.length === 0 ? <div className="jee-pad"><Lightbulb size={18} aria-hidden="true" /><p className="jee-muted">Not enough data yet.</p></div> : <ul>
             {insights.map((insight, index) => <li key={index}>
               <StatusBadge tone={insight.kind === 'recorded' ? 'Strong' : insight.kind === 'classified' ? 'Okay' : 'muted'}>{insight.kind === 'recorded' ? 'Recorded' : insight.kind === 'classified' ? 'You classified' : 'Derived'}</StatusBadge>
               <span>{insight.text}</span>
@@ -144,6 +144,7 @@ export default function MockAnalysisPage() {
 function ClassifyDialog({ test, existing, onClose, onSave }: {
   test: TestRecord; existing?: TestErrorLog; onClose: () => void; onSave: (value: ErrorLogValue) => Promise<void>
 }) {
+  const classifySubjects = useExamSubjects(existing?.subject)
   const [form, setForm] = useState<ErrorLogFormInput>({
     testId: test.id, subject: existing?.subject ?? '', category: existing?.category ?? 'Silly mistake',
     marksLost: existing?.marks_lost != null ? String(existing.marks_lost) : '', questions: existing?.questions != null ? String(existing.questions) : '',
@@ -166,10 +167,10 @@ function ClassifyDialog({ test, existing, onClose, onSave }: {
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save the classification.', 'error') }
     finally { setSaving(false) }
   }
-  return <Dialog title={existing ? 'Edit classification' : 'Classify lost marks'} subtitle="What went wrong on this question or chunk of marks?" onClose={onClose} className="jee-dialog">
+  return <Dialog title={existing ? 'Edit classification' : 'Classify lost marks'} onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <div className="form-grid two">
-        <Field label="Subject"><select value={form.subject} onChange={event => set('subject', event.target.value as Subject | '')}><option value="">Not specified</option>{SUBJECTS.map(subject => <option key={subject}>{subject}</option>)}</select></Field>
+        <Field label="Subject"><select value={form.subject} onChange={event => set('subject', event.target.value as Subject | '')}><option value="">Not specified</option>{classifySubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field>
         <Field label="Why did it happen?" error={errors.category} required><select value={form.category} onChange={event => set('category', event.target.value as ErrorCategory)}>{ERROR_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></Field>
       </div>
       <div className="form-grid two">
@@ -183,8 +184,9 @@ function ClassifyDialog({ test, existing, onClose, onSave }: {
 }
 
 function TimeDialog({ data, test, onClose, onSave }: { data: AppData; test: TestRecord; onClose: () => void; onSave: (entries: TestTimeEntry[]) => Promise<void> }) {
+  const timeSubjects = useExamSubjects()
   const existing = data.testTimeEntries.filter(entry => entry.test_id === test.id)
-  const [rows, setRows] = useState(() => SUBJECTS.map(subject => {
+  const [rows, setRows] = useState(() => [...new Set([...timeSubjects, ...existing.map(entry => entry.subject).filter((subject): subject is string => Boolean(subject))])].map(subject => {
     const row = existing.find(entry => entry.subject === subject)
     return { subject, minutes: row?.minutes != null ? String(row.minutes) : '', attempted: row?.attempted != null ? String(row.attempted) : '', unattempted: row?.unattempted != null ? String(row.unattempted) : '' }
   }))
@@ -222,7 +224,7 @@ function TimeDialog({ data, test, onClose, onSave }: { data: AppData; test: Test
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save time data.', 'error') }
     finally { setSaving(false) }
   }
-  return <Dialog title="Time & attempts by subject" subtitle="Leave a field blank if you did not record it — nothing is estimated." onClose={onClose} className="jee-dialog">
+  return <Dialog title="Time & attempts by subject" subtitle="Leave unknown fields blank." onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       {rows.map(row => <fieldset key={row.subject} className="jee-fieldset"><legend><SubjectBadge subject={row.subject} /></legend>
         <div className="form-grid three">

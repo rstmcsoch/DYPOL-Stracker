@@ -1,6 +1,7 @@
 import { lookup } from 'node:dns/promises'
 import type { LookupAddress } from 'node:dns'
 import { AI_PROVIDER_IDS, type AIProviderId, type AIProtocol, type AICapabilities, type AIModelOption } from '../../src/lib/ai/catalog.js'
+import { stripControlChars } from '../../src/lib/control-chars.js'
 import { ApiError } from './http.js'
 import { catalogModel, RETIRED_MODEL_IDS } from '../../src/lib/ai/model-catalog.js'
 
@@ -218,7 +219,7 @@ export async function normalizeProviderSetup(input: Record<string, unknown>): Pr
   const apiKey = typeof input.apiKey === 'string' && input.apiKey.trim() ? input.apiKey.trim() : undefined
   if (apiKey && (apiKey.length > 2048 || /[\r\n]/.test(apiKey))) throw new ApiError(400, 'invalid_api_key', 'The API key format is not valid.')
   const organizationId = typeof input.organizationId === 'string' && input.organizationId.trim()
-    ? input.organizationId.trim().slice(0, 160) : null
+    ? stripControlChars(input.organizationId).trim().slice(0, 160) || null : null
   return { providerId: id, displayName, modelId, apiKey, baseUrl, protocol, organizationId, region, capabilities }
 }
 
@@ -239,16 +240,20 @@ export function modelOptionsFromApi(provider: AIProviderId, values: unknown[]): 
   const unique = new Map<string, AIModelOption>()
   for (const value of values) {
     const item = value as Record<string, unknown>
-    const id = typeof item.id === 'string' ? item.id.replace(/^models\//, '') : ''
+    // OpenAI-style lists use `id`; Gemini lists use `name: "models/<id>"` and `displayName`.
+    const rawId = typeof item.id === 'string' ? item.id : typeof item.name === 'string' ? item.name : ''
+    const id = rawId.replace(/^models\//, '')
     if (!id || id.length > 200 || unique.has(id)) continue
     if (provider === 'openai' && !/^(gpt-|chatgpt-|o[1-9])/.test(id.toLowerCase())) continue
     if (provider === 'deepseek' && !/^deepseek-/i.test(id)) continue
     if (provider === 'qwen' && !/^qwen(?:-|\d)/i.test(id)) continue
     if (provider === 'gemini' && !/^(gemini-|gemma-)/i.test(id)) continue
+    if (provider !== 'custom' && /(embedding|embed|audio|transcri|moderation|whisper|tts|image|imagen|veo|live|aqa|robotics|computer-use|realtime|search)/i.test(id)) continue
+    if (provider === 'gemini' && Array.isArray(item.supportedGenerationMethods) && !(item.supportedGenerationMethods as unknown[]).includes('generateContent')) continue
     if (provider === 'custom' && /(embedding|embed|audio|transcri|moderation|whisper|tts)/i.test(id)) continue
     const methods = Array.isArray(item.supportedGenerationMethods) ? item.supportedGenerationMethods.filter((entry): entry is string => typeof entry === 'string') : undefined
     const caps = inferCapabilities(provider, id, provider === 'custom' ? 'openai-compatible' : PROVIDER_DEFAULTS[provider as Exclude<AIProviderId, 'custom'>].protocol, undefined, methods)
-    const display = typeof item.name === 'string' ? item.name : typeof item.display_name === 'string' ? item.display_name : id
+    const display = typeof item.displayName === 'string' ? item.displayName : typeof item.display_name === 'string' ? item.display_name : typeof item.name === 'string' && !item.name.startsWith('models/') ? item.name : id
     unique.set(id, { id, name: display, capabilities: caps, contextWindow: typeof item.contextWindow === 'number' ? item.contextWindow : undefined })
   }
   return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 80)

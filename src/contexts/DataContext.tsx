@@ -2,13 +2,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Table } from 'dexie'
-import { defaultExamTracks, defaultSettings, normalizeSettings, seedChapters } from '../lib/defaults'
+import { defaultExamTracks, defaultSettings, normalizeSettings, seedChapters, shouldSeedJeeSyllabus } from '../lib/defaults'
 import { assetKey, localDb } from '../lib/database'
+import { isOwnedStoragePath } from '../lib/storage-path'
 import { createId } from '../lib/id'
 import { relatedRowsForRemoval } from '../lib/data-relations'
 import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { trackStudentWrite } from '../lib/telemetry/client'
+import { fetchPublishedOverrides } from './SiteContentContext'
+import { resolveSiteValues } from '../lib/site-content/content'
+import { applyOwnerThemeDefaults } from '../lib/site-content/student-defaults'
+
 import type {
   AppData, AppSettings, BacklogItem, Chapter, ChapterStage, DailyTask, Mistake, PracticeSession,
   Profile, PyqRecord, QueuedChange, RecordFor, Revision, StudyCard, StudySession, TableName,
@@ -190,7 +196,8 @@ async function uploadPendingImage(record: Record<string, unknown>, userId: strin
 
 async function retirePreviousMistakeImage(record: Record<string, unknown>): Promise<Record<string, unknown>> {
   const previousPath = typeof record.image_previous_path === 'string' ? record.image_previous_path : ''
-  if (previousPath && previousPath !== record.image_path && supabase) {
+  const owner = typeof record.user_id === 'string' ? record.user_id : ''
+  if (previousPath && previousPath !== record.image_path && supabase && isOwnedStoragePath(owner, previousPath)) {
     const { error } = await supabase.storage.from('mistake-images').remove([previousPath])
     if (error) throw error
   }
@@ -246,7 +253,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           const { error } = await supabase.from(change.table).delete().eq('id', change.id).eq('user_id', userId)
           if (error) throw error
           if (change.table === 'mistakes') {
-            const paths = [change.record?.image_path, change.record?.image_previous_path].filter((path): path is string => typeof path === 'string' && path.length > 0)
+            const paths = [change.record?.image_path, change.record?.image_previous_path].filter((path): path is string => typeof path === 'string' && isOwnedStoragePath(userId, path))
             const uniquePaths = [...new Set(paths)]
             if (uniquePaths.length) {
               const { error: storageError } = await supabase.storage.from('mistake-images').remove(uniquePaths)
@@ -318,7 +325,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             const cached = queryDataRef.current?.mistakes.find(item => item.id === row.id)
             const asset = await localDb.assets.get(assetKey(userId, String(row.id)))
             if (cached?.image_data || asset?.data_url) return { ...row, image_data: cached?.image_data ?? asset?.data_url, image_preview: cached?.image_data ?? asset?.data_url }
-            if (typeof row.image_path === 'string' && row.image_path) {
+            if (typeof row.image_path === 'string' && isOwnedStoragePath(userId, row.image_path)) {
               const { data: signed } = await cloud.storage.from('mistake-images').createSignedUrl(row.image_path, 3600)
               return { ...row, image_preview: signed?.signedUrl ?? null }
             }
@@ -337,12 +344,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
       const settingsRows = fetched.find(([table]) => table === 'app_settings')?.[1] ?? []
       if (!settingsRows.length) {
-        next.settings = defaultSettings(userId, next.profile.display_name)
+        // A new account starts from the owner's published theme defaults (if any).
+        const ownerValues = resolveSiteValues((await fetchPublishedOverrides()) ?? {})
+        next.settings = applyOwnerThemeDefaults(defaultSettings(userId, next.profile.display_name), ownerValues)
         const { error } = await cloud.from('app_settings').upsert(cleanForCloud(next.settings as unknown as Record<string, unknown>))
         if (error) throw error
         await localDb.app_settings.put(next.settings)
       }
-      if (next.chapters.length === 0) {
+      // The JEE syllabus is seeded only for JEE students. Brand-new accounts wait for the
+      // first-run setup to pick an exam (it seeds JEE itself); other exams start empty.
+      if (next.chapters.length === 0 && shouldSeedJeeSyllabus(next.settings)) {
         const initial = seedChapters(userId)
         const { error } = await cloud.from('chapters').upsert(initial)
         if (error) throw error
@@ -402,14 +413,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const now = new Date().toISOString()
         const profile = cached.profile ?? { id: userId, user_id: userId, display_name: user?.displayName ?? 'Study notebook', email: user?.email ?? '', created_at: now, updated_at: now }
         const settings = cached.settings ?? defaultSettings(userId, profile.display_name)
-        const chapters = cached.chapters.length ? cached.chapters : seedChapters(userId)
+        const chapters = cached.chapters.length || !shouldSeedJeeSyllabus(settings) ? cached.chapters : seedChapters(userId)
         const examTracks = cached.examTracks.length ? cached.examTracks : defaultExamTracks(userId)
         // This snapshot can be older than writes that land while the load is in flight (a Settings save,
         // the header theme switch). Fill in only the rows that are missing, and merge into the latest
         // cache, so the load can never write an old settings or profile row back over a newer one.
         await Promise.all([
           putIfMissing(localDb.profiles, profile), putIfMissing(localDb.app_settings, settings),
-          cached.chapters.length ? Promise.resolve() : localDb.chapters.bulkPut(chapters),
+          cached.chapters.length || !chapters.length ? Promise.resolve() : localDb.chapters.bulkPut(chapters),
           cached.examTracks.length ? Promise.resolve() : localDb.user_exam_tracks.bulkPut(examTracks)
         ])
         queryClient.setQueryData<AppData>(['stracker-data', userId], current => {
@@ -450,6 +461,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!inputs.length) return
     let records = inputs.map(input => withOwner(table, input as unknown as Record<string, unknown>, userId))
     validatePersistedRecords(table, records)
+    const known = new Set(rowsFor(queryDataRef.current ?? emptyData(userId), table).map(row => String(row.id)))
+    const writeOp = records.some(record => known.has(String(record.id))) ? 'update' : 'create'
+    const trackWrite = (stage: 'attempted' | 'succeeded' | 'failed', _table: TableName, rows: unknown[], reason?: 'offline' | 'server') =>
+      trackStudentWrite(stage, table, writeOp, rows.length, reason)
     const localTables = table === 'mistakes' ? [localDb.table(table), localDb.assets] : [localDb.table(table)]
     await localDb.transaction('rw', localTables, async () => {
       await localDb.table(table).bulkPut(records as object[])
@@ -464,6 +479,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     })
     setData(current => records.reduce((next, row) => updateOne(next, table, row), current))
     if (supabase && !user?.isLocal && navigator.onLine) {
+      trackWrite('attempted', table, records)
       try {
         if (table === 'mistakes') {
           records = await Promise.all(records.map(row => uploadPendingImage(row, userId)))
@@ -472,6 +488,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         const { error } = await supabase.from(table).upsert(records.map(cleanForCloud))
         if (error) throw error
+        trackWrite('succeeded', table, records)
         if (table === 'mistakes') {
           records = await Promise.all(records.map(retirePreviousMistakeImage))
           await localDb.mistakes.bulkPut(records as unknown as Mistake[])
@@ -481,6 +498,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         await queueChanges(records.map(record => ({ user_id: userId, table, operation: 'upsert', id: String(record.id), record, queued_at: new Date().toISOString() })))
         const offline = isNetworkError(error)
+        trackWrite('failed', table, records, offline ? 'offline' : 'server')
         setSyncState(offline ? 'offline' : 'error')
         setSyncError(offline ? 'Offline — the edit is saved here and will sync automatically.' : 'The edit is saved locally but could not reach the cloud. Retry sync when ready.')
         if (!offline) throw new Error('Saved on this device; cloud sync failed. Use Retry sync to try again.')
@@ -613,7 +631,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       id, user_id: userId, image_path: record.image_path, image_previous_path: record.image_previous_path
     } : undefined
     if (supabase && !user?.isLocal && navigator.onLine) {
+      trackStudentWrite('attempted', table, 'delete', 1)
       const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', userId)
+      trackStudentWrite(error ? 'failed' : 'succeeded', table, 'delete', 1, error ? (isNetworkError(error) ? 'offline' : 'server') : undefined)
       if (error) {
         await queueChanges([{ user_id: userId, table, operation: 'delete', id, record: imageQueueRecord, queued_at: new Date().toISOString() }])
         setSyncState(isNetworkError(error) ? 'offline' : 'error')

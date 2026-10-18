@@ -1,7 +1,9 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { getMeanTestPercentage } from '../analytics.js'
 import { pyqCompletion, syllabusProgress } from './progress.js'
-import type { AppData, PYQExam, TrackId, UserExamTrack } from '../../types/index.js'
+import type { AppData, AppSettings, PYQExam, TrackId, UserExamTrack } from '../../types/index.js'
+import { examName, isJeeExam } from '../exams/catalog.js'
+import { currentSubjectCatalog } from '../exams/subjects.js'
 import { TRACK_IDS } from '../../types/index.js'
 
 /**
@@ -21,6 +23,40 @@ export const TRACK_LABEL: Record<TrackId, string> = {
 /** Which PYQ exam a track is measured against. Boards has no JEE PYQ relevance. */
 export const TRACK_PYQ_EXAM: Record<TrackId, PYQExam | null> = {
   main1: 'Main', main2: 'Main', advanced: 'Advanced', boards: null
+}
+
+type ExamSettings = Pick<AppSettings, 'exam_id' | 'exam_year' | 'boards_addon' | 'active_track'>
+
+/** True when the student's exam is JEE (including every notebook from before exam choice). */
+export function isJeeSettings(settings: Pick<AppSettings, 'exam_id'>): boolean {
+  return isJeeExam(settings.exam_id ?? null)
+}
+
+/** "NEET UG 2027"-style name for the chosen exam, from the published catalogue. */
+export function chosenExamTitle(settings: Pick<AppSettings, 'exam_id' | 'exam_year'>): string {
+  const name = examName(settings.exam_id, currentSubjectCatalog())
+  return settings.exam_year ? `${name} ${settings.exam_year}` : name
+}
+
+/**
+ * Track labels for the chosen exam. JEE keeps Main Session 1/2, Advanced and Boards.
+ * Any other exam has one main date (stored where the JEE Main date lives) plus Class 12
+ * boards when the student added them.
+ */
+export function trackLabels(settings: Pick<AppSettings, 'exam_id' | 'exam_year'>): Record<TrackId, string> {
+  if (isJeeSettings(settings)) return TRACK_LABEL
+  const title = chosenExamTitle(settings)
+  return { main1: title, main2: title, advanced: title, boards: 'Class 12 boards' }
+}
+
+export function availableTracks(settings: Pick<AppSettings, 'exam_id' | 'boards_addon'>): TrackId[] {
+  if (isJeeSettings(settings)) return [...TRACK_IDS]
+  return settings.boards_addon ? ['main1', 'boards'] : ['main1']
+}
+
+/** The saved active track, or the exam's main date when that track does not apply to this exam. */
+export function effectiveTrack(settings: ExamSettings): TrackId {
+  return availableTracks(settings).includes(settings.active_track) ? settings.active_track : 'main1'
 }
 
 export const EXAM_MODE_WINDOW_DAYS = 30
@@ -71,9 +107,9 @@ export interface ExamModeState {
  * activates without a configured date.
  */
 export function currentExamMode(data: AppData, today: string): ExamModeState {
-  const track = data.settings.active_track
+  const track = effectiveTrack(data.settings)
   const days = daysUntilExam(trackExamDate(data, track), today)
-  const label = TRACK_LABEL[track]
+  const label = trackLabels(data.settings)[track]
   const setting = data.settings.exam_mode
   if (setting === 'off') return { active: false, reason: 'Exam Mode is switched off in Settings.', label, daysLeft: days, track, boost: 1 }
   if (setting === 'on') return { active: true, reason: 'Exam Mode is switched on manually in Settings.', label, daysLeft: days, track, boost: EXAM_MODE_BOOST }
@@ -100,20 +136,22 @@ export interface TrackReadiness {
  */
 export function trackReadiness(data: AppData, track: TrackId, today: string): TrackReadiness {
   const progress = syllabusProgress(data.chapters, data.settings)
-  const pyqExam = TRACK_PYQ_EXAM[track]
+  const jee = isJeeSettings(data.settings)
+  // Non-JEE exams keep their PYQ years in the single (Main) column of the PYQ tracker.
+  const pyqExam = jee ? TRACK_PYQ_EXAM[track] : 'Main'
   const pyq = pyqExam ? pyqCompletion(data.pyqRecords, null, pyqExam, data.settings) : null
   const recent = [...data.tests].sort((a, b) => b.test_date.localeCompare(a.test_date)).slice(0, 3)
   const testAverage = getMeanTestPercentage(recent, data.testSubjectScores).average
   const components = [
     { label: 'Weighted syllabus', value: progress.weighted, note: progress.weighted === null ? 'No chapters yet' : 'Shared syllabus' },
-    { label: pyqExam ? `${pyqExam === 'Main' ? 'JEE Main' : 'JEE Advanced'} PYQs` : 'PYQs', value: pyq?.percent ?? null, note: pyq ? `${pyq.done} of ${pyq.total} years` : 'Not used for Boards' },
+    { label: pyqExam && jee ? `${pyqExam === 'Main' ? 'JEE Main' : 'JEE Advanced'} PYQs` : 'PYQs', value: pyq?.percent ?? null, note: pyq ? `${pyq.done} of ${pyq.total} years` : jee ? 'Not used for Boards' : 'JEE PYQ tracker only' },
     { label: 'Recent tests', value: testAverage, note: recent.length ? `Last ${recent.length} test${recent.length === 1 ? '' : 's'}` : 'No tests yet' }
   ]
   const usable = components.map(item => item.value).filter((value): value is number => value !== null)
   const config = trackConfig(data, track)
   return {
     track,
-    label: config.label || TRACK_LABEL[track],
+    label: jee ? config.label || TRACK_LABEL[track] : trackLabels(data.settings)[track],
     percent: usable.length ? usable.reduce((sum, value) => sum + value, 0) / usable.length : null,
     components,
     daysLeft: daysUntilExam(trackExamDate(data, track), today),
@@ -122,5 +160,5 @@ export function trackReadiness(data: AppData, track: TrackId, today: string): Tr
 }
 
 export function allTrackReadiness(data: AppData, today: string): TrackReadiness[] {
-  return TRACK_IDS.map(track => trackReadiness(data, track, today))
+  return availableTracks(data.settings).map(track => trackReadiness(data, track, today))
 }

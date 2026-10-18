@@ -28,7 +28,7 @@ export function AuthScaffold({ kicker, title, blurb, note, children }: {
     <main className="auth-content">
       <div className="auth-intro">
         <div className="auth-kicker"><span className="kicker-scribble" aria-hidden="true">✎</span> {kicker}</div>
-        <h1>{title}</h1>
+        <h1 className="type-display">{title}</h1>
         <p>{blurb}</p>
         {note && <div className="auth-doodle-note"><span aria-hidden="true">✦</span><span>{note}</span></div>}
       </div>
@@ -36,7 +36,7 @@ export function AuthScaffold({ kicker, title, blurb, note, children }: {
     </main>
     <footer className="auth-footer">
       <span className="auth-footer-rule" aria-hidden="true" />
-      <span>Stracker <b>by DYPOL LABS</b></span>
+      <span className="type-brand">Stracker <b>by DYPOL LABS</b></span>
       <span className="auth-footer-rule" aria-hidden="true" />
     </footer>
   </div>

@@ -5,6 +5,9 @@ import { withAuthenticatedRequest } from '../_lib/handler.js'
 import { decryptCredential } from '../_lib/secrets.js'
 import { discoverProviderModels } from '../_lib/models.js'
 import { normalizeProviderSetup, type ProviderConfigRow } from '../_lib/registry.js'
+import { MODEL_DISCOVERY_RATE, takeRateSlot } from '../_lib/rate-limit.js'
+import { effectiveModelPreferences } from '../../src/lib/ai/model-preferences.js'
+import { rankModels } from '../../src/lib/ai/model-ranking.js'
 
 const requestSchema = z.object({
   configId: z.uuid().optional(),
@@ -23,6 +26,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
   await withAuthenticatedRequest(req, res, ['POST'], async ({ userId, adminClient }) => {
     const parsed = requestSchema.safeParse(await readJson(req))
     if (!parsed.success) throw new ApiError(400, 'invalid_model_request', 'Choose a provider and enter its current connection details.')
+    await takeRateSlot(adminClient, userId, MODEL_DISCOVERY_RATE)
     const input = parsed.data
     let setup
     let key: string
@@ -49,6 +53,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       key = setup.apiKey
     }
     const result = await discoverProviderModels(setup, key)
-    sendJson(res, 200, result)
+    // Owner-ranked AI defaults (server-side only table; built-ins when unavailable).
+    const { data: preferenceRow } = await adminClient.from('ai_model_preferences').select('preferences').eq('id', 1).maybeSingle()
+    const modelPreferences = effectiveModelPreferences(preferenceRow?.preferences)
+    const rankedModelIds = setup.providerId === 'custom' ? [] : rankModels(result.models.map(model => model.id), modelPreferences[setup.providerId as keyof typeof modelPreferences] ?? [])
+    sendJson(res, 200, { ...result, rankedModelIds, modelPreferences })
   })
 }

@@ -79,9 +79,9 @@ interface AIContextValue {
   backendHealth:AIBackendHealth|null
   checkBackendHealth:()=>Promise<void>
   refreshProviders:()=>Promise<void>
-  discoverModels:(draft:AIProviderDraft)=>Promise<{models:AIModelOption[];discoveryAvailable:boolean;message?:string}>
+  discoverModels:(draft:AIProviderDraft)=>Promise<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>}>
   saveProvider:(draft:AIProviderDraft)=>Promise<AIProviderConfig>
-  testProvider:(id:string)=>Promise<void>
+  testProvider:(id:string)=>Promise<{latencyMs?:number}>
   patchProvider:(id:string,action:'enable'|'disable'|'default')=>Promise<void>
   removeProvider:(id:string)=>Promise<void>
   recentConversations:AIConversationSummary[]
@@ -265,7 +265,7 @@ export function AIProvider({ children }: { children:ReactNode }) {
   const discoverModels = useCallback(async (draft:AIProviderDraft) => {
     const { id,...setup } = draft
     const useSavedConfiguration = Boolean(id && !draft.apiKey)
-    return apiFetch<{models:AIModelOption[];discoveryAvailable:boolean;message?:string}>('/api/ai/models',{method:'POST',body:JSON.stringify(useSavedConfiguration ? { configId:id } : setup)})
+    return apiFetch<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>}>('/api/ai/models',{method:'POST',body:JSON.stringify(useSavedConfiguration ? { configId:id } : setup)})
   },[apiFetch])
 
   const saveProvider = useCallback(async (draft:AIProviderDraft) => {
@@ -276,7 +276,7 @@ export function AIProvider({ children }: { children:ReactNode }) {
   },[apiFetch,refreshProviders])
 
   const testProvider = useCallback(async (id:string) => {
-    try { await apiFetch('/api/ai/test-connection',{method:'POST',body:JSON.stringify({configId:id})}) }
+    try { return await apiFetch<{latencyMs?:number}>('/api/ai/test-connection',{method:'POST',body:JSON.stringify({configId:id})}) ?? {} }
     finally { await refreshProviders() }
   },[apiFetch,refreshProviders])
 
@@ -362,7 +362,9 @@ export function AIProvider({ children }: { children:ReactNode }) {
         setMessages(current => current.map(item => item.id === assistantId ? { ...item,status:'cancelled',content:'Request stopped. No Stracker change was made.' } : item))
         setActiveTask(current => current ? { ...current,status:'cancelled',progress:'Cancelled by you.' } : current)
       } else {
-        const messageText = !navigator.onLine ? 'AI is unavailable while offline. Your Stracker notebook is still available.' : error instanceof Error ? error.message : 'The AI request could not be started.'
+        // A browser network failure surfaces as a TypeError ("Failed to fetch", "Load failed",
+        // "NetworkError…"); never show that raw text. Session errors keep their own message.
+        const messageText = !navigator.onLine ? 'AI is unavailable while offline. Your Stracker notebook is still available.' : error instanceof TypeError || !(error instanceof Error) ? 'Stracker could not reach its AI service. Check your connection and press Retry.' : error.message
         setMessages(current => current.map(item => item.id === assistantId ? { ...item,status:'failed',content:messageText,error:messageText } : item))
         setActiveTask(current => current ? { ...current,status:'failed',progress:'Request failed.' } : current)
       }

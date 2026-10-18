@@ -6,11 +6,12 @@ import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { indiaDate, prettyDate } from '../lib/date'
 import type { MistakeType, Subject } from '../types'
-import { SUBJECTS } from '../types'
+import { useReportSubjects } from '../lib/exams/useExamSubjects'
 
 const TYPES: MistakeType[] = ['Concept', 'Silly', 'Calculation', 'Time', 'Guess']
 
 export default function RetryPage() {
+  const subjectList = useReportSubjects()
   const { data, upsert, remove } = useData()
   const { notify } = useToast()
   const navigate = useNavigate()
@@ -57,11 +58,11 @@ export default function RetryPage() {
   }
 
   return <div className="content-page retry-page">
-    <PageHeader eyebrow="RETURN, RETRIEVE, REMEMBER" title="Retry list" subtitle="Give the questions that caught you another honest attempt." doodle={<RotateCcw size={19} />} action={<Button variant="secondary" onClick={() => navigate('/mistakes')}><ArrowLeft size={16} /> Mistake notebook</Button>} />
+    <PageHeader title="Retry list" doodle={<RotateCcw size={19} />} action={<Button variant="secondary" onClick={() => navigate('/mistakes')}><ArrowLeft size={16} /> Mistake notebook</Button>} />
     <div className="retry-intro-row"><NotebookCard className="retry-intro-card"><div className="retry-circle-doodle"><RotateCcw size={22} /></div><div><span className="eyebrow">A SECOND LOOK</span><h2>{ready.length} question{ready.length === 1 ? '' : 's'} waiting for you</h2><p>Try again before reading the solution. Retrieval beats recognition.</p></div><div className="retry-spark" aria-hidden="true">✦</div></NotebookCard></div>
     <NotebookCard className="retry-board">
-      <div className="retry-filters"><div className="search-field"><Search size={16} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search retry notes…" aria-label="Search retry notes" />{search && <button aria-label="Clear search" onClick={() => setSearch('')}><X size={14} /></button>}</div><select aria-label="Filter retry subject" value={subject} onChange={event => { setSubject(event.target.value as 'all' | Subject); setChapterId('all') }}><option value="all">All subjects</option>{SUBJECTS.map(item => <option key={item}>{item}</option>)}</select><select aria-label="Filter retry chapter" value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="all">All chapters</option>{chapters.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Filter mistake type" value={type} onChange={event => setType(event.target.value as 'all' | MistakeType)}><option value="all">All types</option>{TYPES.map(item => <option key={item}>{item}</option>)}</select></div>
-      {filtered.length === 0 ? <EmptyState icon={<CircleCheck size={25} />} title={ready.length ? 'Nothing in this view.' : 'Nothing waiting to retry.'} description={ready.length ? 'Try clearing a filter, or pick a different subject.' : 'When a question needs another pass, mark it “Retry later” in your mistake notebook.'} action={!ready.length ? <Button variant="secondary" size="sm" onClick={() => navigate('/mistakes')}>Open mistake notebook</Button> : <Button variant="secondary" size="sm" onClick={() => { setSubject('all'); setChapterId('all'); setType('all'); setSearch('') }}>Clear filters</Button>} /> : <div className="retry-list">{filtered.map(mistake => {
+      <div className="retry-filters"><div className="search-field"><Search size={16} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search retry notes…" aria-label="Search retry notes" />{search && <button aria-label="Clear search" onClick={() => setSearch('')}><X size={14} /></button>}</div><select aria-label="Filter retry subject" value={subject} onChange={event => { setSubject(event.target.value as 'all' | Subject); setChapterId('all') }}><option value="all">All subjects</option>{subjectList.map(item => <option key={item}>{item}</option>)}</select><select aria-label="Filter retry chapter" value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="all">All chapters</option>{chapters.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Filter mistake type" value={type} onChange={event => setType(event.target.value as 'all' | MistakeType)}><option value="all">All types</option>{TYPES.map(item => <option key={item}>{item}</option>)}</select></div>
+      {filtered.length === 0 ? <EmptyState icon={<CircleCheck size={25} />} title={ready.length ? 'Nothing in this view.' : 'Nothing waiting to retry.'} description={ready.length ? undefined : 'Mark a mistake “Retry later” to add it here.'} action={!ready.length ? <Button variant="secondary" size="sm" onClick={() => navigate('/mistakes')}>Open mistake notebook</Button> : <Button variant="secondary" size="sm" onClick={() => { setSubject('all'); setChapterId('all'); setType('all'); setSearch('') }}>Clear filters</Button>} /> : <div className="retry-list">{filtered.map(mistake => {
         const chapter = data.chapters.find(item => item.id === mistake.chapter_id)
         const test = data.tests.find(item => item.id === mistake.test_id)
         return <article key={mistake.id} className="retry-row">

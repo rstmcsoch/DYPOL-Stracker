@@ -12,7 +12,7 @@ import { MIN_PASSWORD_LENGTH } from '../lib/auth-rules'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 const PERKS = [
-  'A seeded, editable JEE 2027 syllabus waiting for you',
+  'A ready-made, editable syllabus waiting for you',
   'Two exam dates, a daily study goal, and a plan for today',
   'Private by default: your records belong to your account only'
 ]
@@ -24,7 +24,7 @@ const PERKS = [
  * confirmation is off, or a confirmation step when it is on.
  */
 export default function SignupPage() {
-  usePageMeta('Create your Stracker account', 'Create a Stracker account to organize JEE preparation: syllabus, tests, mistakes, revision, planning and focus sessions.')
+  usePageMeta('Create your Stracker account', 'Create a Stracker account to organize exam preparation: syllabus, tests, mistakes, revision, planning and focus sessions.')
   const { signUp, resendConfirmation, error, clearError, loading: authLoading } = useAuth()
   const { notify } = useToast()
   const navigate = useNavigate()
@@ -90,7 +90,7 @@ export default function SignupPage() {
   return <AuthScaffold
     kicker="CREATE YOUR NOTEBOOK"
     title={<>Start the record <em>on day one.</em></>}
-    blurb="Set up your JEE 2027 syllabus once, then let every test, mistake, revision and study session land in the same place."
+    blurb="Set up your syllabus once, then let every test, mistake, revision and study session land in the same place."
     note="The best time to start keeping the record is before the first test."
   >
     <section className="auth-card" aria-labelledby="signup-title">

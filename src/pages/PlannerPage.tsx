@@ -11,7 +11,7 @@ import { taskInputSchema } from '../lib/task-validation'
 import { indiaDate, indiaToday, prettyDate } from '../lib/date'
 import { fmtDuration, fmtNumber } from '../lib/format'
 import type { DailyTask, GoalType, Priority, Subject, WeeklyGoal } from '../types'
-import { SUBJECTS } from '../types'
+import { useExamSubjects } from '../lib/exams/useExamSubjects'
 
 const goalTypes: { type: GoalType; title: string; unit: string }[] = [
   { type: 'study_hours', title: 'Study hours', unit: 'hours' }, { type: 'tests', title: 'Tests', unit: 'tests' },
@@ -106,7 +106,7 @@ export default function PlannerPage() {
   const doneTotal = tasks.filter(task => task.is_completed).length
 
   return <div className="content-page planner-page">
-    <PageHeader eyebrow="MAKE SPACE FOR THE WORK" title="Planner" subtitle="A steady plan is a promise you can keep adjusting." doodle={<CalendarDays size={19} />} action={<Button onClick={() => { setEditingTask(null); setTaskDialog(true) }}><Plus size={17} /> Add task</Button>} />
+    <PageHeader title="Planner" doodle={<CalendarDays size={19} />} action={<Button onClick={() => { setEditingTask(null); setTaskDialog(true) }}><Plus size={17} /> Add task</Button>} />
     <div className="planner-main-grid">
       <div className="planner-primary">
         <NotebookCard className="week-card">
@@ -121,7 +121,7 @@ export default function PlannerPage() {
           })}</div>
           <div className="selected-day-head"><div><span className="eyebrow">{selectedDate === indiaToday() ? 'TODAY' : new Intl.DateTimeFormat('en-IN', { weekday: 'long' }).format(parseISO(`${selectedDate}T12:00:00`)).toUpperCase()}</span><h2>{prettyDate(selectedDate, { day: 'numeric', month: 'long' })}</h2></div><span className="task-count-label">{doneTotal} / {todayTotal} complete</span></div>
           <div className="planner-task-list" onDragOver={event => event.preventDefault()}>
-            {tasks.length === 0 ? <EmptyState icon={<CalendarDays size={24} />} title="A clear patch of paper." description="Add a task for this day. You can move or reschedule it whenever your plan changes." action={<Button variant="secondary" size="sm" onClick={() => { setEditingTask(null); setTaskDialog(true) }}><Plus size={15} /> Plan a task</Button>} /> : tasks.map((task, index) => <PlannerTaskRow key={task.id} task={task} chapter={data.chapters.find(chapter => chapter.id === task.chapter_id)} dragged={draggedId === task.id} onToggle={() => void toggleTask(task)} onEdit={() => { setEditingTask(task); setTaskDialog(true) }} onDuplicate={() => void duplicateTask(task)} onDelete={() => setDeleteTarget(task)} onDragStart={() => setDraggedId(task.id)} onDragEnd={() => setDraggedId(null)} onDrop={() => { const dragged = tasks.find(item => item.id === draggedId); if (dragged) void reorderTask(dragged, task); setDraggedId(null) }} onMove={direction => { const dest = tasks[index + direction]; if (dest) void reorderTask(task, dest) }} />)}
+            {tasks.length === 0 ? <EmptyState icon={<CalendarDays size={24} />} title="Nothing planned for this day." action={<Button variant="secondary" size="sm" onClick={() => { setEditingTask(null); setTaskDialog(true) }}><Plus size={15} /> Plan a task</Button>} /> : tasks.map((task, index) => <PlannerTaskRow key={task.id} task={task} chapter={data.chapters.find(chapter => chapter.id === task.chapter_id)} dragged={draggedId === task.id} onToggle={() => void toggleTask(task)} onEdit={() => { setEditingTask(task); setTaskDialog(true) }} onDuplicate={() => void duplicateTask(task)} onDelete={() => setDeleteTarget(task)} onDragStart={() => setDraggedId(task.id)} onDragEnd={() => setDraggedId(null)} onDrop={() => { const dragged = tasks.find(item => item.id === draggedId); if (dragged) void reorderTask(dragged, task); setDraggedId(null) }} onMove={direction => { const dest = tasks[index + direction]; if (dest) void reorderTask(task, dest) }} />)}
           </div>
           <div className="planner-card-footer"><span><GripVertical size={15} /> Drag to reorder. Edit a task to move dates.</span><span>{fmtDuration(tasks.reduce((sum, task) => sum + (task.is_completed ? task.estimated_minutes : 0), 0))} complete</span></div>
         </NotebookCard>
@@ -156,6 +156,7 @@ function PlannerTaskRow({ task, chapter, dragged, onToggle, onEdit, onDuplicate,
 }
 
 function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: DailyTask | null; defaultDate: string; data: ReturnType<typeof useData>['data']; onClose: () => void; onSave: (task: DailyTask) => Promise<void> }) {
+  const taskSubjects = useExamSubjects(initial?.subject)
   const { notify } = useToast()
   const now = new Date().toISOString()
   const [taskId] = useState(() => initial?.id ?? createId())
@@ -199,10 +200,10 @@ function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: 
     try { await onSave(task) } finally { savingRef.current = false; setSaving(false) }
   }
   const clearError = (key: string) => setErrors(current => { const next = { ...current }; delete next[key]; return next })
-  return <Dialog title={initial ? 'Edit your task' : 'Plan a study task'} subtitle="You can change the day later. A plan should flex with you." onClose={onClose}>
+  return <Dialog title={initial ? 'Edit your task' : 'Plan a study task'}  onClose={onClose}>
     <form className="form-stack" noValidate onSubmit={submit}><Field label="Task" required error={errors.title}><input autoFocus required maxLength={200} value={title} onChange={event => { setTitle(event.target.value); clearError('title') }} placeholder="e.g. Practice 15 integration problems" /></Field>
       <div className="form-grid two"><Field label="Date" error={errors.task_date}><input type="date" required value={date} onChange={event => { setDate(event.target.value); clearError('task_date') }} /></Field><Field label="Estimated minutes" error={errors.estimated_minutes}><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => { setMinutes(event.target.value); clearError('estimated_minutes') }} /></Field></div>
-      <div className="form-grid three"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{SUBJECTS.map(item => <option key={item}>{item}</option>)}</select></Field><Field label="Chapter" error={errors.chapter_id}><select value={chapterId} onChange={event => { setChapterId(event.target.value); clearError('chapter_id') }}><option value="">None</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field><Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
+      <div className="form-grid three"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{taskSubjects.map(item => <option key={item}>{item}</option>)}</select></Field><Field label="Chapter" error={errors.chapter_id}><select value={chapterId} onChange={event => { setChapterId(event.target.value); clearError('chapter_id') }}><option value="">None</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field><Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button><Button type="submit" loading={saving}>{initial ? 'Save task' : 'Add task'}</Button></div>
     </form>
   </Dialog>

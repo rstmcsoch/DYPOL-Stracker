@@ -1,8 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { INTERFACE_FONT_OPTIONS } from './fonts'
-import { INTERFACE_FONTS } from '../types'
+import { READING_FONT_OPTIONS } from './fonts'
+import { READING_FONTS } from '../types'
 
 const sourceDir = fileURLToPath(new URL('../', import.meta.url))
 const stylesDir = `${sourceDir}styles/`
@@ -123,12 +123,17 @@ describe('responsive layout contract', () => {
     expect(base).toContain('container: clock / inline-size;')
   })
 
-  it('routes every interface typography role through the one global font token', () => {
-    expect(base).toContain('--app-font-family:')
-    expect(base).toContain('font-family: var(--app-font-family);')
-    expect(base).toContain('--font-ui: var(--app-font-family);')
-    for (const role of ['body', 'heading', 'label', 'number']) {
-      expect(base).toContain(`--font-${role}: var(--app-font-family);`)
+  it('routes fixed identity and selected content through the centralized role tokens', () => {
+    const typography = read('typography.css')
+    expect(base).toContain("--font-identity: 'Patrick Hand'")
+    expect(base).toContain("--font-default-reading: 'Lexend'")
+    expect(base).toContain('--font-body: var(--reading-font-family);')
+    expect(base).toContain('--text-primary: var(--ink);')
+    expect(base).toContain('--text-muted:')
+    expect(base).toContain('--text-accent:')
+    expect(typography).toContain('--body-scale')
+    for (const role of ['brand', 'display', 'h1', 'h2', 'h3', 'empty', 'metric', 'body', 'nav', 'button', 'input', 'caption', 'overline', 'badge', 'table', 'alert']) {
+      expect(typography).toContain(`.type-${role}`)
     }
     expect(base).toContain('body { min-width: 320px;')
     expect(base).toContain('font-family: inherit;')
@@ -136,53 +141,43 @@ describe('responsive layout contract', () => {
     expect(base).toContain('button, input, textarea, select { font: inherit; }')
     expect(base).toContain('option, optgroup, ::file-selector-button { font: inherit; }')
     expect(base).toContain('::placeholder { font: inherit; }')
-    // Font selection only changes the shared token. Responsive optical sizing does not
-    // branch by font IDs, which could otherwise leave a heading or label on a stale face.
     expect(responsive).not.toContain('data-font')
-    for (const option of INTERFACE_FONT_OPTIONS) expect(option.stack).toMatch(/system-ui, sans-serif$/)
-    expect(INTERFACE_FONTS).toHaveLength(4)
+    expect(READING_FONTS).toHaveLength(4)
+    expect(READING_FONT_OPTIONS.map(option => option.scale)).toEqual([1, 0.95, 0.97, 1])
   })
 
   it('prevents component CSS from introducing another UI font family', () => {
-    // Typography contract (base.css): ordinary interface rules use the root token, a semantic role
-    // alias, or inherit. The single non-UI exception is --font-code, used only by the AI code block.
-    const rules = [...componentStyles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-      .map(([, selector = '', body = '']) => ({ selector: selector.trim(), body }))
-    const allowedGlobalFamily = /^(?:inherit|var\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\s*\))$/i
-    const fontFamilyDeclarations = rules.flatMap(({ selector, body }) =>
-      [...body.matchAll(/(?<![-\w])font-family\s*:\s*([^;}]+)/gi)].map(([, value]) => ({ selector, value: value?.trim() ?? '' })))
+    // @font-face rules are the one sanctioned place that names a family (fonts.css
+    // declares the self-hosted faces); scoped code samples intentionally use monospace.
+    // Ordinary interface rules must use a centralized typography token.
+    const withoutFontFaces = componentStyles.replace(/@font-face\s*\{[^}]*\}/g, '')
+    const withoutCodeSamples = withoutFontFaces.replace(/(?:code,\s*pre,\s*samp,\s*\.mono,\s*\.ai-code-block|\.ai-code-block)\s*\{[^}]*\}/g, '')
+    // The one decorative branding exception is the public homepage's oversized Sora wordmark.
+    const withoutPublicWordmark = withoutCodeSamples.replace(/(?:\.pub-page \.pub-footer-wordmark,\s*html\[data-app-font='active'\] \.pub-page \.pub-footer-wordmark)\s*\{[^}]*\}/g, '')
+    const allowedGlobalFamily = /^(?:inherit|var\(\s*--(?:reading-font-family|font-(?:identity|public|default-reading|ui|body|heading|label|number))\s*\))$/i
+    const fontFamilyDeclarations = [...withoutPublicWordmark.matchAll(/(?<![-\w])font-family\s*:\s*([^;}]+)/gi)]
     const nonGlobalFamilies = fontFamilyDeclarations
-      .filter(({ value }) => !allowedGlobalFamily.test(value))
-      .map(({ selector, value }) => `${selector} { font-family: ${value} }`)
-    const fontShorthands = rules.flatMap(({ selector, body }) =>
-      [...body.matchAll(/(?<![-\w])font\s*:\s*([^;}]+)/gi)].map(([, value]) => ({ selector, value: value?.trim() ?? '' })))
+      .map(([, value]) => (value?.trim() ?? '').replace(/\s*!important$/i, ''))
+      .filter(value => !allowedGlobalFamily.test(value))
+    const fontShorthands = [...withoutCodeSamples.matchAll(/(?<![-\w])font\s*:\s*([^;}]+)/gi)]
     const unscopedShorthands = fontShorthands
-      .filter(({ value }) => !/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(value))
-      .filter(({ value }) => !/\bvar\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\b/i.test(value))
-      .filter(({ selector, value }) => !(selector === '.ai-code-block' && /\bvar\(\s*--font-code\s*\)/.test(value)))
-      .map(({ selector, value }) => `${selector} { font: ${value} }`)
-    const literalMonospace = [...fontFamilyDeclarations, ...fontShorthands]
-      .filter(({ value }) => /\b(?:ui-monospace|SFMono-Regular|Menlo|Consolas|Courier(?: New)?|monospace)\b/i.test(value))
-    const codeTokenRules = rules.filter(({ body }) => /var\(\s*--font-code\s*\)/.test(body)).map(({ selector }) => selector)
-    const importantFonts = [...componentStyles.matchAll(/(?<![-\w])font(?:-family)?\s*:[^;}]*!important/gi)].map(([match]) => match)
+      .map(([, value]) => value?.trim() ?? '')
+      .filter(value => !/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(value))
+      .filter(value => !/\bvar\(\s*--(?:reading-font-family|font-(?:identity|public|default-reading|ui|body|heading|label|number))\b/i.test(value))
     const inlineFontAssignments = sourceFiles(sourceDir)
       .filter(file => /\.tsx?$/.test(file))
       .flatMap(file => [...readFileSync(file, 'utf8').matchAll(/\bfontFamily\s*:\s*([^,}\]]+)/g)])
       .map(([, value]) => value?.trim() ?? '')
     const unapprovedInlineFamilies = inlineFontAssignments.filter(value =>
       value !== 'option.stack' &&
-      !/^['"]var\(\s*--(?:app-font-family|font-(?:ui|body|heading|label|number))\s*\)['"]$/i.test(value))
+      !/^['"]var\(\s*--(?:reading-font-family|font-(?:identity|public|default-reading|ui|body|heading|label|number))\s*\)['"]$/i.test(value))
 
     expect(nonGlobalFamilies).toEqual([])
     expect(unscopedShorthands).toEqual([])
-    expect(literalMonospace).toEqual([])
-    expect(importantFonts).toEqual([])
-    // The monospace token is reachable from exactly one rule, the AI code block, and that block's <code>
-    // inherits it instead of falling back to the browser's own monospace face.
-    expect(codeTokenRules).toEqual(['.ai-code-block'])
-    expect(componentStyles).toMatch(/\.ai-code-block code\s*\{\s*font:\s*inherit;?\s*\}/)
-    expect(base).toContain('--font-code: ui-monospace, SFMono-Regular, Menlo, monospace;')
     expect(unapprovedInlineFamilies).toEqual([])
+    // The AI code block's <code> inherits its scoped monospace shorthand instead of
+    // falling back to the browser's own monospace face.
+    expect(componentStyles).toMatch(/\.ai-code-block code\s*\{\s*font:\s*inherit;?\s*\}/)
     // Only font samples preview candidates; other inline families must use the global token.
     expect(inlineFontAssignments.filter(value => value === 'option.stack')).toHaveLength(2)
   })

@@ -1,5 +1,7 @@
+/** JEE subjects: the default list for notebooks without an exam choice. Per-exam lists live in lib/exams/subjects. */
 export const SUBJECTS = ['Physics', 'Chemistry', 'Maths'] as const
-export type Subject = (typeof SUBJECTS)[number]
+/** Any exam's subject name (validated as non-empty text, at most 60 characters). */
+export type Subject = string
 export type ChapterStatus = 'Not Started' | 'Studying' | 'Done' | 'Revised'
 export type Priority = 'High' | 'Medium' | 'Low'
 export type TestType = 'Chapter Test' | 'Subject Test' | 'Full Mock' | 'PYQ Practice'
@@ -8,12 +10,34 @@ export type RetryStatus = 'pending' | 'retried'
 export type ThemeMode = 'light' | 'dark' | 'auto'
 
 /**
- * Interface fonts the owner can choose for the Stracker UI.
- * Only default cuts of each family are exposed — no variants, weights, or pairings —
- * and the value is a closed union so no arbitrary CSS can be stored.
+ * User-selectable Reading fonts affect authenticated content only. Patrick Hand is
+ * reserved for identity typography and is deliberately not part of this union.
  */
-export const INTERFACE_FONTS = ['default', 'poppins', 'sora', 'open-sans'] as const
-export type InterfaceFont = (typeof INTERFACE_FONTS)[number]
+export const READING_FONTS = ['default', 'poppins', 'sora', 'open-sans'] as const
+export type ReadingFont = (typeof READING_FONTS)[number]
+
+/**
+ * Account-scoped colour theme. Independent of the light/dark/auto display mode:
+ * every theme ships a light AND a dark palette, applied via `data-color` on the
+ * document root while `data-theme` keeps owning the mode. `default` is the
+ * established Stracker warm-paper/chalkboard identity.
+ */
+export const COLOR_THEMES = [
+  'default',
+  'sunset-blaze',
+  'forest-emerald',
+  'sandalwood',
+  'ocean-deep',
+  'sakura-blossom',
+  'dracula-midnight',
+  'lavender-mist',
+  'cyberpunk-neon'
+] as const
+export type ColorTheme = (typeof COLOR_THEMES)[number]
+
+/** @deprecated Kept as a source-compatible alias for the legacy database column. */
+export const INTERFACE_FONTS = READING_FONTS
+export type InterfaceFont = ReadingFont
 
 /* ------------------------------------------------------------------ */
 /* Practice / DPP log                                                  */
@@ -300,7 +324,10 @@ export interface AppSettings extends BaseRecord {
   advanced_exam_date: string
   target_score: number
   theme: ThemeMode
-  interface_font: InterfaceFont
+  /** Backward-compatible database column now presented as Reading font in the UI. */
+  interface_font: ReadingFont
+  /** Colour palette, kept separate from the light/dark/auto display mode. */
+  color_theme: ColorTheme
   weak_threshold: number
   strong_threshold: number
   dropping_threshold: number
@@ -320,6 +347,17 @@ export interface AppSettings extends BaseRecord {
   reminders_enabled: boolean
   reminder_time: string
   reminder_types: ReminderKind[]
+  /** Chosen exam from the catalogue; null = set up before exam choice existed (JEE). */
+  exam_id: string | null
+  exam_year: number | null
+  /** Attempt/session, e.g. a CA attempt month. */
+  exam_session: string | null
+  /** School board, or the board for the Class 12 boards add-on. */
+  exam_board: string | null
+  /** Class 12 boards tracked alongside the main exam. */
+  boards_addon: boolean
+  /** Set once the first-run setup (name, exam, light/dark) has been completed. */
+  onboarding_completed: boolean
 }
 
 export interface Profile extends BaseRecord {

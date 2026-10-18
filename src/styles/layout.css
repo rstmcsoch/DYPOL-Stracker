@@ -1,0 +1,179 @@
+/*
+ * Student-panel layout tokens and dashboard rhythm.
+ *
+ * Loaded last (see src/styles.css) so these equal-specificity rules settle the
+ * spacing that previously varied card to card (gaps of 12/14/17/18/21/22px and
+ * eight different card paddings). Navigation (.sidebar*, .mobile-topbar,
+ * .topline) is deliberately not touched here.
+ */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --card-pad: 16px 18px;
+  --card-pad-compact: 13px 15px;
+  --card-gap: var(--space-4);
+  --column-gap: var(--space-5);
+  --section-gap: var(--space-6);
+  --fs-card-title: 20px;
+}
+
+@media (max-width: 700px) {
+  :root {
+    --card-pad: 14px 14px;
+    --card-pad-compact: 12px 13px;
+    --card-gap: var(--space-3);
+    --column-gap: var(--space-3);
+    --section-gap: 18px;
+  }
+}
+
+/* Page rhythm: one gap between sections, no stacked margins on top of it. */
+.content-page, .dashboard-page { gap: var(--section-gap); }
+.dashboard-page > .study-now-card,
+.dashboard-page > .jee-snapshot { margin-bottom: 0; }
+
+/* Dashboard grids share one gutter so the stacked rows line up. */
+.dashboard-grid { gap: var(--card-gap) var(--column-gap); }
+.dashboard-aside { gap: var(--card-gap); }
+.dashboard-bottom-row {
+  grid-template-columns: minmax(0, 1.35fr) minmax(min(300px, 100%), .83fr);
+  gap: var(--card-gap) var(--column-gap);
+}
+.jee-snapshot { gap: var(--card-gap); }
+
+/* One padding for dashboard cards; compact padding for stat tiles. */
+.today-plan-card,
+.study-progress-card,
+.revisions-card,
+.smart-tip-card,
+.quick-test-card,
+.syllabus-mini-card,
+.study-now-card { padding: var(--card-pad); }
+.jee-snap-card { padding: var(--card-pad-compact); }
+.today-plan-block > .section-heading { margin-bottom: var(--space-3); }
+
+/* Card titles sit one clear step below section headings (26px). */
+.quick-test-card h2,
+.syllabus-mini-head h3,
+.study-now-title { font-size: var(--fs-card-title); }
+
+/* Quieter decoration: keep the notebook feel, drop the tilt on a whole card. */
+.smart-tip-card { transform: none; }
+
+@media (max-width: 960px) {
+  .dashboard-bottom-row { grid-template-columns: minmax(0, 1.2fr) minmax(min(265px, 100%), .85fr); }
+}
+
+@media (max-width: 700px) {
+  .dashboard-grid { gap: var(--card-gap); }
+  .dashboard-aside { gap: var(--card-gap); }
+  .dashboard-bottom-row { grid-template-columns: 1fr; }
+  .task-order-actions button { width: 32px; height: 36px; }
+}
+
+@media (max-width: 519px) {
+  .dashboard-aside { grid-template-columns: 1fr; }
+}
+
+/* ---- Type scale (plan C, P2): page > section > card, one clear step each. ---- */
+:root { --fs-section: 24px; --fs-card-title: 19px; --card-min-h: 120px; }
+.section-heading h2 { font-size: var(--fs-section); }
+
+/* Equal heights instead of per-card magic numbers: one minimum for the small
+   dashboard cards, and grid rows stretch so neighbouring bottoms line up. */
+.revisions-card,
+.smart-tip-card,
+.study-progress-card,
+.quick-test-card { min-height: var(--card-min-h); }
+.dashboard-bottom-row { align-items: stretch; }
+.dashboard-bottom-row > * { height: 100%; }
+.dashboard-aside { align-content: start; }
+
+/* ---- Other student pages (plan C, P4): same gutters as the dashboard. ---- */
+.test-summary-grid,
+.mistake-overview-row { gap: var(--space-3); }
+.planner-main-grid { gap: var(--card-gap) var(--column-gap); }
+.content-page > .jee-filter-card { margin-bottom: 0; }
+
+@media (max-width: 700px) {
+  .test-summary-grid,
+  .mistake-overview-row { gap: var(--space-2); }
+  .planner-main-grid { gap: var(--card-gap); }
+  .planner-aside { gap: var(--space-2); }
+}
+
+/* Settings > Exam: exam picker sits above the existing exam form with the same gap. */
+#settings-panel-exam > .exam-selection-section { margin-bottom: var(--card-gap); }
+.exam-addon-toggle { display: flex; align-items: center; gap: var(--space-2); align-self: end; min-height: 44px; }
+
+/* First-run setup: full-screen on phones, centred card elsewhere; never dismissible. */
+.onboarding-backdrop { z-index: 200; }
+.onboarding-panel { width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; }
+.onboarding-theme { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); border: 0; padding: 0; margin: 0; }
+.onboarding-theme legend { font-weight: 600; margin-bottom: var(--space-2, 8px); }
+.onboarding-theme label { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--line, currentColor); border-radius: 999px; cursor: pointer; min-height: 44px; }
+.onboarding-theme label.selected { border-color: var(--accent, currentColor); box-shadow: inset 0 0 0 1px var(--accent, currentColor); }
+.onboarding-theme input { margin: 0; }
+@media (max-width: 560px) {
+  .onboarding-panel { width: 100vw; max-height: 100dvh; min-height: 100dvh; border-radius: 0; }
+}
+
+/* Context on demand: (i) next to headings; text appears on hover, focus or tap. */
+.info-tip { position: relative; display: inline-flex; align-items: center; margin-left: 6px; vertical-align: middle; color: var(--muted, currentColor); opacity: .7; cursor: help; border-radius: 50%; font-size: 0; }
+.info-tip:hover, .info-tip:focus-visible { opacity: 1; outline: none; }
+.info-tip:focus-visible { box-shadow: 0 0 0 2px var(--accent, currentColor); }
+.info-tip::after { content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); width: max-content; max-width: min(260px, 70vw); padding: 6px 9px; border-radius: 6px; background: var(--ink, #222); color: var(--paper, #fff); font: 400 12.5px/1.4 var(--font-body, inherit); letter-spacing: 0; text-transform: none; white-space: normal; z-index: 50; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.info-tip:hover::after, .info-tip:focus::after { opacity: 1; }
+
+/* Home syllabus card: full subject names (wrap, never truncate) and a short hint when empty. */
+.subject-mini-row { grid-template-columns: minmax(84px, max-content) minmax(60px, 1fr) 40px; }
+.subject-mini-row .subject-badge { max-width: 168px; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; text-align: left; height: auto; padding-block: 3px; }
+.subject-mini-hint { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+
+/* One notebook-style control for every native select, input and checkbox in the student
+   app, dialogs and first-run setup. Zero-specificity base so existing page rules still win. */
+:where(.app-shell, .dialog-backdrop, .onboarding-backdrop) :where(select, textarea, input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file'], [type='hidden'])) {
+  min-height: 40px; padding: 8px 11px; border: 1px solid var(--line-strong); border-radius: 8px 10px 9px 8px;
+  color: var(--ink); background-color: var(--paper-soft); font: 14px/1.35 var(--font-body); max-width: 100%;
+}
+:where(.app-shell, .dialog-backdrop, .onboarding-backdrop) :where(select, textarea, input):focus-visible { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 1px; }
+:where(.app-shell, .dialog-backdrop, .onboarding-backdrop) :where(input, select, textarea):disabled { opacity: .6; cursor: not-allowed; }
+.app-shell select, .dialog-backdrop select, .onboarding-backdrop select, .ui-select {
+  appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+.app-shell select:hover, .dialog-backdrop select:hover, .onboarding-backdrop select:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-strong)); }
+.app-shell select option, .dialog-backdrop select option { color: var(--ink); background: var(--paper); }
+:where(.app-shell, .dialog-backdrop, .onboarding-backdrop) input:where([type='checkbox'], [type='radio']) { accent-color: var(--accent); width: 18px; height: 18px; cursor: pointer; }
+:where(.app-shell, .dialog-backdrop, .onboarding-backdrop) input:where([type='date'], [type='time'])::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .65; }
+
+/* Settings: stacked cards in one tab keep the standard card gap; AI footnote reads as a footnote. */
+.settings-form-fields { display: grid; gap: var(--space-4, 16px); }
+.ai-settings-card .ai-privacy-footnote { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+
+/* Floating buttons: the quick-action (lightning) button's position as shared variables, so the
+   Ask Stracker launcher can sit directly above it at every breakpoint. Values mirror the existing
+   .quick-action-area rules exactly (no visual change to the lightning button). */
+:root { --fab-right: 27px; --fab-bottom: 28px; --fab-size: 58px; --fab-gap: 12px; }
+@media (max-width: 960px) { :root { --fab-right: 19px; --fab-bottom: calc(78px + var(--safe-bottom)); --fab-size: 53px; } }
+@media (max-width: 700px) { :root { --fab-right: 12px; --fab-bottom: calc(72px + var(--safe-bottom)); --fab-size: 48px; } }
+@media (max-height: 760px) { :root { --fab-right: 20px; --fab-bottom: 20px; } }
+@media (orientation: landscape) and (max-height: 480px) { :root { --fab-bottom: calc(64px + var(--safe-bottom)); --fab-size: 46px; } }
+.quick-action-area { right: var(--fab-right); bottom: var(--fab-bottom); }
+
+/* Ask Stracker: a circle above the lightning button; expands leftwards into a pill on scroll down. */
+.ai-launcher-wrap { right: var(--fab-right); bottom: calc(var(--fab-bottom) + var(--fab-size) + var(--fab-gap)); flex-direction: row-reverse; }
+.ai-launcher { height: var(--fab-size); min-height: 0; min-width: var(--fab-size); padding: 0 calc((var(--fab-size) - 20px) / 2); gap: 0; border-radius: calc(var(--fab-size) / 2); justify-content: flex-end; transition: gap .22s ease, padding .22s ease, transform .16s ease, box-shadow .16s ease; }
+.ai-launcher > svg { flex: none; order: 2; }
+.ai-launcher-label { order: 1; display: inline-block; max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; transition: max-width .24s ease, opacity .18s ease; }
+.ai-launcher-expanded .ai-launcher { gap: 7px; padding-left: 16px; }
+.ai-launcher-expanded .ai-launcher-label { max-width: 140px; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-launcher, .ai-launcher-label { transition: none; }
+}

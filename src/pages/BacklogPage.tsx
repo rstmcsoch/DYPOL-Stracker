@@ -10,6 +10,7 @@ import { indiaToday, plusDays, prettyDate } from '../lib/date'
 import { isAwake } from '../lib/jee/reminders'
 import { validateBacklog, type BacklogFormInput, type BacklogValue } from '../lib/jee/forms'
 import { BACKLOG_TYPES, type BacklogItem, type BacklogType, type Priority, type Subject, type AppData } from '../types'
+import { useExamSubjects } from '../lib/exams/useExamSubjects'
 
 type GroupBy = 'due' | 'subject' | 'type' | 'priority'
 type TypeFilter = 'all' | BacklogType
@@ -93,9 +94,8 @@ export default function BacklogPage() {
 
   return <div className="content-page backlog-page">
     <PageHeader
-      eyebrow="UNFINISHED WORK, IN ONE PLACE"
       title="Backlog"
-      subtitle="Skipped lectures, unsolved DPPs, and topics to come back to. Anything due here is considered by “What should I study now?”."
+      subtitle="Skipped lectures, unsolved DPPs and topics to revisit."
       action={<Button onClick={() => { setCreating(true); if (params.get('add')) setParams({}, { replace: true }) }}><Plus size={16} /> Add item</Button>}
     />
     <section className="jee-stat-grid" aria-label="Backlog summary">
@@ -114,16 +114,16 @@ export default function BacklogPage() {
       </div>
     </NotebookCard>
 
-    {data.backlogItems.length === 0 ? <NotebookCard><EmptyState icon={<Check size={24} />} title="The backlog is empty." description="Add a skipped lecture, an unsolved DPP, or a topic you want to revisit. Nothing is ever lost here." action={<Button variant="secondary" size="sm" onClick={() => setCreating(true)}><Plus size={15} /> Add the first item</Button>} /></NotebookCard>
+    {data.backlogItems.length === 0 ? <NotebookCard><EmptyState icon={<Check size={24} />} title="Backlog is empty." action={<Button variant="secondary" size="sm" onClick={() => setCreating(true)}><Plus size={15} /> Add the first item</Button>} /></NotebookCard>
     : <>
-      {groups.length === 0 ? <NotebookCard><EmptyState icon={<Check size={22} />} title="Nothing open in this view." description="Clear the filters, or check snoozed items below." /></NotebookCard>
+      {groups.length === 0 ? <NotebookCard><EmptyState icon={<Check size={22} />} title="Nothing open in this view." /></NotebookCard>
         : groups.map(group => <section key={group.key} className="jee-backlog-group">
           <SectionHeading title={group.title} note={`${group.items.length} item${group.items.length === 1 ? '' : 's'}`} />
           <NotebookCard><ul className="jee-backlog-list">{group.items.map(renderRow)}</ul></NotebookCard>
         </section>)}
 
       {snoozed.length > 0 && <section className="jee-backlog-group">
-        <SectionHeading title="Snoozed" note="These return automatically on their date." />
+        <SectionHeading title="Snoozed" note="Returns automatically on its date." />
         <NotebookCard><ul className="jee-backlog-list">{snoozed.map(renderRow)}</ul></NotebookCard>
       </section>}
 
@@ -165,7 +165,9 @@ function groupItems(items: BacklogItem[], groupBy: GroupBy, chapterById: Map<str
       else put(`d-${item.due_on}`, `Due ${prettyDate(item.due_on)}`, `2${item.due_on}`, item)
     } else if (groupBy === 'subject') {
       const subject = String(item.subject ?? (item.chapter_id ? chapterById.get(item.chapter_id)?.subject : undefined) ?? 'General')
-      put(subject, subject, String(['Physics', 'Chemistry', 'Maths', 'General'].indexOf(subject)), item)
+      const jeeIndex = ['Physics', 'Chemistry', 'Maths'].indexOf(subject)
+      // Physics, Chemistry, Maths keep their order; other subjects follow alphabetically; General is last.
+      put(subject, subject, subject === 'General' ? '~' : jeeIndex >= 0 ? String(jeeIndex) : `9${subject}`, item)
     } else if (groupBy === 'type') {
       put(item.type, item.type === 'DPP' ? 'Unsolved DPPs' : item.type === 'Lecture' ? 'Skipped lectures' : 'Come back to', String(BACKLOG_TYPES.indexOf(item.type)), item)
     } else {
@@ -181,6 +183,7 @@ function groupItems(items: BacklogItem[], groupBy: GroupBy, chapterById: Map<str
 function BacklogDialog({ data, existing, onClose, onSave }: {
   data: AppData; existing?: BacklogItem; onClose: () => void; onSave: (value: BacklogValue) => Promise<void>
 }) {
+  const backlogSubjects = useExamSubjects(existing?.subject)
   const chapter = existing?.chapter_id ? data.chapters.find(item => item.id === existing.chapter_id) : undefined
   const [form, setForm] = useState<BacklogFormInput>({
     title: existing?.title ?? '', type: existing?.type ?? 'Lecture', subject: existing?.subject ?? chapter?.subject ?? '',
@@ -203,7 +206,7 @@ function BacklogDialog({ data, existing, onClose, onSave }: {
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save the item.', 'error') }
     finally { setSaving(false) }
   }
-  return <Dialog title={existing ? 'Edit backlog item' : 'Add to backlog'} subtitle="A skipped lecture, an unsolved DPP, or something to come back to." onClose={onClose} className="jee-dialog">
+  return <Dialog title={existing ? 'Edit backlog item' : 'Add to backlog'} onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <Field label="What is it?" required error={errors.title}><input autoFocus maxLength={200} value={form.title} onChange={event => set('title', event.target.value)} placeholder="e.g. Lecture 8 — EMI" /></Field>
       <div className="form-grid two">
@@ -211,7 +214,7 @@ function BacklogDialog({ data, existing, onClose, onSave }: {
         <Field label="Priority"><select value={form.priority} onChange={event => set('priority', event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field>
       </div>
       <div className="form-grid two">
-        <Field label="Subject"><select value={form.subject} onChange={event => { set('subject', event.target.value as Subject | ''); set('chapterId', '') }}><option value="">General</option><option>Physics</option><option>Chemistry</option><option>Maths</option></select></Field>
+        <Field label="Subject"><select value={form.subject} onChange={event => { set('subject', event.target.value as Subject | ''); set('chapterId', '') }}><option value="">General</option>{backlogSubjects.map(item => <option key={item}>{item}</option>)}</select></Field>
         <Field label="Due date (optional)" error={errors.dueOn}><input type="date" value={form.dueOn} onChange={event => set('dueOn', event.target.value)} /></Field>
       </div>
       <ChapterSelect chapters={data.chapters} value={form.chapterId} onChange={value => set('chapterId', value)} subject={form.subject || 'all'} label="Linked chapter (optional)" allowNone noneLabel="No chapter" />

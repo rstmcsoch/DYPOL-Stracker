@@ -1,7 +1,9 @@
-import { Children, cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
+import { Children, cloneElement, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowUpRight, Check, LoaderCircle, MoreHorizontal, Sparkles, X } from 'lucide-react'
+import { useExit } from '../lib/ui/use-exit'
+import { ArrowUpRight, Check, Info, LoaderCircle, MoreHorizontal, Sparkles, X } from 'lucide-react'
 import type { Subject } from '../types'
+import { subjectSlug } from '../lib/exams/subjects'
 
 export function Button({
   children, variant = 'primary', size = 'md', className = '', loading = false, type = 'button', ...props
@@ -10,7 +12,7 @@ export function Button({
   size?: 'sm' | 'md' | 'lg'
   loading?: boolean
 }) {
-  return <button type={type} className={`button button-${variant} button-${size} ${className}`} disabled={props.disabled || loading} {...props}>
+  return <button type={type} className={`button type-button button-${variant} button-${size} ${className}`} disabled={props.disabled || loading} {...props}>
     {loading ? <LoaderCircle size={17} className="spin" aria-hidden="true" /> : null}{children}
   </button>
 }
@@ -29,8 +31,7 @@ export function PageHeader({
   return <div className="page-header">
     <div className="page-header-copy">
       {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-      <h1>{title}{doodle && <span className="title-doodle" aria-hidden="true">{doodle}</span>}</h1>
-      {subtitle && <p>{subtitle}</p>}
+      <h1 className="type-h1">{title}{doodle && <span className="title-doodle" aria-hidden="true">{doodle}</span>}{subtitle && <InfoTip text={subtitle} />}</h1>
     </div>
     {action && <div className="page-header-action">{action}</div>}
   </div>
@@ -38,19 +39,19 @@ export function PageHeader({
 
 export function SubjectBadge({ subject, withMark = false }: { subject: Subject | null | undefined; withMark?: boolean }) {
   if (!subject) return <span className="subject-badge subject-neutral">General</span>
-  return <span className={`subject-badge subject-${subject.toLowerCase()}`}>
+  return <span className={`subject-badge type-badge subject-${subjectSlug(subject)}`}>
     {withMark && <span className="subject-mark" aria-hidden="true" />}{subject}
   </span>
 }
 
 export function StatusBadge({ children, tone = 'muted' }: { children: ReactNode; tone?: string }) {
-  return <span className={`status-badge tone-${tone.toLowerCase().replaceAll(' ', '-')}`}>{children}</span>
+  return <span className={`status-badge type-badge tone-${tone.toLowerCase().replaceAll(' ', '-')}`}>{children}</span>
 }
 
 export function StatCard({ label, value, note, icon, tint = 'paper', className = '' }: { label: string; value: ReactNode; note?: ReactNode; icon?: ReactNode; tint?: string; className?: string }) {
   return <NotebookCard className={`stat-card tint-${tint} ${className}`}>
     <div className="stat-top"><span>{label}</span>{icon && <span className="stat-icon">{icon}</span>}</div>
-    <div className="stat-value">{value}</div>
+    <div className="stat-value type-metric">{value}</div>
     {note && <div className="stat-note">{note}</div>}
   </NotebookCard>
 }
@@ -65,7 +66,7 @@ export function ProgressRing({ value, size = 94, label, sublabel, color = 'var(-
       <circle cx="50" cy="50" r={radius} className="progress-ring-track" />
       <circle cx="50" cy="50" r={radius} className="progress-ring-value" style={{ strokeDasharray: `${dash} ${circumference}`, stroke: color }} />
     </svg>
-    <div className="progress-ring-label">{label ?? `${Math.round(safe)}%`}{sublabel && <small>{sublabel}</small>}</div>
+    <div className="progress-ring-label type-metric">{label ?? `${Math.round(safe)}%`}{sublabel && <small className="type-caption">{sublabel}</small>}</div>
   </div>
 }
 
@@ -75,14 +76,14 @@ export function ProgressBar({ value, color = 'var(--accent)', label }: { value: 
     <div className="progress-bar-track" role="progressbar" aria-valuenow={Math.round(safe)} aria-valuemin={0} aria-valuemax={100} aria-label={label ?? 'Progress'}>
       <span style={{ width: `${safe}%`, background: color }} />
     </div>
-    {label && <span className="progress-bar-caption">{label}</span>}
+    {label && <span className="progress-bar-caption type-caption">{label}</span>}
   </div>
 }
 
-export function EmptyState({ icon, title, description, action }: { icon?: ReactNode; title: string; description: string; action?: ReactNode }) {
+export function EmptyState({ icon, title, description, action }: { icon?: ReactNode; title: string; description?: string; action?: ReactNode }) {
   return <div className="empty-state">
     <div className="empty-illustration">{icon ?? <span className="empty-star">✳</span>}</div>
-    <h3>{title}</h3><p>{description}</p>{action && <div className="empty-action">{action}</div>}
+    <h3 className="type-empty">{title}</h3>{description && <p className="type-body">{description}</p>}{action && <div className="empty-action">{action}</div>}
   </div>
 }
 
@@ -96,25 +97,30 @@ export function Field({ label, hint, error, required, children, className = '' }
     const describedBy = [element.props['aria-describedby'], hint ? hintId : null, error ? errorId : null]
       .filter((value): value is string => typeof value === 'string' && value.length > 0).join(' ')
     return cloneElement(element, {
+      className: `${typeof element.props.className === 'string' ? element.props.className : ''} type-input`.trim(),
       'aria-invalid': error ? true : element.props['aria-invalid'],
       'aria-describedby': describedBy || undefined
     })
   })
   return <label className={`field ${error ? 'field-invalid' : ''} ${className}`}>
-    <span className="field-label">{label}{required && <span className="required-mark" aria-hidden="true"> *</span>}</span>
+    <span className="field-label type-body">{label}{required && <span className="required-mark" aria-hidden="true"> *</span>}</span>
     {controls}
-    {hint && <span className="field-hint" id={hintId}>{hint}</span>}
-    {error && <span className="field-error" id={errorId} role="alert">{error}</span>}
+    {hint && <span className="field-hint type-caption" id={hintId}>{hint}</span>}
+    {error && <span className="field-error type-alert" id={errorId} role="alert">{error}</span>}
   </label>
 }
 
 export function Dialog({ title, subtitle, onClose, children, className = '', labelledBy }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; className?: string; labelledBy?: string }) {
   const ref = useRef<HTMLDivElement>(null)
+  const { state, exit, onAnimationEnd } = useExit(170)
+  const closeRef = useRef(onClose)
+  useLayoutEffect(() => { closeRef.current = onClose })
+  const close = useCallback(() => exit(() => closeRef.current()), [exit])
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     const timer = window.setTimeout(() => ref.current?.querySelector<HTMLElement>('input,select,textarea,button')?.focus(), 20)
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') close()
       if (event.key === 'Tab' && ref.current) {
         const elements = [...ref.current.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
         const first = elements[0]
@@ -131,12 +137,12 @@ export function Dialog({ title, subtitle, onClose, children, className = '', lab
       document.body.classList.remove('modal-open')
       previous?.focus?.()
     }
-  }, [onClose])
+  }, [close])
   const titleId = labelledBy ?? 'dialog-title'
   const stop = (event: FormEvent) => event.preventDefault()
-  return <div className="dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+  return <div className="dialog-backdrop" data-state={state} onAnimationEnd={onAnimationEnd} onMouseDown={event => { if (event.target === event.currentTarget) close() }}>
     <div className={`dialog-panel ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref} onSubmit={stop}>
-      <div className="dialog-head"><div><h2 id={titleId}>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><IconButton label="Close dialog" onClick={onClose}><X size={19} /></IconButton></div>
+      <div className="dialog-head"><div><h2 className="type-h2" id={titleId}>{title}</h2>{subtitle && <p className="type-body">{subtitle}</p>}</div><IconButton label="Close dialog" onClick={close}><X size={19} /></IconButton></div>
       <div className="dialog-content">{children}</div>
     </div>
   </div>
@@ -149,8 +155,16 @@ export function ConfirmDialog({ title, message, confirmLabel = 'Delete', danger 
   </Dialog>
 }
 
+/**
+ * Context on demand: a small (i) next to a heading. The text stays in the accessibility
+ * tree (visually hidden) and shows as a tooltip on hover, keyboard focus or tap.
+ */
+export function InfoTip({ text }: { text: string }) {
+  return <span className="info-tip" tabIndex={0} data-tip={text}><Info size={14} aria-hidden="true" /><span className="visually-hidden">{text}</span></span>
+}
+
 export function SectionHeading({ title, note, action }: { title: string; note?: string; action?: ReactNode }) {
-  return <div className="section-heading"><div><h2>{title}</h2>{note && <p>{note}</p>}</div>{action}</div>
+  return <div className="section-heading"><div><h2 className="type-h2">{title}{note && <InfoTip text={note} />}</h2></div>{action}</div>
 }
 
 export interface OverflowMenuItem {

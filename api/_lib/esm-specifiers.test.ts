@@ -7,15 +7,17 @@ import { describe, expect, it } from 'vitest'
  * Vercel compiles these functions as native ES modules because package.json sets
  * "type": "module". Node's ESM loader does not add extensions, so an extensionless
  * relative import such as '../_lib/http' crashes the function before it can answer.
- * Every file reachable from the AI functions must therefore use an explicit .js specifier.
+ * Every file reachable from a Vercel function (api/ai and api/control) must therefore use an explicit .js specifier.
  */
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 function reachableFiles(): string[] {
   const seen = new Set<string>()
-  const queue = readdirSync(join(root, 'api/ai'))
-    .filter(name => name.endsWith('.ts'))
-    .map(name => join('api/ai', name))
+  const queue = ['api/ai', 'api/control'].flatMap(dir =>
+    readdirSync(join(root, dir))
+      .filter(name => name.endsWith('.ts') && !name.endsWith('.test.ts'))
+      .map(name => join(dir, name))
+  )
   while (queue.length) {
     const rel = queue.shift()!
     if (seen.has(rel)) continue
@@ -32,7 +34,7 @@ function reachableFiles(): string[] {
 }
 
 describe('Vercel ESM function imports', () => {
-  it('uses explicit .js specifiers for every relative import reachable from api/ai', () => {
+  it('uses explicit .js specifiers for every relative import reachable from a Vercel function', () => {
     const offenders: string[] = []
     for (const rel of reachableFiles()) {
       const source = readFileSync(join(root, rel), 'utf8')

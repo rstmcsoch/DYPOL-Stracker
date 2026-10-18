@@ -43,7 +43,7 @@ const chapterStageSchema = z.object({
 const backlogItemSchema = z.object({
   title: z.string().trim().min(1).max(200),
   type: z.enum(BACKLOG_TYPES),
-  subject: z.enum(['Physics', 'Chemistry', 'Maths']).nullable().optional(),
+  subject: z.string().trim().min(1).max(60).nullable().optional(),
   chapter_id: z.string().nullable().optional(),
   priority: z.enum(['High', 'Medium', 'Low']),
   due_on: dateValue.nullable().optional(),

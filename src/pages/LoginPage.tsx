@@ -6,6 +6,7 @@ import { AuthScaffold } from '../components/public/AuthScaffold'
 import { useAuth } from '../contexts/AuthContext'
 import { localPreviewEnabled, supabaseConfigured } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
+import { safeAppPath } from '../lib/safe-path'
 
 /**
  * Dedicated log-in page. Registration lives on /signup and password recovery on
@@ -26,8 +27,8 @@ export default function LoginPage() {
   const requested = typeof location.state === 'object' && location.state && 'from' in location.state
     ? String((location.state as { from?: unknown }).from ?? '/')
     : '/'
-  const safeTarget = requested.startsWith('/') && !requested.startsWith('//') ? requested : '/'
-  const destination = safeTarget.startsWith('/login') || safeTarget.startsWith('/signup') ? '/' : safeTarget
+  const safeTarget = safeAppPath(requested)
+  const destination = safeTarget.startsWith('/login') || safeTarget.startsWith('/signup') || safeTarget.startsWith('/reset-password') ? '/' : safeTarget
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()

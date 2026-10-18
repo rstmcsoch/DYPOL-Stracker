@@ -13,6 +13,7 @@ import { useToast } from '../contexts/ToastContext'
 import { createBackup, testsToCsv, triggerDownload, validateBackupText, type ValidatedImport } from '../lib/backup'
 import { createDocxReport, createPdfReport, type ReportOptions, type ReportSections } from '../lib/report'
 import { supabase } from '../lib/supabase'
+import { isOwnedStoragePath } from '../lib/storage-path'
 import { indiaDate, prettyDate, indiaToday } from '../lib/date'
 import type { AppSettings, Mistake, Profile } from '../types'
 
@@ -55,7 +56,7 @@ export default function BackupPage() {
       const imageFailures: string[] = []
       if (cloud && user && !user.isLocal) {
         await Promise.all(backup.mistakes.map(async mistake => {
-          if (mistake.image_data || !mistake.image_path) return
+          if (mistake.image_data || !mistake.image_path || !user || !isOwnedStoragePath(user.id, mistake.image_path)) return
           const { data: signed, error } = await cloud.storage.from('mistake-images').createSignedUrl(mistake.image_path, 300)
           if (error || !signed?.signedUrl) { imageFailures.push(mistake.id); return }
           try {
@@ -168,7 +169,7 @@ export default function BackupPage() {
   const backupCount = Object.values(data).reduce((count, value) => count + (Array.isArray(value) ? value.length : 0), 0)
 
   return <div className="content-page backup-page">
-    <PageHeader eyebrow="YOUR WORK, YOURS TO KEEP" title="Export & backup" subtitle="Portable copies for your data, report-ready summaries for your next review." doodle={<Archive size={19} />} />
+    <PageHeader title="Export & backup" subtitle="Download, import or report your data." doodle={<Archive size={19} />} />
     {reminderDue && <div className="backup-reminder" role="status"><span className="backup-reminder-icon"><ShieldCheck size={18} /></span><div><strong>{backupAge === null ? 'You haven’t made a backup yet.' : `Your last backup was ${backupAge} days ago.`}</strong><p>Export a private JSON backup to keep your study history safe.</p></div><Button size="sm" onClick={() => void exportJson()} loading={exporting === 'json'}><ArrowDownToLine size={15} /> Backup now</Button></div>}
 
     <section className="backup-export-grid" aria-label="Data exports"><NotebookCard className="backup-export-card json-export-card"><div className="export-card-icon json-icon"><FileArchive size={20} /></div><StatusBadge tone="Strong">FULL BACKUP</StatusBadge><h2>JSON notebook backup</h2><p>Settings, syllabus, notes, tests, mistakes, revisions, tasks, goals, sessions and compressed images.</p><ul><li><CheckCircle2 size={14} /> All owner data in one file</li><li><CheckCircle2 size={14} /> Re-importable and relationship-aware</li><li><LockKeyhole size={14} /> Owner-scoped; no server secret included</li></ul><Button onClick={() => void exportJson()} loading={exporting === 'json'}><CloudDownload size={16} /> Download JSON backup</Button><span className="export-last-date">{data.settings.last_backup_at ? `Last JSON backup: ${prettyDate(indiaDate(data.settings.last_backup_at))}` : 'No JSON backup recorded yet'}</span></NotebookCard>

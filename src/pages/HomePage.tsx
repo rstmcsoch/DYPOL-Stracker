@@ -16,10 +16,18 @@ import { currentExamMode } from '../lib/jee/exam'
 import { fmtDuration } from '../lib/format'
 import { indiaToday, prettyDate } from '../lib/date'
 import { completeRevision as completeRevisionAction } from '../lib/revision-actions'
-import type { AppData, DailyTask, Revision, Subject } from '../types'
+import type { AppData, DailyTask, Revision } from '../types'
+import { useReportSubjects } from '../lib/exams/useExamSubjects'
+import { subjectColor } from '../lib/exams/subjects'
+import { chosenExamTitle, isJeeSettings, trackExamDate } from '../lib/jee/exam'
+
+const HOME_SUBJECT_LIMIT = 5
 
 export default function HomePage() {
+  const homeSubjects = useReportSubjects()
   const { data, upsert, upsertMany } = useData()
+  // Only subjects the student actually has chapters in; a long catalogue (CUET, school) would otherwise list every option.
+  const trackedSubjects = homeSubjects.filter(subject => data.chapters.some(item => item.subject === subject))
   const { notify } = useToast()
   const navigate = useNavigate()
   const [reordering, setReordering] = useState(false)
@@ -36,6 +44,23 @@ export default function HomePage() {
   const totalChapters = data.chapters.length
   const examDays = daysUntil(data.settings.advanced_exam_date)
   const mainDays = daysUntil(data.settings.main_exam_date)
+  // The prominent countdown prefers JEE Advanced, but when Advanced is unset and
+  // a Main date exists, JEE Main becomes the big day instead of a tiny footnote.
+  const jee = isJeeSettings(data.settings)
+  const examTitle = chosenExamTitle(data.settings)
+  const boardsDate = jee ? null : trackExamDate(data, 'boards')
+  const otherPrimary = mainDays !== null ? { label: examTitle, days: mainDays, date: data.settings.main_exam_date, dot: 'blue' as const } : null
+  const otherSecondary = data.settings.boards_addon ? { label: 'Class 12 boards', days: daysUntil(boardsDate ?? ''), date: boardsDate ?? '', dot: 'orange' as const } : null
+  const jeePrimary = examDays !== null
+    ? { label: 'JEE Advanced', days: examDays, date: data.settings.advanced_exam_date, dot: 'orange' as const }
+    : mainDays !== null
+      ? { label: 'JEE Main', days: mainDays, date: data.settings.main_exam_date, dot: 'blue' as const }
+      : null
+  const primaryExam = jee ? jeePrimary : otherPrimary
+  const jeeSecondary = jeePrimary?.label === 'JEE Main'
+    ? { label: 'JEE Advanced', days: examDays, date: data.settings.advanced_exam_date, dot: 'orange' as const }
+    : { label: 'JEE Main', days: mainDays, date: data.settings.main_exam_date, dot: 'blue' as const }
+  const secondaryExam = jee ? jeeSecondary : otherSecondary
 
   const toggleTask = async (task: DailyTask) => {
     try {
@@ -63,13 +88,13 @@ export default function HomePage() {
   }
 
   return <div className="dashboard-page">
-    <PageHeader eyebrow={new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' }).format(new Date()).toUpperCase()} title={`Good ${getGreeting()}, ${data.settings.owner_name || data.profile?.display_name || 'future engineer'}.`} subtitle="Let’s make today count — one honest study block at a time." doodle={<span className="header-atom">✦</span>} />
+    <PageHeader eyebrow={new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' }).format(new Date()).toUpperCase()} title={`Good ${getGreeting()}, ${data.settings.owner_name || data.profile?.display_name || 'future engineer'}.`} doodle={<span className="header-atom">✦</span>} />
 
     <section className="hero-row" aria-label="Exam countdown and syllabus progress">
       <NotebookCard className="countdown-card">
-        <div className="countdown-top"><span className="countdown-label"><span className="pencil-underline">THE BIG DAY</span></span><span className="countdown-badge"><Rocket size={15} /> JEE 2027</span></div>
-        {examDays === null ? <div className="countdown-unset"><div><span>JEE Advanced</span><h2>Set your date<br /><em>when you’re ready.</em></h2><p>We’ll keep the countdown honest.</p></div><Button variant="marker" size="sm" onClick={() => navigate('/settings')}>Add exam date <ArrowRight size={15} /></Button></div> : <div className="countdown-main"><div className="countdown-number">{Math.max(0, examDays)}<span>days</span></div><div className="countdown-copy"><span>until</span><strong>JEE Advanced</strong><small>{prettyDate(data.settings.advanced_exam_date)}</small></div><span className="countdown-scribble" aria-hidden="true">↗</span></div>}
-        <div className="countdown-footer"><div className="mini-exam"><span className="mini-exam-dot blue" /><span>JEE Main</span>{mainDays === null ? <button onClick={() => navigate('/settings')}>Add date</button> : <strong>{Math.max(0, mainDays)} days</strong>}</div><div className="mini-exam"><span className="mini-exam-dot orange" /><span>Chapters covered</span><strong>{completedChapters}/{totalChapters}</strong></div></div>
+        <div className="countdown-top"><span className="countdown-label"><span className="pencil-underline">THE BIG DAY</span></span><span className="countdown-badge"><Rocket size={15} /> {jee ? `JEE ${data.settings.exam_year ?? 2027}` : examTitle}</span></div>
+        {primaryExam === null ? <div className="countdown-unset"><div><span>{jee ? 'JEE Main & Advanced' : examTitle}</span><h2>Set your date<br /><em>when you’re ready.</em></h2><p>We’ll keep the countdown honest.</p></div><Button variant="marker" size="sm" onClick={() => navigate('/settings')}>Add exam date <ArrowRight size={15} /></Button></div> : <div className="countdown-main"><div className="countdown-number">{Math.max(0, primaryExam.days)}<span>days</span></div><div className="countdown-copy"><span>until</span><strong>{primaryExam.label}</strong><small>{prettyDate(primaryExam.date)}</small></div><span className="countdown-scribble" aria-hidden="true">↗</span></div>}
+        <div className="countdown-footer">{secondaryExam && <div className="mini-exam"><span className={`mini-exam-dot ${secondaryExam.dot}`} /><span>{secondaryExam.label}</span>{secondaryExam.days === null ? <button onClick={() => navigate('/settings')}>Add date</button> : <strong>{Math.max(0, secondaryExam.days)} days</strong>}</div>}<div className="mini-exam"><span className="mini-exam-dot orange" /><span>Chapters covered</span><strong>{completedChapters}/{totalChapters}</strong></div></div>
         <div className="countdown-star" aria-hidden="true">✳</div>
       </NotebookCard>
       <NotebookCard className="streak-card accent-orange">
@@ -84,14 +109,13 @@ export default function HomePage() {
 
     {examMode.active && <div className="exam-mode-banner" role="status"><span className="exam-mode-days">{examMode.daysLeft}</span><div><strong>Exam Mode · {examMode.label}</strong><p>{examMode.reason} Revision, PYQs, mocks and weak-area fixes come first.</p></div></div>}
     <StudyNowCard />
-    <HomeSnapshot />
 
     <div className="dashboard-grid">
       <section className="today-plan-block">
         <SectionHeading title="Today's plan" note={`${doneTasks} of ${todayTasks.length} done`} action={<Button variant="secondary" size="sm" onClick={() => navigate('/planner?add=1')}><Plus size={16} /> Add task</Button>} />
         <NotebookCard className="today-plan-card">
           <div className="plan-card-top"><span className="handwriting-label">A little list for today</span><span className="plan-date"><CalendarDays size={14} /> {prettyDate(today, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
-          {todayTasks.length === 0 ? <EmptyState icon={<BookOpen size={26} />} title="Your page is still blank." description="Add one clear task and give today a gentle starting point." action={<Button variant="secondary" size="sm" onClick={() => navigate('/planner?add=1')}><Plus size={15} /> Plan a task</Button>} /> : <div className="task-list">
+          {todayTasks.length === 0 ? <EmptyState icon={<BookOpen size={26} />} title="No tasks today." action={<Button variant="secondary" size="sm" onClick={() => navigate('/planner?add=1')}><Plus size={15} /> Plan a task</Button>} /> : <div className="task-list">
             {todayTasks.slice(0, 6).map((task, index) => {
               const chapter = data.chapters.find(item => item.id === task.chapter_id)
               return <div key={task.id} className={`task-row ${task.is_completed ? 'task-done' : ''}`}>
@@ -141,6 +165,8 @@ export default function HomePage() {
       </aside>
     </div>
 
+    <HomeSnapshot />
+
     <section className="dashboard-bottom-row">
       <NotebookCard className="quick-test-card">
         <div className="quick-test-illustration" aria-hidden="true"><NotebookPen size={25} /><span>✦</span></div>
@@ -149,12 +175,12 @@ export default function HomePage() {
       </NotebookCard>
       <NotebookCard className="syllabus-mini-card">
         <div className="syllabus-mini-head"><div><span className="eyebrow">THE LONG GAME</span><h3>Syllabus progress</h3></div><ProgressRing value={totalChapters ? completedChapters / totalChapters * 100 : 0} size={62} label={<span className="ring-value small">{Math.round(totalChapters ? completedChapters / totalChapters * 100 : 0)}<small>%</small></span>} /></div>
-        <div className="subject-mini-bars">{(['Physics', 'Chemistry', 'Maths'] as Subject[]).map(subject => {
+        {trackedSubjects.length === 0 ? <p className="subject-mini-hint">Add chapters in Syllabus to track a subject.</p> : <div className="subject-mini-bars">{trackedSubjects.slice(0, HOME_SUBJECT_LIMIT).map(subject => {
           const total = data.chapters.filter(item => item.subject === subject).length
           const done = data.chapters.filter(item => item.subject === subject && (item.status === 'Done' || item.status === 'Revised')).length
-          return <div className="subject-mini-row" key={subject}><SubjectBadge subject={subject} /><ProgressBar value={total ? done / total * 100 : 0} color={`var(--subject-${subject.toLowerCase()})`} /><span>{done}/{total}</span></div>
-        })}</div>
-        <button className="syllabus-mini-link" onClick={() => navigate('/syllabus')}>See all chapters <ChevronRight size={15} /></button>
+          return <div className="subject-mini-row" key={subject}><SubjectBadge subject={subject} /><ProgressBar value={total ? done / total * 100 : 0} color={subjectColor(subject)} /><span>{done}/{total}</span></div>
+        })}</div>}
+        <button className="syllabus-mini-link" onClick={() => navigate('/syllabus')}>{trackedSubjects.length > HOME_SUBJECT_LIMIT ? `See all ${trackedSubjects.length} subjects` : trackedSubjects.length ? 'See all chapters' : 'Open Syllabus'} <ChevronRight size={15} /></button>
       </NotebookCard>
     </section>
   </div>

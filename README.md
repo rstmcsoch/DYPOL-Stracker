@@ -13,7 +13,7 @@
 - **Analytics:** subject and chapter signals, test trends, study time, streaks, mistake summaries, weak areas, and rule-based study prompts. Up to three favourite charts can be pinned to the top of the page (a per-browser preference), and a clearly-labelled example preview stands in until the first real test is logged. The weak-areas page keeps untested chapters in a collapsible section of tappable chips that jump straight to pre-filled test logging. Empty or incomplete data is shown as such rather than invented.
 - **Exports and backups:** re-importable JSON notebook backup, UTF-8 test-history CSV, and selectable/date-ranged PDF and DOCX reports. Backup import validates records and relationships, previews the merge, and requires confirmation.
 - **Privacy and offline support:** Supabase Auth, user-scoped PostgreSQL tables with RLS, a private image bucket, browser-local IndexedDB caching, and an owner-scoped sync queue for offline changes.
-- **Appearance controls:** a light/night switch in the top-right corner (desktop header and mobile top bar) that stays in step with the theme choice in Settings, plus one application-wide font preference — Default (Poppins), Poppins, Sora, or Open Sans.
+- **Appearance controls:** a light/night switch in the top-right corner (desktop header and mobile top bar) that stays in step with the theme choice in Settings, plus one application-wide font preference — Default (your device's font), Poppins, Sora, or Open Sans.
 - **Public homepage and separate authentication:** a marketing-free product homepage on `/` for visitors, dedicated `/login` and `/signup` pages, and password recovery on `/reset-password`. Signed-in visitors go straight to the notebook instead.
 - **JEE preparation system:** a Practice / DPP log per chapter (attempted, correct, incorrect, accuracy, source, optional time) kept separate from tests; a PYQ tracker for JEE Main and Advanced by year, with bulk actions and configurable year range; five independent chapter stages (Theory → Notes → PYQs → Revised → Tested) that accept real evidence from revisions, tests and PYQ records; a Backlog for skipped lectures, unsolved DPPs and come-back topics with snooze, due dates and grouping; weighted syllabus progress shown beside the raw count; study time split into Lecture, Practice and Revision, with a streak rule stated in the UI; mock deep-dive with time and attempts per subject, lost-mark classification and derived "fix before your next mock" insights; formula and flashcard decks on the R1 → R7 → R30 ladder; exam tracks (Main Session 1 and 2, Advanced, Boards) over one shared syllabus with Exam Mode in the final 30 days; a deterministic “What should I study now?” engine that explains every ranking; a weekly report that only compares weeks with real data; and in-app plus browser-notification reminders.
 - **Installable PWA:** application manifest, service worker and app icons. The online navigation strategy is network-first; the precached shell is used only when the network is unavailable, so a deployment never waits behind a cached page or an update prompt.
@@ -78,20 +78,20 @@ Settings is organised into five tabs — **Account, Exam, Appearance, Study rhyt
 
 The header switch saves its choice immediately. *Settings → Appearance → Notebook theme* is part of the Appearance draft and saves with *Save appearance settings*. Both edit the same saved value, so once saved they never disagree: switching to `Auto` in Settings follows the device, and the next press of the header switch pins an explicit light or night choice.
 
-*Settings → Appearance → Interface font* selects the single family used across the entire interface — content, headings, navigation, forms, tables, dialogs, notifications, and dynamically mounted UI:
+*Settings → Appearance → Reading font* selects the content face for the authenticated notebook. Patrick Hand remains the fixed identity face for the brand, headings and metrics, regardless of this setting. The public homepage always uses Patrick Hand; public sign-in, sign-up and password-reset pages use Patrick Hand for identity and Lexend for readable content, independently of any account preference.
 
-| Choice | Family |
-| --- | --- |
-| Default | Poppins (balanced default) |
-| Poppins | Poppins |
-| Sora | Sora |
-| Open Sans | Open Sans |
+| Choice | Content family | Scale |
+| --- | --- | --- |
+| Lexend | Lexend (default) | 1.00 |
+| Poppins | Poppins | 0.95 |
+| Sora | Sora | 0.97 |
+| Open Sans | Open Sans (also covers Greek letters, ₹ and maths symbols) | 1.00 |
 
-Each selectable family is bundled locally (latin subset, regular through bold) with `font-display: swap` and a system-sans fallback.
+The fonts are self-hosted as subset WOFF2 files under `/assets/fonts/` with `unicode-range` and `font-display: swap`; Patrick Hand is bundled at regular weight only, while reading faces include the weights used for content and controls.
 
-Picking a font is a draft. It previews across the whole interface at once, the Appearance tab shows its unsaved-changes dot, and nothing is written until you press **Save appearance settings**. Repeated picks save only the final choice. **Discard** restores the saved font, theme, and global font. Leaving Settings without saving reverts the preview and drops the draft, the same as every other unsaved tab. The saved value lives in `app_settings.interface_font` and restores on reload.
+Picking a font is a draft. While Settings is open, the draft previews the Reading font across the authenticated interface and the Appearance tab shows its unsaved-changes dot, but nothing is written until you press **Save appearance settings**. Repeated picks save only the final choice. **Discard** restores the saved font, theme, and colour palette. Leaving Settings without saving reverts the preview and drops the draft, the same as every other unsaved tab. The saved value lives in `app_settings.interface_font` and restores on reload.
 
-The effective font is applied once, as `--app-font-family` on the root element. Body copy, headings, labels, numbers, native controls, portals and overlays all inherit it. Components never name a family of their own, and nothing uses `!important` to force one. The one documented monospace exception is the `--font-code` token, which only fenced AI code blocks (`.ai-code-block`) use. Exports are intentionally separate: JSON, CSV, PDF, and DOCX keep their own typography and are never re-rendered in the interface font.
+The Reading font changes body text, menus and buttons—not headings or the Stracker identity. It is applied through `--reading-font-family` and `--body-scale` on the root element. It follows the same local-first/Supabase sync path as other settings, through the single settings writer (`updateSettings`). Public pages do not read or cache that preference. Patrick Hand and Lexend regular are preloaded in `index.html`; there is no device-wide font cache. Exports are intentionally separate: JSON, CSV, PDF and DOCX keep their own typography and are never re-rendered in the Reading font.
 
 ## Supabase setup (per-account, private by default)
 
@@ -116,7 +116,7 @@ The effective font is applied once, as `--app-font-family` on the root element. 
 
 Stracker AI is an optional, authenticated Vercel Node API that calls **your own** Gemini, OpenAI, Anthropic, DeepSeek, Qwen, or custom OpenAI-/Anthropic-compatible provider. DYPOL does not supply or proxy a DYPOL-owned model key. Provider usage is billed under your provider account. When you send a prompt, the prompt and the limited Stracker data required by the selected analytics tool are sent to the configured provider; review that provider’s retention and privacy policies before connecting it. AI requests need an internet connection and are not available in the device-only local preview.
 
-1. Deploy the project to Vercel and apply `20261008150000_ai_assistant.sql` and `20261008160000_ai_atomic_test_write.sql` in filename order after the existing Stracker migrations. The second migration adds narrow, owner-scoped atomic test/chapter-score, Full Mock subject-score, and revision-completion RPCs; it does not enable arbitrary SQL access. **Do not deploy the AI UI against a Supabase project until its migrations have been applied.**
+1. Deploy the project to Vercel and apply `20261008150000_ai_assistant.sql`, `20261008160000_ai_atomic_test_write.sql`, and `20261009193000_rate_limit_and_rls_force.sql` in filename order after the existing Stracker migrations. The second migration adds narrow, owner-scoped atomic test/chapter-score, Full Mock subject-score, and revision-completion RPCs; it does not enable arbitrary SQL access. The third adds the atomic AI rate-limit function and forces row-level security on existing private tables. **Do not deploy the AI UI against a Supabase project until its migrations have been applied.** Until the rate-limit migration is applied, the API still limits requests using audit rows, but concurrent bursts can slip past that fallback.
 2. In Vercel Project Settings → Environment Variables, add the server-only values below. Keep `SUPABASE_SERVICE_ROLE_KEY` and `AI_CREDENTIALS_ENCRYPTION_KEY` unprefixed; never add either as a `VITE_*` variable. Generate a fresh encryption key with `openssl rand -hex 32`, store it in your password manager, and keep it stable: changing it without migrating stored provider credentials makes those credentials unreadable.
 
    ```dotenv
@@ -181,3 +181,7 @@ Serve the production app over HTTPS so browser authentication, IndexedDB, and se
 ## License
 
 No license has been selected for this repository yet. Add a `LICENSE` file before redistributing or reusing the project outside the owner’s deployment.
+
+## Stracker Control Center
+
+A private administration console lives at `/control-panel/`. It is for the DYPOL LABS operator team, is not linked from the public site or the student dashboard, and is marked `noindex`. Access requires an existing account granted a server-side admin role plus a verified authenticator (TOTP). See [docs/control-center.md](docs/control-center.md) for provisioning, MFA recovery, the audit-event catalogue, the time-zone policy, required environment variables and current limits.

@@ -16,6 +16,13 @@ import { createId } from '../lib/id'
 import { computeReminders, shouldFireToday } from '../lib/jee/reminders'
 import { taskInputSchema } from '../lib/task-validation'
 import type { AppData, DailyTask, Priority, Subject } from '../types'
+import { useSiteValues } from '../contexts/SiteContentContext'
+import { navCaptionFor, navLabelFor } from '../lib/site-content/nav'
+import type { SiteValues } from '../lib/site-content/content'
+import { useExamSubjects } from '../lib/exams/useExamSubjects'
+import { chosenExamTitle, isJeeSettings } from '../lib/jee/exam'
+import { OnboardingDialog } from './OnboardingDialog'
+import { needsOnboarding } from '../lib/defaults'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
 interface NavigationGroup { caption: string; items: NavigationItem[] }
@@ -65,11 +72,18 @@ const mobileBar: NavigationItem[] = [
   { to: '/revision', label: 'Revision', icon: AlarmClock }
 ]
 const allNav: NavigationItem[] = navGroups.flatMap(group => group.items)
+
+/** Label of the destination for the current path, using the owner's wording when one is saved. */
+function currentNavLabel(pathname: string, values: SiteValues): string | undefined {
+  const item = allNav.find(entry => entry.to === pathname)
+  return item ? navLabelFor(item.to, item.label, values) : undefined
+}
 const moreRoutes = new Set(allNav.map(item => item.to).filter(to => !mobileBar.some(item => item.to === to)))
 
 export function AppFrame() {
+  const siteValues = useSiteValues()
   const { user, signOut } = useAuth()
-  const { data, syncState, pendingCount, syncError, refresh, undoAvailable, undoDelete, dismissUndo } = useData()
+  const { data, loading, syncState, pendingCount, syncError, refresh, undoAvailable, undoDelete, dismissUndo } = useData()
   const { notify } = useToast()
   const navigate = useNavigate()
   const location = useLocation()
@@ -80,6 +94,16 @@ export function AppFrame() {
   const [quickActionsOpen, setQuickActionsOpen] = useState(false)
 
   useEffect(() => { setMobileMore(false) }, [location.pathname])
+
+  // First-run setup waits for the first sync so a stale device cache never flashes it, then
+  // stays up (even through later sync states) until the student completes it.
+  const onboardingNeeded = needsOnboarding(data.settings)
+  const syncSettled = !loading && syncState !== 'loading' && syncState !== 'syncing'
+  const [onboardingShown, setOnboardingShown] = useState(false)
+  useEffect(() => { if (onboardingNeeded && syncSettled) setOnboardingShown(true) }, [onboardingNeeded, syncSettled])
+  const onboarding = onboardingNeeded && (syncSettled || onboardingShown)
+  const onboardingRef = useRef(onboarding)
+  onboardingRef.current = onboarding
 
   // Reminders: checked while the app is open. Fires at most once per IST day, and only when
   // there is a real item to mention and the browser has granted notification permission.
@@ -99,6 +123,7 @@ export function AppFrame() {
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
+      if (onboardingRef.current) return
       const isTyping = target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault(); setSearchOpen(true); return
@@ -118,7 +143,8 @@ export function AppFrame() {
   const statusLabel = syncState === 'syncing' ? 'Syncing' : syncState === 'offline' ? 'Offline' : syncState === 'error' ? 'Sync issue' : syncState === 'local' ? 'On this device' : pendingCount ? `${pendingCount} pending` : 'Synced'
   const StatusIcon = syncState === 'offline' || syncState === 'error' ? CloudOff : syncState === 'local' ? ShieldCheck : Cloud
 
-  return <div className="app-shell">
+  return <>
+  <div className="app-shell" inert={onboarding || undefined} aria-hidden={onboarding || undefined}>
     <aside className="sidebar" aria-label="Main navigation">
       <div className="sidebar-head">
         <Brand />
@@ -126,9 +152,9 @@ export function AppFrame() {
       </div>
       <div className="sidebar-scroll">
         {navGroups.map(group => <div key={group.caption} className="nav-group">
-          <div className="nav-caption">{group.caption}</div>
+          <div className="nav-caption">{navCaptionFor(group.caption, siteValues)}</div>
           <nav className="nav-list" aria-label={`${group.caption.toLowerCase()} sections`}>
-            {group.items.map(item => <NavItem key={item.to} {...item} />)}
+            {group.items.map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} />)}
           </nav>
         </div>)}
       </div>
@@ -153,7 +179,7 @@ export function AppFrame() {
 
     <main className="main-area">
       <div className="topline">
-        <div className="breadcrumb"><span>JEE 2027</span><ChevronRight size={13} /><strong>{allNav.find(item => item.to === location.pathname)?.label ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
+        <div className="breadcrumb"><span>{loading || (!data.settings.exam_id && !data.settings.onboarding_completed) ? 'Stracker' : isJeeSettings(data.settings) ? `JEE ${data.settings.exam_year ?? 2027}` : chosenExamTitle(data.settings)}</span><ChevronRight size={13} /><strong>{currentNavLabel(location.pathname, siteValues) ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
         <div className="topline-right">
           {user?.isLocal && <span className="preview-pill"><span />Local preview — not synced</span>}
           <button className={`sync-pill sync-${syncState}`} onClick={() => void refresh()} title={syncError ?? 'Click to sync now'}>
@@ -171,7 +197,7 @@ export function AppFrame() {
     </main>
 
     <nav className="mobile-nav" aria-label="Mobile navigation">
-      {mobileBar.map(item => <MobileNavItem key={item.to} item={item} />)}
+      {mobileBar.map(item => <MobileNavItem key={item.to} item={{ ...item, label: navLabelFor(item.to, item.label, siteValues) }} />)}
       <button className={`mobile-nav-item ${activeMore || mobileMore ? 'active' : ''}`} onClick={() => setMobileMore(true)} aria-expanded={mobileMore}>
         <MoreHorizontal size={20} /><span>More</span>
       </button>
@@ -181,8 +207,8 @@ export function AppFrame() {
         <div className="sheet-handle" /><div className="sheet-head"><div><span className="eyebrow">STUDY TOOLS</span><h2>More to explore</h2></div><IconButton label="Close navigation" onClick={() => setMobileMore(false)}><X size={19} /></IconButton></div>
         <nav className="sheet-nav">
           {navGroups.map(group => <div key={group.caption}>
-            <div className="sheet-nav-caption">{group.caption.charAt(0) + group.caption.slice(1).toLowerCase()}</div>
-            {group.items.filter(item => !mobileBar.some(bar => bar.to === item.to)).map(item => <NavItem key={item.to} {...item} onClick={() => setMobileMore(false)} />)}
+            <div className="sheet-nav-caption">{(() => { const caption = navCaptionFor(group.caption, siteValues); return caption.charAt(0) + caption.slice(1).toLowerCase() })()}</div>
+            {group.items.filter(item => !mobileBar.some(bar => bar.to === item.to)).map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} onClick={() => setMobileMore(false)} />)}
           </div>)}
           <button className="nav-link sheet-help" onClick={() => { setMobileMore(false); setShortcutsOpen(true) }}><CircleHelp size={18} /><span>Keyboard shortcuts</span></button>
           <button className="nav-link sheet-help" onClick={() => { setMobileMore(false); void signOut() }}><LogOut size={18} /><span>Sign out</span></button>
@@ -209,24 +235,26 @@ export function AppFrame() {
     {undoAvailable && <div className="undo-toast" role="status"><Check size={15} /><span>Deleted</span><button onClick={() => void undoDelete().then(() => notify('Deletion undone.')).catch(error => notify(error instanceof Error ? error.message : 'Could not undo deletion.', 'error'))}>Undo</button><IconButton label="Dismiss" onClick={dismissUndo}><X size={14} /></IconButton></div>}
     <AIExperience />
   </div>
+  {onboarding && <OnboardingDialog />}
+  </>
 }
 
 function NavItem({ to, label, icon: Icon, exact, onClick }: NavigationItem & { onClick?: () => void }) {
-  return <NavLink to={to} end={exact} onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+  return <NavLink to={to} end={exact} onClick={onClick} className={({ isActive }) => `nav-link type-nav ${isActive ? 'active' : ''}`}>
     <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
   </NavLink>
 }
 
 function MobileNavItem({ item }: { item: NavigationItem }) {
   const Icon = item.icon
-  return <NavLink to={item.to} end={item.exact} className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}>
+  return <NavLink to={item.to} end={item.exact} className={({ isActive }) => `mobile-nav-item type-nav ${isActive ? 'active' : ''}`}>
     <Icon size={20} strokeWidth={1.8} /><span>{item.label === 'Mistake notebook' ? 'Mistakes' : item.label}</span>
   </NavLink>
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return <NavLink className={`brand ${compact ? 'brand-compact' : ''}`} to="/" aria-label="Stracker home">
-    <span className="brand-mark"><span>S</span><i>✳</i></span><span className="brand-type">Stracker<small>JEE STUDY HOME</small></span>
+    <span className="brand-mark"><span>S</span><i>✳</i></span><span className="brand-type type-brand">Stracker<small className="type-overline">STUDY HOME</small></span>
   </NavLink>
 }
 
@@ -235,6 +263,7 @@ function PageLoading() {
 }
 
 function QuickTaskDialog({ data, onClose }: { data: AppData; onClose: () => void }) {
+  const quickSubjects = useExamSubjects()
   const { upsert } = useData()
   const { notify } = useToast()
   const [taskId] = useState(() => createId())
@@ -278,10 +307,10 @@ function QuickTaskDialog({ data, onClose }: { data: AppData; onClose: () => void
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save task. Retry.', 'error') }
     finally { loadingRef.current = false; setLoading(false) }
   }
-  return <Dialog title="A small step for today" subtitle="Add a task to your study plan." onClose={onClose}>
+  return <Dialog title="Add a task" onClose={onClose}>
     <form className="form-stack" noValidate onSubmit={save}>
       <Field label="What do you want to do?" required error={fieldErrors.title}><input autoFocus required maxLength={200} placeholder="e.g. Revise Kirchhoff's laws" value={title} onChange={event => { setTitle(event.target.value); setFieldErrors(current => { const next = { ...current }; delete next.title; return next }) }} /></Field>
-      <div className="form-grid two"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option><option>Physics</option><option>Chemistry</option><option>Maths</option></select></Field>
+      <div className="form-grid two"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{quickSubjects.map(item => <option key={item}>{item}</option>)}</select></Field>
         <Field label="Chapter"><select value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="">Choose chapter</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field></div>
       <div className="form-grid two"><Field label="Estimated time (min)" error={fieldErrors.estimated_minutes}><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => { setMinutes(event.target.value); setFieldErrors(current => { const next = { ...current }; delete next.estimated_minutes; return next }) }} /></Field>
         <Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
@@ -322,7 +351,7 @@ function GlobalSearch({ data, onClose }: { data: AppData; onClose: () => void })
 
 function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const shortcuts = [['⌘ / Ctrl + K', 'Search your notebook'], ['N', 'Add a task'], ['T', 'Add a test'], ['R', 'Open revisions'], ['Space', 'Start or pause in Focus mode'], ['Esc', 'Close the current dialog'], ['?', 'Show this help']]
-  return <Dialog title="A few handy shortcuts" subtitle="Shortcuts stay out of the way while you type." onClose={onClose} className="dialog-narrow">
+  return <Dialog title="A few handy shortcuts" onClose={onClose} className="dialog-narrow">
     <div className="shortcut-list">{shortcuts.map(([key, action]) => <div className="shortcut-row" key={key}><span>{action}</span><kbd>{key}</kbd></div>)}</div>
     <div className="dialog-actions"><Button onClick={onClose}>Got it</Button></div>
   </Dialog>

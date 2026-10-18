@@ -4,7 +4,7 @@ import { Button, Field, NotebookCard } from '../ui'
 import { useData } from '../../contexts/DataContext'
 import { useToast } from '../../contexts/ToastContext'
 import { defaultExamTracks } from '../../lib/defaults'
-import { TRACK_LABEL } from '../../lib/jee/exam'
+import { isJeeSettings, trackLabels } from '../../lib/jee/exam'
 import { REMINDER_LABEL } from '../../lib/jee/reminders'
 import { stableId } from '../../lib/id'
 import { REMINDER_KINDS, type AppSettings, type ReminderKind, type TrackId, type UserExamTrack } from '../../types'
@@ -15,7 +15,9 @@ export function ExamTracksSection() {
   const { notify } = useToast()
   const userId = data.settings.user_id ?? data.settings.id
   const rows = data.examTracks.length ? data.examTracks : defaultExamTracks(userId)
-  const editable: TrackId[] = ['main2', 'boards']
+  const jee = isJeeSettings(data.settings)
+  const TRACK_LABEL = trackLabels(data.settings)
+  const editable: TrackId[] = jee ? ['main2', 'boards'] : data.settings.boards_addon ? ['boards'] : []
   const [drafts, setDrafts] = useState<Record<string, { exam_date: string; target_score: string }>>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,11 +55,11 @@ export function ExamTracksSection() {
   }
 
   return <NotebookCard className="settings-section">
-    <div className="jee-settings-head"><CalendarDays size={18} aria-hidden="true" /><div><strong>Preparation tracks</strong><small className="jee-muted">One shared syllabus. Each track differs only by its date and target.</small></div></div>
+    <div className="jee-settings-head"><CalendarDays size={18} aria-hidden="true" /><div><strong>Preparation tracks</strong><small className="jee-muted">One syllabus; tracks differ by date.</small></div></div>
     <div className="settings-section-content">
       <div className="jee-track-settings">
-        <div className="jee-track-setting readonly"><span>{TRACK_LABEL.main1}</span><small className="jee-muted">Date comes from “JEE Main date” above.</small></div>
-        <div className="jee-track-setting readonly"><span>{TRACK_LABEL.advanced}</span><small className="jee-muted">Date comes from “JEE Advanced date” above.</small></div>
+        <div className="jee-track-setting readonly"><span>{TRACK_LABEL.main1}</span><small className="jee-muted">Date comes from “{jee ? 'JEE Main date' : `${TRACK_LABEL.main1} date`}” above.</small></div>
+        {jee && <div className="jee-track-setting readonly"><span>{TRACK_LABEL.advanced}</span><small className="jee-muted">Date comes from “JEE Advanced date” above.</small></div>}
         {editable.map(track => <div key={track} className="jee-track-setting">
           <span>{TRACK_LABEL[track]}</span>
           <div className="form-grid two">
@@ -68,7 +70,7 @@ export function ExamTracksSection() {
       </div>
       {error && <p className="field-error" role="alert">{error}</p>}
       <div className="jee-section-save"><Button variant="secondary" size="sm" onClick={() => void save()} loading={saving}><Check size={14} /> Save track dates</Button></div>
-      <p className="jee-small jee-muted">Leave dates blank until official dates are published. Nothing here assumes a date.</p>
+      <p className="jee-small jee-muted">Leave blank until dates are official.</p>
     </div>
   </NotebookCard>
 }
@@ -90,7 +92,7 @@ export function ReminderSettingsSection({ draft, patch, errors }: {
     setPermission(await Notification.requestPermission())
   }
   return <NotebookCard className="settings-section">
-    <div className="jee-settings-head">{draft.reminders_enabled ? <Bell size={18} aria-hidden="true" /> : <BellOff size={18} aria-hidden="true" />}<div><strong>Daily reminders</strong><small className="jee-muted">Reminders only mention things that really need you.</small></div></div>
+    <div className="jee-settings-head">{draft.reminders_enabled ? <Bell size={18} aria-hidden="true" /> : <BellOff size={18} aria-hidden="true" />}<div><strong>Daily reminders</strong></div></div>
     <div className="settings-section-content">
       <label className="jee-toggle-row"><input type="checkbox" checked={draft.reminders_enabled} onChange={event => patch('reminders_enabled', event.target.checked)} /><span>Remind me once a day</span></label>
       <div className="form-grid two">
@@ -110,7 +112,7 @@ export function ReminderSettingsSection({ draft, patch, errors }: {
         </div>
         {errors.reminder_types && <p className="field-error" role="alert">{errors.reminder_types}</p>}
       </fieldset>
-      <p className="jee-small jee-muted">Stracker can only notify while the app is open or installed and running. It cannot send a reminder when the device is fully closed; that needs a push service, which is not configured here.</p>
+      <p className="jee-small jee-muted">Works only while the app is open or running.</p>
     </div>
   </NotebookCard>
 }

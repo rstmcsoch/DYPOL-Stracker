@@ -6,6 +6,7 @@ import { logAIEvent } from '../_lib/diagnostics.js'
 import { authenticateRequest } from '../_lib/supabase.js'
 import { redactPotentialSecrets } from '../_lib/secrets.js'
 import { runAssistant } from '../_lib/agent.js'
+import { CHAT_RATE, takeRateSlot } from '../_lib/rate-limit.js'
 
 const requestSchema = z.object({
   conversationId: z.uuid().nullable().optional(),
@@ -14,6 +15,9 @@ const requestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
   pageContext: z.string().max(80).nullable().optional()
 }).strict()
+/** A running task older than this cannot still be alive (Vercel maxDuration is 60 s). */
+const ACTIVE_TASK_TTL_MS = 75_000
+
 const SAFE_PAGES: Record<string,string> = {
   '/':'Dashboard','/syllabus':'Chapters','/tests':'Tests','/mistakes':'Mistakes','/retry':'Retry notebook',
   '/planner':'Tasks and weekly goals','/revision':'Revision','/analytics':'Analytics','/weak-areas':'Weak areas',
@@ -84,13 +88,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       return
     }
 
-    const minuteAgo = new Date(Date.now() - 60_000).toISOString()
-    const { count, error: rateError } = await adminClient.from('ai_tasks').select('id',{ count:'exact',head:true }).eq('user_id',userId).gte('started_at',minuteAgo)
-    if (rateError) throw new ApiError(503,'task_unavailable','Stracker could not start an AI task. Try again.')
-    if ((count ?? 0) >= 10) throw new ApiError(429,'request_limit','You have sent several AI requests recently. Wait a minute and try again.')
-    const activeSince = new Date(Date.now() - 90_000).toISOString()
-    const { data: active } = await adminClient.from('ai_tasks').select('id').eq('user_id',userId).in('status',['running','tool_call','fallback','retrying']).gte('started_at',activeSince).limit(1)
-    if (active?.length) throw new ApiError(409,'assistant_busy','A Stracker AI task is already running. Stop it or wait for it to finish.')
+    await takeRateSlot(adminClient, userId, CHAT_RATE)
+    // One running task per CONVERSATION (other conversations and sessions are independent). A lock
+    // older than the function's 60 s limit is stale (crash/timeout) and is ignored.
+    if (body.conversationId) {
+      const activeSince = new Date(Date.now() - ACTIVE_TASK_TTL_MS).toISOString()
+      const { data: active } = await adminClient.from('ai_tasks').select('id').eq('user_id',userId).eq('conversation_id',body.conversationId).in('status',['queued','running','tool_call','fallback','retrying']).gte('started_at',activeSince).limit(1)
+      if (active?.length) throw new ApiError(409,'assistant_busy','This conversation is still answering. Stop it, wait a moment, or start a new conversation.')
+    }
 
     const { data: existingUserMessage, error: messageLookupError } = await adminClient.from('ai_messages').select('id,conversation_id,content,role').eq('user_id',userId).eq('idempotency_key',body.messageId).maybeSingle()
     if (messageLookupError) throw new ApiError(503,'message_unavailable','The message could not be saved. Try again.')
@@ -119,10 +124,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       if (error || !insertedMessage) throw new ApiError(503,'message_unavailable','The message could not be saved. Try again.')
       currentMessageId = String(insertedMessage.id)
     }
-    if (conversationTitle === 'New conversation') {
-      await adminClient.from('ai_conversations').update({ title:currentMessage.replace(/\s+/g,' ').slice(0,72) || 'New conversation',updated_at:new Date().toISOString() }).eq('user_id',userId).eq('id',conversationId)
-    }
-    const { data: priorRows, error: historyError } = await adminClient.from('ai_messages').select('id,role,content').eq('user_id',userId).eq('conversation_id',conversationId).order('created_at',{ascending:true}).limit(24)
+    // Title update and history load are independent: run them together to save a round trip.
+    const [, { data: priorRows, error: historyError }] = await Promise.all([
+      conversationTitle === 'New conversation'
+        ? adminClient.from('ai_conversations').update({ title:currentMessage.replace(/\s+/g,' ').slice(0,72) || 'New conversation',updated_at:new Date().toISOString() }).eq('user_id',userId).eq('id',conversationId)
+        : Promise.resolve(null),
+      adminClient.from('ai_messages').select('id,role,content').eq('user_id',userId).eq('conversation_id',conversationId).order('created_at',{ascending:true}).limit(24)
+    ])
     if (historyError) throw new ApiError(503,'conversation_unavailable','Conversation context could not be loaded. Try again.')
     const prior = (priorRows ?? []).filter((row:Record<string,unknown>) => row.id !== currentMessageId && (row.role === 'user' || row.role === 'assistant')).slice(-20) as Array<{role:'user'|'assistant';content:string}>
     const { data: task, error: taskError } = await adminClient.from('ai_tasks').insert({

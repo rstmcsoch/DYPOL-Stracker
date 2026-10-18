@@ -6,8 +6,9 @@ import { indiaDate, indiaToday, prettyDate } from './date'
 import { makeStudyBars } from './study-aggregation'
 import { fmtDuration, fmtNumber } from './format'
 import type { AppData, TestRecord } from '../types'
-import { SUBJECTS } from '../types'
+import { subjectsFor } from './exams/subjects'
 import { triggerDownload } from './backup'
+import { chosenExamTitle, isJeeSettings } from './jee/exam'
 
 export interface ReportSections {
   summary: boolean
@@ -152,7 +153,7 @@ function addPdfTable(doc: jsPDF, rows: string[][], x: number, y: number, widths:
     const lineHeight = 5.1
     const cellLines = values.map((value, index) => doc.splitTextToSize(value || '—', (widths[index] ?? 30) - 4) as string[])
     const rowHeight = Math.max(9, Math.max(...cellLines.map(lines => lines.length)) * lineHeight + 4)
-    if (currentY + rowHeight > doc.internal.pageSize.getHeight() - 21) { pdfFooter(doc, 'JEE STUDY REPORT'); doc.addPage(); currentY = pdfSectionTitle(doc, 'Continued') }
+    if (currentY + rowHeight > doc.internal.pageSize.getHeight() - 21) { pdfFooter(doc, 'STUDY REPORT'); doc.addPage(); currentY = pdfSectionTitle(doc, 'Continued') }
     if (header) doc.setFillColor(235, 231, 218); else if (Math.round(currentY / rowHeight) % 2 === 0) doc.setFillColor(250, 248, 241); else doc.setFillColor(255, 255, 255)
     doc.setDrawColor(222, 218, 207); doc.rect(x, currentY, widths.reduce((sum, value) => sum + value, 0), rowHeight, 'FD')
     let cellX = x
@@ -182,7 +183,7 @@ export async function createPdfReport(data: AppData, options: ReportOptions): Pr
   // Cover page: warm-paper treatment with no fabricated data.
   doc.setFillColor(248, 246, 238); doc.rect(0, 0, width, height, 'F')
   doc.setDrawColor(82, 105, 78); doc.setLineWidth(0.8); doc.roundedRect(12, 12, width - 24, height - 24, 4, 4, 'S')
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(86, 108, 82); doc.text('A JEE 2027 STUDY NOTEBOOK', 22, 44)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(86, 108, 82); doc.text(`A ${(isJeeSettings(scoped.settings) ? `JEE ${scoped.settings.exam_year ?? 2027}` : chosenExamTitle(scoped.settings)).toUpperCase()} STUDY NOTEBOOK`.slice(0, 60), 22, 44)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(37); doc.setTextColor(39, 45, 38); doc.text('Stracker', 22, 75)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(18); doc.setTextColor(91, 98, 83); doc.text('Study progress report', 22, 88)
   doc.setDrawColor(204, 177, 102); doc.setLineWidth(1.2); doc.line(22, 99, 93, 99)
@@ -275,7 +276,7 @@ export async function createPdfReport(data: AppData, options: ReportOptions): Pr
     doc.addPage(); let y = pdfSectionTitle(doc, 'Study hours', 'Focus sessions logged in the selected report range.')
     doc.addImage(chartHours, 'PNG', 17, y, 176, 63); y += 72
     y = pdfLine(doc, `Total study time: ${fmtDuration(scoped.sessions.reduce((sum, session) => sum + session.duration_minutes, 0))}.`, 18, y, 170, 11)
-    const subjectMinutes = SUBJECTS.map(subject => [subject, fmtDuration(scoped.sessions.filter(session => session.subject === subject).reduce((sum, session) => sum + session.duration_minutes, 0))])
+    const subjectMinutes = subjectsFor(scoped).map(subject => [subject, fmtDuration(scoped.sessions.filter(session => session.subject === subject).reduce((sum, session) => sum + session.duration_minutes, 0))])
     addPdfTable(doc, subjectMinutes, 17, y + 4, [88, 88], ['Subject','Logged time'])
     pdfFooter(doc, 'STUDY HOURS')
   }
@@ -328,7 +329,7 @@ export async function createDocxReport(data: AppData, options: ReportOptions): P
   const trendImage = await svgPng(chartSvg(scoped, 'trend'))
   const hoursImage = await svgPng(chartSvg(scoped, 'hours'))
   content.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 1400, after: 260 }, children: [new TextRun({ text: 'STRACKER', bold: true, size: 56, color: '354432', font: 'Kalam' })] }))
-  content.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 800 }, children: [new TextRun({ text: 'JEE Study Progress Report', size: 34, color: '65735D', font: 'Patrick Hand' })] }))
+  content.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 800 }, children: [new TextRun({ text: 'Study Progress Report', size: 34, color: '65735D', font: 'Patrick Hand' })] }))
   content.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: options.ownerName || 'Study notebook', bold: true, size: 30, color: '30352E', font: 'Kalam' })] }))
   content.push(docParagraph(`Report date: ${reportDate}`, { alignment: AlignmentType.CENTER, size: 22, color: '777367' }))
   content.push(docParagraph(`Selected range: ${rangeLabel}`, { alignment: AlignmentType.CENTER, size: 22, color: '777367', spacing: 500 }))
@@ -386,7 +387,7 @@ export async function createDocxReport(data: AppData, options: ReportOptions): P
     content.push(docParagraph('Study hours', { heading: HeadingLevel.HEADING_1, font: 'Kalam', size: 34, color: '354432' }))
     content.push(new Paragraph({ children: [new ImageRun({ data: hoursImage, type: 'png', transformation: { width: 600, height: 215 } })], spacing: { after: 150 } }))
     content.push(docParagraph(`Total logged study time: ${fmtDuration(scoped.sessions.reduce((sum, session) => sum + session.duration_minutes, 0))}.`))
-    content.push(docTable(['Subject','Logged time'], SUBJECTS.map(subject => [subject, fmtDuration(scoped.sessions.filter(session => session.subject === subject).reduce((sum, session) => sum + session.duration_minutes, 0))])))
+    content.push(docTable(['Subject','Logged time'], subjectsFor(scoped).map(subject => [subject, fmtDuration(scoped.sessions.filter(session => session.subject === subject).reduce((sum, session) => sum + session.duration_minutes, 0))])))
     content.push(new Paragraph({ children: [new PageBreak()] }))
   }
   if (selected.tips) {

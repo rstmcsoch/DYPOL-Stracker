@@ -1,7 +1,9 @@
 import { SYLLABUS } from './syllabus.js'
 import { createId, stableId } from './id.js'
 import { indiaToday } from './date.js'
-import { normalizeInterfaceFont } from './fonts.js'
+import { normalizeReadingFont } from './fonts.js'
+import { normalizeColorTheme } from './themes.js'
+import { EXAM_ID_PATTERN, isJeeExam } from './exams/catalog.js'
 import type {
   AppSettings, Chapter, ChapterImportance, ChapterStage, ChapterStageKey, ReminderKind, Subject,
   TrackId, UserExamTrack
@@ -19,6 +21,7 @@ export function defaultSettings(userId: string, ownerName = ''): AppSettings {
     target_score: 240,
     theme: 'light',
     interface_font: 'default',
+    color_theme: 'default',
     weak_threshold: 60,
     strong_threshold: 80,
     dropping_threshold: 10,
@@ -36,6 +39,12 @@ export function defaultSettings(userId: string, ownerName = ''): AppSettings {
     reminders_enabled: false,
     reminder_time: '08:00',
     reminder_types: ['revision', 'backlog'],
+    exam_id: null,
+    exam_year: null,
+    exam_session: null,
+    exam_board: null,
+    boards_addon: false,
+    onboarding_completed: false,
     created_at: now,
     updated_at: now
   }
@@ -68,7 +77,10 @@ export function normalizeSettings(row: Record<string, unknown>, userId: string):
     advanced_exam_date: typeof row.advanced_exam_date === 'string' ? row.advanced_exam_date : '',
     target_score: asNumber(row.target_score, fallback.target_score),
     theme: row.theme === 'dark' || row.theme === 'auto' || row.theme === 'light' ? row.theme : fallback.theme,
-    interface_font: normalizeInterfaceFont(row.interface_font),
+    interface_font: normalizeReadingFont(row.interface_font),
+    // Older accounts (and rows synced from before the palette existed) simply
+    // fall back to the Default theme; invalid values can never leak through.
+    color_theme: normalizeColorTheme(row.color_theme),
     weak_threshold: asNumber(row.weak_threshold, fallback.weak_threshold),
     strong_threshold: asNumber(row.strong_threshold, fallback.strong_threshold),
     dropping_threshold: asNumber(row.dropping_threshold, fallback.dropping_threshold),
@@ -88,6 +100,12 @@ export function normalizeSettings(row: Record<string, unknown>, userId: string):
     reminders_enabled: asBool(row.reminders_enabled, fallback.reminders_enabled),
     reminder_time: typeof row.reminder_time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(row.reminder_time) ? row.reminder_time : fallback.reminder_time,
     reminder_types: reminderTypes,
+    exam_id: typeof row.exam_id === 'string' && EXAM_ID_PATTERN.test(row.exam_id) ? row.exam_id : null,
+    exam_year: typeof row.exam_year === 'number' && Number.isInteger(row.exam_year) && row.exam_year >= 2020 && row.exam_year <= 2100 ? row.exam_year : null,
+    exam_session: typeof row.exam_session === 'string' && row.exam_session.length <= 40 ? row.exam_session : null,
+    exam_board: typeof row.exam_board === 'string' && row.exam_board.length <= 40 ? row.exam_board : null,
+    boards_addon: row.boards_addon === true,
+    onboarding_completed: row.onboarding_completed === true,
     created_at: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : new Date().toISOString()
   }
@@ -139,4 +157,18 @@ export function defaultExamTracks(userId: string): UserExamTrack[] {
 
 export function todayTaskDate(): string {
   return indiaToday()
+}
+
+/**
+ * Seed the JEE syllabus only once JEE is actually chosen: an explicit JEE pick, or an
+ * account that finished first-run setup before exam choice existed. Brand-new accounts
+ * wait for the first-run setup, which seeds JEE itself; other exams start empty.
+ */
+export function shouldSeedJeeSyllabus(settings: Pick<AppSettings, 'exam_id' | 'onboarding_completed'>): boolean {
+  return isJeeExam(settings.exam_id) && (settings.exam_id !== null || settings.onboarding_completed === true)
+}
+
+/** Who sees first-run setup: anyone who has not finished it and has no exam chosen yet. */
+export function needsOnboarding(settings: Pick<AppSettings, 'onboarding_completed' | 'exam_id'>): boolean {
+  return settings.onboarding_completed !== true && !settings.exam_id
 }

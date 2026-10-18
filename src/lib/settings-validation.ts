@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { EXAM_MODES, INTERFACE_FONTS, REMINDER_KINDS, TRACK_IDS } from '../types/index.js'
+import { COLOR_THEMES, EXAM_MODES, READING_FONTS, REMINDER_KINDS, TRACK_IDS } from '../types/index.js'
 
 const dateValue = z.iso.date()
 const timestampValue = z.iso.datetime({ offset: true })
@@ -13,7 +13,9 @@ export const settingsSchema = z.object({
   theme: z.enum(['light', 'dark', 'auto']),
   // Defaulted so rows written before the preference existed still validate and simply
   // fall back to the Stracker default typography.
-  interface_font: z.enum(INTERFACE_FONTS).default('default'),
+  interface_font: z.enum(READING_FONTS).default('default'),
+  // Colour palette is additive: legacy rows and exports without it default safely.
+  color_theme: z.enum(COLOR_THEMES).default('default'),
   weak_threshold: z.number().finite().min(0).max(99.99).multipleOf(0.01),
   strong_threshold: z.number().finite().min(0.01).max(100).multipleOf(0.01),
   dropping_threshold: z.number().finite().min(0).max(100).multipleOf(0.01),
@@ -30,7 +32,14 @@ export const settingsSchema = z.object({
   exam_mode: z.enum(EXAM_MODES).default('auto'),
   reminders_enabled: z.boolean().default(false),
   reminder_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Choose a reminder time like 08:00.').default('08:00'),
-  reminder_types: z.array(z.enum(REMINDER_KINDS)).max(REMINDER_KINDS.length).default(['revision', 'backlog'])
+  reminder_types: z.array(z.enum(REMINDER_KINDS)).max(REMINDER_KINDS.length).default(['revision', 'backlog']),
+  // --- Exam choice (additive; older rows and exports default to "not chosen" = JEE) ---
+  exam_id: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/).nullable().default(null),
+  exam_year: z.number().int().min(2020).max(2100).nullable().default(null),
+  exam_session: z.string().trim().max(40).nullable().default(null),
+  exam_board: z.string().trim().max(40).nullable().default(null),
+  boards_addon: z.boolean().default(false),
+  onboarding_completed: z.boolean().default(false)
 }).refine(value => value.weak_threshold < value.strong_threshold, {
   path: ['strong_threshold'],
   message: 'Strong above must be greater than Weak below.'
@@ -55,7 +64,7 @@ export function settingsFieldErrors(error: z.ZodError): SettingsFieldErrors {
         : 'Must be between 0.01 and 100, using up to two decimal places.'; break
       case 'dropping_threshold': fieldErrors[field] = 'Must be between 0 and 100, using up to two decimal places.'; break
       case 'revision_gaps': fieldErrors[field] = 'Enter 1–12 positive whole days, e.g. 1, 7, 30.'; break
-      case 'interface_font': fieldErrors[field] = 'Choose Default, Poppins, Sora, or Open Sans.'; break
+      case 'interface_font': fieldErrors[field] = 'Choose Lexend, Poppins, Sora, or Open Sans.'; break
       case 'daily_study_goal_minutes': fieldErrors[field] = 'Enter a daily goal from 0 to 24 hours.'; break
       case 'owner_name': fieldErrors[field] = 'Name must be 100 characters or fewer.'; break
       case 'main_exam_date': fieldErrors[field] = 'Choose a valid calendar date or leave it blank.'; break

@@ -2,35 +2,35 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultSettings } from '../lib/defaults'
-import { INTERFACE_FONT_OPTIONS } from '../lib/fonts'
-import type { AppSettings, InterfaceFont } from '../types'
+import { readingFontOption } from '../lib/fonts'
+import type { AppSettings, ReadingFont } from '../types'
 
 const mocks = vi.hoisted(() => ({ useData: vi.fn(), notify: vi.fn() }))
 
 vi.mock('./DataContext', () => ({ useData: mocks.useData }))
 vi.mock('./ToastContext', () => ({ useToast: () => ({ notify: mocks.notify }) }))
 
-import { AppearanceProvider, useAppearance, useInterfaceFontPreview } from './AppearanceContext'
+import { AppearanceProvider, useAppearance, useReadingFontPreview } from './AppearanceContext'
 
-const stackOf = (font: InterfaceFont) => INTERFACE_FONT_OPTIONS.find(option => option.value === font)?.stack
-const rootFont = () => document.documentElement.style.getPropertyValue('--app-font-family')
+const stackOf = (font: ReadingFont) => readingFontOption(font).stack
+const rootFont = () => document.documentElement.style.getPropertyValue('--reading-font-family')
 
 function AppearanceProbe() {
-  const { interfaceFont, theme, setTheme } = useAppearance()
+  const { readingFont, theme, setTheme } = useAppearance()
   return <>
-    <output data-testid="active-font">{interfaceFont}</output>
+    <output data-testid="active-font">{readingFont}</output>
     <output data-testid="active-theme">{theme}</output>
-    <button type="button" onClick={() => setTheme('dark')}>Header theme switch</button>
+    <button type="button" onClick={() => setTheme('dark')}>Use dark theme</button>
   </>
 }
 
 /** Stands in for the Settings Appearance draft: previews `font` while mounted. */
-function DraftPreview({ font }: { font: InterfaceFont }) {
-  useInterfaceFontPreview(font)
+function DraftPreview({ font }: { font: ReadingFont }) {
+  useReadingFontPreview(font)
   return null
 }
 
-function Harness({ previewing, font = 'sora' }: { previewing: boolean; font?: InterfaceFont }) {
+function Harness({ previewing, font = 'sora' }: { previewing: boolean; font?: ReadingFont }) {
   return <AppearanceProvider>
     <AppearanceProbe />
     {previewing && <DraftPreview font={font} />}
@@ -67,26 +67,53 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  document.documentElement.style.removeProperty('--app-font-family')
+  delete document.documentElement.dataset.appFont
+  delete document.documentElement.dataset.color
+  document.documentElement.style.removeProperty('--reading-font-family')
+  document.documentElement.style.removeProperty('--body-scale')
   document.documentElement.removeAttribute('data-theme')
 })
 
-describe('AppearanceProvider font application', () => {
-  it('restores the saved account font to the document root when the app session mounts', () => {
+describe('AppearanceProvider Reading font lifecycle', () => {
+  it('applies the saved account Reading font to content tokens while leaving identity fixed', () => {
     mountAppearance(settingsFor('user-one', 'open-sans'))
 
     expect(screen.getByTestId('active-font').textContent).toBe('open-sans')
+    expect(document.documentElement.dataset.appFont).toBe('active')
     expect(rootFont()).toBe(stackOf('open-sans'))
+    expect(document.documentElement.style.getPropertyValue('--body-scale')).toBe('1.00')
+    // The identity token is static CSS, never written or replaced by account settings.
+    expect(document.documentElement.style.getPropertyValue('--font-identity')).toBe('')
   })
 
-  it('clears one account font on logout and restores the next account font on login', () => {
+  it('uses Lexend as the safe default for accounts without a valid saved value', () => {
+    mountAppearance({ ...defaultSettings('user-one'), interface_font: 'default' })
+    expect(screen.getByTestId('active-font').textContent).toBe('default')
+    expect(rootFont()).toBe(stackOf('default'))
+
+    cleanup()
+    mountAppearance({ ...defaultSettings('user-two'), interface_font: 'bad-value' as AppSettings['interface_font'] })
+    expect(screen.getByTestId('active-font').textContent).toBe('default')
+    expect(rootFont()).toBe(stackOf('default'))
+  })
+
+  it('never persists a font as a side effect of mounting the appearance provider', () => {
+    const updateSettings = vi.fn().mockResolvedValue(settingsFor('user-one', 'sora'))
+    mountAppearance(settingsFor('user-one', 'sora'), updateSettings)
+    expect(updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('clears the previous account font on logout and applies only the next account value', () => {
     const firstSession = mountAppearance(settingsFor('user-one', 'sora'))
     expect(rootFont()).toBe(stackOf('sora'))
 
     firstSession.unmount()
-    expect(rootFont()).toBe(stackOf('default'))
+    expect(document.documentElement.dataset.appFont).toBeUndefined()
+    expect(rootFont()).toBe('')
+    expect(document.documentElement.style.getPropertyValue('--body-scale')).toBe('')
 
     mountAppearance(settingsFor('user-two', 'open-sans'))
+    expect(screen.getByTestId('active-font').textContent).toBe('open-sans')
     expect(rootFont()).toBe(stackOf('open-sans'))
   })
 
@@ -124,14 +151,15 @@ describe('AppearanceProvider font application', () => {
     expect(rootFont()).toBe(stackOf('sora'))
   })
 
-  it('clears an active preview on logout, so the next signed-out screen uses the default font', () => {
+  it('clears an active preview on logout, so no account font survives into the signed-out screen', () => {
     const { rerender, unmount } = mountAppearance(settingsFor('user-one', 'open-sans'))
     rerender(<Harness previewing font="sora" />)
     expect(rootFont()).toBe(stackOf('sora'))
 
     unmount()
 
-    expect(rootFont()).toBe(stackOf('default'))
+    expect(document.documentElement.dataset.appFont).toBeUndefined()
+    expect(rootFont()).toBe('')
   })
 })
 
@@ -139,11 +167,12 @@ describe('AppearanceProvider theme ownership', () => {
   it('persists only the theme when the header switch is used, leaving the saved font untouched', () => {
     const { updateSettings } = mountAppearance(settingsFor('user-one', 'sora'))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Header theme switch' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use dark theme' }))
 
     expect(updateSettings).toHaveBeenCalledTimes(1)
     const mutate = updateSettings.mock.calls[0]?.[0] as (current: AppSettings) => AppSettings
     const current = settingsFor('user-one', 'sora')
     expect(mutate(current)).toEqual({ ...current, theme: 'dark' })
+    expect(rootFont()).toBe(stackOf('sora'))
   })
 })

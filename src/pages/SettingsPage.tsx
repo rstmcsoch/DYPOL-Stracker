@@ -1,21 +1,24 @@
-import { useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { AlertOctagon, Bell, CalendarDays, Check, Cloud, Database, KeyRound, LogOut, Palette, RotateCcw, Save, Shield, SlidersHorizontal, Target, Timer, Type, UserRound } from 'lucide-react'
-import { Button, Dialog, Field, NotebookCard, PageHeader, StatusBadge } from '../components/ui'
+import { Button, Dialog, Field, InfoTip, NotebookCard, PageHeader, StatusBadge } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
-import { useInterfaceFontPreview } from '../contexts/AppearanceContext'
+import { useReadingFontPreview } from '../contexts/AppearanceContext'
 import { useToast } from '../contexts/ToastContext'
 import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
-import { INTERFACE_FONT_OPTIONS } from '../lib/fonts'
+import { readingFontOption, READING_FONT_OPTIONS } from '../lib/fonts'
+import { COLOR_THEME_OPTIONS } from '../lib/themes'
 import { settingsFieldErrors, settingsSchema } from '../lib/settings-validation'
 import { passwordLengthError } from '../lib/auth-rules'
 import { AISettingsSection } from '../components/ai/AISettingsSection'
 import { ExamTracksSection, ReminderSettingsSection } from '../components/jee/SettingsSections'
+import { ExamSelectionSection } from '../components/jee/ExamSelectionSection'
 import { ListChecks } from 'lucide-react'
 import type { AppSettings, Profile, ThemeMode } from '../types'
+import { availableTracks, chosenExamTitle, isJeeSettings, trackLabels } from '../lib/jee/exam'
 
 type SettingsTab = 'account' | 'exam' | 'appearance' | 'rhythm' | 'data'
 
@@ -31,7 +34,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
 const TAB_FIELDS: Record<Exclude<SettingsTab, 'data'>, (keyof AppSettings)[]> = {
   account: ['owner_name'],
   exam: ['main_exam_date', 'advanced_exam_date', 'target_score', 'active_track', 'exam_mode', 'weight_high', 'weight_medium', 'weight_low', 'pyq_from_year', 'pyq_to_year'],
-  appearance: ['theme', 'interface_font'],
+  appearance: ['theme', 'interface_font', 'color_theme'],
   rhythm: ['weak_threshold', 'strong_threshold', 'dropping_threshold', 'revision_gaps', 'daily_study_goal_minutes', 'sound_enabled', 'reminders_enabled', 'reminder_time', 'reminder_types']
 }
 
@@ -41,6 +44,9 @@ const sameSettingValue = (left: unknown, right: unknown): boolean =>
 
 export default function SettingsPage() {
   const { data, upsert, updateSettings } = useData()
+  const jeeExam = isJeeSettings(data.settings)
+  const examTitle = chosenExamTitle(data.settings)
+  const examTrackLabels = trackLabels(data.settings)
   const { user, signOut } = useAuth()
   const { notify } = useToast()
   const queryClient = useQueryClient()
@@ -70,7 +76,7 @@ export default function SettingsPage() {
   const [soundTested, setSoundTested] = useState(false)
   // The unsaved Appearance draft previews live across the app. Leaving this page clears the
   // preview, so an unsaved font never outlives the draft that produced it.
-  useInterfaceFontPreview(draft.interface_font)
+  useReadingFontPreview(draft.interface_font)
 
   // Layout phase: when saved settings arrive (or change externally), the draft adopts them before
   // the browser paints, so the live font preview never shows a stale draft for a frame.
@@ -284,8 +290,9 @@ export default function SettingsPage() {
   }
 
   const auto = draft.theme === 'auto'
+  const selectedReadingFont = readingFontOption(draft.interface_font)
   return <div className="content-page settings-page">
-    <PageHeader eyebrow="MAKE IT YOUR OWN" title="Settings" subtitle="Small adjustments for the way you study." doodle={<SlidersHorizontal size={19} />} />
+    <PageHeader title="Settings" doodle={<SlidersHorizontal size={19} />} />
 
     <div className="settings-tabs-wrap">
       <div className="settings-tabs" role="tablist" aria-label="Settings sections" onKeyDown={onTablistKeyDown}>
@@ -314,7 +321,7 @@ export default function SettingsPage() {
       {activeTab === 'account' && <div className="settings-panel" role="tabpanel" id="settings-panel-account" aria-labelledby="settings-tab-account">
         <form className="settings-form" noValidate onSubmit={event => void saveTab('account', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'account'}>
-            <NotebookCard className="settings-section"><SectionLabel icon={<UserRound size={18} />} title="Owner" note="Your notebook belongs to this account." /><div className="settings-section-content">
+            <NotebookCard className="settings-section"><SectionLabel icon={<UserRound size={18} />} title="Owner" /><div className="settings-section-content">
               <div className="settings-owner-row"><div className="settings-avatar">{(draft.owner_name.trim()[0] ?? 'S').toUpperCase()}</div><div className="settings-owner-fields"><Field label="Name in your notebook" error={errors.owner_name}><input maxLength={100} value={draft.owner_name} onChange={event => patch('owner_name', event.target.value)} placeholder="What should Stracker call you?" /></Field><Field label="Account email"><input type="email" value={user?.email ?? ''} readOnly aria-readonly="true" /><span className="field-hint">Email and password are managed by secure Supabase authentication.</span></Field></div></div>
               <div className="settings-note-line"><Shield size={15} /> Your records stay private to this account — only you can read or change them. New accounts are created from the sign-up page whenever your Supabase project allows sign-ups.</div>
               <div className="settings-account-actions"><Button type="button" variant="secondary" onClick={() => setPasswordDialogOpen(true)} disabled={!user || user.isLocal}><KeyRound size={15} /> Change password</Button><Button type="button" variant="quiet" onClick={() => void signOutFromSettings()} loading={signingOut}><LogOut size={15} /> Sign out</Button></div>
@@ -327,26 +334,27 @@ export default function SettingsPage() {
       </div>}
 
       {activeTab === 'exam' && <div className="settings-panel" role="tabpanel" id="settings-panel-exam" aria-labelledby="settings-tab-exam">
+        <ExamSelectionSection />
         <form className="settings-form" noValidate onSubmit={event => void saveTab('exam', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'exam'}>
-            <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Exam dates & target" note="A countdown is only useful when the date is yours to choose." /><div className="settings-section-content"><div className="form-grid three">
-              <Field label="JEE Main date" error={errors.main_exam_date}><input type="date" value={draft.main_exam_date} onChange={event => patch('main_exam_date', event.target.value)} /></Field>
-              <Field label="JEE Advanced date" error={errors.advanced_exam_date}><input type="date" value={draft.advanced_exam_date} onChange={event => patch('advanced_exam_date', event.target.value)} /></Field>
-              <Field label="Target score" error={errors.target_score}><input type="number" min="0" max="999999.99" step="0.01" value={Number.isFinite(draft.target_score) ? draft.target_score : ''} onChange={event => patch('target_score', event.target.value === '' ? Number.NaN : Number(event.target.value))} /><span className="field-hint">Compared to a mock with all three subject totals.</span></Field>
+            <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Exam dates & target" /><div className="settings-section-content"><div className="form-grid three">
+              <Field label={jeeExam ? 'JEE Main date' : `${examTitle} date`} error={errors.main_exam_date}><input type="date" value={draft.main_exam_date} onChange={event => patch('main_exam_date', event.target.value)} /></Field>
+              {jeeExam && <Field label="JEE Advanced date" error={errors.advanced_exam_date}><input type="date" value={draft.advanced_exam_date} onChange={event => patch('advanced_exam_date', event.target.value)} /></Field>}
+              <Field label="Target score" error={errors.target_score}><input type="number" min="0" max="999999.99" step="0.01" value={Number.isFinite(draft.target_score) ? draft.target_score : ''} onChange={event => patch('target_score', event.target.value === '' ? Number.NaN : Number(event.target.value))} /><span className="field-hint">{jeeExam ? 'Compared to a mock with all three subject totals.' : 'Compared to a full mock with every subject total.'}</span></Field>
             </div><div className="settings-note-line"><Target size={15} /> Leave dates blank until the official dates are confirmed.</div></div></NotebookCard>
 
-            <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Active track & Exam Mode" note="Tracks share one syllabus. The active track sets the countdown and when Exam Mode turns on." /><div className="settings-section-content"><div className="form-grid three">
-              <Field label="Active track" error={errors.active_track}><select value={draft.active_track} onChange={event => patch('active_track', event.target.value as AppSettings['active_track'])}><option value="main1">JEE Main — Session 1</option><option value="main2">JEE Main — Session 2</option><option value="advanced">JEE Advanced</option><option value="boards">Boards</option></select></Field>
+            <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Active track & Exam Mode" note="The active track sets the countdown and Exam Mode." /><div className="settings-section-content"><div className="form-grid three">
+              <Field label="Active track" error={errors.active_track}><select value={draft.active_track} onChange={event => patch('active_track', event.target.value as AppSettings['active_track'])}>{availableTracks(data.settings).map(track => <option key={track} value={track}>{examTrackLabels[track]}</option>)}{!availableTracks(data.settings).includes(draft.active_track) && <option value={draft.active_track}>{examTrackLabels.main1}</option>}</select></Field>
               <Field label="Exam Mode" error={errors.exam_mode}><select value={draft.exam_mode} onChange={event => patch('exam_mode', event.target.value as AppSettings['exam_mode'])}><option value="auto">Automatic (final 30 days)</option><option value="on">Always on</option><option value="off">Off</option></select></Field>
-            </div><p className="jee-small jee-muted">Automatic Exam Mode needs a date for the active track. It favours revision, PYQs, mocks and weak-area fixes, and stops suggesting new theory.</p></div></NotebookCard>
+            </div><p className="jee-small jee-muted">Exam Mode needs a date for the active track.</p></div></NotebookCard>
 
-            <NotebookCard className="settings-section"><SectionLabel icon={<Target size={18} />} title="Weighted progress" note="Chapter importance multiplies into weighted completion. These numbers are yours to set — no JEE weightage is assumed." /><div className="settings-section-content"><div className="form-grid three">
+            <NotebookCard className="settings-section"><SectionLabel icon={<Target size={18} />} title="Weighted progress" note="Importance multiplies into weighted completion." /><div className="settings-section-content"><div className="form-grid three">
               <Field label="High importance ×" error={errors.weight_high}><input type="number" min="0.1" max="10" step="0.01" value={Number.isFinite(draft.weight_high) ? draft.weight_high : ''} onChange={event => patch('weight_high', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
               <Field label="Medium importance ×" error={errors.weight_medium}><input type="number" min="0.1" max="10" step="0.01" value={Number.isFinite(draft.weight_medium) ? draft.weight_medium : ''} onChange={event => patch('weight_medium', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
               <Field label="Low importance ×" error={errors.weight_low}><input type="number" min="0.1" max="10" step="0.01" value={Number.isFinite(draft.weight_low) ? draft.weight_low : ''} onChange={event => patch('weight_low', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
             </div></div></NotebookCard>
 
-            <NotebookCard className="settings-section"><SectionLabel icon={<ListChecks size={18} />} title="PYQ year range" note="Years shown as tappable chips for each chapter in the PYQ tracker." /><div className="settings-section-content"><div className="form-grid two">
+            <NotebookCard className="settings-section"><SectionLabel icon={<ListChecks size={18} />} title="PYQ year range" note="Years shown per chapter in the PYQ tracker." /><div className="settings-section-content"><div className="form-grid two">
               <Field label="First year" error={errors.pyq_from_year}><input type="number" min="1990" max="2100" step="1" value={Number.isFinite(draft.pyq_from_year) ? draft.pyq_from_year : ''} onChange={event => patch('pyq_from_year', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
               <Field label="Last year" error={errors.pyq_to_year}><input type="number" min="1990" max="2100" step="1" value={Number.isFinite(draft.pyq_to_year) ? draft.pyq_to_year : ''} onChange={event => patch('pyq_to_year', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
             </div></div></NotebookCard>
@@ -360,21 +368,32 @@ export default function SettingsPage() {
       {activeTab === 'appearance' && <div className="settings-panel" role="tabpanel" id="settings-panel-appearance" aria-labelledby="settings-tab-appearance">
         <form className="settings-form" noValidate onSubmit={event => void saveTab('appearance', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'appearance'}>
-            <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Notebook theme" note="Choose paper, blackboard, or follow this device." /><div className="settings-section-content"><div className="theme-choice-grid" role="radiogroup" aria-label="Theme preference">{([['light','Warm paper','Light notebook paper'],['dark','Chalkboard','Dark, high-contrast study mode'],['auto','Auto','Follow your device setting']] as const).map(([value,title,desc]) => <label className={`theme-choice theme-choice-${value} ${draft.theme === value ? 'selected' : ''}`} key={value}><input type="radio" name="theme" value={value} checked={draft.theme === value} onChange={() => patch('theme', value as ThemeMode)} /><span className="theme-swatch"><i /><i /><i /></span><strong>{title}</strong><small>{desc}</small>{draft.theme === value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> {auto ? 'Auto theme follows the device appearance.' : 'Theme choice is saved with your account.'}</div></div></NotebookCard>
+            <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Notebook theme" /><div className="settings-section-content"><div className="theme-choice-grid" role="radiogroup" aria-label="Theme preference">{([['light','Warm paper','Light notebook paper'],['dark','Chalkboard','Dark, high-contrast study mode'],['auto','Auto','Follow your device setting']] as const).map(([value,title,desc]) => <label className={`theme-choice theme-choice-${value} ${draft.theme === value ? 'selected' : ''}`} key={value}><input type="radio" name="theme" value={value} checked={draft.theme === value} onChange={() => patch('theme', value as ThemeMode)} /><span className="theme-swatch"><i /><i /><i /></span><strong>{title}</strong><small>{desc}</small>{draft.theme === value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> {auto ? 'Auto theme follows the device appearance.' : 'Theme choice is saved with your account.'}</div></div></NotebookCard>
+
+            <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Color theme" note="Light/dark variant follows the mode above." /><div className="settings-section-content"><div className="color-theme-grid" role="radiogroup" aria-label="Color theme">{COLOR_THEME_OPTIONS.map(option => <label className={`color-theme-choice ${draft.color_theme === option.value ? 'selected' : ''}`} key={option.value}><input type="radio" name="color_theme" value={option.value} checked={draft.color_theme === option.value} onChange={() => patch('color_theme', option.value)} /><span className="color-theme-swatch" aria-hidden="true"><span className="swatch-half light"><i style={{ background: option.light[0] }} /><i style={{ background: option.light[1] }} /><i style={{ background: option.light[2] }} /></span><span className="swatch-half dark"><i style={{ background: option.dark[0] }} /><i style={{ background: option.dark[1] }} /><i style={{ background: option.dark[2] }} /></span></span><strong>{option.label}</strong><small>{option.description}</small>{draft.color_theme === option.value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> The top-right Light/Night switch keeps this palette and only changes the mode.</div></div></NotebookCard>
 
             <NotebookCard className="settings-section">
-              <SectionLabel icon={<Type size={18} />} title="Interface font" note="One font across the entire app, including headings, navigation and controls." />
+              <SectionLabel icon={<Type size={18} />} title="Reading font" note="Body text, menus and buttons." />
               <div className="settings-section-content">
-                <div className="font-choice-grid" role="radiogroup" aria-label="Interface font">
-                  {INTERFACE_FONT_OPTIONS.map(option => <label className={`font-choice ${draft.interface_font === option.value ? 'selected' : ''}`} key={option.value}>
+                <div className="font-choice-grid" role="radiogroup" aria-label="Reading font">
+                  {READING_FONT_OPTIONS.map(option => <label className={`font-choice ${draft.interface_font === option.value ? 'selected' : ''}`} key={option.value} style={{ '--body-scale': option.scale } as CSSProperties}>
                     <input type="radio" name="interface_font" value={option.value} checked={draft.interface_font === option.value} onChange={() => patch('interface_font', option.value)} />
-                    {/* These two samples intentionally preview each option; the rest of the UI inherits the global token. */}
+                    {/* These samples intentionally preview each candidate; the rest of the UI uses the applied Reading font. */}
                     <span className="font-choice-sample" style={{ fontFamily: option.stack }} aria-hidden="true">Aa</span>
-                    <span className="font-choice-copy"><strong style={{ fontFamily: option.stack }}>{option.label}</strong><small>{option.note}</small></span>
+                    <span className="font-choice-copy" style={{ fontFamily: option.stack }}><strong>{option.label}</strong><small>{option.description}</small></span>
                     {draft.interface_font === option.value && <span className="theme-check"><Check size={13} /></span>}
                   </label>)}
                 </div>
-                <div className="settings-note-line"><Type size={15} /> Previews across every page, heading, sidebar, button, form, dialog, chart label and notification as you choose. It is saved only with Save appearance settings. JSON, CSV, PDF and DOCX exports keep their own typography.</div>
+                <div className="typography-live-preview" style={{ '--font-body': selectedReadingFont.stack, '--body-scale': selectedReadingFont.scale } as CSSProperties} aria-live="polite">
+                  <div className="typography-preview-copy">
+                    <span className="type-overline">LIVE PREVIEW</span>
+                    <h2 className="type-h2">A clearer study session</h2>
+                    <p className="type-body">Keep your notes easy to follow, so you can spend more time understanding each idea.</p>
+                    <span className="type-caption">Your saved preference changes content text, not headings.</span>
+                  </div>
+                  <button className="type-button typography-preview-button" type="button">Review today’s plan</button>
+                </div>
+                <div className="settings-note-line"><Type size={15} /> The preview updates as you choose and, while Settings is open, previews across the authenticated app; leaving without saving reverts it. Save applies the Reading font to authenticated content; headings and public pages keep their fixed typography.</div>
               </div>
             </NotebookCard>
           </fieldset>
@@ -385,13 +404,13 @@ export default function SettingsPage() {
       {activeTab === 'rhythm' && <div className="settings-panel" role="tabpanel" id="settings-panel-rhythm" aria-labelledby="settings-tab-rhythm">
         <form className="settings-form" noValidate onSubmit={event => void saveTab('rhythm', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'rhythm'}>
-            <NotebookCard className="settings-section"><SectionLabel icon={<RotateCcw size={18} />} title="Revision rhythm" note="When a chapter is first marked Done, these gaps create its revision schedule." /><div className="settings-section-content"><Field label="Days between revisions" error={errors.revision_gaps}><input value={gapsText} onChange={event => { setGapsText(event.target.value); setErrors(current => { const next = { ...current }; delete next.revision_gaps; return next }) }} placeholder="1, 7, 30" /><span className="field-hint">Comma-separated positive days, sorted automatically. Existing revisions are not moved.</span></Field><div className="revision-gap-preview">{gapsText.split(',').map(value => Number(value.trim())).filter(value => Number.isFinite(value) && value > 0).map((value, index) => <span key={`${value}-${index}`}>R{index + 1}<strong>{value}d</strong></span>)}</div></div></NotebookCard>
+            <NotebookCard className="settings-section"><SectionLabel icon={<RotateCcw size={18} />} title="Revision rhythm" note="Gaps after a chapter is first marked Done." /><div className="settings-section-content"><Field label="Days between revisions" error={errors.revision_gaps}><input value={gapsText} onChange={event => { setGapsText(event.target.value); setErrors(current => { const next = { ...current }; delete next.revision_gaps; return next }) }} placeholder="1, 7, 30" /><span className="field-hint">Comma-separated positive days, sorted automatically. Existing revisions are not moved.</span></Field><div className="revision-gap-preview">{gapsText.split(',').map(value => Number(value.trim())).filter(value => Number.isFinite(value) && value > 0).map((value, index) => <span key={`${value}-${index}`}>R{index + 1}<strong>{value}d</strong></span>)}</div></div></NotebookCard>
 
-            <NotebookCard className="settings-section"><SectionLabel icon={<Timer size={18} />} title="Daily goal & focus" note="A gentle baseline for the timer and study heatmap." /><div className="settings-section-content"><div className="form-grid two"><Field label="Daily study goal (hours)" error={errors.daily_study_goal_minutes}><input type="number" min="0" max="24" step="any" value={dailyGoalText} onChange={event => { setDailyGoalText(event.target.value); setErrors(current => { const next = { ...current }; delete next.daily_study_goal_minutes; return next }) }} /><span className="field-hint">Use whole-minute increments (for example, 1.5 hours).</span></Field><label className="sound-toggle"><input type="checkbox" checked={draft.sound_enabled} onChange={event => patch('sound_enabled', event.target.checked)} /><span className="toggle-visual" /><span><strong>Focus timer sound</strong><small>Play a soft tone when a focus session ends.</small></span></label></div><div className="settings-note-line"><Bell size={15} /> Sound is generated locally in your browser; no audio is sent to a service.{draft.sound_enabled && <button className="text-button" type="button" onClick={playTestTone}>{soundTested ? 'Test tone played' : 'Try a tone'}</button>}</div></div></NotebookCard>
+            <NotebookCard className="settings-section"><SectionLabel icon={<Timer size={18} />} title="Daily goal & focus" /><div className="settings-section-content"><div className="form-grid two"><Field label="Daily study goal (hours)" error={errors.daily_study_goal_minutes}><input type="number" min="0" max="24" step="any" value={dailyGoalText} onChange={event => { setDailyGoalText(event.target.value); setErrors(current => { const next = { ...current }; delete next.daily_study_goal_minutes; return next }) }} /><span className="field-hint">Use whole-minute increments (for example, 1.5 hours).</span></Field><label className="sound-toggle"><input type="checkbox" checked={draft.sound_enabled} onChange={event => patch('sound_enabled', event.target.checked)} /><span className="toggle-visual" /><span><strong>Focus timer sound</strong><small>Play a soft tone when a focus session ends.</small></span></label></div><div className="settings-note-line"><Bell size={15} /> Sound is generated locally in your browser; no audio is sent to a service.{draft.sound_enabled && <button className="text-button" type="button" onClick={playTestTone}>{soundTested ? 'Test tone played' : 'Try a tone'}</button>}</div></div></NotebookCard>
 
             <ReminderSettingsSection draft={draft} patch={patch} errors={errors} />
 
-            <NotebookCard className="settings-section"><SectionLabel icon={<Target size={18} />} title="Weak-area thresholds" note="These bands describe test results; they do not judge your preparation." /><div className="settings-section-content"><div className="form-grid three">
+            <NotebookCard className="settings-section"><SectionLabel icon={<Target size={18} />} title="Weak-area thresholds" note="Bands for test results." /><div className="settings-section-content"><div className="form-grid three">
               <Field label="Weak below (%)" error={errors.weak_threshold}><input type="number" min="0" max="99.99" step="0.01" value={Number.isFinite(draft.weak_threshold) ? draft.weak_threshold : ''} onChange={event => patch('weak_threshold', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
               <Field label="Strong above (%)" error={errors.strong_threshold}><input type="number" min="0.01" max="100" step="0.01" value={Number.isFinite(draft.strong_threshold) ? draft.strong_threshold : ''} onChange={event => patch('strong_threshold', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
               <Field label="Dropping when down by (points)" error={errors.dropping_threshold}><input type="number" min="0" max="100" step="0.01" value={Number.isFinite(draft.dropping_threshold) ? draft.dropping_threshold : ''} onChange={event => patch('dropping_threshold', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
@@ -404,7 +423,7 @@ export default function SettingsPage() {
       {activeTab === 'data' && <div className="settings-panel" role="tabpanel" id="settings-panel-data" aria-labelledby="settings-tab-data">
         <form className="settings-form" noValidate onSubmit={event => event.preventDefault()}>
           <fieldset className="settings-form-fields">
-            <NotebookCard className="settings-section backup-status-settings"><SectionLabel icon={<Cloud size={18} />} title="Your data & backup" note="Your cloud data is private to your account. Keep an export somewhere safe." /><div className="settings-section-content"><div className="backup-status-line"><div><strong>{data.settings.last_backup_at ? `Last backup ${new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(data.settings.last_backup_at))}` : 'No backup recorded yet'}</strong><span>{data.settings.last_backup_at ? 'JSON, PDF and DOCX exports live in Export & Backup.' : 'A JSON backup is the easiest way to keep a portable copy.'}</span></div><Button variant="secondary" type="button" onClick={() => navigate('/backup')}>Open backup center</Button></div></div></NotebookCard>
+            <NotebookCard className="settings-section backup-status-settings"><SectionLabel icon={<Cloud size={18} />} title="Your data & backup" note="Private to your account. Keep an export safe." /><div className="settings-section-content"><div className="backup-status-line"><div><strong>{data.settings.last_backup_at ? `Last backup ${new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(data.settings.last_backup_at))}` : 'No backup recorded yet'}</strong><span>{data.settings.last_backup_at ? 'JSON, PDF and DOCX exports live in Export & Backup.' : 'A JSON backup is the easiest way to keep a portable copy.'}</span></div><Button variant="secondary" type="button" onClick={() => navigate('/backup')}>Open backup center</Button></div></div></NotebookCard>
 
             <section className="danger-zone" aria-label="Danger zone"><div className="danger-zone-head"><div className="danger-icon"><AlertOctagon size={18} /></div><div><h2>Danger zone</h2><p>These options affect your entire study notebook and cannot be triggered by a normal Save.</p></div></div><div className="danger-zone-row"><div><strong>Reset all study data</strong><span>Delete your cloud records, mistake images, and this device’s offline cache. This cannot be recovered unless you exported a backup.</span></div><Button variant="danger" type="button" onClick={() => setFirstResetOpen(true)}><RotateCcw size={15} /> Reset all data</Button></div></section>
           </fieldset>
@@ -412,7 +431,7 @@ export default function SettingsPage() {
       </div>}
     </div>
 
-    {anyDirty && <p className="settings-unsaved-note" role="status">You have unsaved changes — look for the marked tab{anyDirty && TABS.filter(tab => isTabDirty(tab.id)).length > 1 ? 's' : ''}. Each tab saves on its own.</p>}
+    {anyDirty && <p className="settings-unsaved-note" role="status">Unsaved changes in the marked tab{anyDirty && TABS.filter(tab => isTabDirty(tab.id)).length > 1 ? 's' : ''}.</p>}
 
     {passwordDialogOpen && <ChangePasswordDialog onClose={() => setPasswordDialogOpen(false)} />}
     {firstResetOpen && <Dialog title="This will erase your study history." subtitle="Chapters, tests, mistakes, revisions, tasks, goals, sessions and uploaded images will be permanently removed from the cloud and this device." onClose={() => setFirstResetOpen(false)} className="dialog-danger"><div className="reset-warning"><AlertOctagon size={22} /><p>Export a JSON backup first if you may want to restore your data later. This reset does not delete your Supabase login account.</p></div><div className="dialog-actions"><Button variant="secondary" onClick={() => setFirstResetOpen(false)}>Keep my data</Button><Button variant="danger" onClick={() => { setFirstResetOpen(false); setSecondResetOpen(true) }}>Continue to confirmation</Button></div></Dialog>}
@@ -461,13 +480,13 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
       notify(error instanceof Error ? error.message : 'Could not update the password. Try again.', 'error')
     } finally { savingRef.current = false; setSaving(false) }
   }
-  return <Dialog title="Change password" subtitle="Choose a new password for your secure owner account." onClose={onClose} className="dialog-narrow"><form className="form-stack" noValidate onSubmit={submit}>
+  return <Dialog title="Change password" onClose={onClose} className="dialog-narrow"><form className="form-stack" noValidate onSubmit={submit}>
     <Field label="New password" required hint="At least 8 characters." error={errors.password}><input type="password" autoComplete="new-password" value={password} onChange={event => { setPassword(event.target.value); setErrors(current => ({ ...current, password: undefined })) }} /></Field>
     <Field label="Confirm new password" required error={errors.confirmation}><input type="password" autoComplete="new-password" value={confirmation} onChange={event => { setConfirmation(event.target.value); setErrors(current => ({ ...current, confirmation: undefined })) }} /></Field>
     <div className="dialog-actions"><Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button><Button type="submit" loading={saving}><KeyRound size={15} /> {saving ? 'Updating…' : 'Update password'}</Button></div>
   </form></Dialog>
 }
 
-function SectionLabel({ icon, title, note }: { icon: React.ReactNode; title: string; note: string }) {
-  return <div className="settings-section-heading"><span className="settings-section-icon">{icon}</span><div><h2>{title}</h2><p>{note}</p></div></div>
+function SectionLabel({ icon, title, note }: { icon: React.ReactNode; title: string; note?: string }) {
+  return <div className="settings-section-heading"><span className="settings-section-icon">{icon}</span><div><h2>{title}{note && <InfoTip text={note} />}</h2></div></div>
 }

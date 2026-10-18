@@ -9,10 +9,12 @@ import { createId } from '../lib/id'
 import { indiaToday, prettyDate } from '../lib/date'
 import { reviewCard, dueCards, type CardRating } from '../lib/jee/cards'
 import type { CardKind, StudyCard } from '../types'
+import { useReportSubjects } from '../lib/exams/useExamSubjects'
 
 type KindFilter = 'all' | CardKind
 
 export default function DecksPage() {
+  const deckSubjects = useReportSubjects()
   const { data, upsert, remove, upsertMany } = useData()
   const { notify } = useToast()
   const [params] = useSearchParams()
@@ -20,7 +22,7 @@ export default function DecksPage() {
   const dueOverall = useMemo(() => dueCards(data.studyCards, today), [data.studyCards, today])
   const defaultChapter = params.get('chapter') ?? dueOverall[0]?.chapter_id ?? data.chapters.find(chapter => chapter.formula_notes.trim())?.id ?? data.chapters[0]?.id ?? ''
   const [chapterId, setChapterId] = useState(defaultChapter)
-  const [subject, setSubject] = useState<'all' | 'Physics' | 'Chemistry' | 'Maths'>('all')
+  const [subject, setSubject] = useState<string>('all')
   const [kind, setKind] = useState<KindFilter>('all')
   const [reviewing, setReviewing] = useState(false)
   const [editing, setEditing] = useState<StudyCard | 'new' | null>(null)
@@ -55,9 +57,8 @@ export default function DecksPage() {
 
   return <div className="content-page decks-page">
     <PageHeader
-      eyebrow="FORMULAS & FLASHCARDS ON THE R1 → R7 → R30 LADDER"
       title="Formula & flashcards"
-      subtitle="Cards you know move out to R7, then R30. Difficult ones come back tomorrow. Due cards also surface in Study now."
+      subtitle="Known cards move to R7, then R30; hard ones return tomorrow."
       action={<Button onClick={() => setEditing('new')} disabled={!chapterId}><Plus size={16} /> New card</Button>}
     />
 
@@ -69,20 +70,20 @@ export default function DecksPage() {
 
     <NotebookCard className="jee-filter-card">
       <div className="jee-filter-grid">
-        <label className="jee-select"><span>Subject</span><select value={subject} onChange={event => setSubject(event.target.value as typeof subject)}><option value="all">All subjects</option><option>Physics</option><option>Chemistry</option><option>Maths</option></select></label>
+        <label className="jee-select"><span>Subject</span><select value={subject} onChange={event => setSubject(event.target.value as typeof subject)}><option value="all">All subjects</option>{deckSubjects.map(item => <option key={item}>{item}</option>)}</select></label>
         <ChapterSelect chapters={data.chapters} value={chapterId} onChange={setChapterId} subject={subject} label="Chapter" />
       </div>
       <ChipFilter<KindFilter> label="Deck" value={kind} onChange={setKind} options={[{ value: 'all', label: 'Both' }, { value: 'formula', label: 'Formulas' }, { value: 'flashcard', label: 'Flashcards' }]} />
     </NotebookCard>
 
-    {!chapter ? <NotebookCard><EmptyState title="No chapter selected." description="Pick a chapter to open its decks." /></NotebookCard> : <>
+    {!chapter ? <NotebookCard><EmptyState title="Pick a chapter to open its decks." /></NotebookCard> : <>
       <div className="jee-deck-actions">
         <Button onClick={() => setReviewing(true)} disabled={chapterDue.length === 0}><Eye size={16} /> Review {chapterDue.length} due</Button>
         {chapter.formula_notes.trim() && <Button variant="secondary" onClick={() => void importFormulaNotes()}><WandSparkles size={15} /> Make formula cards from chapter notes</Button>}
       </div>
 
       <SectionHeading title={`${chapter.name}`} note={`${cards.length} card${cards.length === 1 ? '' : 's'} in view · ${gaps.map(gap => `R${gap}`).join(' → ')} ladder`} action={<SubjectBadge subject={chapter.subject} />} />
-      {cards.length === 0 ? <NotebookCard><EmptyState icon={<Sigma size={24} />} title="No cards in this deck yet." description="Add a formula you keep forgetting, or a question you want to rehearse. Cards stay private to your account." action={<Button variant="secondary" size="sm" onClick={() => setEditing('new')}><Plus size={15} /> Add a card</Button>} /></NotebookCard>
+      {cards.length === 0 ? <NotebookCard><EmptyState icon={<Sigma size={24} />} title="No cards in this deck yet." action={<Button variant="secondary" size="sm" onClick={() => setEditing('new')}><Plus size={15} /> Add a card</Button>} /></NotebookCard>
       : <div className="jee-card-grid">
         {cards.map(card => {
           const isDue = dueCards([card], today).length > 0
@@ -183,7 +184,7 @@ function CardDialog({ card, chapterId, nextPosition, onClose, onSave }: {
     catch (saveError) { notify(saveError instanceof Error ? saveError.message : 'Could not save the card.', 'error') }
     finally { setSaving(false) }
   }
-  return <Dialog title={card ? 'Edit card' : 'New card'} subtitle="Formulas and flashcards share one scheduling ladder." onClose={onClose} className="jee-dialog">
+  return <Dialog title={card ? 'Edit card' : 'New card'} onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <Field label="Deck"><select value={kind} onChange={event => setKind(event.target.value as CardKind)}><option value="formula">Formula</option><option value="flashcard">Flashcard</option></select></Field>
       <Field label={kind === 'formula' ? 'Formula name or prompt' : 'Question'} required><textarea rows={2} maxLength={5000} value={front} onChange={event => setFront(event.target.value)} placeholder={kind === 'formula' ? 'e.g. Capacitance of parallel plates' : 'e.g. Why does a conductor have zero field inside?'} /></Field>
