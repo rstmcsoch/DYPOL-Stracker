@@ -21,7 +21,7 @@ const FOCUSABLE = 'button:not([disabled]),input:not([disabled]),select:not([disa
 export function OnboardingDialog() {
   const { data, upsert, upsertMany } = useData()
   const { user } = useAuth()
-  const { data: fetched } = useQuery({ queryKey: ['exam-catalog'], queryFn: fetchExamCatalog, staleTime: 10 * 60_000 })
+  const { data: fetched } = useQuery({ queryKey: ['exam-catalog'], queryFn: fetchExamCatalog, staleTime: 0 })
   const catalog = fetched ?? visibleCatalog(BUILT_IN_EXAMS)
   const settings = data.settings
   const [name, setName] = useState(() => settings.owner_name || data.profile?.display_name || (user?.isLocal ? '' : user?.displayName ?? ''))

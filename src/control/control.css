@@ -596,13 +596,30 @@ textarea.cc-input { resize: vertical; min-height: 84px; }
 .cc-image-preview { width: 160px; min-height: 90px; display: grid; place-items: center; }
 
 /* Exams (owner catalogue) */
-.cc-exam-form label { display: grid; gap: 4px; font-size: 13px; }
-.cc-exam-form .cc-check { display: flex; align-items: center; gap: 8px; }
-.cc-exam-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.cc-exam-list > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid var(--cc-border, rgba(127,127,127,.25)); border-radius: 8px; }
+.cc-exam-form { gap: 14px; }
+.cc-exam-form label, .cc-exam-field { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: var(--cc-muted); }
+.cc-exam-form label .cc-input, .cc-exam-field .cc-input { font-weight: 400; color: var(--cc-text); }
+.cc-exam-form .cc-check { display: flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13.5px; font-weight: 400; color: var(--cc-text); }
+.cc-exam-form .cc-check input { width: 16px; height: 16px; accent-color: var(--cc-accent); }
+.cc-exam-field__label { font-size: 12px; font-weight: 600; color: var(--cc-muted); }
+.cc-exam-group { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--cc-border); border-radius: var(--cc-radius); background: var(--cc-surface); }
+.cc-exam-group > strong { font-size: 13.5px; color: var(--cc-text); }
+.cc-exam-group > .cc-muted { font-weight: 400; }
+.cc-year-editor { display: grid; gap: 8px; }
+.cc-year-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 28px; }
+.cc-year-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border: 1px solid var(--cc-border); border-radius: 999px; background: var(--cc-input); color: var(--cc-text); font-size: 13px; font-weight: 600; }
+.cc-year-chip button { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--cc-muted); cursor: pointer; }
+.cc-year-chip button:hover { background: var(--cc-surface-2, var(--cc-border-soft)); color: var(--cc-text); }
+.cc-year-add { display: flex; gap: 8px; align-items: center; }
+.cc-year-add .cc-input { max-width: 140px; min-height: 34px; }
+.cc-exam-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.cc-exam-list > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 12px 14px; border: 1px solid var(--cc-border); border-radius: var(--cc-radius); background: var(--cc-surface); }
+.cc-exam-list > li:hover { border-color: var(--cc-border-strong); }
 .cc-exam-list > li.is-hidden { opacity: .6; }
-.cc-exam-main { min-width: 0; }
-.cc-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.cc-exam-main { min-width: 0; display: grid; gap: 2px; }
+.cc-exam-main strong { font-size: 14px; color: var(--cc-text); }
+.cc-exam-meta { color: var(--cc-muted); font-size: 12.5px; white-space: normal; }
+.cc-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 
 /* Analytics */
 .cc-an-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 12px; align-items: end; padding: 12px; border: 1px solid var(--cc-border); border-radius: var(--cc-radius); background: var(--cc-surface); }

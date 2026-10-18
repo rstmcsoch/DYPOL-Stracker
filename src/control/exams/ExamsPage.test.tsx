@@ -102,6 +102,51 @@ describe('Exams section interactions', () => {
   })
 })
 
+describe('Exams editor styling and target years', () => {
+  it('renders the editor with admin field styling and a chip-based year editor', async () => {
+    mount()
+    await screen.findByText('Alpha Exam')
+    fireEvent.click(within(rows()[0] as HTMLElement).getByRole('button', { name: /Edit/ }))
+    expect(await screen.findByText('Edit Alpha Exam')).toBeTruthy()
+
+    // Every text control carries the shared admin input styling; no raw comma years field.
+    const panel = document.querySelector('.cc-exam-form') as HTMLElement
+    const controls = [...panel.querySelectorAll('input, textarea, select')].filter(el => (el as HTMLInputElement).type !== 'checkbox')
+    expect(controls.length).toBeGreaterThan(5)
+    expect(controls.every(el => el.classList.contains('cc-input'))).toBe(true)
+    expect(screen.queryByPlaceholderText('blank = automatic')).toBeNull()
+
+    // Years are chips: Alpha is seeded with 2027.
+    expect(panel.querySelector('.cc-year-chip')?.textContent).toContain('2027')
+    fireEvent.click(within(panel).getByRole('button', { name: 'Remove year 2027' }))
+    expect(panel.querySelector('.cc-year-chip')).toBeNull()
+    expect(within(panel).getByText(/Automatic/)).toBeTruthy()
+
+    // Adding validates and sorts; duplicates are rejected with an inline error.
+    const yearInput = within(panel).getByLabelText('Year to add')
+    fireEvent.change(yearInput, { target: { value: '2031' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add year' }))
+    expect(panel.querySelector('.cc-year-chip')?.textContent).toContain('2031')
+    fireEvent.change(yearInput, { target: { value: '2031' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add year' }))
+    expect(within(panel).getByText('2031 is already in the list.')).toBeTruthy()
+    fireEvent.change(yearInput, { target: { value: '1999' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add year' }))
+    expect(within(panel).getByText('Enter a whole year between 2020 and 2100.')).toBeTruthy()
+  })
+
+  it('exam rows use the admin card styling hooks', async () => {
+    mount()
+    await screen.findByText('Alpha Exam')
+    const row = rows()[0] as HTMLElement
+    expect(row.querySelector('.cc-exam-main strong')?.textContent).toBe('Alpha Exam')
+    expect(row.querySelector('.cc-exam-meta')).toBeTruthy()
+    const css = readFileSync(`${process.cwd()}/src/control/control.css`, 'utf8')
+    expect(css).toContain('.cc-exam-list > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 12px 14px; border: 1px solid var(--cc-border); border-radius: var(--cc-radius); background: var(--cc-surface); }')
+    expect(css).toContain('.cc-year-chip')
+  })
+})
+
 describe('Control sidebar', () => {
   it('has no X/close button next to the sidebar title', () => {
     const layout = readFileSync(`${process.cwd()}/src/control/ControlLayout.tsx`, 'utf8')
