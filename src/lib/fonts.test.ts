@@ -139,7 +139,7 @@ describe('role typography coverage', () => {
     const ai = readFileSync(`${process.cwd()}/src/styles/ai.css`, 'utf8')
 
   it('keeps fixed identity roles separate from scaled content and readable paragraph floors', () => {
-    for (const [role, size] of Object.entries({ brand: '1.75rem', display: '2.25rem', h1: '2rem', h2: '1.5rem', h3: '1.25rem', empty: '1.25rem', metric: '2rem' })) {
+    for (const [role, size] of Object.entries({ brand: '1.575rem', display: '2.025rem', h1: '1.8rem', h2: '1.38rem', h3: '1.1875rem', empty: '1.1875rem', metric: '1.8rem' })) {
       expect(typography).toContain(`--type-${role}-size: ${size}`)
     }
     expect(typography).toContain('font-family: var(--font-identity) !important;')
@@ -151,6 +151,21 @@ describe('role typography coverage', () => {
     expect(base).toContain(":root[data-theme='dark']")
     expect(base).toContain('--text-muted: #bdc5ba;')
     expect(typography).toContain('@media (max-width: 640px)')
+  })
+
+  it('keeps the reduced identity scale readable on phones (page title stays >= 22px)', () => {
+    // Mobile overrides: display -10%, h1 -10% (25.2px), h2 -8%, h3 -5%, metric -10% vs the previous scale.
+    for (const rule of ['font-size: 1.71rem !important', 'font-size: 1.575rem !important', 'font-size: 1.265rem !important', 'font-size: 1.06875rem !important']) {
+      expect(typography).toContain(rule)
+    }
+  })
+
+  it('no longer renders a Keep going navigation heading in the sidebar or drawer', () => {
+    expect(shell).not.toContain('KEEP GOING')
+    expect(shell).not.toContain('Keep going')
+    // Settings itself is preserved, now under Planning.
+    const planning = shell.slice(shell.indexOf("caption: 'PLANNING'"), shell.indexOf('const mobileBar'))
+    expect(planning).toContain("to: '/settings'")
   })
 
   it('covers forms, navigation, dialogs, portal menus, charts, AI and notifications', () => {

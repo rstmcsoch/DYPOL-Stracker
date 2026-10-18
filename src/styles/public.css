@@ -325,7 +325,7 @@
 .hero h1 {
   margin: 0 0 16px;
   color: var(--ink);
-  font: 400 clamp(33px, 5.1vw, 56px)/1.04 var(--font-heading);
+  font: 400 clamp(30px, 4.6vw, 50px)/1.04 var(--font-heading);
   letter-spacing: -1.2px;
 }
 
@@ -636,7 +636,7 @@
 .pub-section h2 {
   margin: 9px 0 0;
   color: var(--ink);
-  font: 400 clamp(27px, 3.4vw, 42px)/1.09 var(--font-heading);
+  font: 400 clamp(25px, 3.1vw, 38px)/1.09 var(--font-heading);
   letter-spacing: -.9px;
 }
 
@@ -675,7 +675,7 @@
 
 .loop-step-index { display: block; color: #c9a866; font: 400 22px/1 var(--font-label); }
 .pub-page[data-public-theme='dark'] .loop-step-index { color: #d8b06a; }
-.loop-step-card h3 { margin: 8px 0 0; color: var(--ink); font: 400 22px/1.15 var(--font-heading); }
+.loop-step-card h3 { margin: 8px 0 0; color: var(--ink); font: 400 21px/1.15 var(--font-heading); }
 .loop-step-card p { margin: 10px 0 14px; color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
 
 .loop-step-link {
@@ -763,7 +763,7 @@
 }
 
 .feature-entry-head > div { min-width: 0; }
-.feature-entry-head h3 { margin: 1px 0 0; color: var(--ink); font: 400 21px/1.15 var(--font-heading); }
+.feature-entry-head h3 { margin: 1px 0 0; color: var(--ink); font: 400 20px/1.15 var(--font-heading); }
 .feature-entry-head p { margin: 8px 0 0; color: var(--pub-muted); font-size: 14px; line-height: 1.5; }
 
 .feature-points {
@@ -822,7 +822,7 @@
   align-items: start;
 }
 
-.principle-copy h2 { margin: 9px 0 0; color: var(--ink); font: 400 clamp(27px, 3.4vw, 42px)/1.09 var(--font-heading); letter-spacing: -.9px; }
+.principle-copy h2 { margin: 9px 0 0; color: var(--ink); font: 400 clamp(25px, 3.1vw, 38px)/1.09 var(--font-heading); letter-spacing: -.9px; }
 .principle-copy > p { margin: 13px 0 0; color: var(--ink-soft); font-size: 16px; line-height: 1.55; }
 
 .principle-note {
@@ -903,7 +903,7 @@
 }
 
 .step-copy { min-width: 0; }
-.step-copy h3 { margin: 1px 0 0; color: var(--ink); font: 400 clamp(19px, 1.9vw, 24px)/1.15 var(--font-heading); }
+.step-copy h3 { margin: 1px 0 0; color: var(--ink); font: 400 clamp(18px, 1.8vw, 23px)/1.15 var(--font-heading); }
 .step-copy p { max-width: 64ch; margin: 5px 0 0; color: var(--ink-soft); font-size: 15px; line-height: 1.5; }
 
 /* Only the last stage is ticked: it is the one that feeds the next cycle. */
@@ -1055,7 +1055,7 @@
 .dypol-mark i { position: absolute; top: -8px; right: -8px; color: #cf9150; font:normal 15px var(--font-body); }
 
 .dypol-band > div { min-width: 0; }
-.dypol-band h2 { margin: 0; color: var(--ink); font: 400 clamp(21px, 2.3vw, 28px)/1.1 var(--font-heading); letter-spacing: -.4px; }
+.dypol-band h2 { margin: 0; color: var(--ink); font: 400 clamp(20px, 2.15vw, 26px)/1.1 var(--font-heading); letter-spacing: -.4px; }
 .dypol-band p { max-width: 66ch; margin: 7px 0 0; color: var(--ink-soft); font-size: 14.5px; line-height: 1.5; }
 
 .dypol-tag {
@@ -1282,7 +1282,7 @@
 }
 
 .final-sheet .pub-eyebrow { justify-content: center; }
-.final-sheet h2 { margin: 9px 0 0; color: var(--ink); font: 400 clamp(26px, 3.5vw, 40px)/1.1 var(--font-heading); letter-spacing: -.8px; }
+.final-sheet h2 { margin: 9px 0 0; color: var(--ink); font: 400 clamp(24px, 3.2vw, 36px)/1.1 var(--font-heading); letter-spacing: -.8px; }
 .final-sheet > p { max-width: 52ch; margin: 13px auto 0; color: var(--ink-soft); font-size: 16px; line-height: 1.5; }
 .final-sheet .pub-cta-row { margin-top: 18px; }
 .final-note {

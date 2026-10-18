@@ -10,7 +10,7 @@ export function userNavLabelKey(to: string): string | null {
   return item ? `user.nav.${item.slug}.label` : null
 }
 
-/** Registry key for a navigation group heading such as "KEEP GOING". */
+/** Registry key for a navigation group heading such as "PLANNING". */
 export function userNavCaptionKey(caption: string): string {
   return `user.nav.group.${caption.trim().toLowerCase().replace(/\s+/g, '-')}.label`
 }
