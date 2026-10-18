@@ -35,6 +35,20 @@ describe('centralized typography registry', () => {
     for (const value of READING_FONTS) expect(normalizeReadingFont(value)).toBe(value)
   })
 
+  it('routes the Settings picker into the unsaved draft and its preview, never into a persisting setter', () => {
+    const settingsPage = readFileSync(`${process.cwd()}/src/pages/SettingsPage.tsx`, 'utf8')
+    expect(settingsPage).toContain("onChange={() => patch('interface_font', option.value)}")
+    expect(settingsPage).toContain('useReadingFontPreview(draft.interface_font)')
+    expect(settingsPage).not.toContain('setInterfaceFont')
+  })
+
+  it('keeps font persistence out of AppearanceContext, which only resolves and applies the font', () => {
+    const appearance = readFileSync(`${process.cwd()}/src/contexts/AppearanceContext.tsx`, 'utf8')
+    expect(appearance).not.toMatch(/setInterfaceFont|pendingFont|writeQueue|\bupsert\(/)
+    // Theme persists through the shared settings writer; the font field itself is never written here.
+    expect(appearance).not.toMatch(/interface_font\s*:/)
+  })
+
   it('applies and clears only the content-family and scale tokens at the document boundary', () => {
     const root = document.createElement('html')
     for (const option of READING_FONT_OPTIONS) {

@@ -21,9 +21,9 @@ function Probe() {
   </>
 }
 
-function mount(settings: AppSettings, upsert = vi.fn().mockResolvedValue(undefined)) {
-  mocks.useData.mockReturnValue({ data: { settings }, upsert })
-  return { ...render(<AppearanceProvider><Probe /></AppearanceProvider>), upsert }
+function mount(settings: AppSettings, updateSettings = vi.fn().mockImplementation((mutate: (current: AppSettings) => AppSettings) => Promise.resolve(mutate(settings)))) {
+  mocks.useData.mockReturnValue({ data: { settings }, updateSettings })
+  return { ...render(<AppearanceProvider><Probe /></AppearanceProvider>), updateSettings }
 }
 
 beforeEach(() => {
@@ -66,21 +66,24 @@ describe('colour theme persistence', () => {
     expect(document.documentElement.dataset.color).toBeUndefined()
   })
 
-  it('persists palette changes through the account settings row', async () => {
-    const upsert = vi.fn().mockResolvedValue(undefined)
-    mount(defaultSettings('u1'), upsert)
+  it('persists palette changes through the shared settings writer', async () => {
+    const settings = defaultSettings('u1')
+    const updateSettings = vi.fn().mockImplementation((mutate: (current: AppSettings) => AppSettings) => Promise.resolve(mutate(settings)))
+    mount(settings, updateSettings)
     fireEvent.click(screen.getByText('Pick ocean'))
-    await waitFor(() => expect(upsert).toHaveBeenCalled())
-    expect(upsert.mock.calls[0]?.[0]).toBe('app_settings')
-    expect(upsert.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ color_theme: 'ocean-deep', theme: 'light' }))
+    await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1))
+    const mutate = updateSettings.mock.calls[0]?.[0] as (current: AppSettings) => AppSettings
+    expect(mutate(settings)).toEqual(expect.objectContaining({ color_theme: 'ocean-deep', theme: 'light' }))
   })
 
   it('the top-right style mode switch never resets the chosen palette', async () => {
-    const upsert = vi.fn().mockResolvedValue(undefined)
-    mount({ ...defaultSettings('u1'), color_theme: 'forest-emerald' }, upsert)
+    const settings = { ...defaultSettings('u1'), color_theme: 'forest-emerald' as AppSettings['color_theme'] }
+    const updateSettings = vi.fn().mockImplementation((mutate: (current: AppSettings) => AppSettings) => Promise.resolve(mutate(settings)))
+    mount(settings, updateSettings)
     fireEvent.click(screen.getByText('Night on'))
-    await waitFor(() => expect(upsert).toHaveBeenCalled())
-    const saved = upsert.mock.calls[0]?.[1] as AppSettings
+    await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1))
+    const mutate = updateSettings.mock.calls[0]?.[0] as (current: AppSettings) => AppSettings
+    const saved = mutate(settings)
     expect(saved.theme).toBe('dark')
     expect(saved.color_theme).toBe('forest-emerald')
   })

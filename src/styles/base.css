@@ -1,4 +1,20 @@
 /* STRACKER · warm paper, pencil lines, quiet colour */
+
+/* TYPOGRAPHY CONTRACT
+ *  1. Reading content has one account-controlled family. `--reading-font-family` (and
+ *     `--body-scale`) are written to <html> by AppearanceContext (applyReadingFont) from the
+ *     font being rendered: a live Settings draft preview, otherwise the saved
+ *     app_settings.interface_font. AppearanceContext never persists a font; Settings Save
+ *     writes it through DataContext.updateSettings.
+ *  2. Patrick Hand stays the fixed identity family for brand, headings, labels and numbers.
+ *     Components use the semantic roles below, or inherit; they never name a family.
+ *  3. Native controls, option lists and placeholders inherit (the font-inherit rules below).
+ *     Portals and overlays inherit from <html>, so their content follows the Reading font too.
+ *  4. Scoped code samples are the one monospace exception (.ai-code-block in ai.css).
+ *     Monospace must not be used for navigation, controls, headings, tables or prose.
+ *  5. Public pages do not read the account preference. Exports (JSON, CSV, PDF, DOCX) keep
+ *     their own typography and never read these tokens.
+ */
 :root {
   /* One identity family is shared by the public site and fixed app headings. */
   --font-identity: 'Patrick Hand', 'Segoe Print', 'Bradley Hand', cursive;

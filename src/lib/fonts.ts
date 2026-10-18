@@ -1,9 +1,16 @@
 import { READING_FONTS, type ReadingFont } from '../types/index.js'
 
 /**
- * Registry for account-scoped reading fonts. Identity typography is intentionally
- * excluded: Patrick Hand is a fixed design role, never an option in Settings.
- * Font files are self-hosted under /assets/fonts/ and declared in fonts.css.
+ * Registry for account-scoped Reading fonts, with one owner per concern:
+ *  - `app_settings.interface_font` is the persisted source of truth. It changes only when
+ *    Settings -> Appearance -> "Save appearance settings" runs, through DataContext.updateSettings.
+ *  - SettingsPage owns the draft. Picking a font edits the draft and previews it through
+ *    AppearanceContext; it persists nothing, and Discard or leaving Settings drops the draft.
+ *  - AppearanceContext owns runtime application. It resolves the effective font (a live preview
+ *    from the Settings draft, otherwise the saved value) and never writes a font anywhere.
+ *  - Identity typography is intentionally excluded: Patrick Hand is a fixed design role,
+ *    never an option in Settings. Font files are self-hosted under /assets/fonts/ and
+ *    declared in fonts.css; each stack ends in a system fallback.
  */
 export interface ReadingFontOption {
   value: ReadingFont

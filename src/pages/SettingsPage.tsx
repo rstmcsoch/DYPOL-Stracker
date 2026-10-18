@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { AlertOctagon, Bell, CalendarDays, Check, Cloud, Database, KeyRound, LogOut, Palette, RotateCcw, Save, Shield, SlidersHorizontal, Target, Timer, Type, UserRound } from 'lucide-react'
 import { Button, Dialog, Field, InfoTip, NotebookCard, PageHeader, StatusBadge } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
+import { useReadingFontPreview } from '../contexts/AppearanceContext'
 import { useToast } from '../contexts/ToastContext'
 import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
@@ -37,8 +38,12 @@ const TAB_FIELDS: Record<Exclude<SettingsTab, 'data'>, (keyof AppSettings)[]> = 
   rhythm: ['weak_threshold', 'strong_threshold', 'dropping_threshold', 'revision_gaps', 'daily_study_goal_minutes', 'sound_enabled', 'reminders_enabled', 'reminder_time', 'reminder_types']
 }
 
+/** Field-level equality for persisted values, including arrays such as revision gaps. */
+const sameSettingValue = (left: unknown, right: unknown): boolean =>
+  Object.is(left, right) || JSON.stringify(left) === JSON.stringify(right)
+
 export default function SettingsPage() {
-  const { data, upsert } = useData()
+  const { data, upsert, updateSettings } = useData()
   const jeeExam = isJeeSettings(data.settings)
   const examTitle = chosenExamTitle(data.settings)
   const examTrackLabels = trackLabels(data.settings)
@@ -69,8 +74,13 @@ export default function SettingsPage() {
   const [resetting, setResetting] = useState(false)
   const resettingRef = useRef(false)
   const [soundTested, setSoundTested] = useState(false)
+  // The unsaved Appearance draft previews live across the app. Leaving this page clears the
+  // preview, so an unsaved font never outlives the draft that produced it.
+  useReadingFontPreview(draft.interface_font)
 
-  useEffect(() => {
+  // Layout phase: when saved settings arrive (or change externally), the draft adopts them before
+  // the browser paints, so the live font preview never shows a stale draft for a frame.
+  useLayoutEffect(() => {
     const previous = savedRef.current
     setDraft(current => {
       const next = { ...data.settings }
@@ -173,27 +183,30 @@ export default function SettingsPage() {
 
     try {
       const now = new Date().toISOString()
-      // Write the saved settings + this tab's validated fields, so unsaved edits in
-      // other tabs are never overwritten by saving here.
+      // This tab's validated values, normalised the way they are stored.
       const source: AppSettings = validated.success ? { ...candidate, ...validated.data } : candidate
-      const tabValues: Record<string, unknown> = {}
-      for (const key of TAB_FIELDS[tab]) tabValues[key] = source[key]
-      const settings: AppSettings = {
-        ...data.settings,
-        ...tabValues as Partial<AppSettings>,
-        ...(tab === 'rhythm' ? { revision_gaps: [...new Set(validated.success ? validated.data.revision_gaps : candidate.revision_gaps)].sort((a, b) => a - b) } : {}),
-        updated_at: now
+      const values: Partial<Record<keyof AppSettings, unknown>> = {}
+      for (const key of TAB_FIELDS[tab]) values[key] = source[key]
+      if (tab === 'rhythm') values.revision_gaps = [...new Set(validated.success ? validated.data.revision_gaps : candidate.revision_gaps)].sort((a, b) => a - b)
+      // Write only the fields this tab changed. The settings writer merges them into the latest
+      // committed row, so saving here can never revert another tab or the header theme switch,
+      // even when this draft still holds an older value for a field it did not touch.
+      const changed = (Object.keys(values) as (keyof AppSettings)[]).filter(key => !sameSettingValue(values[key], data.settings[key]))
+      let saved: AppSettings = data.settings
+      if (changed.length) {
+        const patch: Partial<AppSettings> = {}
+        for (const key of changed) (patch as Record<string, unknown>)[key] = values[key]
+        saved = await updateSettings(current => ({ ...current, ...patch }))
       }
-      await upsert('app_settings', settings)
       if (tab === 'account' && user) {
         const profile: Profile = data.profile
-          ? { ...data.profile, display_name: settings.owner_name, updated_at: now }
-          : { id: user.id, user_id: user.id, display_name: settings.owner_name, email: user.email, created_at: now, updated_at: now }
+          ? { ...data.profile, display_name: saved.owner_name, updated_at: now }
+          : { id: user.id, user_id: user.id, display_name: saved.owner_name, email: user.email, created_at: now, updated_at: now }
         await upsert('profiles', profile)
       }
       if (tab === 'rhythm') {
-        setGapsText(settings.revision_gaps.join(', '))
-        setDailyGoalText(String(settings.daily_study_goal_minutes / 60))
+        setGapsText(saved.revision_gaps.join(', '))
+        setDailyGoalText(String(saved.daily_study_goal_minutes / 60))
       }
       setErrors({})
       flashSaved(tab)
@@ -365,6 +378,7 @@ export default function SettingsPage() {
                 <div className="font-choice-grid" role="radiogroup" aria-label="Reading font">
                   {READING_FONT_OPTIONS.map(option => <label className={`font-choice ${draft.interface_font === option.value ? 'selected' : ''}`} key={option.value} style={{ '--body-scale': option.scale } as CSSProperties}>
                     <input type="radio" name="interface_font" value={option.value} checked={draft.interface_font === option.value} onChange={() => patch('interface_font', option.value)} />
+                    {/* These samples intentionally preview each candidate; the rest of the UI uses the applied Reading font. */}
                     <span className="font-choice-sample" style={{ fontFamily: option.stack }} aria-hidden="true">Aa</span>
                     <span className="font-choice-copy" style={{ fontFamily: option.stack }}><strong>{option.label}</strong><small>{option.description}</small></span>
                     {draft.interface_font === option.value && <span className="theme-check"><Check size={13} /></span>}
@@ -379,7 +393,7 @@ export default function SettingsPage() {
                   </div>
                   <button className="type-button typography-preview-button" type="button">Review today’s plan</button>
                 </div>
-                <div className="settings-note-line"><Type size={15} /> The preview updates as you choose. Save applies the Reading font to authenticated content; public pages keep their fixed typography.</div>
+                <div className="settings-note-line"><Type size={15} /> The preview updates as you choose and, while Settings is open, previews across the authenticated app; leaving without saving reverts it. Save applies the Reading font to authenticated content; headings and public pages keep their fixed typography.</div>
               </div>
             </NotebookCard>
           </fieldset>

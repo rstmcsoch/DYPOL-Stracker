@@ -125,6 +125,8 @@
 .ai-message-prose { display:block; white-space:pre-wrap; }
 .ai-message-user .ai-message-prose { color:#354153; }
 .ai-code-block { max-width:100%; overflow-x:auto; margin:6px 0; padding:8px; border-radius:7px; color:var(--ink); background:var(--paper-muted); white-space:pre; font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+/* The browser's default <code> face is monospace on its own; inherit the block's face instead. */
+.ai-code-block code { font:inherit; }
 .ai-user-bubble time { justify-self:end; color:#7f8996; font-size: max(.8125rem, calc(8px * var(--body-scale))); }
 .ai-message-meta { display:flex; align-items:center; flex-wrap:wrap; gap:4px; color:var(--muted); font-size: max(.8125rem, calc(9px * var(--body-scale))); }
 .ai-message-meta .ai-provider-mark { width:18px; height:18px; border-radius:5px; }

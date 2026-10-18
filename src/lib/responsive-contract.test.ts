@@ -175,6 +175,9 @@ describe('responsive layout contract', () => {
     expect(nonGlobalFamilies).toEqual([])
     expect(unscopedShorthands).toEqual([])
     expect(unapprovedInlineFamilies).toEqual([])
+    // The AI code block's <code> inherits its scoped monospace shorthand instead of
+    // falling back to the browser's own monospace face.
+    expect(componentStyles).toMatch(/\.ai-code-block code\s*\{\s*font:\s*inherit;?\s*\}/)
     // Only font samples preview candidates; other inline families must use the global token.
     expect(inlineFontAssignments.filter(value => value === 'option.stack')).toHaveLength(2)
   })

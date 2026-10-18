@@ -15,25 +15,32 @@ vi.mock('../contexts/AuthContext', () => ({ useAuth: mocks.useAuth }))
 vi.mock('../components/ai/AISettingsSection', () => ({ AISettingsSection: () => null }))
 vi.mock('../components/jee/SettingsSections', () => ({ ExamTracksSection: () => null, ReminderSettingsSection: () => null }))
 
+import { AppearanceProvider } from '../contexts/AppearanceContext'
 import SettingsPage from './SettingsPage'
 
 function tree(client: QueryClient) {
-  return <QueryClientProvider client={client}><MemoryRouter><SettingsPage /></MemoryRouter></QueryClientProvider>
+  return <QueryClientProvider client={client}><MemoryRouter><AppearanceProvider><SettingsPage /></AppearanceProvider></MemoryRouter></QueryClientProvider>
 }
 
 function mountSettings(startSettings: AppSettings = defaultSettings('reader-one')) {
   let savedSettings = startSettings
-  let updateSettings: Dispatch<SetStateAction<AppSettings>> = () => {}
+  let setSettingsState: Dispatch<SetStateAction<AppSettings>> = () => {}
   const upsert = vi.fn(async (_table: string, record: AppSettings) => {
     savedSettings = record
-    updateSettings(record)
+    setSettingsState(record)
+  })
+  // Settings saves now go through the single settings writer: a mutator built from the latest row.
+  const updateSettings = vi.fn(async (mutate: (current: AppSettings) => AppSettings) => {
+    savedSettings = mutate(savedSettings)
+    setSettingsState(savedSettings)
+    return savedSettings
   })
   mocks.useAuth.mockReturnValue({ user: { id: savedSettings.user_id, email: 'reader@example.com' }, signOut: vi.fn() })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   function Harness() {
     const [settings, setSettings] = useState(startSettings)
-    updateSettings = setSettings
-    mocks.useData.mockReturnValue({ data: { settings, profile: null }, upsert })
+    setSettingsState = setSettings
+    mocks.useData.mockReturnValue({ data: { settings, profile: null }, upsert, updateSettings })
     return tree(client)
   }
   const view = render(<Harness />)
@@ -41,12 +48,26 @@ function mountSettings(startSettings: AppSettings = defaultSettings('reader-one'
     ...view,
     client,
     upsert,
+    updateSettings,
     getSavedSettings: () => savedSettings,
     openAppearance: () => fireEvent.click(screen.getByRole('tab', { name: /Appearance/ }))
   }
 }
 
 beforeEach(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    }))
+  })
   mocks.useData.mockReset()
   mocks.notify.mockReset()
   mocks.useAuth.mockReset()
@@ -66,6 +87,7 @@ describe('Reading font draft and save flow', () => {
     fireEvent.click(screen.getByRole('radio', { name: /Poppins/ }))
     expect(preview?.getAttribute('style')).toContain("'Poppins'")
     expect(preview?.getAttribute('style')).toContain('0.95')
+    expect(page.updateSettings).not.toHaveBeenCalled()
     expect(page.upsert).not.toHaveBeenCalled()
     expect((screen.getByRole('button', { name: 'Save appearance settings' }) as HTMLButtonElement).disabled).toBe(false)
     expect((screen.getByRole('radio', { name: /Warm paper/ }) as HTMLInputElement).disabled).toBe(false)
@@ -77,14 +99,15 @@ describe('Reading font draft and save flow', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: /Poppins/ }))
     fireEvent.click(screen.getByRole('radio', { name: /Sora/ }))
-    expect(page.upsert).not.toHaveBeenCalled()
+    expect(page.updateSettings).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Save appearance settings' }))
-    await waitFor(() => expect(page.upsert).toHaveBeenCalledTimes(1))
-    expect(page.upsert).toHaveBeenCalledWith('app_settings', expect.objectContaining({
+    await waitFor(() => expect(page.updateSettings).toHaveBeenCalledTimes(1))
+    expect(page.getSavedSettings()).toEqual(expect.objectContaining({
       user_id: 'reader-one',
       interface_font: 'sora'
     }))
+    expect(page.upsert).not.toHaveBeenCalledWith('app_settings', expect.anything())
     await waitFor(() => expect((screen.getByRole('button', { name: 'Save appearance settings' }) as HTMLButtonElement).disabled).toBe(true))
   })
 
@@ -100,7 +123,7 @@ describe('Reading font draft and save flow', () => {
     expect(preview?.getAttribute('style')).toContain("'Open Sans'")
     expect((screen.getByRole('radio', { name: /Open Sans/ }) as HTMLInputElement).checked).toBe(true)
     expect((screen.getByRole('button', { name: 'Save appearance settings' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(page.upsert).not.toHaveBeenCalled()
+    expect(page.updateSettings).not.toHaveBeenCalled()
   })
 
   it('does not save when Settings is left with an unsaved font draft', () => {
@@ -108,7 +131,7 @@ describe('Reading font draft and save flow', () => {
     page.openAppearance()
     fireEvent.click(screen.getByRole('radio', { name: /Sora/ }))
     page.unmount()
-    expect(page.upsert).not.toHaveBeenCalled()
+    expect(page.updateSettings).not.toHaveBeenCalled()
   })
 
   it('restores the saved Reading font when the Settings screen is mounted again', async () => {

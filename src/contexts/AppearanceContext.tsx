@@ -1,10 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { useData } from './DataContext'
 import { useToast } from './ToastContext'
 import { applyReadingFont, clearReadingFont, normalizeReadingFont } from '../lib/fonts'
 import { normalizeColorTheme } from '../lib/themes'
-import type { AppSettings, ColorTheme, ReadingFont, ThemeMode } from '../types'
+import type { ColorTheme, ReadingFont, ThemeMode } from '../types'
 
 export type ResolvedTheme = 'light' | 'dark'
 
@@ -16,12 +16,14 @@ interface AppearanceContextValue {
   isDark: boolean
   /** Stored colour palette; independent of the display mode. */
   colorTheme: ColorTheme
-  /** The committed, account-scoped Reading font (drafts stay inside SettingsPage). */
+  /** The Reading font being rendered: an active Settings preview when one exists, otherwise the saved choice. */
   readingFont: ReadingFont
-  /** Persist a theme toggle through the existing app_settings row. */
+  /** Header quick switch. Persists only the display mode through the shared settings writer. */
   setTheme: (theme: ThemeMode) => void
-  /** Persist the colour palette; never touches the display mode. */
+  /** Persist only the colour palette through the shared settings writer; never touches the display mode. */
   setColorTheme: (colorTheme: ColorTheme) => void
+  /** Runtime-only Reading-font preview, driven by the Settings draft. Never persists anything. */
+  previewReadingFont: (font: ReadingFont | null) => void
   saving: boolean
 }
 
@@ -44,30 +46,31 @@ function useSystemPrefersDark(): boolean {
 }
 
 /**
- * Runtime owner of the committed account appearance. Reading-font drafts are owned
- * solely by the Appearance tab in SettingsPage: this provider only applies a saved
- * value and never persists a font on selection. The public site and public auth routes
- * do not mount this provider and always use their fixed CSS typography scope.
+ * Runtime appearance state for the signed-in shell. It resolves what to render and applies it;
+ * it does not own the Settings draft or decide what gets saved.
  *
- * Display mode (`data-theme`) and colour palette (`data-color`) are two attributes:
- * the top-right switch writes only the mode, the Settings palette writes only the
- * colour, and neither can reset the other.
+ *  · `app_settings` (via DataContext.updateSettings) is the persisted source of truth and the
+ *    only settings writer used here: display-mode and colour-palette changes go through it.
+ *  · A Reading-font preview is an in-memory override that the Settings draft sets while mounted.
+ *    It never persists; unmounting Settings reverts to the saved font.
+ *  · Display mode (`data-theme`) and colour palette (`data-color`) are separate attributes, and
+ *    neither writer resets the other. The rendered Reading font is applied to `<html>` as
+ *    `--reading-font-family` / `--body-scale`; Patrick Hand identity roles stay fixed.
+ *  · The public site and public auth routes do not mount this provider and always use their
+ *    fixed CSS typography scope.
  */
 export function AppearanceProvider({ children }: { children: ReactNode }) {
-  const { data, upsert } = useData()
+  const { data, updateSettings } = useData()
   const { notify } = useToast()
   const systemPrefersDark = useSystemPrefersDark()
+  const [fontPreview, setFontPreview] = useState<ReadingFont | null>(null)
   const [saving, setSaving] = useState(false)
 
   const settings = data.settings
-  const settingsRef = useRef<AppSettings>(settings)
-  settingsRef.current = settings
-  const writeQueue = useRef<Promise<void>>(Promise.resolve())
-
   const theme = settings.theme
   const colorTheme = normalizeColorTheme(settings.color_theme)
   const resolvedTheme: ResolvedTheme = theme === 'auto' ? (systemPrefersDark ? 'dark' : 'light') : theme
-  const readingFont = normalizeReadingFont(settings.interface_font)
+  const readingFont = fontPreview ?? normalizeReadingFont(settings.interface_font)
 
   useEffect(() => {
     const root = document.documentElement
@@ -87,7 +90,8 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     applyReadingFont(root, readingFont)
   }, [readingFont])
 
-  // Never carry one account's appearance across sign-out or into public routes.
+  // Public and auth routes do not mount this provider. Reset in the layout phase so no account's
+  // font or palette survives logout into the next screen; login reapplies that account's values.
   useLayoutEffect(() => () => {
     const root = document.documentElement
     delete root.dataset.appFont
@@ -96,23 +100,13 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const persistAppearance = useCallback((patch: { theme?: ThemeMode; color_theme?: ColorTheme }) => {
-    const write = writeQueue.current.then(async () => {
-      setSaving(true)
-      try {
-        await upsert('app_settings', {
-          ...settingsRef.current,
-          ...patch,
-          updated_at: new Date().toISOString()
-        })
-      } catch (error) {
+    setSaving(true)
+    return updateSettings(current => ({ ...current, ...patch }))
+      .catch(error => {
         notify(error instanceof Error ? error.message : 'Could not save that preference. Try again.', 'error')
-      } finally {
-        setSaving(false)
-      }
-    })
-    writeQueue.current = write
-    return write
-  }, [notify, upsert])
+      })
+      .finally(() => setSaving(false))
+  }, [notify, updateSettings])
 
   const setTheme = useCallback((next: ThemeMode) => {
     void persistAppearance({ theme: next })
@@ -123,14 +117,8 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   }, [persistAppearance])
 
   const value = useMemo<AppearanceContextValue>(() => ({
-    theme,
-    resolvedTheme,
-    isDark: resolvedTheme === 'dark',
-    colorTheme,
-    readingFont,
-    setTheme,
-    setColorTheme,
-    saving
+    theme, resolvedTheme, isDark: resolvedTheme === 'dark', colorTheme, readingFont,
+    setTheme, setColorTheme, previewReadingFont: setFontPreview, saving
   }), [theme, resolvedTheme, colorTheme, readingFont, setTheme, setColorTheme, saving])
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>
@@ -140,4 +128,19 @@ export function useAppearance(): AppearanceContextValue {
   const context = useContext(AppearanceContext)
   if (!context) throw new Error('useAppearance must be used inside AppearanceProvider')
   return context
+}
+
+/**
+ * Previews `font` across the whole app while the calling component is mounted.
+ *
+ * Settings passes its unsaved Appearance draft here, so the preview follows the user's choice.
+ * Unmounting clears the preview, which means leaving Settings without saving reverts to the
+ * saved font. Previewing never writes; only the Settings Save action persists the choice.
+ */
+export function useReadingFontPreview(font: ReadingFont): void {
+  const { previewReadingFont } = useAppearance()
+  useLayoutEffect(() => {
+    previewReadingFont(font)
+    return () => previewReadingFont(null)
+  }, [font, previewReadingFont])
 }

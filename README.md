@@ -76,7 +76,7 @@ npm audit
 
 Settings is organised into five tabs — **Account, Exam, Appearance, Study rhythm, and Data** — so long forms stay scannable. Each tab keeps its own draft, shows a dot while it has unsaved edits, and saves independently; the arrow keys move between tabs. Data resets and sign-out live in the Data and Account tabs behind their own confirmation dialogs, never behind a plain Save.
 
-The header switch and *Settings → Appearance → Notebook theme* edit the same value, so they never disagree: switching to `Auto` in Settings follows the device, and the next press of the header switch pins an explicit light or night choice.
+The header switch saves its choice immediately. *Settings → Appearance → Notebook theme* is part of the Appearance draft and saves with *Save appearance settings*. Both edit the same saved value, so once saved they never disagree: switching to `Auto` in Settings follows the device, and the next press of the header switch pins an explicit light or night choice.
 
 *Settings → Appearance → Reading font* selects the content face for the authenticated notebook. Patrick Hand remains the fixed identity face for the brand, headings and metrics, regardless of this setting. The public homepage always uses Patrick Hand; public sign-in, sign-up and password-reset pages use Patrick Hand for identity and Lexend for readable content, independently of any account preference.
 
@@ -87,7 +87,11 @@ The header switch and *Settings → Appearance → Notebook theme* edit the same
 | Sora | Sora | 0.97 |
 | Open Sans | Open Sans (also covers Greek letters, ₹ and maths symbols) | 1.00 |
 
-The fonts are self-hosted as subset WOFF2 files under `/assets/fonts/` with `unicode-range` and `font-display: swap`; Patrick Hand is bundled at regular weight only, while reading faces include the weights used for content and controls. The Reading font changes body text, menus and buttons—not headings or the Stracker identity. It is stored in the existing account-scoped `app_settings.interface_font` field and follows the same local-first/Supabase sync path as other settings. Public pages do not read or cache that preference. Patrick Hand and Lexend regular are preloaded in `index.html`; there is no device-wide font cache. Exports are intentionally separate: JSON, CSV, PDF and DOCX keep their own typography and are never re-rendered in the interface font.
+The fonts are self-hosted as subset WOFF2 files under `/assets/fonts/` with `unicode-range` and `font-display: swap`; Patrick Hand is bundled at regular weight only, while reading faces include the weights used for content and controls.
+
+Picking a font is a draft. While Settings is open, the draft previews the Reading font across the authenticated interface and the Appearance tab shows its unsaved-changes dot, but nothing is written until you press **Save appearance settings**. Repeated picks save only the final choice. **Discard** restores the saved font, theme, and colour palette. Leaving Settings without saving reverts the preview and drops the draft, the same as every other unsaved tab. The saved value lives in `app_settings.interface_font` and restores on reload.
+
+The Reading font changes body text, menus and buttons—not headings or the Stracker identity. It is applied through `--reading-font-family` and `--body-scale` on the root element. It follows the same local-first/Supabase sync path as other settings, through the single settings writer (`updateSettings`). Public pages do not read or cache that preference. Patrick Hand and Lexend regular are preloaded in `index.html`; there is no device-wide font cache. Exports are intentionally separate: JSON, CSV, PDF and DOCX keep their own typography and are never re-rendered in the Reading font.
 
 ## Supabase setup (per-account, private by default)
 
