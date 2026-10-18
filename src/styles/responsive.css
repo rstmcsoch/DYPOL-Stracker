@@ -573,11 +573,15 @@ body.modal-open .quick-action-area { display: none; }
   .profile-identity { gap: 14px; }
 }
 
-/* Sync pill placement (sidebar/drawer header) */
+/* Sync control placement (sidebar/drawer header): icon-only round button.
+   The JSX renders no visible status text at all, so nothing can clip in the
+   narrow drawer; status is conveyed by the icon, aria-label and tooltip. */
 .sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.sidebar-sync .sync-pill { width: 36px; min-width: 36px; min-height: 34px; justify-content: center; padding: 4px; }
-.sidebar-sync .sync-pill span { display: none; }
-.mobile-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sidebar-sync .sync-pill,
+.drawer-sync .sync-pill { width: 40px; min-width: 40px; height: 40px; min-height: 40px; justify-content: center; padding: 4px; border-radius: 50%; }
+.sync-pill-icon-only { position: relative; }
+.sync-pill-icon-only small { position: absolute; top: -4px; right: -4px; }
+.mobile-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
 .drawer-sync { flex: none; }
 
 @media (max-width: 960px) {
