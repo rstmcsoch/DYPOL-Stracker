@@ -33,3 +33,19 @@ describe('mobile shell (Phase 1)', () => {
     expect(block).toContain('.mobile-menu-lines.is-open i:first-child { transform: translateY(4px) rotate(45deg); }')
   })
 })
+
+describe('mobile cleanup (Phase 2)', () => {
+  it('hides the duplicated topline cluster and every keyboard hint on phones', () => {
+    const block = responsive.slice(responsive.indexOf('mobile cleanup (Phase 2)'))
+    expect(block).toContain('.topline { display: none; }')
+    expect(block).toContain('.app-shell kbd { display: none; }')
+  })
+
+  it('stacks the AI button above the lightning button above the floating bar', () => {
+    const ai = readFileSync(`${process.cwd()}/src/styles/ai.css`, 'utf8')
+    expect(ai).toContain('.ai-launcher-wrap { right:16px; bottom:calc(164px + var(--safe-bottom)); }')
+    expect(ai).not.toContain('right:70px; bottom:calc(78px')
+    const phase1 = responsive.slice(responsive.indexOf('mobile shell (Phase 1)'))
+    expect(phase1).toContain('.quick-action-area { bottom: calc(96px + var(--safe-bottom)); }')
+  })
+})
