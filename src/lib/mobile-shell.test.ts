@@ -102,3 +102,25 @@ describe('mobile follow-ups', () => {
     expect(layout).toContain('.ai-launcher-wrap { right: var(--fab-right); bottom: calc(var(--fab-bottom) + var(--fab-size) + var(--fab-gap));')
   })
 })
+
+describe('sync pill placement + mobile FAB (follow-up)', () => {
+  const layout = readFileSync(`${process.cwd()}/src/styles/layout.css`, 'utf8')
+
+  it('sync lives in the sidebar header and the drawer header, not the bars', () => {
+    expect(shell).toContain('sidebar-brand-row')
+    expect(shell).toContain('drawer-sync')
+    expect(shell).not.toContain('mobile-sync')
+    const topline = shell.slice(shell.indexOf('className="topline"'), shell.indexOf('className="topline-right"') + 400)
+    expect(topline).not.toContain('sync-pill')
+    expect((shell.match(/syncPill/g) ?? []).length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('short-height tiers cannot drop the lightning button under the mobile bar', () => {
+    expect(layout).toContain('@media (min-width: 961px) and (max-height: 760px)')
+    expect(layout).not.toContain('@media (max-height: 760px) { :root { --fab-right: 20px; --fab-bottom: 20px; } }')
+    expect(responsive).toContain('.quick-action-area { z-index: 65; }')
+    // The pair itself is untouched: same component, same four actions.
+    for (const action of ['Plan a task', 'Add a test', 'Log practice', 'Focus session']) expect(shell).toContain(action)
+    expect(shell).toContain('quick-action-fab')
+  })
+})
