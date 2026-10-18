@@ -2,8 +2,8 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Activity, AlarmClock, AlertTriangle, ArrowDownToLine, BookOpen, CalendarDays, Check,
-  ChevronRight, CircleHelp, Cloud, CloudOff, Compass, Focus, Home, Inbox, Layers, Library, ListChecks, Microscope, MoreHorizontal,
-  NotebookPen, RotateCcw, Search, Settings, ShieldCheck, Sparkles, Timer, X, Zap, LogOut, ClipboardList, type LucideIcon
+  ChevronRight, CircleHelp, Cloud, CloudOff, Compass, Focus, Home, Inbox, Layers, Library, ListChecks, Microscope,
+  NotebookPen, RotateCcw, Search, Settings, ShieldCheck, Sparkles, Timer, UserRound, X, Zap, LogOut, ClipboardList, type LucideIcon
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
@@ -64,12 +64,12 @@ const navGroups: NavigationGroup[] = [
     { to: '/settings', label: 'Settings', icon: Settings }
   ] }
 ]
-/** Bottom bar on phones: the four daily destinations, with everything else under More. */
+/** Bottom bar on phones: the four daily destinations; everything else lives in the drawer. */
 const mobileBar: NavigationItem[] = [
   { to: '/', label: 'Home', icon: Home, exact: true },
-  { to: '/practice', label: 'Practice', icon: ClipboardList },
   { to: '/tests', label: 'Tests', icon: ListChecks },
-  { to: '/revision', label: 'Revision', icon: AlarmClock }
+  { to: '/analytics', label: 'Analytics', icon: Activity },
+  { to: '/profile', label: 'Profile', icon: UserRound }
 ]
 const allNav: NavigationItem[] = navGroups.flatMap(group => group.items)
 
@@ -78,7 +78,6 @@ function currentNavLabel(pathname: string, values: SiteValues): string | undefin
   const item = allNav.find(entry => entry.to === pathname)
   return item ? navLabelFor(item.to, item.label, values) : undefined
 }
-const moreRoutes = new Set(allNav.map(item => item.to).filter(to => !mobileBar.some(item => item.to === to)))
 
 export function AppFrame() {
   const siteValues = useSiteValues()
@@ -87,13 +86,19 @@ export function AppFrame() {
   const { notify } = useToast()
   const navigate = useNavigate()
   const location = useLocation()
-  const [mobileMore, setMobileMore] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [quickTaskOpen, setQuickTaskOpen] = useState(false)
   const [quickActionsOpen, setQuickActionsOpen] = useState(false)
 
-  useEffect(() => { setMobileMore(false) }, [location.pathname])
+  useEffect(() => { setDrawerOpen(false) }, [location.pathname])
+  useEffect(() => {
+    if (!drawerOpen) return
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setDrawerOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drawerOpen])
 
   // First-run setup waits for the first sync so a stale device cache never flashes it, then
   // stays up (even through later sync states) until the student completes it.
@@ -139,7 +144,6 @@ export function AppFrame() {
   }, [navigate])
 
   const name = data.settings.owner_name || data.profile?.display_name || user?.displayName || 'Your notebook'
-  const activeMore = [...moreRoutes].some(to => location.pathname === to)
   const statusLabel = syncState === 'syncing' ? 'Syncing' : syncState === 'offline' ? 'Offline' : syncState === 'error' ? 'Sync issue' : syncState === 'local' ? 'On this device' : pendingCount ? `${pendingCount} pending` : 'Synced'
   const StatusIcon = syncState === 'offline' || syncState === 'error' ? CloudOff : syncState === 'local' ? ShieldCheck : Cloud
 
@@ -170,10 +174,14 @@ export function AppFrame() {
 
     <header className="mobile-topbar">
       <Brand compact />
+      <span className="mobile-exam-title">{loading || (!data.settings.exam_id && !data.settings.onboarding_completed) ? 'Study home' : isJeeSettings(data.settings) ? `JEE ${data.settings.exam_year ?? 2027}` : chosenExamTitle(data.settings)}</span>
       <div className="mobile-top-actions">
         <ThemeToggle className="theme-toggle-compact" />
         <button className="mobile-sync" onClick={() => void refresh()} aria-label={`Sync status: ${statusLabel}`} title={syncError ?? statusLabel}><StatusIcon size={16} />{pendingCount > 0 && <span className="mobile-pending-dot" />}</button>
         <IconButton label="Search notebook" onClick={() => setSearchOpen(true)}><Search size={19} /></IconButton>
+        <button type="button" className="mobile-menu-btn" onClick={() => setDrawerOpen(open => !open)} aria-expanded={drawerOpen} aria-controls="mobile-drawer" aria-label={drawerOpen ? 'Close navigation' : 'Open navigation'}>
+          <span className={`mobile-menu-lines ${drawerOpen ? 'is-open' : ''}`} aria-hidden="true"><i /><i /></span>
+        </button>
       </div>
     </header>
 
@@ -198,23 +206,19 @@ export function AppFrame() {
 
     <nav className="mobile-nav" aria-label="Mobile navigation">
       {mobileBar.map(item => <MobileNavItem key={item.to} item={{ ...item, label: navLabelFor(item.to, item.label, siteValues) }} />)}
-      <button className={`mobile-nav-item ${activeMore || mobileMore ? 'active' : ''}`} onClick={() => setMobileMore(true)} aria-expanded={mobileMore}>
-        <MoreHorizontal size={20} /><span>More</span>
-      </button>
     </nav>
-    {mobileMore && <div className="mobile-sheet-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setMobileMore(false) }}>
-      <div className="mobile-sheet" role="dialog" aria-modal="true" aria-label="More navigation">
-        <div className="sheet-handle" /><div className="sheet-head"><div><span className="eyebrow">STUDY TOOLS</span><h2>More to explore</h2></div><IconButton label="Close navigation" onClick={() => setMobileMore(false)}><X size={19} /></IconButton></div>
-        <nav className="sheet-nav">
-          {navGroups.map(group => <div key={group.caption}>
+    {drawerOpen && <div className="mobile-drawer-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setDrawerOpen(false) }}>
+      <aside className="mobile-drawer" id="mobile-drawer" role="dialog" aria-modal="true" aria-label="Navigation">
+        <div className="mobile-drawer-head"><Brand compact /></div>
+        <nav className="mobile-drawer-nav" aria-label="All sections">
+          {navGroups.map(group => <div key={group.caption} className="mobile-drawer-group">
             <div className="sheet-nav-caption">{(() => { const caption = navCaptionFor(group.caption, siteValues); return caption.charAt(0) + caption.slice(1).toLowerCase() })()}</div>
-            {group.items.filter(item => !mobileBar.some(bar => bar.to === item.to)).map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} onClick={() => setMobileMore(false)} />)}
+            {group.items.filter(item => item.to !== '/settings').map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} onClick={() => setDrawerOpen(false)} />)}
           </div>)}
-          <button className="nav-link sheet-help" onClick={() => { setMobileMore(false); setShortcutsOpen(true) }}><CircleHelp size={18} /><span>Keyboard shortcuts</span></button>
-          <button className="nav-link sheet-help" onClick={() => { setMobileMore(false); void signOut() }}><LogOut size={18} /><span>Sign out</span></button>
+          <button className="nav-link sheet-help" onClick={() => { setDrawerOpen(false); void signOut() }}><LogOut size={18} /><span>Sign out</span></button>
         </nav>
         <div className="sheet-brand-credit">Stracker <span>by DYPOL LABS</span></div>
-      </div>
+      </aside>
     </div>}
 
     <div className="quick-action-area">

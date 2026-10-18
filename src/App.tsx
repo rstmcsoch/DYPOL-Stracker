@@ -26,6 +26,7 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const WeakAreasPage = lazy(() => import('./pages/WeakAreasPage'))
 const BackupPage = lazy(() => import('./pages/BackupPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const FocusPage = lazy(() => import('./pages/FocusPage'))
 const PracticePage = lazy(() => import('./pages/PracticePage'))
 const PyqPage = lazy(() => import('./pages/PyqPage'))
@@ -110,6 +111,7 @@ function AppRoutes() {
           <Route path="weak-areas" element={<WeakAreasPage />} />
           <Route path="backup" element={<BackupPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="profile" element={<ProfilePage />} />
           <Route path="focus" element={<FocusPage />} />
           <Route path="practice" element={<PracticePage />} />
           <Route path="pyqs" element={<PyqPage />} />
