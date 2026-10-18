@@ -115,6 +115,27 @@ describe('sync pill placement + mobile FAB (follow-up)', () => {
     expect((shell.match(/syncPill/g) ?? []).length).toBeGreaterThanOrEqual(3)
   })
 
+  it('sidebar sync control is icon-only: no visible text, but an aria-label and pending badge', () => {
+    const responsiveCss = readFileSync(`${process.cwd()}/src/styles/responsive.css`, 'utf8')
+    const pill = shell.slice(shell.indexOf('const syncPill'), shell.indexOf('return <>'))
+    // No visible status text node — 'Synced' / '3 pending' etc. must not render as text.
+    expect(pill).not.toContain('<span>{statusLabel}</span>')
+    expect(pill).not.toContain('>{statusLabel}<')
+    expect(pill).toContain('sync-pill-icon-only')
+    expect(pill).toContain('<StatusIcon')
+    // Status + refresh action stay announced for assistive tech and tooltips.
+    expect(pill).toContain('aria-label={`Sync status: ${statusLabel} — tap to refresh`}')
+    expect(pill).toContain('title={syncError ?? statusLabel}')
+    expect(pill).toContain('onClick={() => void refresh()}')
+    // A pending count, when present, still shows — as a badge on the icon, not as text.
+    expect(pill).toContain('{pendingCount > 0 && <small>{pendingCount}</small>}')
+    // Both header instances (desktop sidebar + mobile drawer) get the fixed round size
+    // so the drawer header cannot clip it.
+    expect(responsiveCss).toContain('.sidebar-sync .sync-pill,')
+    expect(responsiveCss).toContain('.drawer-sync .sync-pill { width: 40px; min-width: 40px; height: 40px; min-height: 40px;')
+    expect(responsiveCss).toContain('.sync-pill-icon-only small { position: absolute;')
+  })
+
   it('short-height tiers cannot drop the lightning button under the mobile bar', () => {
     expect(layout).toContain('@media (min-width: 961px) and (max-height: 760px)')
     expect(layout).not.toContain('@media (max-height: 760px) { :root { --fab-right: 20px; --fab-bottom: 20px; } }')

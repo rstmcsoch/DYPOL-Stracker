@@ -143,8 +143,12 @@ export function AppFrame() {
   const name = data.settings.owner_name || data.profile?.display_name || user?.displayName || 'Your notebook'
   const statusLabel = syncState === 'syncing' ? 'Syncing' : syncState === 'offline' ? 'Offline' : syncState === 'error' ? 'Sync issue' : syncState === 'local' ? 'On this device' : pendingCount ? `${pendingCount} pending` : 'Synced'
   const StatusIcon = syncState === 'offline' || syncState === 'error' ? CloudOff : syncState === 'local' ? ShieldCheck : Cloud
-  const syncPill = <button className={`sync-pill sync-${syncState}`} onClick={() => void refresh()} aria-label={`Sync status: ${statusLabel}`} title={syncError ?? statusLabel}>
-    <StatusIcon size={15} className={syncState === 'syncing' ? 'sync-spin' : ''} /><span>{statusLabel}</span>{pendingCount > 0 && <small>{pendingCount}</small>}
+  // Icon-only in the sidebar/drawer header: no visible status text (it clipped in the
+  // narrow drawer). Status stays available via aria-label/title and the icon itself
+  // (spinning while syncing, CloudOff/red when offline or in error); a pending count,
+  // when present, rides on the icon as a small badge.
+  const syncPill = <button className={`sync-pill sync-pill-icon-only sync-${syncState}`} onClick={() => void refresh()} aria-label={`Sync status: ${statusLabel} — tap to refresh`} title={syncError ?? statusLabel}>
+    <StatusIcon size={17} className={syncState === 'syncing' ? 'sync-spin' : ''} />{pendingCount > 0 && <small>{pendingCount}</small>}
   </button>
 
   return <>
