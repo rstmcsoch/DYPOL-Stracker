@@ -161,8 +161,8 @@
    Ask Stracker launcher can sit directly above it at every breakpoint. Values mirror the existing
    .quick-action-area rules exactly (no visual change to the lightning button). */
 :root { --fab-right: 27px; --fab-bottom: 28px; --fab-size: 58px; --fab-gap: 12px; }
-@media (max-width: 960px) { :root { --fab-right: 19px; --fab-bottom: calc(78px + var(--safe-bottom)); --fab-size: 53px; } }
-@media (max-width: 700px) { :root { --fab-right: 12px; --fab-bottom: calc(72px + var(--safe-bottom)); --fab-size: 48px; } }
+@media (max-width: 960px) { :root { --fab-right: 19px; --fab-bottom: calc(96px + var(--safe-bottom)); --fab-size: 53px; } }
+@media (max-width: 700px) { :root { --fab-right: 12px; --fab-bottom: calc(96px + var(--safe-bottom)); --fab-size: 48px; } }
 @media (max-height: 760px) { :root { --fab-right: 20px; --fab-bottom: 20px; } }
 @media (orientation: landscape) and (max-height: 480px) { :root { --fab-bottom: calc(64px + var(--safe-bottom)); --fab-size: 46px; } }
 .quick-action-area { right: var(--fab-right); bottom: var(--fab-bottom); }

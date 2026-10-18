@@ -444,7 +444,7 @@ export const USER_NAV_ITEMS: ReadonlyArray<{ slug: string; to: string; label: st
   { slug: 'syllabus', to: '/syllabus', label: 'Syllabus' },
   { slug: 'weak-areas', to: '/weak-areas', label: 'Weak areas' },
   { slug: 'pyqs', to: '/pyqs', label: 'PYQs' },
-  { slug: 'tests', to: '/tests', label: 'Tests & mocks' },
+  { slug: 'tests', to: '/tests', label: 'Tests' },
   { slug: 'mock-analysis', to: '/mock-analysis', label: 'Mock analysis' },
   { slug: 'mistakes', to: '/mistakes', label: 'Mistake notebook' },
   { slug: 'retry', to: '/retry', label: 'Retry' },
