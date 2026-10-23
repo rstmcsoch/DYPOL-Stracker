@@ -230,6 +230,15 @@ confirm that, and the APK is now built.
 
 
 
+**Run 8** (the chrome reported from a tablet). Four things changed after the screenshots:
+
+| Symptom in the screenshot | Change |
+|---|---|
+| a wide pale band across the top of the page, over the header | the header is no longer a Material `AppBar`: `NotebookScaffold` draws its own opaque header, so no elevation tint, hover overlay, splash or default `ErrorWidget` (the grey rectangle a release build uses for a failed layout) can be painted there. The logo has an `errorBuilder` too, and release mode replaces `ErrorWidget` with an empty box. |
+| the same band above the app, at the window edge | the Android window theme asked for *transparent* system bars, which leaves the platform to draw its own strip. `values/styles.xml` and `values-night/styles.xml` now give both bars the page colour and disable the enforced bar contrast, and app.dart paints the bars from the active palette on every screen (splash, sign-in, sheets, pages). |
+| content sliding under the bottom tabs | `PageBody` no longer uses a fixed 100 px bottom padding; it adds the page's own bottom inset to a fixed clearance, so pushed pages are not padded twice and tab pages always clear the quick-action button. |
+| light/night only reachable from an icon | Profile → Account now carries an explicit **Appearance: Light / Night / Auto** control that writes the same account setting the website uses. |
+
 ## How this gets verified without a computer
 
 `ci/flutter-release.yml` performs the same steps on GitHub's runners: `flutter pub get`,

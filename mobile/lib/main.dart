@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,14 @@ final Provider<SharedPreferences> preferencesProvider = Provider<SharedPreferenc
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // A release build renders a layout failure as a grey rectangle. That rectangle is what a
+  // student would see over the top of a page, so in release it is replaced by an empty box
+  // (the page's own background then shows through) while the error is still reported
+  // through FlutterError.onError.
+  if (kReleaseMode) {
+    ErrorWidget.builder = (FlutterErrorDetails details) => const SizedBox.shrink();
+  }
+
   // Every orientation is allowed: the layout adapts instead of locking the phone.
   await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
     DeviceOrientation.portraitUp,
@@ -25,17 +34,11 @@ Future<void> main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
-  // Standard Android chrome: the status and navigation bars are painted, not transparent.
-  // Drawing under them (edge to edge) is what made the top strip look like a detached grey
-  // block over the app bar. Each page re-applies the right bar colours from the theme.
+  // Standard Android chrome, with the bars painted rather than transparent. The colours
+  // themselves come from the active palette in app.dart (an AnnotatedRegion over the whole
+  // app), so nothing here is pinned to the light theme and the bars cannot disagree with
+  // the page underneath them.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Color(0xFFF7F4EC),
-    statusBarIconBrightness: Brightness.dark,
-    systemNavigationBarColor: Color(0xFFF7F4EC),
-    systemNavigationBarIconBrightness: Brightness.dark,
-    systemNavigationBarDividerColor: Colors.transparent,
-  ));
 
   final SharedPreferences preferences = await SharedPreferences.getInstance();
 

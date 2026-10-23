@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/date.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_controller.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -160,13 +161,16 @@ class ProfilePage extends ConsumerWidget {
             title: 'Account',
             child: Column(
               children: <Widget>[
+                // The switch is here, in the open, not only as an icon in the header:
+                // three choices that write the same account setting the website uses.
+                const _AppearanceChoices(),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                   leading: const Icon(Icons.palette_outlined, size: 19),
-                  title: const Text('Appearance'),
+                  title: const Text('Palette and reading font'),
                   subtitle: Text(
-                    'Theme, palette and reading font',
+                    'Colour palette and the font this notebook is read in',
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                   trailing: const Icon(Icons.chevron_right, size: 18),
@@ -315,6 +319,39 @@ class ProfilePage extends ConsumerWidget {
     } catch (error) {
       if (context.mounted) showToast(context, error.toString(), error: true);
     }
+  }
+}
+
+/// Light / Night / Auto, applied at once and saved to the account so the website and every
+/// other device open with the same appearance.
+class _AppearanceChoices extends ConsumerWidget {
+  const _AppearanceChoices();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeState appearance = ref.watch(themeControllerProvider);
+    return ChoiceRow<ThemeMode>(
+      label: 'Appearance',
+      value: appearance.mode,
+      options: const <ThemeMode>[ThemeMode.light, ThemeMode.dark, ThemeMode.system],
+      labelFor: (ThemeMode mode) => switch (mode) {
+        ThemeMode.light => 'Light',
+        ThemeMode.dark => 'Night',
+        ThemeMode.system => 'Auto',
+      },
+      onChanged: (ThemeMode mode) async {
+        await ref.read(themeControllerProvider.notifier).setMode(mode);
+        final AppData latest = ref.read(dataControllerProvider).data;
+        final String stored = ref.read(themeControllerProvider).modeValue;
+        try {
+          await ref
+              .read(dataControllerProvider.notifier)
+              .saveSettings(latest.settings.copyWith(theme: stored));
+        } catch (_) {
+          // The screen has already switched; the account value is retried on the next save.
+        }
+      },
+    );
   }
 }
 

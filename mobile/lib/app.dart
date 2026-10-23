@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -38,12 +39,32 @@ class StrackerApp extends ConsumerWidget {
         readingFont: appearance.readingFont,
       ),
       builder: (BuildContext context, Widget? child) {
+        // The status and navigation bars are painted from the active palette on every
+        // screen - splash, sign-in, sheets and pages alike. Without this, screens that have
+        // no AppBar leave the bars to the platform, which draws its own grey strip.
+        final bool dark = switch (appearance.mode) {
+          ThemeMode.dark => true,
+          ThemeMode.light => false,
+          ThemeMode.system => MediaQuery.platformBrightnessOf(context) == Brightness.dark,
+        };
+        final StrackerPalette bars =
+            (palette?[dark ? 'dark' : 'light']) ?? fallback[dark ? 'dark' : 'light']!;
         // System text scaling is honoured but clamped: below 0.85 the notebook's labels
         // stop being legible, and above 1.6 the fixed-width tables break.
-        return MediaQuery.withClampedTextScaling(
-          minScaleFactor: 0.85,
-          maxScaleFactor: 1.6,
-          child: child ?? const SizedBox.shrink(),
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle(
+            statusBarColor: bars.bg,
+            statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+            statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+            systemNavigationBarColor: bars.bg,
+            systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+            systemNavigationBarDividerColor: bars.bg,
+          ),
+          child: MediaQuery.withClampedTextScaling(
+            minScaleFactor: 0.85,
+            maxScaleFactor: 1.6,
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
       home: const RootGate(),
