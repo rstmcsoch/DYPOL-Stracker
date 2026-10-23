@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/notebook.dart';
@@ -42,7 +41,6 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   String? _requestId;
   String? _pageContext = 'home';
   bool _sending = false;
-  bool _loadingHistory = false;
   String? _error;
   String? _status;
   AiHealth? _health;
@@ -86,7 +84,6 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 
   Future<void> _openConversation(AiConversation conversation) async {
     setState(() {
-      _loadingHistory = true;
       _error = null;
     });
     try {
@@ -105,13 +102,11 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 failed: message.status == 'failed',
               ),
           ]);
-        _loadingHistory = false;
       });
       _scrollToEnd();
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _loadingHistory = false;
         _error = error.toString();
       });
     }
@@ -827,16 +822,16 @@ class _AddProviderSheetState extends State<_AddProviderSheet> {
               controller: _key,
               obscureText: true,
               decoration: const InputDecoration(
-                labelText: 'API key',
-                helperText: 'Sent once over a secure connection and stored encrypted.',
+                labelText: 'Your private key',
+                helperText: 'Kept on your account, encrypted. Used only for your own questions.',
               ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _baseUrl,
               decoration: const InputDecoration(
-                labelText: 'Base URL (optional)',
-                helperText: 'Only for self-hosted or custom compatible endpoints.',
+                labelText: 'Custom address (optional)',
+                helperText: 'Only needed if your provider gave you a different address.',
               ),
             ),
             if (_error != null) ...<Widget>[
@@ -849,7 +844,7 @@ class _AddProviderSheetState extends State<_AddProviderSheet> {
                   ? null
                   : () async {
                       if (_model.text.trim().isEmpty || _key.text.trim().isEmpty) {
-                        setState(() => _error = 'A model id and an API key are required.');
+                        setState(() => _error = 'A model name and your private key are both required.');
                         return;
                       }
                       setState(() {

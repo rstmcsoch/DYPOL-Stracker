@@ -6,7 +6,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/palettes.dart';
 import 'core/theme/theme_controller.dart';
-import 'data/app_data.dart';
 import 'data/data_controller.dart';
 import 'data/models.dart';
 import 'data/repository.dart';

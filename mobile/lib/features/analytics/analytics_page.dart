@@ -8,7 +8,6 @@ import '../../core/widgets/charts.dart';
 import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
-import '../../data/models.dart';
 import '../../logic/aggregation.dart';
 import '../../logic/analytics.dart';
 import '../../logic/progress.dart';

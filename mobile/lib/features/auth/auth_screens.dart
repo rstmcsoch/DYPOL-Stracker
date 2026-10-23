@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
-import '../../data/data_controller.dart';
 import 'auth_controller.dart';
 import 'connection_sheet.dart';
 
