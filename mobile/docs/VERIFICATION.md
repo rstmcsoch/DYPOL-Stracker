@@ -122,6 +122,35 @@ against the real 3.47.7 file in both directions: with the repaired pins it print
 four rows and exits 0; with the original pins restored it reproduces both CI failures
 (`Gradle 8.13 … TOO OLD`, `Kotlin 2.2.0 … TOO OLD`) and exits 1 in under a second.
 
+**Run 4** (after the fixes, with the pinned Flutter 3.47.7 and the toolchain gate in place)
+got much further, and its step results are the useful evidence:
+
+| Step | Result |
+|---|---|
+| Set up Flutter 3.47.7 / Java 17 / SDK | success |
+| `flutter pub get` | success |
+| **Check the Android toolchain versions** | success — the gate reports Gradle 8.14.3, AGP 8.11.1, Kotlin 2.2.20, Java 17 all `ok` |
+| `flutter analyze` (advisory) | 38 issues, **0 errors** (44 − the 6 fixed), exit status 0 under `--no-fatal-warnings` |
+| `flutter test` (advisory) | **55 passed, 0 failed** — both earlier failures fixed |
+| Prepare signing | success — keystore decoded, `STRAKER_KEYSTORE` exported |
+| **Build the universal APK** | **failed at `:app:processReleaseResources`** |
+
+The resource failure was
+`values-v31.xml:8: error: style attribute 'android:attr/postSplashScreenTheme' not found`
+(and the same in `values-night-v31.xml`). `postSplashScreenTheme` is a
+`androidx.core:core-splashscreen` attribute, not a framework one, so the `android:` prefix
+makes it unresolvable — a genuine bug in the hand-written launch theme, and the first failure
+in this project that was *not* environmental. Both entries are removed; Flutter's
+`io.flutter.embedding.android.NormalTheme` meta-data already swaps the theme after the system
+splash, so nothing is lost on Android 12+.
+
+`tool/check_resources.py` now guards that class of mistake: it scans the manifest and every
+`res/**/*.xml`, rejects `android:`-prefixed attributes that only exist in libraries, and
+verifies that every `@color`/`@drawable`/`@mipmap`/`@style`/`@string`/`@xml`/`@layout`
+reference resolves. It was tested both ways: clean tree → exit 0; with the
+`postSplashScreenTheme` entry and a typo'd `@color/` reference re-injected → both reported,
+exit 1.
+
 **Still not verified:** that the release APK now builds end to end. Run 1 never reached Dart
 compilation, and the fixes above have only been checked statically here (71/71 files parse;
 the six error sites were read back line by line). The next green run in the Actions tab is the

@@ -221,6 +221,12 @@ compatibility ranges in `gradle_utils.dart`.
 dependency to change, so a Flutter upgrade fails with a sentence instead of a Gradle stack
 trace. The workflow runs it before `flutter build apk`.
 
+`python3 tool/check_resources.py` is the same idea for the hand-written resources: it rejects
+`android:`-prefixed attributes that exist only in AndroidX libraries (this caught the
+`postSplashScreenTheme` failure that cost a full Gradle run) and any `@color` / `@drawable` /
+`@mipmap` / `@style` / `@string` / `@xml` / `@layout` reference that does not resolve, which is
+what AAPT reports as `error: style attribute … not found` or `resource … not found`.
+
 ## 9. Deliberate limitations
 
 1. **The universal APK carries three ABIs, not four.** Flutter's Android engine ships
