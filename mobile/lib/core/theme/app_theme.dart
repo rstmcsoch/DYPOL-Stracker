@@ -238,15 +238,15 @@ ThemeData buildStrackerTheme({
       ),
       textStyle: TextStyle(fontFamily: body, fontSize: 12, color: palette.bg),
     ),
-    // Platform-native page transitions: the Android zoom-forward on Android, the iOS
-    // slide-from-right on iOS. Pushed sections and the back gesture therefore feel like
-    // the rest of the phone.
+    // Android's own zoom-forward page transition, which is what the platform uses for
+    // activity changes. (The Cupertino builder lives in package:flutter/cupertino.dart and
+    // is not needed by an Android-only app.)
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: <TargetPlatform, PageTransitionsBuilder>{
         TargetPlatform.android: ZoomPageTransitionsBuilder(),
         TargetPlatform.fuchsia: ZoomPageTransitionsBuilder(),
-        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-        TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
+        TargetPlatform.macOS: ZoomPageTransitionsBuilder(),
         TargetPlatform.windows: ZoomPageTransitionsBuilder(),
         TargetPlatform.linux: ZoomPageTransitionsBuilder(),
       },
