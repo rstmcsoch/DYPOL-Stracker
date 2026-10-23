@@ -301,8 +301,9 @@ class _NotebookHeader extends StatelessWidget {
     // The status bar is painted in the same colour, so the header and the system strip
     // read as one surface instead of two stacked blocks.
     final double topInset = MediaQuery.viewPaddingOf(context).top;
-    return ColoredBox(
+    return Material(
       color: colors.palette.bg,
+      elevation: 0,
       child: Padding(
         padding: EdgeInsets.only(top: topInset),
         child: SizedBox(
@@ -477,24 +478,20 @@ class ThemeToggleButton extends ConsumerWidget {
         ? MediaQuery.platformBrightnessOf(context)
         : (appearance.mode == ThemeMode.dark ? Brightness.dark : Brightness.light);
     final bool dark = effective == Brightness.dark;
-    return Semantics(
+    return HeaderIcon(
       label: dark ? 'Switch to light' : 'Switch to night',
-      button: true,
-      child: HeaderIcon(
-        label: dark ? 'Switch to light' : 'Switch to night',
-        icon: dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-        onTap: () async {
-          await ref.read(themeControllerProvider.notifier).toggle(effective);
-          final DataController controller = ref.read(dataControllerProvider.notifier);
-          final AppData data = ref.read(dataControllerProvider).data;
-          final ThemeState next = ref.read(themeControllerProvider);
-          try {
-            await controller.saveSettings(data.settings.copyWith(theme: next.modeValue));
-          } catch (_) {
-            // The local switch already applied; the account value is retried on the next save.
-          }
-        },
-      ),
+      icon: dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+      onTap: () async {
+        await ref.read(themeControllerProvider.notifier).toggle(effective);
+        final DataController controller = ref.read(dataControllerProvider.notifier);
+        final AppData data = ref.read(dataControllerProvider).data;
+        final ThemeState next = ref.read(themeControllerProvider);
+        try {
+          await controller.saveSettings(data.settings.copyWith(theme: next.modeValue));
+        } catch (_) {
+          // The local switch already applied; the account value is retried on the next save.
+        }
+      },
     );
   }
 }
