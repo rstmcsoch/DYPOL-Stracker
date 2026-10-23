@@ -43,6 +43,9 @@ presented as working functionality anywhere in the app.
    (`DependencyVersionChecker.kt`: Gradle 8.14.0, AGP 8.11.1, Kotlin 2.2.20, Java 17 floors).
    A future Flutter release can raise those floors; `tool/check_toolchain.py` runs before the
    build and names the dependency that must change, instead of failing 90 s into Gradle.
+   `tool/check_resources.py` does the same job for AAPT: it rejects `android:`-prefixed
+   attributes that only exist in AndroidX libraries (the `postSplashScreenTheme` mistake) and
+   unresolved `@color`/`@drawable`/`@style` references before Gradle sees them.
 
 ## 3. Product limitations
 

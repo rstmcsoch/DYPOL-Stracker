@@ -6,7 +6,6 @@
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@color/icon_background</item>
         <item name="android:windowSplashScreenAnimationDuration">0</item>
-        <item name="android:postSplashScreenTheme">@style/NormalTheme</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
