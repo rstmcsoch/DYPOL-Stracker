@@ -28,7 +28,6 @@ class _AuthFlowState extends ConsumerState<AuthFlow> {
   @override
   Widget build(BuildContext context) {
     final AuthStatus status = ref.watch(authControllerProvider);
-    final StrackerColors colors = context.stracker;
 
     if (status.awaitingEmailConfirmation) {
       return _AuthShell(

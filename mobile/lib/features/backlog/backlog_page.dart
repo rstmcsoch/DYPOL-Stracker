@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
-import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
@@ -354,7 +352,7 @@ Future<void> openBacklogEditor(
                 );
                 if (!confirmed) return;
                 try {
-                  await ref.read(dataControllerProvider.notifier).deleteBacklog(item!);
+                  await ref.read(dataControllerProvider.notifier).deleteBacklog(item);
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, 'Item deleted.');
                 } catch (error) {

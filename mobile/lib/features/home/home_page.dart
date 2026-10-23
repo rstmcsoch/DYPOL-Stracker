@@ -10,7 +10,6 @@ import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/aggregation.dart';
-import '../../logic/analytics.dart';
 import '../../logic/exam.dart';
 import '../../logic/progress.dart';
 import '../../logic/recommend.dart';

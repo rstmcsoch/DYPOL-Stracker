@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/date.dart';
-import '../../core/iterables.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
@@ -428,7 +427,7 @@ Future<void> openMistakeEditor(
                 );
                 if (!confirmed) return;
                 try {
-                  await ref.read(dataControllerProvider.notifier).deleteMistake(mistake!);
+                  await ref.read(dataControllerProvider.notifier).deleteMistake(mistake);
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, 'Mistake deleted.');
                 } catch (error) {

@@ -14,7 +14,6 @@ import '../../logic/analytics.dart';
 import '../../logic/progress.dart';
 import '../revision/revision_actions.dart';
 import '../shell/app_shell.dart';
-import '../shell/routes.dart';
 import '../../core/iterables.dart';
 
 /// Syllabus notebook: every chapter with its status, importance, five preparation
