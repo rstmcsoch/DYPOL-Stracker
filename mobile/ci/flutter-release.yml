@@ -53,6 +53,11 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Show the toolchain
+        run: |
+          flutter --version
+          flutter doctor -v || true
+
       - name: Install Dart packages
         working-directory: mobile
         run: flutter pub get
