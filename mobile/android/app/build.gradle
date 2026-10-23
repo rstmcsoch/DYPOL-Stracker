@@ -1,0 +1,124 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader -> localProperties.load(reader) }
+}
+
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode")
+if (flutterVersionCode == null) {
+    flutterVersionCode = "1"
+}
+
+def flutterVersionName = localProperties.getProperty("flutter.versionName")
+if (flutterVersionName == null) {
+    flutterVersionName = "1.0.0"
+}
+
+// Release signing. The keystore is never in the repository: either a local key.properties
+// (git-ignored) or the STRAKER_* environment variables supplied by CI / the release machine.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withReader("UTF-8") { reader -> keystoreProperties.load(reader) }
+}
+
+def storeFileValue = System.getenv("STRAKER_KEYSTORE") ?: keystoreProperties.getProperty("storeFile")
+def storePasswordValue = System.getenv("STRAKER_STORE_PASSWORD") ?: keystoreProperties.getProperty("storePassword")
+def keyAliasValue = System.getenv("STRAKER_KEY_ALIAS") ?: keystoreProperties.getProperty("keyAlias")
+def keyPasswordValue = System.getenv("STRAKER_KEY_PASSWORD") ?: keystoreProperties.getProperty("keyPassword")
+def hasReleaseSigning = storeFileValue != null && storePasswordValue != null &&
+        keyAliasValue != null && keyPasswordValue != null
+
+android {
+    namespace = "come.stracker.dypollabs"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    defaultConfig {
+        applicationId = "come.stracker.dypollabs"
+        // Android 7.0. Every dependency in pubspec.yaml supports API 24.
+        minSdk = 24
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutterVersionCode.toInteger()
+        versionName = flutterVersionName
+    }
+
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile = file(storeFileValue)
+                storePassword = storePasswordValue
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
+                // The distributed keystore is PKCS#12 so it can be created without keytool.
+                if (storeFileValue.endsWith(".p12") || storeFileValue.endsWith(".pfx")) {
+                    storeType = "PKCS12"
+                }
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Never silently ship a debug-signed build. A missing keystore fails the build
+            // unless the caller explicitly opts in with STRAKER_ALLOW_DEBUG_SIGNING=true,
+            // which the CI fallback uses to hand the owner an installable test build.
+            def allowDebugSigning = System.getenv("STRAKER_ALLOW_DEBUG_SIGNING") == "true"
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.release
+            } else if (allowDebugSigning) {
+                logger.warn("WARNING: building a debug-signed release APK. Do not distribute it.")
+                signingConfig = signingConfigs.debug
+            } else {
+                throw new GradleException(
+                        "Release signing is not configured. Set STRAKER_KEYSTORE / " +
+                        "STRAKER_STORE_PASSWORD / STRAKER_KEY_ALIAS / STRAKER_KEY_PASSWORD, " +
+                        "or add android/key.properties. Set STRAKER_ALLOW_DEBUG_SIGNING=true " +
+                        "only for a throwaway test build.")
+            }
+            // Dart is AOT-compiled and its icons/dead code are tree-shaken by the Flutter
+            // tool regardless of these flags. Java/Kotlin shrinking is left off until the
+            // first build has been run on a device; enable it with -PstrackerMinify to
+            // shrink further once the runtime behaviour is confirmed.
+            minifyEnabled = project.hasProperty("strackerMinify")
+            shrinkResources = project.hasProperty("strackerMinify")
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+        debug {
+            // Same applicationId as the release so the icon, data directory and deep link
+            // are the real ones. A debug-signed build is not a drop-in upgrade for a
+            // release-signed one (different key), so uninstall before switching back.
+            versionNameSuffix = "-debug"
+        }
+    }
+
+    // One universal APK. No `splits` block and no `abiFilters`: every ABI the Flutter
+    // engine publishes (armeabi-v7a, arm64-v8a, x86_64) ends up in the same artifact,
+    // which is what the student installs.
+
+    // AGP 8 spelling; `packagingOptions` was removed in AGP 8.0.
+    packaging {
+        resources {
+            excludes += ["META-INF/*.kotlin_module"]
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
