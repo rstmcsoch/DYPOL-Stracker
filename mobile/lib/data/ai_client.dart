@@ -155,7 +155,11 @@ class AiClient {
   final http.Client _client;
   final String _baseUrl;
 
-  static const int chatTimeout = Duration(minutes: 3).inSeconds;
+  /// How long the server may take to open the chat event stream before we give up.
+  static const Duration connectTimeout = Duration(seconds: 60);
+
+  /// Upper bound for one assistant turn, used by the chat page for its own spinner.
+  static const Duration chatTimeout = Duration(minutes: 3);
 
   String? get _token => Supabase.instance.client.auth.currentSession?.accessToken;
 
@@ -354,7 +358,7 @@ class AiClient {
       });
 
     final http.StreamedResponse response =
-        await _client.send(request).timeout(const Duration(seconds: 60));
+        await _client.send(request).timeout(connectTimeout);
     if (response.statusCode >= 400) {
       final String raw = await response.stream.bytesToString();
       Map<String, dynamic> body = <String, dynamic>{};

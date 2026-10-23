@@ -307,7 +307,6 @@ Future<void> openMistakeEditor(
   bool retryLater = mistake?.retryLater ?? true;
   String retryStatus = mistake?.retryStatus ?? 'pending';
   File? picked;
-  String pickedExtension = 'webp';
   String? error;
 
   await showAppSheet<void>(
@@ -370,13 +369,8 @@ Future<void> openMistakeEditor(
               final XFile? file =
                   await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
               if (file == null) return;
-              final String name = file.name.toLowerCase();
-              final String extension = name.endsWith('.png')
-                  ? 'png'
-                  : (name.endsWith('.webp') ? 'webp' : 'jpeg');
               setSheetState(() {
                 picked = File(file.path);
-                pickedExtension = extension;
               });
             },
             icon: const Icon(Icons.image_outlined, size: 18),
@@ -416,7 +410,7 @@ Future<void> openMistakeEditor(
               try {
                 await ref
                     .read(dataControllerProvider.notifier)
-                    .saveMistake(next, image: picked, extension: pickedExtension);
+                    .saveMistake(next, image: picked);
                 if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                 if (context.mounted) showToast(context, creating ? 'Mistake logged.' : 'Mistake saved.');
               } catch (error) {

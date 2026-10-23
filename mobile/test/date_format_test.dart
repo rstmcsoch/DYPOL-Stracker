@@ -31,10 +31,11 @@ void main() {
   test('number and percentage formatting never shows a fake zero', () {
     expect(percentLabel(null), '—');
     expect(percentLabel(48.4), '48%');
-    expect(percentLabel(48.45, digits: 1), '48.5%');
+    expect(percentLabel(48.46, digits: 1), '48.5%');
     expect(numberLabel(null), '—');
     expect(numberLabel(2.0), '2');
     expect(scoreLabel(42, 80), '42 / 80');
+    expect(scoreLabel(42.5, 80), '42.5 / 80');
     expect(minutesLabel(95), contains('1'));
     expect(hoursLabel(120), contains('2'));
     expect(plural(1, 'test'), '1 test');

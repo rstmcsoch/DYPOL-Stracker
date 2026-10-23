@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -609,6 +610,10 @@ class DataController extends StateNotifier<DataState> {
   }
 
   Future<String?> mistakeImageUrl(String path) => _repository.signedImageUrl(path);
+
+  /// Raw bytes of a private mistake image, for the in-app thumbnail.
+  Future<Uint8List?> mistakeImageBytes(String path) =>
+      _repository.downloadMistakeImage(path);
 
   Future<void> deleteMistake(Mistake mistake) async {
     await _run(

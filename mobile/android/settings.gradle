@@ -18,10 +18,13 @@ pluginManagement {
 
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-    // Pinned so a build is reproducible: AGP 8.11.1, Kotlin 2.2.0, Gradle 8.13.
-    // These support the compileSdk that current Flutter stable requires (35/36).
+    // Pinned so a build is reproducible. These are the versions Flutter 3.47.7 accepts:
+    //   * Gradle   8.14.3  — above its hard floor of 8.14.0 (android/gradle/wrapper/…)
+    //   * AGP      8.11.1  — exactly its hard floor
+    //   * Kotlin   2.2.20  — exactly its hard floor; 2.2.20 is documented as supporting
+    //                        Gradle <= 8.14.x and AGP < 8.12, which is this combination.
     id "com.android.application" version "8.11.1" apply false
-    id "org.jetbrains.kotlin.android" version "2.2.0" apply false
+    id "org.jetbrains.kotlin.android" version "2.2.20" apply false
 }
 
 include ":app"

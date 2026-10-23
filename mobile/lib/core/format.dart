@@ -28,10 +28,16 @@ String hoursLabel(num? minutes) {
   return '${hours.toStringAsFixed(hours >= 10 ? 0 : 1)}h';
 }
 
-/// "2 correct, 1 wrong" style summary used by test rows.
+/// Whole numbers keep no decimal, halves keep one: 42 -> "42", 42.5 -> "42.5".
+/// Mirrors `Intl.NumberFormat('en-IN', {maximumFractionDigits: 1})` on the website.
+String _scoreDigits(double value) => value == value.truncateToDouble()
+    ? value.toStringAsFixed(0)
+    : value.toStringAsFixed(1);
+
+/// "42 / 80" style summary used by test rows.
 String scoreLabel(double? obtained, double? total) {
   if (obtained == null || total == null) return 'No score';
-  return '${numberLabel(obtained, digits: 1)} / ${numberLabel(total)}';
+  return '${_scoreDigits(obtained)} / ${_scoreDigits(total)}';
 }
 
 String clampText(String value, int max) =>

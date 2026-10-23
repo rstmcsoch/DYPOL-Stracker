@@ -208,6 +208,19 @@ reported but does not block the artifact), then builds every ABI into one APK, p
 package id, label, minSdk, native libraries and signer certificate into the run summary, and
 removes the keystore from the runner afterwards.
 
+## 8b. The pinned Android toolchain
+
+`android/settings.gradle` and `android/gradle/wrapper/gradle-wrapper.properties` pin
+**AGP 8.11.1, Kotlin 2.2.20, Gradle 8.14.3**, and the release workflow pins **Flutter 3.47.7**.
+Those are the versions Flutter 3.47.7 accepts, taken from its own
+`packages/flutter_tools/gradle/src/main/kotlin/DependencyVersionChecker.kt`
+(Gradle 8.14.0 / AGP 8.11.1 / Kotlin 2.2.20 / Java 17 floors) and cross-checked against the
+compatibility ranges in `gradle_utils.dart`.
+
+`python3 tool/check_toolchain.py` performs that comparison in about a second and names the
+dependency to change, so a Flutter upgrade fails with a sentence instead of a Gradle stack
+trace. The workflow runs it before `flutter build apk`.
+
 ## 9. Deliberate limitations
 
 1. **The universal APK carries three ABIs, not four.** Flutter's Android engine ships

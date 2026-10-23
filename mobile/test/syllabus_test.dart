@@ -24,9 +24,12 @@ void main() {
 
   test('importance weights come from the account settings', () {
     final AppSettings settings = AppSettings.defaults('u1');
-    expect(importanceWeight(settings, 'High'), settings.weightHigh);
-    expect(importanceWeight(settings, 'Medium'), settings.weightMedium);
-    expect(importanceWeight(settings, 'Low'), settings.weightLow);
+    // `importance` is a lowercase enum in the database and in src/lib/jee/progress.ts.
+    expect(importanceWeight(settings, 'high'), settings.weightHigh);
+    expect(importanceWeight(settings, 'medium'), settings.weightMedium);
+    expect(importanceWeight(settings, 'low'), settings.weightLow);
+    // Anything else falls back to the medium weight, exactly like the website.
+    expect(importanceWeight(settings, 'High'), settings.weightMedium);
   });
 
   test('progress is empty rather than 0% when nothing is tracked', () {

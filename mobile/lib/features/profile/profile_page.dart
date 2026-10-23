@@ -13,6 +13,7 @@ import '../../data/models.dart';
 import '../../logic/aggregation.dart';
 import '../../logic/exam.dart';
 import '../../logic/progress.dart';
+import '../auth/auth_controller.dart';
 import '../auth/auth_screens.dart';
 import '../owner/owner_console_page.dart';
 import '../shell/app_shell.dart';
