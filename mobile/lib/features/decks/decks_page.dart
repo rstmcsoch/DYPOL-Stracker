@@ -319,7 +319,7 @@ Future<void> openCardEditor(
                 );
                 if (!confirmed) return;
                 try {
-                  await ref.read(dataControllerProvider.notifier).deleteCard(card!);
+                  await ref.read(dataControllerProvider.notifier).deleteCard(card);
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, 'Card deleted.');
                 } catch (error) {

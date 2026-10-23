@@ -37,7 +37,6 @@ class _PyqPageState extends ConsumerState<PyqPage> {
   @override
   Widget build(BuildContext context) {
     final AppData data = ref.watch(dataControllerProvider).data;
-    final StrackerColors colors = context.stracker;
     final List<int> years = pyqYears(data.settings);
     final String needle = _search.text.trim().toLowerCase();
     final List<Chapter> chapters = data.chapters

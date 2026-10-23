@@ -222,7 +222,8 @@ whole app and runs the whole suite on a GitHub runner, so these are measured res
 | `flutter analyze` | run 39913456743 named every error in the tree: four, all on two lines using `CupertinoPageTransitionsBuilder` in `app_theme.dart` (it lives in `package:flutter/cupertino.dart`). Fixed by using `ZoomPageTransitionsBuilder` everywhere. |
 | `flutter test` | after that fix, **+65 tests, zero failures** (the earlier `-1` was `widgets_test.dart` failing to compile because it imports `app_theme.dart` — not a broken assertion) |
 | `flutter build apk --release` | **success** in run 39914153006 (tag `stracker-v1.1.1`), artifact `stracker-apk`, and the project check in the same run printed the compiled-in ref `tkggckwksoatbswrebpu` with `Match: yes` |
-| analyzer warnings | 10 unused imports/fields reported by the same run; all removed afterwards, so the build is warning-free apart from toolchain deprecation notices for `actions/*@v4` (not ours to fix) |
+| analyzer warnings | the run on commit `6751770` (run 39918467643, tag `stracker-v1.1.4`) reports **0 warnings, 0 errors, 0 test failures**; the earlier runs' ten-plus unused imports, two unused locals and four redundant `!` are all gone |
+| release APK | five consecutive successful `flutter build apk --release` runs on this branch (39913456743 failed only on the Cupertino builder; 39914153006, 39916052287, 39917407176, 39918467643 all succeeded) |
 
 **Still not verified:** that it renders and feels right on a physical phone. Only a phone can
 confirm that, and the APK is now built.
