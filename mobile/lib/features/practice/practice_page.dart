@@ -415,7 +415,7 @@ Future<void> openPracticeEditor(
                 );
                 if (!confirmed) return;
                 try {
-                  await ref.read(dataControllerProvider.notifier).deletePractice(session!);
+                  await ref.read(dataControllerProvider.notifier).deletePractice(session);
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, 'Practice block deleted.');
                 } catch (error) {

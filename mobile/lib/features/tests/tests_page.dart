@@ -512,7 +512,7 @@ Future<void> openTestEditor(
                       );
                       if (!confirmed) return;
                       try {
-                        await ref.read(dataControllerProvider.notifier).deleteTest(test!);
+                        await ref.read(dataControllerProvider.notifier).deleteTest(test);
                         if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                         if (context.mounted) showToast(context, 'Test deleted.');
                       } catch (error) {
