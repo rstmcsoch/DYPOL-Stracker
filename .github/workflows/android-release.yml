@@ -79,7 +79,8 @@ jobs:
         run: |
           status=0
           flutter analyze --no-fatal-infos --no-fatal-warnings > "$RUNNER_TEMP/analyze.log" 2>&1 || status=$?
-          grep -E "^ *error • " "$RUNNER_TEMP/analyze.log" | head -40 > "$RUNNER_TEMP/analyze-errors.log" || true
+          grep -E "^ *(error|warning) • " "$RUNNER_TEMP/analyze.log" | head -40 > "$RUNNER_TEMP/analyze-errors.log" || true
+          grep -E "^ *info • " "$RUNNER_TEMP/analyze.log" | head -25 >> "$RUNNER_TEMP/analyze-errors.log" || true
           {
             echo "### flutter analyze (advisory)"
             echo '```'
@@ -144,6 +145,12 @@ jobs:
             echo "No keystore secret was provided, so this APK is **debug-signed (test only)**." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # `android:postSplashScreenTheme` (a library attribute, not a framework one) cost a
+      # whole Gradle run: ':app:processReleaseResources' failed after the Dart side compiled.
+      - name: Check the Android resources
+        working-directory: mobile
+        run: python3 tool/check_resources.py
+
       - name: Build the universal APK
         working-directory: mobile
         env:
@@ -207,15 +214,45 @@ jobs:
           path: mobile/out/*
           if-no-files-found: error
 
+      # When something fails, the failing step's log is downloadable as a file instead of a
+      # wall of text in the browser — handy when the only device is a phone.
+      - name: Upload the logs (diagnosis)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stracker-logs
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/analyze.log
+            ${{ runner.temp }}/test.log
+            ${{ runner.temp }}/build.log
+            ${{ runner.temp }}/build-errors.log
+
+      # Only `main` publishes. Older build workflows that still exist on side branches
+      # (apk-debug) use the same `stracker-latest` tag, so restricting the publisher to
+      # main means a stale branch can never overwrite the release the owner installs from.
       - name: Publish to Releases (easiest download on a phone)
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: stracker-latest
           name: Stracker — latest Android build
+          # Supersedes the older "Stracker Android APK …" releases on the releases page.
+          make_latest: true
           body: |
             Built by GitHub Actions from `${{ github.sha }}`.
+
             Download the `.apk` file below, then open it on the phone to install.
+            If an older Stracker build is already installed, uninstall it first: this APK is
+            signed with the project's release key, and Android refuses an update signed with
+            a different key.
+
             Read `docs/VERIFICATION.md` before treating a build as a verified release.
           files: mobile/out/*
           fail_on_unmatched_files: false
+
+      - name: Say why nothing was published (not on main)
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::notice::This run built the APK from '${GITHUB_REF_NAME}', so it was uploaded as an artifact only. Releases are published from main."
+          echo "Built from \`${GITHUB_REF_NAME}\`: artifact only, no release was published." >> "$GITHUB_STEP_SUMMARY"
