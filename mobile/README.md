@@ -132,10 +132,13 @@ flutter build apk --release
 Both values are public (the website sends the same key from its own bundle) and each row is
 still protected by the account's own rules on the server.
 
-Overrides exist only for a staging copy:
+Overrides exist only for a staging copy, and only when the build asks for them:
+`SUPABASE_URL` / `SUPABASE_ANON_KEY` are *ignored* unless `ALLOW_PROJECT_OVERRIDE=true`
+is also passed, so a leftover CI secret cannot move the APK to another project.
 
 ```bash
 flutter build apk --release \
+  --dart-define=ALLOW_PROJECT_OVERRIDE=true \
   --dart-define=SUPABASE_URL=https://<other-project>.supabase.co \
   --dart-define=SUPABASE_ANON_KEY=<its public key> \
   [--dart-define=API_BASE_URL=https://<other-host>]

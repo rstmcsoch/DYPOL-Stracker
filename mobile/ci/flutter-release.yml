@@ -162,14 +162,14 @@ jobs:
           EXPECTED: ${{ vars.EXPECTED_SUPABASE_PROJECT || 'tkggckwksoatbswrebpu' }}
         run: |
           set -eu
-          url=$(sed -n "s/.*defaultValue: '\(https:\/\/[^']*\)'.*/\1/p" lib/core/config.dart | head -1)
+          url=$(sed -n "s/.*_projectUrl = '\(https:\/\/[^']*\)'.*/\1/p" lib/core/config.dart | head -1)
           if [ -z "$url" ]; then
             echo "::error title=No project address::lib/core/config.dart has no default Supabase URL, so the APK could not sign anyone in."
             exit 1
           fi
           host=$(printf '%s' "$url" | sed -E 's#^https?://##; s#/.*$##')
           ref=$(printf '%s' "$host" | cut -d. -f1)
-          key=$(sed -n "s/.*defaultValue: '\(eyJ[^']*\)'.*/\1/p" lib/core/config.dart | tr -d "\n" | head -c 40)
+          key=$(grep -c "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" lib/core/config.dart)
           {
             echo "### Supabase project (compiled in)"
             echo ""
@@ -178,7 +178,7 @@ jobs:
             echo "| APK will use | \`$ref\` (\`$host\`) |"
             echo "| Expected | \`$EXPECTED\` |"
             echo "| Match | $([ "$ref" = "$EXPECTED" ] && echo 'yes' || echo '**NO**') |"
-            echo "| Public key present | $([ -n "$key" ] && echo 'yes' || echo '**NO**') |"
+            echo "| Public key present | $([ "${key:-0}" -gt 0 ] && echo 'yes' || echo '**NO**') |"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$ref" != "$EXPECTED" ]; then
