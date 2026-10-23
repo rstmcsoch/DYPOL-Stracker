@@ -23,6 +23,10 @@ nor the package set could be installed. **Consequently `flutter pub get`, `flutt
 
 ## What was verified (with the method)
 
+0. **Grammar-level parse of all 71 Dart files** (`lib/` + `test/`) — `tool/check_syntax.py`
+   parses every file with `tree-sitter-dart`, a real Dart grammar, and walks the tree for
+   `ERROR`/missing nodes. Result: **71 files parsed, 0 syntax errors**. This cannot see types,
+   but any file that fails to parse could never compile, and none does.
 1. **Static symbol resolution across all 59 files in `lib/`** — four small checkers run in
    this environment:
    * `tool/check_api.py` resolves every `data.<member>` against `AppData`, every
@@ -34,8 +38,10 @@ nor the package set could be installed. **Consequently `flutter pub get`, `flutt
    * `tool/check_imports.py` reports a declaration used without an import that provides it.
    * `tool/balance.py` tokenises each file (strings, interpolation, comments) and confirms
      balanced brackets.
+   * `tool/check_syntax.py` (see item 0) covers what the others cannot: statement-level
+     grammar.
    Result at hand-off: no unresolved provider, no unknown `AppData` member, no unknown
-   constructor parameter, every file balanced. The remaining checker output was reviewed by
+   constructor parameter, every file balanced and parseable. The remaining checker output was reviewed by
    hand and consists of known false positives (type annotations such as `(Chapter c) => …`
    being read as constructor calls, `TextEditingController.clear()`, and a field named
    `chapterStages` sharing a name with a top-level function).
