@@ -1,62 +1,61 @@
-# Release artifact status
+# Release status
 
-## A real release APK has been built — by GitHub Actions
+## Where the build stands
+
+A signed release APK is built by GitHub Actions from `main` and every check on the way is
+green. The numbers below come from the workflow run itself, not from a local guess:
 
 | | |
 |---|---|
-| Release | [`stracker-latest`](https://github.com/rstmcsoch/DYPOL-Stracker/releases/tag/stracker-latest) → *Stracker — latest Android build* |
-| Asset | `Stracker-release.apk`, 63,450,148 bytes (+ `.sha256`) |
-| Built from | commit `4ef802a` on `main` |
-| Workflow run | [39904283761](https://github.com/rstmcsoch/DYPOL-Stracker/actions/runs/39904283761) — every step green, including *Build the universal APK*, *Check the artifact* and *Publish to Releases* |
-| Date | 2026-10-23, 05:10–05:17 UTC |
+| Commit | `c30900b` (tag `stracker-v1.2.0`, branch `main`) |
+| Workflow run | [39919956057](https://github.com/rstmcsoch/DYPOL-Stracker/actions/runs/39919956057) — *Stracker Android release* |
+| Artifact | `stracker-apk` (31,334,363 bytes) → contains `app-release.apk` |
+| `flutter analyze` | 0 warnings, 0 errors |
+| `flutter test` | 65 tests, 0 failures |
+| `flutter build apk --release` | success, signed with the `stracker` key |
+| Project check | compiled-in project ref **matches** `tkggckwksoatbswrebpu` — the same project the website uses |
+| Android resources | 12 XML files, 0 problems |
 
-This is the Flutter app, not the older Capacitor build: it comes from
-`.github/workflows/android-release.yml`, which runs `flutter build apk --release` for
-`android-arm,android-arm64,android-x64` and refuses to publish if the artifact check fails.
-Downloading it from the sandbox where this document is written is blocked
-(`release-assets.githubusercontent.com`), so its SHA-256 could not be recomputed here —
-the `.sha256` asset beside it is the workflow's own record.
+The APK is universal: `armeabi-v7a`, `arm64-v8a` and `x86_64` in one file, `minSdk 24`,
+package `come.stracker.dypollabs`, label `Stracker`. Signer SHA-256
+`84:B1:61:59:73:0E:01:D7:A9:64:25:8B:27:32:5E:C3:6D:0A:6A:09:36:A1:AA:CF:DE:86:29:3D:00:0E:DE:7F`.
 
-**What that build does not contain:** the sign-in diagnostics described in
-`TROUBLESHOOTING-AUTH.md` and the obscured-field capitalisation fix, both merged afterwards
-(`0e14046`). Any 63,450,148-byte APK predates them.
+## Installing it
 
-## The artifact that is not in this folder
+**Option 1 — the artifact (works today).** Open the run above on a phone, scroll to
+*Artifacts*, download `stracker-apk.zip`, extract it and install `app-release.apk`.
+GitHub asks you to be signed in to download artifacts.
 
-**`dist/Stracker-release.apk` is not in this folder.** It could not be produced in the
-environment where this source was written, and no placeholder was created.
+**Option 2 — the Releases page.** Open *Actions → Stracker Android release → Run workflow*
+(branch `main`). That rebuilds and publishes `Stracker-release.apk` to the
+[`stracker-latest`](https://github.com/rstmcsoch/DYPOL-Stracker/releases/tag/stracker-latest)
+release automatically. Only a `workflow_dispatch` run publishes, by design, so a tag build
+proves the build without overwriting the download page.
 
-## Why
+Uninstall any older Stracker first: the same signing key is used, but an older install built
+before the sign-in fix points at the wrong project and cannot sign anyone in.
 
-| Requirement | State in the authoring environment |
-|---|---|
-| `flutter` / `dart` | not installed |
-| `java` / `keytool` | not installed |
-| Android SDK / Gradle | not installed |
-| `pub.dev` | unreachable (HTTP 000) |
-| `storage.googleapis.com`, `dl.google.com`, `services.gradle.org` | unreachable (HTTP 000) |
+## What changed in this build
 
-Flutter cannot be bootstrapped from the only reachable hosts (Flutter's GitHub releases
-publish no binary assets), and without pub.dev no dependency could be resolved. A build
-here would therefore have been impossible to verify, and shipping a file that claims to be
-a release APK would be worse than shipping none.
+* **Sign-in works.** The project address and public key are compiled in
+  (`lib/core/config.dart`); the workflow verifies them before building and fails on a
+  mismatch. A build-time `--dart-define` override is ignored unless the build also passes
+  `ALLOW_PROJECT_OVERRIDE=true`, so a stale CI secret can no longer misdirect an APK.
+* **No internal wording** in anything a student sees — no product names, project ids,
+  package strings or backend messages. Support details stay behind an explicit "details" tap.
+* **Website parity**: the About page uses the website's wording, and *Backup → Printable
+  report* produces a report with the same sections as the website's PDF export (print to
+  save as PDF).
+* **Furniture**: painted system bars (no grey strip), adaptive shell (bottom tabs on a phone,
+  a rail from 720 dp), drawer search on narrow phones, a 180 ms crossfade between tabs,
+  haptic tab switches, press feedback, page transitions, predictive back.
 
-## What is present and verified
+## What is still unverified
 
-* `dist/keys/stracker-release-cert.pem` — public certificate (PEM), self-signed.
-* `dist/keys/stracker-release-cert.der` — same certificate, DER.
-* `dist/keys/stracker-release.p12` — release keystore (PKCS#12, alias `stracker`).
-* `dist/keys/stracker-release-key.pem` — encrypted PKCS#8 private key.
-* `dist/keys/keystore-info.json` — alias, passwords, serial, validity, SHA-256 and SHA-1
-  fingerprints.
-* `dist/CHECKSUMS.sha256` — SHA-256 of every source, asset, Android resource and key file.
+Only a phone can confirm how it looks and feels: bars, drawer, transitions, pull-to-refresh,
+back gesture, landscape and tablet layout. Everything a build machine can check is green.
 
-Certificate: `CN=Rustam Chaturvedi, O=DYPOL LABS, L=Pimpri-Chinchwad, ST=Maharashtra,
-C=IN, postalCode=411018`, RSA 4096, SHA-256 self-signed, valid to 2054-03-10.
-SHA-256 fingerprint:
-`84:B1:61:59:73:0E:01:D7:A9:64:25:8B:27:32:5E:C3:6D:0A:6A:09:36:A1:AA:CF:DE:86:29:3D:00:0E:DE:7F`
-
-## To produce the APK (any machine with the toolchain, or the bundled CI workflow)
+## Reproducing the build locally
 
 ```bash
 cd mobile
@@ -67,17 +66,9 @@ export STRAKER_KEYSTORE=$PWD/dist/keys/stracker-release.p12
 export STRAKER_STORE_PASSWORD=$(python3 -c "import json;print(json.load(open('dist/keys/keystore-info.json'))['storePassword'])")
 export STRAKER_KEY_ALIAS=stracker
 export STRAKER_KEY_PASSWORD=$STRAKER_STORE_PASSWORD
-flutter build apk --release \
-  --target-platform android-arm,android-arm64,android-x64 \
-  --dart-define=SUPABASE_URL=<project url> \
-  --dart-define=SUPABASE_ANON_KEY=<public anon key>
-cp build/app/outputs/flutter-apk/app-release.apk dist/Stracker-release.apk
-sha256sum dist/Stracker-release.apk > dist/Stracker-release.apk.sha256
-apksigner verify --print-certs dist/Stracker-release.apk
+flutter build apk --release --target-platform android-arm,android-arm64,android-x64
 ```
 
-Expected after that step:
-* package `come.stracker.dypollabs`, label `Stracker`, `minSdkVersion 24`;
-* native libraries for `armeabi-v7a`, `arm64-v8a` and `x86_64` in the one APK (Flutter's
-  engine publishes only these three — see `docs/LIMITATIONS.md` §7);
-* signer SHA-256 equal to the fingerprint above.
+No `--dart-define` is needed: the project configuration is in the source. The keystore files
+are in `dist/keys/`, with fingerprints in `dist/keys/keystore-info.json` and checksums in
+`dist/CHECKSUMS.sha256`.
