@@ -235,9 +235,7 @@ class ProfilePage extends ConsumerWidget {
                 Text('Stracker · DYPOL LABS', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 3),
                 Text(
-                  'A notebook for JEE preparation, built by Rustam Chaturvedi. The app reads and writes '
-                  'the same Supabase project as the website; there is no second backend and no AI key on '
-                  'the device.',
+                  'A notebook for JEE preparation.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
                 ),
                 const SizedBox(height: 6),

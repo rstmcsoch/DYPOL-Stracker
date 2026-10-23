@@ -115,7 +115,8 @@ test/                       unit + widget tests (see §7)
 tool/                       palette generator and static consistency checks
 ci/                         ready-to-install GitHub Actions workflow
 dist/                       release artifacts (APK, certificate, checksums)
-docs/                       build, signing, features, verification, limitations
+docs/                       build, signing, features, verification, limitations,
+                            workflow map, sign-in troubleshooting
 ```
 
 ## 5. Configuration
@@ -226,6 +227,15 @@ trace. The workflow runs it before `flutter build apk`.
 `postSplashScreenTheme` failure that cost a full Gradle run) and any `@color` / `@drawable` /
 `@mipmap` / `@style` / `@string` / `@xml` / `@layout` reference that does not resolve, which is
 what AAPT reports as `error: style attribute … not found` or `resource … not found`.
+
+## 8d. Sign-in problems
+
+`docs/TROUBLESHOOTING-AUTH.md` answers the question that looks like a wrong password but isn't:
+the app and the website share one Supabase project (there is no separate app database), so a
+refused sign-in means the build points at another project, the key belongs to another project, or
+the account has no password for this one. **Settings → Connection** shows the project ref the APK
+uses and whether that project accepts its key; the build log prints the same value under
+“Check which Supabase project the APK will talk to”.
 
 ## 8c. Which workflow to run
 

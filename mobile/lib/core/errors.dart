@@ -10,16 +10,38 @@ class AppFailure implements Exception {
   String toString() => message;
 }
 
+/// The untouched server wording behind [friendlyAuthError], for the "Details" line.
+///
+/// "Email or password is incorrect" is shown for more than one real cause (no such account
+/// in *this* project, wrong password, or a key that belongs to another project), so the raw
+/// message plus status code is what makes a support question answerable.
+String authErrorDetail(String message, {String? statusCode}) {
+  final String clean = message.trim();
+  if (clean.isEmpty) {
+    return statusCode == null ? 'No details from the server.' : 'No details · HTTP $statusCode';
+  }
+  return statusCode == null ? clean : 'HTTP $statusCode · $clean';
+}
+
 /// Mirrors `friendlyAuthError` in src/contexts/AuthContext.tsx.
 String friendlyAuthError(String message) {
   final String normalized = message.toLowerCase();
-  if (normalized.contains('invalid login credentials')) {
+  if (normalized.contains('invalid login credentials') || normalized.contains('invalid_credentials')) {
     return 'Email or password is incorrect. Please try again.';
+  }
+  if (normalized.contains('invalid api key') || normalized.contains('invalid_api_key')) {
+    return 'This build cannot talk to its account service (key rejected). Reinstall a build '
+        'made with the right secrets.';
+  }
+  if (normalized.contains('user not found') || normalized.contains('user_not_found')) {
+    return 'No account with that email exists here. Check the spelling, or create an account.';
   }
   if (normalized.contains('email not confirmed')) {
     return 'Confirm your email before signing in.';
   }
-  if (normalized.contains('too many requests')) {
+  if (normalized.contains('too many requests') ||
+      normalized.contains('rate limit') ||
+      normalized.contains('over_request_rate_limit')) {
     return 'Too many attempts. Wait a moment, then try again.';
   }
   if (normalized.contains('failed to fetch') ||

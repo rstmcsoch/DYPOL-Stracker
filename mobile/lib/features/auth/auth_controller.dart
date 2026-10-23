@@ -15,6 +15,7 @@ class AuthStatus {
     this.initializing = true,
     this.busy = false,
     this.error,
+    this.detail,
     this.recoveryMode = false,
     this.awaitingEmailConfirmation = false,
     this.misconfigured = false,
@@ -24,6 +25,9 @@ class AuthStatus {
   final bool initializing;
   final bool busy;
   final String? error;
+
+  /// Raw server wording + status code behind [error], shown under "Details".
+  final String? detail;
 
   /// The user arrived from a password-recovery link and must set a new password.
   final bool recoveryMode;
@@ -41,6 +45,7 @@ class AuthStatus {
     bool? initializing,
     bool? busy,
     Object? error = _none,
+    Object? detail = _none,
     bool? recoveryMode,
     bool? awaitingEmailConfirmation,
     bool? misconfigured,
@@ -51,6 +56,7 @@ class AuthStatus {
         initializing: initializing ?? this.initializing,
         busy: busy ?? this.busy,
         error: error == _none ? this.error : error as String?,
+        detail: detail == _none ? this.detail : detail as String?,
         recoveryMode: recoveryMode ?? this.recoveryMode,
         awaitingEmailConfirmation: awaitingEmailConfirmation ?? this.awaitingEmailConfirmation,
         misconfigured: misconfigured ?? this.misconfigured,
@@ -104,6 +110,7 @@ class AuthController extends StateNotifier<AuthStatus> {
       initializing: false,
       busy: false,
       error: null,
+      detail: null,
       recoveryMode: recovery,
       awaitingEmailConfirmation:
           session == null ? state.awaitingEmailConfirmation : false,
@@ -122,10 +129,18 @@ class AuthController extends StateNotifier<AuthStatus> {
       _publish(response.session, recovery: false);
       return response.session != null;
     } on AuthException catch (error) {
-      state = state.copyWith(busy: false, error: friendlyAuthError(error.message));
+      state = state.copyWith(
+        busy: false,
+        error: friendlyAuthError(error.message),
+        detail: authErrorDetail(error.message, statusCode: error.statusCode),
+      );
       return false;
     } catch (error) {
-      state = state.copyWith(busy: false, error: friendlyAuthError('$error'));
+      state = state.copyWith(
+        busy: false,
+        error: friendlyAuthError('$error'),
+        detail: authErrorDetail('$error'),
+      );
       return false;
     }
   }
@@ -160,10 +175,18 @@ class AuthController extends StateNotifier<AuthStatus> {
       }
       return hasSession;
     } on AuthException catch (error) {
-      state = state.copyWith(busy: false, error: friendlyAuthError(error.message));
+      state = state.copyWith(
+        busy: false,
+        error: friendlyAuthError(error.message),
+        detail: authErrorDetail(error.message, statusCode: error.statusCode),
+      );
       return false;
     } catch (error) {
-      state = state.copyWith(busy: false, error: friendlyAuthError('$error'));
+      state = state.copyWith(
+        busy: false,
+        error: friendlyAuthError('$error'),
+        detail: authErrorDetail('$error'),
+      );
       return false;
     }
   }
@@ -176,9 +199,17 @@ class AuthController extends StateNotifier<AuthStatus> {
       await client.auth.resend(email: email.trim(), type: OtpType.signup);
       state = state.copyWith(busy: false);
     } on AuthException catch (error) {
-      state = state.copyWith(busy: false, error: friendlyAuthError(error.message));
+      state = state.copyWith(
+        busy: false,
+        error: friendlyAuthError(error.message),
+        detail: authErrorDetail(error.message, statusCode: error.statusCode),
+      );
     } catch (error) {
-      state = state.copyWith(busy: false, error: friendlyAuthError('$error'));
+      state = state.copyWith(
+        busy: false,
+        error: friendlyAuthError('$error'),
+        detail: authErrorDetail('$error'),
+      );
     }
   }
 
@@ -194,10 +225,18 @@ class AuthController extends StateNotifier<AuthStatus> {
       state = state.copyWith(busy: false);
       return true;
     } on AuthException catch (error) {
-      state = state.copyWith(busy: false, error: friendlyAuthError(error.message));
+      state = state.copyWith(
+        busy: false,
+        error: friendlyAuthError(error.message),
+        detail: authErrorDetail(error.message, statusCode: error.statusCode),
+      );
       return false;
     } catch (error) {
-      state = state.copyWith(busy: false, error: friendlyAuthError('$error'));
+      state = state.copyWith(
+        busy: false,
+        error: friendlyAuthError('$error'),
+        detail: authErrorDetail('$error'),
+      );
       return false;
     }
   }
@@ -213,10 +252,18 @@ class AuthController extends StateNotifier<AuthStatus> {
       if (response.user == null) return false;
       return true;
     } on AuthException catch (error) {
-      state = state.copyWith(busy: false, error: friendlyAuthError(error.message));
+      state = state.copyWith(
+        busy: false,
+        error: friendlyAuthError(error.message),
+        detail: authErrorDetail(error.message, statusCode: error.statusCode),
+      );
       return false;
     } catch (error) {
-      state = state.copyWith(busy: false, error: friendlyAuthError('$error'));
+      state = state.copyWith(
+        busy: false,
+        error: friendlyAuthError('$error'),
+        detail: authErrorDetail('$error'),
+      );
       return false;
     }
   }
@@ -233,7 +280,7 @@ class AuthController extends StateNotifier<AuthStatus> {
     state = const AuthStatus(initializing: false);
   }
 
-  void clearError() => state = state.copyWith(error: null);
+  void clearError() => state = state.copyWith(error: null, detail: null);
 
   void leaveRecovery() => state = state.copyWith(recoveryMode: false);
 

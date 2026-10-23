@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config.dart';
 import '../../core/date.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
@@ -9,6 +10,8 @@ import '../../core/theme/palettes.dart';
 import '../../core/theme/theme_controller.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/dialogs.dart';
+import '../../data/connection_check.dart';
+import '../auth/connection_sheet.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
@@ -492,13 +495,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
-                    leading: const Icon(Icons.info_outline, size: 19),
-                    title: const Text('About the connection'),
+                    leading: const Icon(Icons.wifi_tethering, size: 19),
+                    title: const Text('Connection'),
                     subtitle: Text(
-                      'Supabase project and the /api/ai endpoints on dypol-stracker.vercel.app. No service '
-                      'role key and no AI provider key is stored on this device.',
+                      projectRefFrom(AppConfig.supabaseUrl).isEmpty
+                          ? 'This build has no project address'
+                          : 'Project ${projectRefFrom(AppConfig.supabaseUrl)} · tap to test',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
                     ),
+                    trailing: const Icon(Icons.chevron_right, size: 18),
+                    onTap: () => showConnectionSheet(context),
                   ),
                 ],
               ),

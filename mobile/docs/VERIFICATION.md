@@ -23,9 +23,9 @@ nor the package set could be installed. **Consequently `flutter pub get`, `flutt
 
 ## What was verified (with the method)
 
-0. **Grammar-level parse of all 71 Dart files** (`lib/` + `test/`) — `tool/check_syntax.py`
+0. **Grammar-level parse of all 74 Dart files** (`lib/` + `test/`) — `tool/check_syntax.py`
    parses every file with `tree-sitter-dart`, a real Dart grammar, and walks the tree for
-   `ERROR`/missing nodes. Result: **71 files parsed, 0 syntax errors**. This cannot see types,
+   `ERROR`/missing nodes. Result: **74 files parsed, 0 syntax errors**. This cannot see types,
    but any file that fails to parse could never compile, and none does.
 1. **Static symbol resolution across all 59 files in `lib/`** — four small checkers run in
    this environment:
@@ -157,6 +157,36 @@ the six error sites were read back line by line). The next green run in the Acti
 proof, and its summary prints the package id, minSdk, the three ABIs and the signer
 fingerprint.
 
+**Run 5** (sign-in diagnosis). This one is different from Runs 1–4: it does not change how the
+app builds, it changes how a failed sign-in is explained. Everything below was checked
+statically only; the next workflow run is what executes it.
+
+| Check | Result |
+|---|---|
+| `tree_sitter` parse of `lib/` + `test/` | **74 files, 0 syntax errors** |
+| `tool/balance.py` | `balanced` |
+| `tool/check_resources.py` | 12 XML files, 0 problems |
+| `tool/check_members.py` / `check_calls.py` / `check_api.py` | only the known false positives (`chapterStages`, `_pickChapter`, `main`, `copyWith(decoration:/fontSize:)`, `DataController.clear`) |
+| `AuthException.statusCode` shape | read from `supabase/gotrue-dart` `lib/src/types/auth_exception.dart` (`df3fe7a`) — it is a **`String?`**, so `authErrorDetail` takes `String?`; a `int?` version would not have compiled |
+| Test count | 13 files, **63 cases** — 6 new cases in `connection_test.dart` (project-ref parsing, the three verdicts, the unexpected-status branch, error wording) |
+
+Two behaviour changes are worth naming:
+
+1. **`AppField` no longer capitalises obscured text.** The widget defaulted to
+   `TextCapitalization.sentences` for every field, password included; Android keyboards honour
+   it, so a password could be sent as `Abcd@1234` while the stored one is `abcd@1234`. Obscured
+   fields now force `TextCapitalization.none`, `autocorrect: false`, `enableSuggestions: false`,
+   and the three email fields opt out of capitalisation too. This is a plausible cause of
+   "my correct password is rejected" and it is fixed regardless of the project question.
+2. **The app can now prove which project it talks to.** `GET {SUPABASE_URL}/auth/v1/settings`
+   with only the public anon key reports the project ref, reachability, latency, HTTP status,
+   whether the key is accepted, and whether email confirmation / sign-ups are on. Shown under a
+   failed sign-in and in Settings → Connection; the build log prints the same ref and compares
+   it with the expected project. No password, no user token, no new backend.
+
+**Still not verified:** that this build compiles and that sign-in succeeds on a device. Both
+need the next Actions run (compilation) and a phone (sign-in).
+
 ## How this gets verified without a computer
 
 `ci/flutter-release.yml` performs the same steps on GitHub's runners: `flutter pub get`,
@@ -175,7 +205,7 @@ until the first build is green.
 cd mobile
 flutter pub get
 flutter analyze                      # expect no errors
-flutter test                         # 12 files, 57 cases
+flutter test                         # 13 files, 63 cases
 flutter build apk --release \
   --dart-define=SUPABASE_URL=… --dart-define=SUPABASE_ANON_KEY=…
 ```
