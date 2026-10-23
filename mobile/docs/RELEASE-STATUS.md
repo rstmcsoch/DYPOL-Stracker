@@ -1,5 +1,28 @@
 # Release artifact status
 
+## A real release APK has been built — by GitHub Actions
+
+| | |
+|---|---|
+| Release | [`stracker-latest`](https://github.com/rstmcsoch/DYPOL-Stracker/releases/tag/stracker-latest) → *Stracker — latest Android build* |
+| Asset | `Stracker-release.apk`, 63,450,148 bytes (+ `.sha256`) |
+| Built from | commit `4ef802a` on `main` |
+| Workflow run | [39904283761](https://github.com/rstmcsoch/DYPOL-Stracker/actions/runs/39904283761) — every step green, including *Build the universal APK*, *Check the artifact* and *Publish to Releases* |
+| Date | 2026-10-23, 05:10–05:17 UTC |
+
+This is the Flutter app, not the older Capacitor build: it comes from
+`.github/workflows/android-release.yml`, which runs `flutter build apk --release` for
+`android-arm,android-arm64,android-x64` and refuses to publish if the artifact check fails.
+Downloading it from the sandbox where this document is written is blocked
+(`release-assets.githubusercontent.com`), so its SHA-256 could not be recomputed here —
+the `.sha256` asset beside it is the workflow's own record.
+
+**What that build does not contain:** the sign-in diagnostics described in
+`TROUBLESHOOTING-AUTH.md` and the obscured-field capitalisation fix, both merged afterwards
+(`0e14046`). Any 63,450,148-byte APK predates them.
+
+## The artifact that is not in this folder
+
 **`dist/Stracker-release.apk` is not in this folder.** It could not be produced in the
 environment where this source was written, and no placeholder was created.
 
