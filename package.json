@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && tsc --noEmit -p tsconfig.server.json && vite build",
+    "build": "node scripts/pentest/ci-gate.mjs && tsc -b && tsc --noEmit -p tsconfig.server.json && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -b --pretty && tsc --noEmit -p tsconfig.server.json",
     "lint": "eslint .",
