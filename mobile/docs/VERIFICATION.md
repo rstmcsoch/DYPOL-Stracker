@@ -196,6 +196,7 @@ need the next Actions run (compilation) and a phone (sign-in).
 | `tool/check_resources.py` | 12 XML files, 0 problems |
 | test count | 14 files, **65 cases** (2 new in `report_test.dart`) |
 | config check, run locally | the workflow's own `sed` extraction returns `https://tkggckwksoatbswrebpu.supabase.co` → ref `tkggckwksoatbswrebpu` |
+| override cannot drift | `--dart-define=SUPABASE_URL=…` is ignored unless `ALLOW_PROJECT_OVERRIDE=true`, so the stale workflow on `main` (which still forwards repository secrets) can no longer move the APK |
 | anon key check, run locally | 208 characters, payload decodes to `{"ref":"tkggckwksoatbswrebpu","role":"anon"}`, identical to the key in the project dashboard |
 | model ↔ database check | every column read by `lib/data/models.dart` (19 tables) exists in the live schema (`information_schema.columns`, project `tkggckwksoatbswrebpu`); 20 user tables all have RLS enabled with `authenticated` SELECT/INSERT |
 | no vendor words in UI | grep over `lib/` for supabase/vercel/github/postgres/schema/backend inside string literals: only code identifiers and the collapsed support block remain |

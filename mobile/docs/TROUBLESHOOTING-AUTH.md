@@ -37,7 +37,9 @@ on the account that already exists.
   `supabaseAnonKey`). The release workflow reads them, prints the project ref in the run
   summary, and **fails the run** if the ref is not `tkggckwksoatbswrebpu`.
 * The workflow no longer passes `SUPABASE_URL` / `SUPABASE_ANON_KEY` secrets to the build:
-  a stale secret was what once pointed the APK at another project.
+  a stale secret was what once pointed the APK at another project. Even if an older workflow
+  copy still forwards them, the app ignores them unless the build passes
+  `ALLOW_PROJECT_OVERRIDE=true`.
 * `Settings → Connection check` performs one public `GET /auth/v1/settings` with the anon key
   — no password, no user token — and reports reachability, HTTP status and whether the key is
   accepted. Use **Copy** to attach that block to a bug report.
