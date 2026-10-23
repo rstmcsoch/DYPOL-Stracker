@@ -228,15 +228,31 @@ jobs:
             ${{ runner.temp }}/build.log
             ${{ runner.temp }}/build-errors.log
 
+      # Only `main` publishes. Older build workflows that still exist on side branches
+      # (apk-debug) use the same `stracker-latest` tag, so restricting the publisher to
+      # main means a stale branch can never overwrite the release the owner installs from.
       - name: Publish to Releases (easiest download on a phone)
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: stracker-latest
           name: Stracker — latest Android build
+          # Supersedes the older "Stracker Android APK …" releases on the releases page.
+          make_latest: true
           body: |
             Built by GitHub Actions from `${{ github.sha }}`.
+
             Download the `.apk` file below, then open it on the phone to install.
+            If an older Stracker build is already installed, uninstall it first: this APK is
+            signed with the project's release key, and Android refuses an update signed with
+            a different key.
+
             Read `docs/VERIFICATION.md` before treating a build as a verified release.
           files: mobile/out/*
           fail_on_unmatched_files: false
+
+      - name: Say why nothing was published (not on main)
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::notice::This run built the APK from '${GITHUB_REF_NAME}', so it was uploaded as an artifact only. Releases are published from main."
+          echo "Built from \`${GITHUB_REF_NAME}\`: artifact only, no release was published." >> "$GITHUB_STEP_SUMMARY"

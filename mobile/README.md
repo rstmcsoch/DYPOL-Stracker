@@ -227,6 +227,15 @@ trace. The workflow runs it before `flutter build apk`.
 `@mipmap` / `@style` / `@string` / `@xml` / `@layout` reference that does not resolve, which is
 what AAPT reports as `error: style attribute … not found` or `resource … not found`.
 
+## 8c. Which workflow to run
+
+The Actions tab lists four workflows; only **Stracker Android release** builds this app. The
+two *"Build … Android APK"* workflows are Capacitor/WebView leftovers from an earlier attempt,
+pinned to their own branches, and a stale copy of the release workflow on `apk-debug` shares the
+`stracker-latest` tag. Release publishing is now restricted to `main`, so a side branch can only
+produce an artifact. See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) for the map and the 2-minute
+cleanup.
+
 ## 9. Deliberate limitations
 
 1. **The universal APK carries three ABIs, not four.** Flutter's Android engine ships

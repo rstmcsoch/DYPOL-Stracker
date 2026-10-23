@@ -88,7 +88,11 @@ The workflow already defaults both.
 
 1. Open **https://github.com/rstmcsoch/DYPOL-Stracker/actions**
 2. Tap **Stracker Android release** in the left list.
-3. Tap **Run workflow** → **Run workflow**.
+   There are four workflows listed; this is the only one that builds the app. The two
+   *"Build … Android APK"* entries are old Capacitor/WebView experiments kept on dead
+   branches — see [`WORKFLOWS.md`](WORKFLOWS.md).
+3. Tap **Run workflow**, check the branch dropdown says **main**, then **Run workflow**.
+   Only `main` publishes to the release page; any other branch uploads an artifact instead.
 4. Wait. The list shows a yellow dot while it runs (6–10 minutes the first time, ~3 after).
 
 ---
@@ -106,6 +110,9 @@ When the run turns green:
    go back, tap **Install**.
 6. If Play Protect warns about an unknown developer, tap **More details → Install anyway**.
    That warning appears for every app installed outside the Play Store.
+7. **If an older Stracker APK is already installed** (from the earlier Capacitor attempt),
+   uninstall it first — it was signed with a different key, so Android will refuse the update.
+   Nothing is lost: your notebook is in Supabase, only the offline cache goes away.
 
 Sign in with the same email and password you use on the website. Your notebook is already
 there.
