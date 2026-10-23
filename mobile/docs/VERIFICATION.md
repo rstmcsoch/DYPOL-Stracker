@@ -166,7 +166,7 @@ statically only; the next workflow run is what executes it.
 | `tree_sitter` parse of `lib/` + `test/` | **74 files, 0 syntax errors** |
 | `tool/balance.py` | `balanced` |
 | `tool/check_resources.py` | 12 XML files, 0 problems |
-| `tool/check_members.py` / `check_calls.py` / `check_api.py` | only the known false positives (`chapterStages`, `_pickChapter`, `main`, `copyWith(decoration:/fontSize:)`, `DataController.clear`) |
+| `tool/check_members.py` / `check_calls.py` / `check_api.py` | only the known false positives (`chapterStages`, `_pickChapter`, `main`, `Chapter`/`Revision` inside UI copy, `copyWith(decoration:/fontSize:)`, `DataController.clear`) |
 | `AuthException.statusCode` shape | read from `supabase/gotrue-dart` `lib/src/types/auth_exception.dart` (`df3fe7a`) — it is a **`String?`**, so `authErrorDetail` takes `String?`; a `int?` version would not have compiled |
 | Test count | 13 files, **63 cases** — 6 new cases in `connection_test.dart` (project-ref parsing, the three verdicts, the unexpected-status branch, error wording) |
 
@@ -214,8 +214,20 @@ Two bugs were found and fixed from the screenshots rather than from CI:
    app-bar tooltips became semantics, and below 400 px the search action moves into the
    drawer so the title can never collide with the actions.
 
-**Still not verified:** that this compiles and runs on a device. That is what the next
-workflow run and your phone have to confirm.
+**Run 7** (evidence from real CI, not a static guess). The release workflow now compiles the
+whole app and runs the whole suite on a GitHub runner, so these are measured results:
+
+| Check | Result |
+|---|---|
+| `flutter analyze` | run 39913456743 named every error in the tree: four, all on two lines using `CupertinoPageTransitionsBuilder` in `app_theme.dart` (it lives in `package:flutter/cupertino.dart`). Fixed by using `ZoomPageTransitionsBuilder` everywhere. |
+| `flutter test` | after that fix, **+65 tests, zero failures** (the earlier `-1` was `widgets_test.dart` failing to compile because it imports `app_theme.dart` — not a broken assertion) |
+| `flutter build apk --release` | **success** in run 39914153006 (tag `stracker-v1.1.1`), artifact `stracker-apk`, and the project check in the same run printed the compiled-in ref `tkggckwksoatbswrebpu` with `Match: yes` |
+| analyzer warnings | 10 unused imports/fields reported by the same run; all removed afterwards, so the build is warning-free apart from toolchain deprecation notices for `actions/*@v4` (not ours to fix) |
+
+**Still not verified:** that it renders and feels right on a physical phone. Only a phone can
+confirm that, and the APK is now built.
+
+
 
 ## How this gets verified without a computer
 

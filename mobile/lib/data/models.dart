@@ -52,8 +52,6 @@ List<int> _intList(Object? value) {
   return const <int>[];
 }
 
-Map<String, dynamic> _map(Map<String, dynamic> raw) => Map<String, dynamic>.from(raw);
-
 /// Random RFC-4122 v4 id, so app-created rows look exactly like web-created ids.
 String newId() {
   final Random random = Random.secure();

@@ -30,8 +30,8 @@ String friendlyAuthError(String message) {
     return 'Email or password is incorrect. Please try again.';
   }
   if (normalized.contains('invalid api key') || normalized.contains('invalid_api_key')) {
-    return 'This build cannot talk to its account service (key rejected). Reinstall a build '
-        'made with the right secrets.';
+    return 'This copy of Stracker cannot reach your account (key rejected). Install the '
+        'latest version from the same download link.';
   }
   if (normalized.contains('user not found') || normalized.contains('user_not_found')) {
     return 'No account with that email exists here. Check the spelling, or create an account.';
