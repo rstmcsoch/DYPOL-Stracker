@@ -86,52 +86,50 @@ class ConnectionReport {
 
   bool get keyAccepted => verdict == KeyVerdict.accepted;
 
-  /// One line that can be shown under a sign-in error.
+  /// One plain sentence for the student. No product names, no project ids.
   String get headline {
-    if (projectRef.isEmpty) return 'This build has no project address.';
-    if (!reachable) return 'Cannot reach $host from this phone.';
-    if (keyAccepted) return 'Connected to project $projectRef.';
+    if (projectRef.isEmpty) return 'This copy of Stracker is not linked to your account yet.';
+    if (!reachable) return 'This phone cannot reach Stracker right now.';
+    if (keyAccepted) return 'Connected. This phone can reach your account.';
     if (verdict == KeyVerdict.unknown) {
-      return 'Project $projectRef answered with HTTP ${statusCode ?? '?'}, so it could not be checked.';
+      return 'The connection answered in an unexpected way, so it could not be checked.';
     }
-    return 'The key in this build does not belong to project $projectRef.';
+    return 'This copy of Stracker is looking in the wrong place, so your account is invisible to it.';
   }
 
-  /// What the owner should do next, in plain words.
+  /// What to do next, in plain words.
   String get advice {
     if (projectRef.isEmpty) {
-      return 'The build was made without a project address, so it cannot sign anyone in. '
-          'Rebuild with the SUPABASE_URL and SUPABASE_ANON_KEY repository secrets.';
+      return 'Nothing on this phone can fix that: the app was installed without its connection '
+          'details. Get the current version from the same link you used before.';
     }
     if (!reachable) {
-      return 'Check the phone is online. If other apps load fine, the project address in the '
-          'build ($host) may be wrong.';
+      return 'Check that this phone is online — mobile data or Wi-Fi — then try again. '
+          'If other apps load fine, the problem is on our side; try again later.';
     }
-    if (verdict == KeyVerdict.unknown) {
-      return 'The address resolved, but the project refused the request in a way that does not '
-          'prove anything about the key. Open the address in a browser: a 404 there means '
-          'SUPABASE_URL is not a project URL (it should look like '
-          'https://<project-ref>.supabase.co). Fix the secret, then rebuild.';
+    if (!keyAccepted && verdict == KeyVerdict.rejected) {
+      return 'A fresh install from the latest download fixes this. If it keeps happening, send '
+          'the details below to support.';
     }
     if (!keyAccepted) {
-      return 'The address is right but the key is for another project, so the account you use on '
-          'the website is invisible here. Fix: make SUPABASE_ANON_KEY and SUPABASE_URL in the '
-          'repository secrets come from the same project, then rebuild.';
+      return 'Try again in a moment. If it persists, send the details below to support.';
     }
-    return 'Both values are correct, so a rejected password is a real password problem for this '
-        'project: use “Forgot password?” on the sign-in page, then sign in with the new one.';
+    return 'Your password is the only thing left to check: use “Forgot password?” on the '
+        'sign-in page, set a new one, and sign in with it.';
   }
 
-  /// Compact block for the details sheet.
-  String get report {
+  /// Technical block, hidden by default. Only shown when someone taps "details", or copied
+  /// when support asks for it — it is never part of the normal screens.
+  String get technicalDetails {
     final StringBuffer buffer = StringBuffer()
+      ..writeln('Stracker connection report')
       ..writeln('Project ref: $projectRef')
       ..writeln('Host: ${host.isEmpty ? '—' : host}')
       ..writeln('Reachable: ${reachable ? 'yes' : 'no'}'
           '${latency == null ? '' : ' (${latency!.inMilliseconds} ms)'}');
     if (statusCode != null) buffer.writeln('HTTP status: $statusCode');
-    if (verdict == KeyVerdict.accepted) buffer.writeln('Key: accepted by this project');
-    if (verdict == KeyVerdict.rejected) buffer.writeln('Key: rejected by this project');
+    if (verdict == KeyVerdict.accepted) buffer.writeln('Key: accepted');
+    if (verdict == KeyVerdict.rejected) buffer.writeln('Key: rejected');
     if (autoConfirmsEmail != null) {
       buffer.writeln('Email confirmation required: ${autoConfirmsEmail! ? 'no' : 'yes'}');
     }

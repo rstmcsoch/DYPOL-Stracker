@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 
@@ -253,6 +254,52 @@ class Pill extends StatelessWidget {
   }
 }
 
+/// A tiny press animation for anything tappable that is not already a button: the surface
+/// sinks to 98 % and comes back on release, with the light tick Android uses for a tap.
+/// Wrap a card, tile or chip; it keeps the child's own layout and ink.
+class TapScale extends StatefulWidget {
+  const TapScale({super.key, required this.child, this.onTap, this.haptic = true});
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final bool haptic;
+
+  @override
+  State<TapScale> createState() => _TapScaleState();
+}
+
+class _TapScaleState extends State<TapScale> {
+  bool _down = false;
+
+  void _set(bool down) {
+    if (!mounted || _down == down) return;
+    setState(() => _down = down);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: widget.onTap == null ? null : (_) => _set(true),
+      onTapCancel: widget.onTap == null ? null : () => _set(false),
+      onTapUp: widget.onTap == null
+          ? null
+          : (_) {
+              _set(false);
+              if (widget.haptic) HapticFeedback.selectionClick();
+              widget.onTap!();
+            },
+      onTap: widget.onTap == null ? null : () {}, // keeps semantics tap-able
+      child: AnimatedScale(
+        scale: _down ? 0.98 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class StatTile extends StatelessWidget {
   const StatTile({
     super.key,
@@ -272,9 +319,10 @@ class StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final StrackerColors colors = context.stracker;
-    return InkWell(
+    // One gesture owner for the whole tile: the press animation and the tap cannot fight
+    // over the same pointer.
+    return TapScale(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(

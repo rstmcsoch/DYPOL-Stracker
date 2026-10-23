@@ -63,8 +63,7 @@ String friendlySignUpError(String message) {
         'Stracker, log in or reset the password.';
   }
   if (normalized.contains('signups not allowed') || normalized.contains('signup disabled')) {
-    return 'This deployment does not allow new accounts to be created yet. Sign in with an '
-        'existing account, or enable email sign-ups in Supabase Auth.';
+    return 'New accounts are closed for now. Sign in with an account you already have.';
   }
   if (normalized.contains('password should be') || normalized.contains('password is too short')) {
     return 'Use at least 8 characters for your password.';
@@ -76,7 +75,7 @@ String friendlySignUpError(String message) {
     return 'Too many attempts. Wait a moment, then try again.';
   }
   if (normalized.contains('failed to fetch') || normalized.contains('network')) {
-    return 'Could not reach the sign-up service. Check your connection and try again.';
+    return 'Could not reach Stracker. Check your connection and try again.';
   }
   return friendlyAuthError(message);
 }
@@ -86,7 +85,13 @@ String friendlyDataError(Object error) {
   final String raw = error.toString();
   final String normalized = raw.toLowerCase();
   if (normalized.contains('row-level security') || normalized.contains('permission denied')) {
-    return 'That record is not available to your account. Sign in again if this keeps happening.';
+    return "That isn't available for your account. Sign in again if this keeps happening.";
+  }
+  if (normalized.contains('schema cache') ||
+      normalized.contains('could not find the table') ||
+      normalized.contains('does not exist')) {
+    return 'That part of your notebook is not available right now. Pull down to refresh, and '
+        'try again in a moment.';
   }
   if (normalized.contains('duplicate key') || normalized.contains('unique constraint')) {
     return 'That entry already exists for this chapter.';

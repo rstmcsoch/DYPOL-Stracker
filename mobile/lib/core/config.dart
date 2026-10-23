@@ -1,46 +1,58 @@
 /// Build-time configuration for Stracker.
 ///
-/// Only client-safe values belong here: the Supabase project URL and its public
-/// (anon/publishable) key, plus the base URL of the existing Stracker web API that
-/// hosts the authenticated `/api/ai/*` endpoints. The service-role key, the AI
-/// provider secrets and the AI credential-encryption key must never be placed in
-/// the app; they stay in the existing Vercel server environment.
+/// The app talks to one account service: the project the Stracker website already uses.
+/// Its address and its **public** key are part of the app, exactly as they are part of the
+/// website's JavaScript bundle — a public key identifies the project, it does not grant
+/// access to anything on its own. Row-level security on the server decides what each
+/// signed-in account may read and write.
 ///
-/// Supply values at build time:
+/// They are baked in as defaults so a build can never point at the wrong project (that
+/// mistake is what made a correct password look wrong). Both can still be overridden at
+/// build time for a staging copy:
+///
 ///   flutter build apk --release \
-///     --dart-define=SUPABASE_URL=https://<project>.supabase.co \
-///     --dart-define=SUPABASE_ANON_KEY=<public-anon-key>
+///     --dart-define=SUPABASE_URL=https://<other-project>.supabase.co \
+///     --dart-define=SUPABASE_ANON_KEY=<its public key>
 ///
-/// `--dart-define-from-file=env.json` works too (see mobile/env.example.json).
+/// Never put a service-role key, a database password or an AI provider key in this file:
+/// those never belong on a phone.
 class AppConfig {
   const AppConfig._();
 
-  /// Existing Supabase project used by https://dypol-stracker.vercel.app.
-  static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  /// The project the website uses: `tkggckwksoatbswrebpu`.
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://tkggckwksoatbswrebpu.supabase.co',
+  );
 
-  /// Public anon/publishable key. This is the same key the browser bundle uses;
-  /// it grants nothing beyond what RLS allows for the signed-in user.
-  static const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+  /// Public anon key of the same project. Safe to ship: it is the same value the website
+  /// sends, and every row is protected by the account's own rules on the server.
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
+        'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrZ2dja3drc29hdGJzd3JlYnB1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0MDIxMjgsImV4cCI6MjEwNjk3ODEyOH0.'
+        'XmoGho5bwT-Fbx2On0rq1vaok_k_2CiRPGhHHjjXfFU',
+  );
 
-  /// Base URL of the deployed Stracker website, which also serves the Vercel
-  /// `/api/ai/*` functions. Override with --dart-define=API_BASE_URL=...
+  /// Where the AI assistant's server endpoints live. Override with
+  /// `--dart-define=API_BASE_URL=...` for a staging deployment.
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'https://dypol-stracker.vercel.app',
   );
 
-  /// Public website origin. Used for links the app deliberately leaves to the browser,
-  /// such as the owner console and the privacy notes.
+  /// Public website origin. Used for links the app deliberately leaves to the browser.
   static const String siteUrl = String.fromEnvironment(
     'SITE_URL',
     defaultValue: 'https://dypol-stracker.vercel.app',
   );
 
-  /// Custom URL scheme registered in AndroidManifest.xml for the password-recovery
-  /// link. The Supabase dashboard must list `stracker://reset-password` under
-  /// Authentication → URL Configuration → Redirect URLs.
+  /// Custom URL scheme registered in AndroidManifest.xml for the password-recovery link.
   static const String authRedirectUrl = 'stracker://reset-password';
 
   static bool get hasSupabaseConfig =>
       supabaseUrl.trim().isNotEmpty && supabaseAnonKey.trim().isNotEmpty;
+
+  /// True when this build was compiled against the project the website uses.
+  static bool get pointsAtMainProject => supabaseUrl.contains('tkggckwksoatbswrebpu');
 }

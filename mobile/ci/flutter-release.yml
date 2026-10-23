@@ -151,55 +151,51 @@ jobs:
         working-directory: mobile
         run: python3 tool/check_resources.py
 
-      # Sign-in fails with "Invalid login credentials" when the APK talks to a different
-      # Supabase project than the website: the same email simply does not exist there. The
-      # project ref is the only way to see that from the outside, so it is printed here and
-      # compared with the project this repository actually uses.
+      # The project the app talks to is compiled in (mobile/lib/core/config.dart), so a
+      # repository secret can no longer point the APK at somebody else's project - the
+      # mistake that made a correct password look wrong. This step proves the committed
+      # value is the project the accounts actually live in.
       # Override the expectation with a repository variable EXPECTED_SUPABASE_PROJECT.
       - name: Check which Supabase project the APK will talk to
         working-directory: mobile
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
           EXPECTED: ${{ vars.EXPECTED_SUPABASE_PROJECT || 'tkggckwksoatbswrebpu' }}
         run: |
           set -eu
-          url="${SUPABASE_URL:-}"
+          url=$(sed -n "s/.*defaultValue: '\(https:\/\/[^']*\)'.*/\1/p" lib/core/config.dart | head -1)
           if [ -z "$url" ]; then
-            echo "::warning::SUPABASE_URL is not set; the APK will show the configuration screen."
-            echo "No SUPABASE_URL was set, so the APK cannot sign anyone in." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "::error title=No project address::lib/core/config.dart has no default Supabase URL, so the APK could not sign anyone in."
+            exit 1
           fi
           host=$(printf '%s' "$url" | sed -E 's#^https?://##; s#/.*$##')
           ref=$(printf '%s' "$host" | cut -d. -f1)
+          key=$(sed -n "s/.*defaultValue: '\(eyJ[^']*\)'.*/\1/p" lib/core/config.dart | tr -d "\n" | head -c 40)
           {
-            echo "### Supabase project"
+            echo "### Supabase project (compiled in)"
             echo ""
             echo "| | |"
             echo "|---|---|"
-            echo "| APK points at | \`$ref\` (\`$host\`) |"
-            echo "| Expected by this repo | \`$EXPECTED\` |"
+            echo "| APK will use | \`$ref\` (\`$host\`) |"
+            echo "| Expected | \`$EXPECTED\` |"
             echo "| Match | $([ "$ref" = "$EXPECTED" ] && echo 'yes' || echo '**NO**') |"
+            echo "| Public key present | $([ -n "$key" ] && echo 'yes' || echo '**NO**') |"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$ref" != "$EXPECTED" ]; then
-            echo "::warning title=Wrong Supabase project::The APK is being built against project '$ref', but this repository's accounts live in '$EXPECTED'. Signing in with website credentials will fail with 'Invalid login credentials'."
+            echo "::error title=Wrong Supabase project::config.dart points at '$ref' but the accounts live in '$EXPECTED'. Fix lib/core/config.dart before shipping."
+            exit 1
           fi
+          echo "APK will talk to $ref"
 
       - name: Build the universal APK
         working-directory: mobile
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
           set -eu
-          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
-            echo "::warning::SUPABASE_URL / SUPABASE_ANON_KEY are not set; the app will show the configuration screen."
-          fi
+          # No --dart-define here on purpose: the address and public key are committed in
+          # lib/core/config.dart, and a stale repository secret must not override them.
           status=0
           flutter build apk --release \
             --target-platform android-arm,android-arm64,android-x64 \
-            --dart-define=SUPABASE_URL="${SUPABASE_URL:-}" \
-            --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}" \
             > "$RUNNER_TEMP/build.log" 2>&1 || status=$?
           if [ "$status" -ne 0 ]; then
             grep -nE "^e: |error:|Error:|FAILURE:|What went wrong|Execution failed|Could not|Caused by|minimum supported version" \

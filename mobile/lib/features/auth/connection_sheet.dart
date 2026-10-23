@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/connection_check.dart';
 
-/// Shows which project this build talks to and whether that project accepts its key.
+/// A plain-language connection check: "can this phone reach my account?".
 ///
-/// Reached from a failed sign-in ("Check connection") and from Settings → About the
-/// connection. It exists because "wrong password" and "wrong project" look identical from
-/// the outside, and only the project ref tells them apart.
-Future<void> showConnectionSheet(BuildContext context) =>
-    showModalBottomSheet<void>(
+/// Technical values (project id, host, HTTP status) are kept behind a collapsed
+/// "Details" row, so a student never sees infrastructure names they cannot act on.
+Future<void> showConnectionSheet(BuildContext context) => showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: context.stracker.palette.paper,
-      builder: (_) => const _ConnectionSheet(),
+      builder: (BuildContext sheetContext) {
+        // Sheets should not stretch edge to edge on a tablet.
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: const _ConnectionSheet(),
+        );
+      },
     );
 
 class _ConnectionSheet extends StatefulWidget {
@@ -50,7 +53,6 @@ class _ConnectionSheetState extends State<_ConnectionSheet> {
   Widget build(BuildContext context) {
     final StrackerColors colors = context.stracker;
     final ConnectionReport? report = _report;
-    final String ref = projectRefFrom(AppConfig.supabaseUrl);
 
     return SafeArea(
       child: Padding(
@@ -76,55 +78,61 @@ class _ConnectionSheetState extends State<_ConnectionSheet> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                     const SizedBox(width: 10),
-                    Text(
-                      ref.isEmpty ? 'Asking the server…' : 'Asking project $ref…',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    Text('Checking…', style: Theme.of(context).textTheme.bodySmall),
                   ],
                 )
               else if (report != null) ...<Widget>[
                 _Verdict(report),
                 const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colors.palette.bg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: colors.palette.line),
-                  ),
-                  child: Text(
-                    report.report,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  report.advice,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.inkSoft),
-                ),
-                const SizedBox(height: 14),
                 Row(
                   children: <Widget>[
                     OutlinedButton.icon(
                       onPressed: _run,
                       icon: const Icon(Icons.refresh, size: 16),
-                      label: const Text('Run again'),
+                      label: const Text('Check again'),
                     ),
                     const SizedBox(width: 10),
                     TextButton.icon(
                       onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: report.report));
+                        await Clipboard.setData(ClipboardData(text: report.technicalDetails));
                         if (context.mounted) Navigator.of(context).pop();
                       },
                       icon: const Icon(Icons.copy_rounded, size: 16),
                       label: const Text('Copy'),
                     ),
                   ],
+                ),
+                const SizedBox(height: 4),
+                Theme(
+                  // A collapsed row: opened only when someone needs to send details on.
+                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: const EdgeInsets.only(bottom: 6),
+                    title: Text(
+                      'Details for support',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: colors.muted),
+                    ),
+                    children: <Widget>[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: colors.palette.bg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: colors.palette.line),
+                        ),
+                        child: Text(
+                          report.technicalDetails,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11.5,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ],
@@ -159,22 +167,32 @@ class _Verdict extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: fg.withValues(alpha: 0.35)),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(
-            good
-                ? Icons.check_circle_outline
-                : (warn ? Icons.error_outline : Icons.cloud_off_outlined),
-            size: 18,
-            color: fg,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(
+                good
+                    ? Icons.check_circle_outline
+                    : (warn ? Icons.error_outline : Icons.cloud_off_outlined),
+                size: 18,
+                color: fg,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  report.headline,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: fg),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              report.headline,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: fg),
-            ),
+          const SizedBox(height: 8),
+          Text(
+            report.advice,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.inkSoft),
           ),
         ],
       ),

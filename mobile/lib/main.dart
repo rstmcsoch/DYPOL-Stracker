@@ -18,24 +18,30 @@ final Provider<SharedPreferences> preferencesProvider = Provider<SharedPreferenc
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Portrait first, landscape allowed: the notebook is responsive rather than locked, so a
-  // tablet in a keyboard case and a rotated phone both work.
+  // Every orientation is allowed: the layout adapts instead of locking the phone.
   await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
+  // Standard Android chrome: the status and navigation bars are painted, not transparent.
+  // Drawing under them (edge to edge) is what made the top strip look like a detached grey
+  // block over the app bar. Each page re-applies the right bar colours from the theme.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    systemNavigationBarColor: Colors.transparent,
+    statusBarColor: Color(0xFFF7F4EC),
+    statusBarIconBrightness: Brightness.dark,
+    systemNavigationBarColor: Color(0xFFF7F4EC),
+    systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarDividerColor: Colors.transparent,
   ));
 
   final SharedPreferences preferences = await SharedPreferences.getInstance();
 
   if (AppConfig.hasSupabaseConfig) {
-    // Same project as the website. PKCE + deep links mean the email-confirmation and
-    // password-recovery links return to this app instead of the browser.
+    // The project is compiled in (see core/config.dart); PKCE + deep links mean the
+    // email-confirmation and password-recovery links return to this app.
     await Supabase.initialize(
       url: AppConfig.supabaseUrl,
       anonKey: AppConfig.supabaseAnonKey,

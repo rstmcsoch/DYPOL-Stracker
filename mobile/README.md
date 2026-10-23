@@ -121,13 +121,24 @@ docs/                       build, signing, features, verification, limitations,
 
 ## 5. Configuration
 
-Only two values are needed to build a working app, and both are public:
+**Nothing has to be supplied.** The project the website uses, together with its public
+anon key, is compiled in at `lib/core/config.dart`, so a normal build is already connected
+to the same accounts and the same notebook:
+
+```bash
+flutter build apk --release
+```
+
+Both values are public (the website sends the same key from its own bundle) and each row is
+still protected by the account's own rules on the server.
+
+Overrides exist only for a staging copy:
 
 ```bash
 flutter build apk --release \
-  --dart-define=SUPABASE_URL=https://<project>.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=<public anon/publishable key> \
-  [--dart-define=API_BASE_URL=https://dypol-stracker.vercel.app]
+  --dart-define=SUPABASE_URL=https://<other-project>.supabase.co \
+  --dart-define=SUPABASE_ANON_KEY=<its public key> \
+  [--dart-define=API_BASE_URL=https://<other-host>]
 ```
 
 `--dart-define-from-file=env.json` is supported too; see `env.example.json`.
@@ -195,8 +206,9 @@ guide is [`docs/PHONE-BUILD.md`](docs/PHONE-BUILD.md); in short:
 2. create `.github/workflows/android-release.yml` in the repository and paste the contents of
    [`ci/flutter-release.yml`](ci/flutter-release.yml) (GitHub refuses to let the automation
    account create workflow files, so this single file must be added by the repository owner);
-3. add four Action secrets — `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-   `STRAKER_KEYSTORE_BASE64`, `STRAKER_STORE_PASSWORD`;
+3. add the two signing secrets — `STRAKER_KEYSTORE_BASE64`, `STRAKER_STORE_PASSWORD`
+   (the project address and public key are already in the code, so no Supabase secret is
+   needed any more);
 4. **Actions → Stracker Android release → Run workflow**;
 5. install `Stracker-release.apk` from the repository's **Releases** page.
 

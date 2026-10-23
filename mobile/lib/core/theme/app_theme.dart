@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import 'palettes.dart';
 
 /// Thin [ThemeExtension] so widgets can read the Stracker palette tokens that
@@ -211,8 +213,43 @@ ThemeData buildStrackerTheme({
       foregroundColor: palette.ink,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
+      scrolledUnderElevation: 0,
       centerTitle: false,
       titleTextStyle: TextStyle(fontFamily: 'PatrickHand', fontSize: 23, color: palette.ink),
+      // Pin the system bars to the notebook colour so the OS never draws its own
+      // translucent chips over the app bar (that is the "floating grey box").
+      systemOverlayStyle: SystemUiOverlayStyle(
+        // Painted with the page colour, so the system strip reads as part of the app.
+        statusBarColor: palette.bg,
+        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: palette.bg,
+        systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+        systemNavigationBarDividerColor: Colors.transparent,
+      ),
+    ),
+    // Tooltips styled as part of the notebook instead of Material's grey rectangle.
+    tooltipTheme: TooltipThemeData(
+      waitDuration: const Duration(milliseconds: 650),
+      showDuration: const Duration(seconds: 2),
+      decoration: BoxDecoration(
+        color: palette.ink,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      textStyle: TextStyle(fontFamily: body, fontSize: 12, color: palette.bg),
+    ),
+    // Platform-native page transitions: the Android zoom-forward on Android, the iOS
+    // slide-from-right on iOS. Pushed sections and the back gesture therefore feel like
+    // the rest of the phone.
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: <TargetPlatform, PageTransitionsBuilder>{
+        TargetPlatform.android: ZoomPageTransitionsBuilder(),
+        TargetPlatform.fuchsia: ZoomPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.windows: ZoomPageTransitionsBuilder(),
+        TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+      },
     ),
     cardTheme: CardThemeData(
       color: palette.paper,

@@ -15,6 +15,7 @@ import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/backup.dart';
+import '../../logic/report.dart';
 import '../shell/app_shell.dart';
 
 /// Backup and restore. Export writes a real JSON file to the app's documents folder and
@@ -96,6 +97,18 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                     icon: const Icon(Icons.table_view_outlined, size: 18),
                     label: const Text('Export CSV tables'),
                   ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _exportReport,
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: const Text('Printable report'),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'A clean one-page-per-section summary. Open it and choose Print → Save as '
+                    'PDF to keep a copy or share it with a teacher.',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+                  ),
                 ],
               ),
             ),
@@ -173,7 +186,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
             ),
             const SizedBox(height: 10),
             InfoBanner(
-              'A backup is a copy, not a migration: your Supabase account stays the source of truth. '
+              'A backup is a copy, not a move: your account stays the source of truth. '
               'Export before big clean-ups, and keep the file off this device too.',
               icon: Icons.verified_user_outlined,
               tone: PillTone.warn,
@@ -214,6 +227,35 @@ class _BackupPageState extends ConsumerState<BackupPage> {
             data.settings.copyWith(lastBackupAt: isoNow()),
           );
       if (mounted) showToast(context, 'Backup written to ${file.path}');
+    } catch (error) {
+      if (mounted) showToast(context, error.toString(), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// The website's report builder produces a PDF; the app produces the same document as a
+  /// printable page, so it needs no PDF engine and the phone's own print dialog turns it
+  /// into a PDF when the student wants one.
+  Future<void> _exportReport() async {
+    setState(() => _busy = true);
+    try {
+      final AppData data = ref.read(dataControllerProvider).data;
+      final Directory dir = await _exportDirectory();
+      final String stamp = todayIso().replaceAll('-', '');
+      final File file = File('${dir.path}/stracker-report-$stamp.html');
+      final String owner = data.profile?.displayName.isNotEmpty == true
+          ? data.profile!.displayName
+          : (data.settings.ownerName.isEmpty ? 'Study notebook' : data.settings.ownerName);
+      await file.writeAsBytes(
+        printableReportBytes(data, owner: owner, generatedOn: todayIso()),
+      );
+      await Share.shareXFiles(
+        <XFile>[XFile(file.path, mimeType: 'text/html')],
+        subject: 'Stracker study report $stamp',
+        text: 'Open the report, then use Print to save it as a PDF.',
+      );
+      if (mounted) showToast(context, 'Report written to ${file.path}');
     } catch (error) {
       if (mounted) showToast(context, error.toString(), error: true);
     } finally {
@@ -297,7 +339,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       context,
       title: 'Clear the local cache?',
       message: 'The app forgets the offline copy on this device. Your account data is untouched — it '
-          'reloads from Supabase on the next refresh.',
+          'loads again from your account on the next refresh.',
       confirmLabel: 'Clear cache',
     );
     if (!confirmed) return;

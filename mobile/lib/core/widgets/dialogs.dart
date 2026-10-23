@@ -54,39 +54,45 @@ Future<T?> showAppSheet<T>(
       final double viewport = MediaQuery.sizeOf(sheetContext).height;
       return Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: viewport * maxHeightFactor),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(title, style: Theme.of(sheetContext).textTheme.headlineSmall),
-                    ),
-                    IconButton(
-                      tooltip: 'Close',
-                      onPressed: () => Navigator.of(sheetContext).maybePop(),
-                      icon: const Icon(Icons.close, size: 20),
-                    ),
-                  ],
-                ),
-              ),
-              Divider(height: 1, color: colors.palette.line),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    14,
-                    16,
-                    16 + MediaQuery.paddingOf(sheetContext).bottom,
+        child: Center(
+          child: ConstrainedBox(
+            // A sheet on a tablet should read like a card, not stretch to 1200 px.
+            constraints: BoxConstraints(
+              maxHeight: viewport * maxHeightFactor,
+              maxWidth: 620,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(title, style: Theme.of(sheetContext).textTheme.headlineSmall),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.of(sheetContext).maybePop(),
+                        icon: const Icon(Icons.close, size: 20),
+                      ),
+                    ],
                   ),
-                  child: builder(sheetContext),
                 ),
-              ),
-            ],
+                Divider(height: 1, color: colors.palette.line),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      14,
+                      16,
+                      16 + MediaQuery.paddingOf(sheetContext).bottom,
+                    ),
+                    child: builder(sheetContext),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );

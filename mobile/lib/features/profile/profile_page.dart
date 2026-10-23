@@ -15,9 +15,9 @@ import '../../logic/exam.dart';
 import '../../logic/progress.dart';
 import '../auth/auth_controller.dart';
 import '../auth/auth_screens.dart';
-import '../owner/owner_console_page.dart';
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
+import 'about_page.dart';
 
 /// Profile tab: identity, exam tracks, a compact account summary, appearance, password and
 /// sign-out. Everything that writes goes to the same Supabase rows the website uses.
@@ -37,7 +37,7 @@ class ProfilePage extends ConsumerWidget {
         : (data.settings.ownerName.isEmpty ? 'Stracker student' : data.settings.ownerName);
     final String email = data.profile?.email.isNotEmpty == true
         ? data.profile!.email
-        : 'Signed in with Supabase';
+        : 'Signed in';
     final List<String> tracks = availableTracks(data.settings);
     final String active = effectiveTrack(data.settings);
 
@@ -108,7 +108,7 @@ class ProfilePage extends ConsumerWidget {
           const SizedBox(height: 10),
           NotebookCard(
             title: 'Your notebook',
-            subtitle: 'Loaded from your own Supabase account — the same rows the website shows.',
+            subtitle: 'Everything you have logged, in one place.',
             child: WrapGrid(
               children: <Widget>[
                 StatTile(
@@ -178,7 +178,7 @@ class ProfilePage extends ConsumerWidget {
                   leading: const Icon(Icons.lock_outline, size: 19),
                   title: const Text('Change password'),
                   subtitle: Text(
-                    'Uses your Supabase session',
+                    'Set a new password for your account',
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                   trailing: const Icon(Icons.chevron_right, size: 18),
@@ -201,20 +201,6 @@ class ProfilePage extends ConsumerWidget {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
-                  leading: const Icon(Icons.admin_panel_settings_outlined, size: 19),
-                  title: const Text('Owner console'),
-                  subtitle: Text(
-                    'Web-only admin surface for DYPOL LABS',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  trailing: const Icon(Icons.chevron_right, size: 18),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const OwnerConsolePage()),
-                  ),
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
                   leading: const Icon(Icons.logout, size: 19, color: Colors.red),
                   title: Text('Sign out', style: TextStyle(color: colors.palette.red)),
                   subtitle: Text(
@@ -233,14 +219,29 @@ class ProfilePage extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text('Stracker · DYPOL LABS', style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
-                  'A notebook for JEE preparation.',
+                  'A focused digital study notebook for exam preparation.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: const Icon(Icons.auto_stories_outlined, size: 19),
+                  title: const Text('About Stracker'),
+                  subtitle: Text(
+                    'What the notebook is for, and how it works',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                  trailing: const Icon(Icons.chevron_right, size: 18),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const AboutPage()),
+                  ),
+                ),
+                const SizedBox(height: 2),
                 Text(
-                  'Version 1.0.0 · applicationId come.stracker.dypollabs',
+                  'Version 1.0.0',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
                 ),
               ],
@@ -304,7 +305,7 @@ class ProfilePage extends ConsumerWidget {
     final bool confirmed = await confirmAction(
       context,
       title: 'Sign out?',
-      message: 'The offline copy on this device is cleared. Your account data stays in Supabase.',
+      message: 'The offline copy on this device is cleared. Your account data is untouched.',
       confirmLabel: 'Sign out',
     );
     if (!confirmed) return;

@@ -46,14 +46,39 @@ importance weighting and the 30-day Exam Mode boost.
 `logic/backup.dart` — payload, counts, tolerant import, CSV.
 `logic/reminders.dart` — in-app reminder lines.
 
+## Adaptive layout and motion
+
+* **Rail vs bar.** Width ≥ 720 px (tablet, landscape phone) swaps the bottom bar for a
+  `NavigationRail`; below that the thumb-reach bar stays. Both drive the same index.
+* **Crossfade.** Switching tabs fades the incoming page in over 180 ms while the other three
+  stay alive in the stack, so scroll positions survive. Inactive pages get `TickerMode(false)`
+  and ignore pointer events.
+* **Native transitions.** `PageTransitionsTheme` uses the platform builder: Android's zoom,
+  iOS's slide-from-right. Android's predictive back is enabled in the manifest
+  (`enableOnBackInvokedCallback`), and `PopScope` returns a secondary tab to Home before the
+  app closes.
+* **Press feedback.** `TapScale` sinks tappable tiles to 98 % with a short haptic tick; buttons
+  and lists keep Material's native ripple.
+* **Content width.** `ContentWidth` caps pages at 760 px and `WrapGrid` picks 1–4 columns from
+  the available width, so a 5-inch phone and a 12-inch tablet both read properly.
+* **Insets.** The system bars are painted (not transparent), so nothing is drawn under the
+  status bar and no OS chip can overlap the app bar.
+
+## About Stracker
+
+`lib/features/profile/about_page.dart` — the website's own public copy (hero line, the
+five-step study loop, the eight working parts, the privacy note). No infrastructure, no
+package names, no owner name.
+
 ## Test inventory
 
-13 files, 63 test cases:
+14 files, 65 test cases:
 
 | File | Cases |
 |---|---|
 | `analytics_test.dart` | 7 |
 | `connection_test.dart` | 6 |
+| `report_test.dart` | 2 |
 | `revision_test.dart` | 3 |
 | `recommend_test.dart` | 4 |
 | `codec_test.dart` | 4 |
@@ -68,5 +93,6 @@ importance weighting and the 30-day Exam Mode boost.
 
 They exercise the ported maths against hand-computed expectations, the JSON/cache/backup
 round trip, input validation, the shared widgets (including night mode and 1.6× text scaling),
-and the connection diagnostics (project-ref parsing, the three verdicts, error wording).
+the connection diagnostics (project-ref parsing, the three verdicts, plain-language wording)
+and the printable report (sections, empty states, HTML escaping).
 Execution status: run by CI on every build — see `VERIFICATION.md`.

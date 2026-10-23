@@ -187,6 +187,35 @@ Two behaviour changes are worth naming:
 **Still not verified:** that this build compiles and that sign-in succeeds on a device. Both
 need the next Actions run (compilation) and a phone (sign-in).
 
+**Run 6** (furnishing pass). Static checks only; the workflow run after this is what compiles.
+
+| Check | Result |
+|---|---|
+| tree-sitter parse of `lib/` + `test/` | **75 files, 0 syntax errors** |
+| `tool/balance.py` | `balanced` |
+| `tool/check_resources.py` | 12 XML files, 0 problems |
+| test count | 14 files, **65 cases** (2 new in `report_test.dart`) |
+| config check, run locally | the workflow's own `sed` extraction returns `https://tkggckwksoatbswrebpu.supabase.co` → ref `tkggckwksoatbswrebpu` |
+| anon key check, run locally | 208 characters, payload decodes to `{"ref":"tkggckwksoatbswrebpu","role":"anon"}`, identical to the key in the project dashboard |
+| model ↔ database check | every column read by `lib/data/models.dart` (19 tables) exists in the live schema (`information_schema.columns`, project `tkggckwksoatbswrebpu`); 20 user tables all have RLS enabled with `authenticated` SELECT/INSERT |
+| no vendor words in UI | grep over `lib/` for supabase/vercel/github/postgres/schema/backend inside string literals: only code identifiers and the collapsed support block remain |
+
+Two bugs were found and fixed from the screenshots rather than from CI:
+
+1. **Wrong project.** The APK in the screenshot was built against another project, so its
+   reads hit empty schemas (`Could not find the table 'public.backlog_items' in the schema
+   cache`) and its sign-in could never match a website password. The project is now compiled
+   in (`lib/core/config.dart`), the workflow verifies it and no longer lets a repository
+   secret override it.
+2. **A floating grey block over the app bar, and cramped chrome.** The app drew under the
+   system bars (edge to edge) with a transparent status bar, and the bar carried four action
+   buttons plus a title. The bars are now painted, the status-bar style comes from the theme,
+   app-bar tooltips became semantics, and below 400 px the search action moves into the
+   drawer so the title can never collide with the actions.
+
+**Still not verified:** that this compiles and runs on a device. That is what the next
+workflow run and your phone have to confirm.
+
 ## How this gets verified without a computer
 
 `ci/flutter-release.yml` performs the same steps on GitHub's runners: `flutter pub get`,
