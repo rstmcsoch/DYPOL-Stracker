@@ -23,7 +23,7 @@ APK is present in `dist/` yet.** This is a genuine blocker, not a skipped step.
 
 ## What was verified (with the method)
 
-1. **Static symbol resolution across all 60 Dart files** — two custom checkers run in this
+1. **Static symbol resolution across all 59 files in `lib/`** — four small checkers run in this
    environment:
    * `tool/check_api.py` resolves every `data.<member>` against `AppData`, every
      `ref.read/watch(<provider>)` against declared providers, and every

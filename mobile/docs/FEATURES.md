@@ -48,7 +48,7 @@ importance weighting and the 30-day Exam Mode boost.
 
 ## Test inventory
 
-12 files, 51 test cases:
+12 files, 57 test cases:
 
 | File | Cases |
 |---|---|
