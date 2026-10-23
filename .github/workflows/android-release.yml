@@ -1,0 +1,165 @@
+# Stracker — build the Android APK from GitHub, with no computer involved.
+#
+# Install (once, from a phone browser):
+#   1. On github.com open mobile/ci/flutter-release.yml and tap the copy icon on the raw file.
+#   2. Go to the repository → Add file → Create new file → name it
+#      .github/workflows/android-release.yml, paste, commit to the branch you want.
+#   3. Settings → Secrets and variables → Actions → add the secrets listed below.
+#   4. Actions → "Stracker Android release" → Run workflow.
+#   The finished APK appears on the repository's Releases page.
+#
+# Secrets (all optional except the two Supabase values):
+#   SUPABASE_URL, SUPABASE_ANON_KEY      public client configuration
+#                                        (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY also work)
+#   STRAKER_KEYSTORE_BASE64              base64 of stracker-release.p12 — enables real signing
+#   STRAKER_STORE_PASSWORD               keystore password
+#   STRAKER_KEY_PASSWORD                 key password (defaults to the store password)
+#   STRAKER_KEY_ALIAS                    key alias (defaults to "stracker")
+#
+# Without the keystore secrets the workflow still produces an installable APK, signed with
+# the throwaway debug key, so the app can be tested today. It is labelled "test" and must
+# not be distributed.
+name: Stracker Android release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["stracker-v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build Apk
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter (current stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show the toolchain
+        run: |
+          flutter --version
+          flutter doctor -v || true
+
+      - name: Install Dart packages
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze (advisory)
+        working-directory: mobile
+        continue-on-error: true
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Test (advisory)
+        working-directory: mobile
+        continue-on-error: true
+        run: flutter test --reporter expanded
+
+      - name: Prepare signing
+        working-directory: mobile
+        env:
+          KEYSTORE_BASE64: ${{ secrets.STRAKER_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STRAKER_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.STRAKER_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.STRAKER_KEY_ALIAS }}
+        run: |
+          set -eu
+          alias_name="${KEY_ALIAS:-stracker}"
+          if [ -n "${KEYSTORE_BASE64:-}" ] && [ -n "${STORE_PASSWORD:-}" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -di > android/stracker-release.p12
+            bytes=$(wc -c < android/stracker-release.p12)
+            if [ "$bytes" -lt 1000 ]; then
+              echo "::error::The keystore secret did not decode (only $bytes bytes). Re-copy the base64 text."
+              exit 1
+            fi
+            {
+              echo "STRAKER_KEYSTORE=$GITHUB_WORKSPACE/mobile/android/stracker-release.p12"
+              echo "STRAKER_STORE_PASSWORD=$STORE_PASSWORD"
+              echo "STRAKER_KEY_PASSWORD=${KEY_PASSWORD:-$STORE_PASSWORD}"
+              echo "STRAKER_KEY_ALIAS=$alias_name"
+              echo "APK_NAME=Stracker-release.apk"
+            } >> "$GITHUB_ENV"
+            echo "Signing with the release keystore ($bytes bytes)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "STRAKER_ALLOW_DEBUG_SIGNING=true"
+              echo "APK_NAME=Stracker-test-debug-signed.apk"
+            } >> "$GITHUB_ENV"
+            echo "::warning::No keystore secret: this build is debug-signed and for testing only."
+            echo "No keystore secret was provided, so this APK is **debug-signed (test only)**." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Build the universal APK
+        working-directory: mobile
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          set -eu
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "::warning::SUPABASE_URL / SUPABASE_ANON_KEY are not set; the app will show the configuration screen."
+          fi
+          flutter build apk --release \
+            --target-platform android-arm,android-arm64,android-x64 \
+            --dart-define=SUPABASE_URL="${SUPABASE_URL:-}" \
+            --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
+
+      - name: Check the artifact
+        working-directory: mobile
+        run: |
+          set -eu
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          {
+            echo "### APK details"
+            echo '```'
+            "$BT/aapt" dump badging "$APK" | grep -E "^package:|^application-label:|sdkVersion|targetSdkVersion"
+            unzip -l "$APK" | grep -E 'lib/(armeabi-v7a|arm64-v8a|x86_64)/libflutter.so' || true
+            "$BT/apksigner" verify --print-certs "$APK" | head -6 || true
+            echo '```'
+            echo "SHA-256: \`$(sha256sum "$APK" | cut -d' ' -f1)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p out
+          cp "$APK" "out/$APK_NAME"
+          sha256sum "out/$APK_NAME" | tee "out/$APK_NAME.sha256"
+
+      - name: Remove the keystore from the runner
+        if: always()
+        run: rm -f mobile/android/stracker-release.p12
+
+      - name: Upload as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stracker-apk
+          path: mobile/out/*
+          if-no-files-found: error
+
+      - name: Publish to Releases (easiest download on a phone)
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: stracker-latest
+          name: Stracker — latest Android build
+          body: |
+            Built by GitHub Actions from `${{ github.sha }}`.
+            Download the `.apk` file below, then open it on the phone to install.
+            Read `docs/VERIFICATION.md` before treating a build as a verified release.
+          files: mobile/out/*
+          fail_on_unmatched_files: false
