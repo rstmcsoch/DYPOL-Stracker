@@ -1,83 +1,45 @@
-# Release artifact status
+# Stracker — release status (2026-10-23, 08:00 UTC)
 
-## A real release APK has been built — by GitHub Actions
+## Where the code stands
 
 | | |
 |---|---|
-| Release | [`stracker-latest`](https://github.com/rstmcsoch/DYPOL-Stracker/releases/tag/stracker-latest) → *Stracker — latest Android build* |
-| Asset | `Stracker-release.apk`, 63,450,148 bytes (+ `.sha256`) |
-| Built from | commit `4ef802a` on `main` |
-| Workflow run | [39904283761](https://github.com/rstmcsoch/DYPOL-Stracker/actions/runs/39904283761) — every step green, including *Build the universal APK*, *Check the artifact* and *Publish to Releases* |
-| Date | 2026-10-23, 05:10–05:17 UTC |
+| `main` | `c30900b` — PRs #80, #81, #82, #83, #84 all merged |
+| Working branch | `arena/01430fd5-dypol-stracker`, tree clean, nothing unmerged |
+| Sign-in | fixed: the project is compiled into the app (`lib/core/config.dart`), and a `--dart-define` override is ignored unless the build also passes `ALLOW_PROJECT_OVERRIDE=true`, so a stale CI secret can no longer misdirect an APK |
+| Project the app talks to | `tkggckwksoatbswrebpu` — the same one the website uses (verified by the build itself, step "Check which Supabase project the APK will talk to") |
 
-This is the Flutter app, not the older Capacitor build: it comes from
-`.github/workflows/android-release.yml`, which runs `flutter build apk --release` for
-`android-arm,android-arm64,android-x64` and refuses to publish if the artifact check fails.
-Downloading it from the sandbox where this document is written is blocked
-(`release-assets.githubusercontent.com`), so its SHA-256 could not be recomputed here —
-the `.sha256` asset beside it is the workflow's own record.
+## What the build actually reported (not a guess)
 
-**What that build does not contain:** the sign-in diagnostics described in
-`TROUBLESHOOTING-AUTH.md` and the obscured-field capitalisation fix, both merged afterwards
-(`0e14046`). Any 63,450,148-byte APK predates them.
+Run **39918467643** (commit `6751770`, tag `stracker-v1.1.4`):
 
-## The artifact that is not in this folder
-
-**`dist/Stracker-release.apk` is not in this folder.** It could not be produced in the
-environment where this source was written, and no placeholder was created.
-
-## Why
-
-| Requirement | State in the authoring environment |
+| Check | Result |
 |---|---|
-| `flutter` / `dart` | not installed |
-| `java` / `keytool` | not installed |
-| Android SDK / Gradle | not installed |
-| `pub.dev` | unreachable (HTTP 000) |
-| `storage.googleapis.com`, `dl.google.com`, `services.gradle.org` | unreachable (HTTP 000) |
+| `flutter analyze` | **0 warnings, 0 errors** |
+| `flutter test` | **65 tests, 0 failures** |
+| `flutter build apk --release` | **success**, signed, artifact `stracker-apk` |
+| project check | compiled-in ref matches `tkggckwksoatbswrebpu` |
+| Android resources | 12 files, 0 problems |
 
-Flutter cannot be bootstrapped from the only reachable hosts (Flutter's GitHub releases
-publish no binary assets), and without pub.dev no dependency could be resolved. A build
-here would therefore have been impossible to verify, and shipping a file that claims to be
-a release APK would be worse than shipping none.
+Four earlier runs on this branch also built an APK; the one failure (39913456743) was a single
+compile error — `CupertinoPageTransitionsBuilder` — fixed in PR #82.
 
-## What is present and verified
+## What you install
 
-* `dist/keys/stracker-release-cert.pem` — public certificate (PEM), self-signed.
-* `dist/keys/stracker-release-cert.der` — same certificate, DER.
-* `dist/keys/stracker-release.p12` — release keystore (PKCS#12, alias `stracker`).
-* `dist/keys/stracker-release-key.pem` — encrypted PKCS#8 private key.
-* `dist/keys/keystore-info.json` — alias, passwords, serial, validity, SHA-256 and SHA-1
-  fingerprints.
-* `dist/CHECKSUMS.sha256` — SHA-256 of every source, asset, Android resource and key file.
+The APK on the Releases page (`stracker-latest`) is **old**: built from `4ef802a`, before the
+sign-in fix. Its notes now say so.
 
-Certificate: `CN=Rustam Chaturvedi, O=DYPOL LABS, L=Pimpri-Chinchwad, ST=Maharashtra,
-C=IN, postalCode=411018`, RSA 4096, SHA-256 self-signed, valid to 2054-03-10.
-SHA-256 fingerprint:
-`84:B1:61:59:73:0E:01:D7:A9:64:25:8B:27:32:5E:C3:6D:0A:6A:09:36:A1:AA:CF:DE:86:29:3D:00:0E:DE:7F`
+Install the new one either way:
 
-## To produce the APK (any machine with the toolchain, or the bundled CI workflow)
+1. **Artifact** — Actions → "Stracker Android release" → run **39918467643** → Artifacts →
+   `stracker-apk.zip` → extract → install `app-release.apk`.
+2. **Releases page** — Actions → "Stracker Android release" → **Run workflow** (branch `main`).
+   That rebuilds and publishes `Stracker-release.apk` to the Releases page automatically.
 
-```bash
-cd mobile
-flutter pub get
-flutter analyze
-flutter test
-export STRAKER_KEYSTORE=$PWD/dist/keys/stracker-release.p12
-export STRAKER_STORE_PASSWORD=$(python3 -c "import json;print(json.load(open('dist/keys/keystore-info.json'))['storePassword'])")
-export STRAKER_KEY_ALIAS=stracker
-export STRAKER_KEY_PASSWORD=$STRAKER_STORE_PASSWORD
-flutter build apk --release \
-  --target-platform android-arm,android-arm64,android-x64 \
-  --dart-define=SUPABASE_URL=<project url> \
-  --dart-define=SUPABASE_ANON_KEY=<public anon key>
-cp build/app/outputs/flutter-apk/app-release.apk dist/Stracker-release.apk
-sha256sum dist/Stracker-release.apk > dist/Stracker-release.apk.sha256
-apksigner verify --print-certs dist/Stracker-release.apk
-```
+Uninstall the old Stracker before installing, so the two builds cannot collide.
 
-Expected after that step:
-* package `come.stracker.dypollabs`, label `Stracker`, `minSdkVersion 24`;
-* native libraries for `armeabi-v7a`, `arm64-v8a` and `x86_64` in the one APK (Flutter's
-  engine publishes only these three — see `docs/LIMITATIONS.md` §7);
-* signer SHA-256 equal to the fingerprint above.
+## What is still not verified
+
+Only the phone can confirm how it looks and feels — the bars, the drawer, the transitions,
+pull-to-refresh, back gesture, landscape and tablet layout. Everything that can be checked
+without a device is green.
