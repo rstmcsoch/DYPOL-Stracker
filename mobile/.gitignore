@@ -1,0 +1,24 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+flutter_export_environment.sh
+local.properties
+key.properties
+*.iml
+.idea/
+*.log
+
+# Signing material — never in Git
+*.jks
+*.keystore
+*.p12
+*.pfx
+dist/keys/
+android/key.properties
+
+# Release binaries (delivered out of band)
+dist/*.apk
+dist/*.aab

@@ -1,0 +1,114 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader -> localProperties.load(reader) }
+}
+
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode")
+if (flutterVersionCode == null) {
+    flutterVersionCode = "1"
+}
+
+def flutterVersionName = localProperties.getProperty("flutter.versionName")
+if (flutterVersionName == null) {
+    flutterVersionName = "1.0.0"
+}
+
+// Release signing. The keystore is never in the repository: either a local key.properties
+// (git-ignored) or the STRAKER_* environment variables supplied by CI / the release machine.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withReader("UTF-8") { reader -> keystoreProperties.load(reader) }
+}
+
+def storeFileValue = System.getenv("STRAKER_KEYSTORE") ?: keystoreProperties.getProperty("storeFile")
+def storePasswordValue = System.getenv("STRAKER_STORE_PASSWORD") ?: keystoreProperties.getProperty("storePassword")
+def keyAliasValue = System.getenv("STRAKER_KEY_ALIAS") ?: keystoreProperties.getProperty("keyAlias")
+def keyPasswordValue = System.getenv("STRAKER_KEY_PASSWORD") ?: keystoreProperties.getProperty("keyPassword")
+def hasReleaseSigning = storeFileValue != null && storePasswordValue != null &&
+        keyAliasValue != null && keyPasswordValue != null
+
+android {
+    namespace = "come.stracker.dypollabs"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    defaultConfig {
+        applicationId = "come.stracker.dypollabs"
+        // Android 7.0. Every dependency in pubspec.yaml supports API 24.
+        minSdk = 24
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutterVersionCode.toInteger()
+        versionName = flutterVersionName
+        resourceConfigurations += ["en"]
+    }
+
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile = file(storeFileValue)
+                storePassword = storePasswordValue
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
+                // The distributed keystore is PKCS#12 so it can be created without keytool.
+                if (storeFileValue.endsWith(".p12") || storeFileValue.endsWith(".pfx")) {
+                    storeType = "PKCS12"
+                }
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Never silently ship a debug-signed build: fail the build instead.
+            if (!hasReleaseSigning) {
+                throw new GradleException(
+                        "Release signing is not configured. Set STRAKER_KEYSTORE / " +
+                        "STRAKER_STORE_PASSWORD / STRAKER_KEY_ALIAS / STRAKER_KEY_PASSWORD " +
+                        "or add android/key.properties.")
+            }
+            signingConfig = signingConfigs.release
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
+    }
+
+    // One universal APK: every ABI stays in the single artifact the student installs.
+    splits {
+        abi {
+            enable = false
+        }
+    }
+
+    // AGP 8 spelling; `packagingOptions` was removed in AGP 8.0.
+    packaging {
+        resources {
+            excludes += ["META-INF/*.kotlin_module"]
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
