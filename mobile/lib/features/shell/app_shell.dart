@@ -216,97 +216,211 @@ class NotebookScaffold extends ConsumerWidget {
       drawer: const NotebookDrawer(),
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: bottom,
-      appBar: AppBar(
-        automaticallyImplyLeading: showBack,
-        leading: showBack
-            ? const BackButton()
-            : Builder(
-                builder: (BuildContext context) => Semantics(
-                  label: 'Open navigation',
-                  button: true,
-                  child: IconButton(
-                    icon: const Icon(Icons.menu, size: 22),
-                    onPressed: () => Scaffold.of(context).openDrawer(),
+      // The header is drawn by the app rather than by Material's AppBar: the Material
+      // version paints its own elevation tint and hover/splash overlay across the title
+      // area, which on a tablet (or a desktop-mode window with a mouse) appeared as a
+      // large pale band over the top of the page. This one is a single opaque surface.
+      body: Column(
+        children: <Widget>[
+          _NotebookHeader(
+            title: title,
+            subtitle: subtitle,
+            showBack: showBack,
+            showBrand: showBrand,
+            actions: <Widget>[
+              ...actions,
+              SyncPill(state: data),
+              // On a narrow phone the title block and four action buttons do not fit
+              // beside each other; search moves into the drawer there instead.
+              if (!compact)
+                HeaderIcon(
+                  label: 'Search notebook',
+                  icon: Icons.search,
+                  onTap: () => showAppSheet<void>(
+                    context,
+                    title: 'Search notebook',
+                    builder: (BuildContext sheetContext) => const GlobalSearchBody(),
                   ),
                 ),
-              ),
-        titleSpacing: 0,
-        title: showBrand
-            ? Row(
-                children: <Widget>[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(9),
-                    child: Image.asset('assets/brand/logo.png', width: 30, height: 30),
-                  ),
-                  const SizedBox(width: 9),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontFamily: 'PatrickHand',
-                          fontSize: 22,
-                          height: 1,
-                          color: colors.palette.ink,
-                        ),
-                      ),
-                      Text(
-                        'DYPOL LABS',
-                        style: TextStyle(
-                          fontFamily: 'Lexend',
-                          fontSize: 8.5,
-                          letterSpacing: 1.6,
-                          color: colors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontFamily: 'PatrickHand',
-                      fontSize: 22,
-                      height: 1,
-                      color: colors.palette.ink,
-                    ),
-                  ),
-                  if (subtitle != null)
-                    Text(
-                      subtitle!,
-                      style: TextStyle(fontFamily: 'Lexend', fontSize: 9.5, color: colors.muted),
-                    ),
-                ],
-              ),
-        actions: <Widget>[
-          ...actions,
-          SyncPill(state: data),
-          // On a narrow phone the title block and four action buttons do not fit beside
-          // each other; the search moves into the drawer there instead of overlapping.
-          if (!compact)
-            Semantics(
-              label: 'Search notebook',
-              button: true,
-              child: IconButton(
-                icon: const Icon(Icons.search, size: 21),
-                onPressed: () => showAppSheet<void>(
-                  context,
-                  title: 'Search notebook',
-                  builder: (BuildContext sheetContext) => const GlobalSearchBody(),
-                ),
-              ),
-            ),
-          ThemeToggleButton(),
+              const ThemeToggleButton(),
+            ],
+          ),
+          Expanded(child: SafeArea(top: false, child: body)),
         ],
       ),
-      body: SafeArea(top: false, child: body),
+    );
+  }
+}
+
+/// Shown if the brand image cannot be decoded (a damaged install, or an asset missing from
+/// a build). It keeps the header's exact size instead of leaving an empty or grey box.
+ImageErrorWidgetBuilder _logoError(double size) {
+  return (BuildContext context, Object error, StackTrace? stack) {
+    final StrackerColors colors = context.stracker;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ColoredBox(
+        color: colors.palette.accentLight,
+        child: Center(
+          child: Text(
+            'S',
+            style: TextStyle(
+              fontFamily: 'PatrickHand',
+              fontSize: size * 0.62,
+              color: colors.palette.textAccent,
+            ),
+          ),
+        ),
+      ),
+    );
+  };
+}
+
+/// The app's own header: one opaque notebook-coloured surface, a back arrow or the menu,
+/// the title block and the page actions. Nothing here is a Material [AppBar], so no
+/// elevation tint, hover overlay or splash can be painted over the top strip.
+class _NotebookHeader extends StatelessWidget {
+  const _NotebookHeader({
+    required this.title,
+    required this.subtitle,
+    required this.showBack,
+    required this.showBrand,
+    required this.actions,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool showBack;
+  final bool showBrand;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    // The status bar is painted in the same colour, so the header and the system strip
+    // read as one surface instead of two stacked blocks.
+    final double topInset = MediaQuery.viewPaddingOf(context).top;
+    return ColoredBox(
+      color: colors.palette.bg,
+      child: Padding(
+        padding: EdgeInsets.only(top: topInset),
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            children: <Widget>[
+              if (showBack)
+                HeaderIcon(
+                  label: 'Back',
+                  icon: Icons.arrow_back,
+                  size: 22,
+                  onTap: () => Navigator.of(context).maybePop(),
+                )
+              else
+                Builder(
+                  builder: (BuildContext context) => HeaderIcon(
+                    label: 'Open navigation',
+                    icon: Icons.menu,
+                    size: 22,
+                    onTap: () => Scaffold.of(context).openDrawer(),
+                  ),
+                ),
+              const SizedBox(width: 2),
+              Expanded(child: showBrand ? _brand(colors) : _titleBlock(colors)),
+              const SizedBox(width: 4),
+              ...actions,
+              const SizedBox(width: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _brand(StrackerColors colors) => Row(
+        children: <Widget>[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(9),
+            child: Image.asset('assets/brand/logo.png', width: 28, height: 28, errorBuilder: _logoError(28)),
+          ),
+          const SizedBox(width: 9),
+          Flexible(child: _titleBlock(colors, eyebrow: 'DYPOL LABS')),
+        ],
+      );
+
+  Widget _titleBlock(StrackerColors colors, {String? eyebrow}) {
+    final String? second = eyebrow ?? subtitle;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: 'PatrickHand',
+            fontSize: 22,
+            height: 1.15,
+            color: colors.palette.ink,
+          ),
+        ),
+        if (second != null)
+          Text(
+            second,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontSize: eyebrow == null ? 9.5 : 8.5,
+              letterSpacing: eyebrow == null ? 0.2 : 1.6,
+              color: colors.muted,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A header button with no Material overlay: the tap target is 44 dp, the ripple is a
+/// haptic tick instead of a splash that would paint a pale rectangle over the header.
+class HeaderIcon extends StatelessWidget {
+  const HeaderIcon({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.size = 20,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    return Semantics(
+      label: label,
+      button: true,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        customBorder: const CircleBorder(),
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(icon, size: size, color: colors.palette.ink),
+        ),
+      ),
     );
   }
 }
@@ -366,9 +480,10 @@ class ThemeToggleButton extends ConsumerWidget {
     return Semantics(
       label: dark ? 'Switch to light' : 'Switch to night',
       button: true,
-      child: IconButton(
-        icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, size: 20),
-        onPressed: () async {
+      child: HeaderIcon(
+        label: dark ? 'Switch to light' : 'Switch to night',
+        icon: dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+        onTap: () async {
           await ref.read(themeControllerProvider.notifier).toggle(effective);
           final DataController controller = ref.read(dataControllerProvider.notifier);
           final AppData data = ref.read(dataControllerProvider).data;
@@ -412,7 +527,7 @@ class NotebookDrawer extends ConsumerWidget {
             children: <Widget>[
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset('assets/brand/logo.png', width: 42, height: 42),
+                child: Image.asset('assets/brand/logo.png', width: 42, height: 42, errorBuilder: _logoError(42)),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -505,12 +620,14 @@ class NotebookDrawer extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 12),
                 children: <Widget>[
-                  group('Today'),
+                  // The same groups and wording as the website's sidebar, so a student who
+                  // uses both finds the same thing in the same place.
+                  group('Study'),
                   item('What should I study now?', Icons.explore_outlined, Routes.studyNow, highlight: true),
                   item('Focus timer', Icons.timer_outlined, Routes.focus),
                   item('Backlog', Icons.layers_outlined, Routes.backlog, badge: backlog == 0 ? null : '$backlog'),
                   item('Practice / DPP', Icons.checklist_rtl_outlined, Routes.practice),
-                  group('Study'),
+                  group('Syllabus'),
                   item('Syllabus', Icons.menu_book_outlined, Routes.syllabus),
                   item('Weak areas', Icons.warning_amber_outlined, Routes.weakAreas),
                   item('PYQs', Icons.local_library_outlined, Routes.pyqs),
@@ -520,10 +637,10 @@ class NotebookDrawer extends ConsumerWidget {
                   item('Mistake notebook', Icons.book_outlined, Routes.mistakes),
                   item('Retry', Icons.replay, Routes.retry, badge: retries == 0 ? null : '$retries'),
                   item('Analytics', Icons.insights_outlined, Routes.analytics),
-                  group('Recall'),
+                  group('Revision'),
                   item('Revisions', Icons.autorenew, Routes.revision, badge: revisions == 0 ? null : '$revisions'),
                   item('Formulas & flashcards', Icons.style_outlined, Routes.decks),
-                  group('Plan'),
+                  group('Planning'),
                   item('Study plan', Icons.event_note_outlined, Routes.planner),
                   item('Stracker AI', Icons.auto_awesome_outlined, 'ai'),
                   item('Settings', Icons.settings_outlined, Routes.settings),
@@ -713,19 +830,24 @@ class PageBody extends StatelessWidget {
   const PageBody({
     super.key,
     required this.children,
-    this.padding = const EdgeInsets.fromLTRB(14, 12, 14, 100),
+    this.padding,
     this.refresh,
   });
 
   final List<Widget> children;
-  final EdgeInsetsGeometry padding;
+
+  /// Overrides the default padding. Left null it is worked out from the window, so the last
+  /// card always clears the quick-action button and the bottom tabs instead of sliding
+  /// underneath them on a short or inset-heavy screen.
+  final EdgeInsetsGeometry? padding;
   final Future<void> Function()? refresh;
 
   @override
   Widget build(BuildContext context) {
+    final double bottomInset = MediaQuery.paddingOf(context).bottom;
     final Widget list = ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: padding,
+      padding: padding ?? EdgeInsets.fromLTRB(14, 12, 14, 88 + bottomInset),
       children: <Widget>[
         ContentWidth(
           child: Column(

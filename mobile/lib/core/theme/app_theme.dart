@@ -206,7 +206,14 @@ ThemeData buildStrackerTheme({
     dividerColor: palette.line,
     fontFamily: body,
     textTheme: textTheme,
-    splashFactory: InkSparkle.splashFactory,
+    // Press and hover feedback is an accent wash mixed from the notebook's own ink. The
+    // Material defaults (white at 8–12% over a dark surface, InkSparkle's shader) read as a
+    // pale grey rectangle on large surfaces such as the chat list or a table row.
+    splashColor: palette.accent.withValues(alpha: 0.10),
+    highlightColor: palette.accent.withValues(alpha: 0.06),
+    hoverColor: palette.accent.withValues(alpha: 0.06),
+    focusColor: palette.accent.withValues(alpha: 0.10),
+    splashFactory: InkRipple.splashFactory,
     extensions: <ThemeExtension<dynamic>>[StrackerColors(palette)],
     appBarTheme: AppBarTheme(
       backgroundColor: palette.bg,
