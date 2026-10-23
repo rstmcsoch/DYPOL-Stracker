@@ -114,14 +114,18 @@ there.
 
 ## If the run turns red
 
-1. Tap the failed run → tap the red step to open its log.
-2. Tap the **⋯** at the top-right of the log → **Copy** (or select the last ~40 lines).
-3. Send that text over. Most first-build failures are one of:
+1. Open the run and read its **Summary** first: the workflow copies every analyzer error,
+   every failing test and the Gradle error lines into that page, so you usually do not have to
+   open a log at all.
+2. Tap the failed run → tap the red step to open its log.
+3. Tap the **⋯** at the top-right of the log → **Copy** (or copy the Summary page).
+4. Send that text over. Most first-build failures are one of:
 
 | Message you may see | What it means |
 |---|---|
 | `Release signing is not configured` | the keystore secrets are missing — add them, or accept the test build |
 | `The keystore secret did not decode` | the base64 text was truncated on paste — re-copy the whole line |
+| `TOO OLD` from **Check the Android toolchain versions** | the pinned Gradle/AGP/Kotlin is below the floor of the Flutter version in the workflow — the step names exactly which one, and it is a one-line fix in `mobile/android/` |
 | `compileSdk … requires AGP …` | the Flutter version moved ahead of the Gradle plugin — a code fix, not something you did |
 | `Gradle build failed` + a `.dart` file name | a code error; send me the line and I fix it |
 | `Error: Project not found` | the `SUPABASE_URL` secret has a typo |

@@ -43,7 +43,7 @@ class HomePage extends ConsumerWidget {
         : (data.settings.ownerName.isEmpty ? 'there' : data.settings.ownerName);
     final String examTitle = chosenExamTitle(data);
     final String track = effectiveTrack(data.settings);
-    final String? trackDate = trackDate(data, track);
+    final String? examDate = trackDate(data, track);
     final bool examMode = currentExamMode(data, today);
 
     return NotebookScaffold(
@@ -75,7 +75,7 @@ class HomePage extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${trackLabels(data)[track] ?? examTitle} · ${countdownLabel(trackDate)}',
+                      '${trackLabels(data)[track] ?? examTitle} · ${countdownLabel(examDate)}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: context.stracker.muted,
                           ),

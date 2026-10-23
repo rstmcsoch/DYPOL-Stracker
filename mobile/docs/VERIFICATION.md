@@ -79,6 +79,55 @@ nor the package set could be installed. **Consequently `flutter pub get`, `flutt
     APK therefore carries three ABIs, not four; confirmed from the engine source rather than
     assumed.
 
+## What the CI runs established (real toolchain, real compiler)
+
+Two runs of `Stracker Android release` have executed on GitHub's own `ubuntu-latest` runners
+with Flutter 3.47.7 / Dart 3.13.5 / JDK 17 (Temurin 17.0.20+1) / Android SDK 37. This is the
+first real evidence in this project, and it is recorded here exactly as it happened.
+
+**Run 1** (`Build Apk`, commit `fa28469`) reached Gradle and failed. In order:
+
+1. `flutter pub get` **succeeded** — all 111 packages resolved, so the pins in `pubspec.yaml`
+   are compatible with Dart 3.13.5.
+2. The signing step **succeeded** and exported a decoded `stracker-release.p12`, so the
+   `STRAKER_KEYSTORE_BASE64` / `STRAKER_STORE_PASSWORD` secrets are correct.
+3. `flutter analyze` reported 44 issues, of which **6 were errors** that would have blocked
+   compilation: a `Duration(...).inSeconds` in a `const`, a local variable named `trackDate`
+   shadowing the function `trackDate()`, a missing `DataController.mistakeImageBytes`, a
+   `saveMistake(..., extension:)` argument that does not exist, and a missing
+   `auth_controller.dart` import. **All six are fixed** (see the commit that follows this
+   document); each was confirmed against the source line the analyser named.
+4. `flutter test` ran the real suite: **55 passed, 2 failed** —
+   `date_format_test` (`scoreLabel(42, 80)` printed `42.0 / 80`) and `syllabus_test`
+   (`importance` was compared as `'High'`; the database constraint and
+   `src/lib/jee/progress.ts` both use lowercase). **Both are fixed** — the formatter now
+   prints whole numbers bare, and the test uses the real enum values.
+5. `flutter build apk` failed with
+   `Your project's Gradle version (8.13.0) is lower than Flutter's minimum supported version
+   of 8.14.0`. Fixing that surfaced a second, hidden floor: Flutter 3.47.7's
+   `DependencyVersionChecker.kt` also demands **Kotlin ≥ 2.2.20**, and this project pinned
+   2.2.0, which would have failed next.
+
+**What that changes about the pins.** The floors are declared in Flutter's own source
+(`packages/flutter_tools/gradle/src/main/kotlin/DependencyVersionChecker.kt`, Flutter 3.47.7):
+Gradle 8.14.0, AGP 8.11.1, Kotlin 2.2.20, Java 17. The project now pins
+**Gradle 8.14.3, AGP 8.11.1, Kotlin 2.2.20**, which `gradle_utils.dart` (same release,
+lines 606–613 and 729–737) documents as a compatible triple: KGP 2.2.20 accepts Gradle
+7.6.3–8.14.x and AGP < 8.12.
+
+**A preflight was added so this cannot happen silently again.** `tool/check_toolchain.py`
+reads those floors out of the installed Flutter and compares them with
+`android/gradle/wrapper/gradle-wrapper.properties` and `android/settings.gradle`. It was run
+against the real 3.47.7 file in both directions: with the repaired pins it prints `ok` for all
+four rows and exits 0; with the original pins restored it reproduces both CI failures
+(`Gradle 8.13 … TOO OLD`, `Kotlin 2.2.0 … TOO OLD`) and exits 1 in under a second.
+
+**Still not verified:** that the release APK now builds end to end. Run 1 never reached Dart
+compilation, and the fixes above have only been checked statically here (71/71 files parse;
+the six error sites were read back line by line). The next green run in the Actions tab is the
+proof, and its summary prints the package id, minSdk, the three ABIs and the signer
+fingerprint.
+
 ## How this gets verified without a computer
 
 `ci/flutter-release.yml` performs the same steps on GitHub's runners: `flutter pub get`,
@@ -122,7 +171,8 @@ Copy the result to `dist/Stracker-release.apk` and record its SHA-256 in
 
 ## Not verified
 
-* Compilation, lint and test execution (no SDK anywhere in this environment).
+* Compilation, lint and test execution in the authoring sandbox (no SDK there). They do run
+  on GitHub's runners — see "What the CI runs established" above.
 * Runtime behaviour on a device or emulator (no emulator, no APK).
 * Live sign-in against the Supabase project (no project URL/anon key were available, and
   `supabase.co` is unreachable from this sandbox).

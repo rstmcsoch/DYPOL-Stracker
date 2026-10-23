@@ -8,8 +8,9 @@ presented as working functionality anywhere in the app.
 1. **No Flutter/Dart/JDK/Android SDK and no package-registry access in the authoring
    environment.** `pub.dev`, `storage.googleapis.com`, `dl.google.com` and
    `services.gradle.org` all return `000` there, and Flutter's GitHub releases carry no SDK
-   binaries, so the project could never be compiled in that sandbox. The build runs on
-   GitHub Actions instead — see `PHONE-BUILD.md`.
+   binaries, so the project cannot be compiled in that sandbox. The build runs on GitHub
+   Actions instead — see `PHONE-BUILD.md`. Two CI runs have now executed the real toolchain
+   (see `VERIFICATION.md` §"What the CI runs established").
 2. **No Supabase credentials were supplied.** `AppConfig` reads
    `--dart-define=SUPABASE_URL` / `SUPABASE_ANON_KEY`. Without them the app deliberately
    shows the configuration screen instead of failing at runtime.
@@ -31,27 +32,34 @@ presented as working functionality anywhere in the app.
    verified without a build. Dart is still AOT-compiled and icons/code are tree-shaken, so the
    result is a real release build, just a few megabytes larger. Enable the flag once a device
    run confirms nothing breaks.
-6. **`flutter analyze` / `flutter test` are advisory steps in CI.** They run on every build and
-   their output is kept in the log, but they do not block the artifact, because this source has
-   never been compiled and a lint-level finding should not deny the owner an installable APK.
-   Make them blocking once a build is green.
+6. **`flutter analyze` / `flutter test` are advisory steps in CI.** They run on every build,
+   their error lines are copied into the run summary and raised as annotations, but they do not
+   block the artifact: a lint-level finding should not deny the owner an installable APK.
+   Make them blocking once a full build has succeeded end to end.
+
+7. **The Android toolchain is pinned, not floating.** `android/settings.gradle` and
+   `android/gradle/wrapper/gradle-wrapper.properties` pin AGP 8.11.1, Kotlin 2.2.20 and Gradle
+   8.14.3, and the workflow pins Flutter 3.47.7. Those are the versions Flutter 3.47.7 accepts
+   (`DependencyVersionChecker.kt`: Gradle 8.14.0, AGP 8.11.1, Kotlin 2.2.20, Java 17 floors).
+   A future Flutter release can raise those floors; `tool/check_toolchain.py` runs before the
+   build and names the dependency that must change, instead of failing 90 s into Gradle.
 
 ## 3. Product limitations
 
-7. **Owner console is not in the app.** `/control-panel/*` runs on service-role privileges and
+8. **Owner console is not in the app.** `/control-panel/*` runs on service-role privileges and
    a second factor. Reimplementing it would need a second backend or weaker security, so
    *Profile → Owner console* explains the console, shows its address and copies it.
-8. **No scheduled Android notifications.** The reminder time is honoured inside the app
+9. **No scheduled Android notifications.** The reminder time is honoured inside the app
    (`logic/reminders.dart`); no alarm or push is registered, so the phone is not woken.
-9. **Offline is read-only.** Cached notebook browsing works; writes need connectivity. The
+10. **Offline is read-only.** Cached notebook browsing works; writes need connectivity. The
    website's offline write queue is not ported.
-10. **No undo-delete.** Destructive actions confirm first; the web app's undo toast is not
+11. **No undo-delete.** Destructive actions confirm first; the web app's undo toast is not
     reproduced.
-11. **First-run setup is silent.** A new account is seeded like the website (profile, settings
+12. **First-run setup is silent.** A new account is seeded like the website (profile, settings
     with `onboarding_completed`, four exam tracks, JEE syllabus for a JEE notebook) and lands
     on the dashboard; exam, year and target can be changed in Settings. The website's
     onboarding dialog is not reproduced as a modal.
-12. **iOS folder absent.** The Dart layer is platform-neutral, but only Android was built and
+13. **iOS folder absent.** The Dart layer is platform-neutral, but only Android was built and
     delivered.
-13. **Landscape tables** are capped at 760 dp and scroll; wide tablets use the same
+14. **Landscape tables** are capped at 760 dp and scroll; wide tablets use the same
     single-column notebook rather than a different information architecture.

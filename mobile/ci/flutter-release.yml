@@ -47,9 +47,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Flutter (current stable)
+      # Pinned on purpose: the Gradle/AGP/Kotlin floors below belong to this exact Flutter
+      # release, so a new stable cannot break the build without a commit that says so.
+      # Flutter 3.47.7 requires Gradle >= 8.14.0, AGP >= 8.11.1, Kotlin >= 2.2.20, Java 17.
+      - name: Set up Flutter 3.47.7
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: 3.47.7
           channel: stable
           cache: true
 
@@ -62,15 +66,49 @@ jobs:
         working-directory: mobile
         run: flutter pub get
 
+      # Reads the hard floors out of Flutter's own DependencyVersionChecker.kt and compares
+      # them with android/gradle/wrapper and android/settings.gradle. Seconds instead of the
+      # ~90s a real Gradle failure costs, and the message names the dependency to change.
+      - name: Check the Android toolchain versions
+        working-directory: mobile
+        run: python3 tool/check_toolchain.py
+
       - name: Analyze (advisory)
         working-directory: mobile
         continue-on-error: true
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: |
+          status=0
+          flutter analyze --no-fatal-infos --no-fatal-warnings > "$RUNNER_TEMP/analyze.log" 2>&1 || status=$?
+          grep -E "^ *error • " "$RUNNER_TEMP/analyze.log" | head -40 > "$RUNNER_TEMP/analyze-errors.log" || true
+          {
+            echo "### flutter analyze (advisory)"
+            echo '```'
+            cat "$RUNNER_TEMP/analyze-errors.log"
+            tail -n 1 "$RUNNER_TEMP/analyze.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::error title=ANALYZE::$line"
+          done < "$RUNNER_TEMP/analyze-errors.log"
+          exit "$status"
 
       - name: Test (advisory)
         working-directory: mobile
         continue-on-error: true
-        run: flutter test --reporter expanded
+        run: |
+          status=0
+          flutter test --reporter expanded > "$RUNNER_TEMP/test.log" 2>&1 || status=$?
+          grep -E "\[E\]|Some tests failed|^[0-9]{2}:[0-9]{2} \+" "$RUNNER_TEMP/test.log" | tail -25 > "$RUNNER_TEMP/test-errors.log" || true
+          {
+            echo "### flutter test (advisory)"
+            echo '```'
+            cat "$RUNNER_TEMP/test-errors.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::error title=TEST::$line"
+          done < "$RUNNER_TEMP/test-errors.log"
+          exit "$status"
 
       - name: Prepare signing
         working-directory: mobile
@@ -116,10 +154,28 @@ jobs:
           if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
             echo "::warning::SUPABASE_URL / SUPABASE_ANON_KEY are not set; the app will show the configuration screen."
           fi
+          status=0
           flutter build apk --release \
             --target-platform android-arm,android-arm64,android-x64 \
             --dart-define=SUPABASE_URL="${SUPABASE_URL:-}" \
-            --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
+            --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}" \
+            > "$RUNNER_TEMP/build.log" 2>&1 || status=$?
+          if [ "$status" -ne 0 ]; then
+            grep -nE "^e: |error:|Error:|FAILURE:|What went wrong|Execution failed|Could not|Caused by|minimum supported version" \
+              "$RUNNER_TEMP/build.log" | head -25 > "$RUNNER_TEMP/build-errors.log" || true
+            tail -n 12 "$RUNNER_TEMP/build.log" >> "$RUNNER_TEMP/build-errors.log" || true
+            {
+              echo "### flutter build apk (failed)"
+              echo '```'
+              cat "$RUNNER_TEMP/build-errors.log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error title=BUILD::$line"
+            done < "$RUNNER_TEMP/build-errors.log"
+            exit "$status"
+          fi
+          tail -n 5 "$RUNNER_TEMP/build.log"
 
       - name: Check the artifact
         working-directory: mobile
