@@ -49,6 +49,13 @@ class AppField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final StrackerColors colors = context.stracker;
+    // A password is typed exactly as it is stored. Android keyboards honour
+    // `textCapitalization` and autocorrect, so the default (sentences + suggestions) would
+    // turn "abcd@1234" into "Abcd@1234" and produce "Email or password is incorrect" for a
+    // password that is perfectly correct. Obscured fields therefore never capitalise,
+    // autocorrect or suggest.
+    final TextCapitalization effectiveCaps =
+        obscure ? TextCapitalization.none : textCapitalization;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -75,7 +82,9 @@ class AppField extends StatelessWidget {
             enabled: enabled,
             inputFormatters: inputFormatters,
             onChanged: onChanged,
-            textCapitalization: textCapitalization,
+            textCapitalization: effectiveCaps,
+            autocorrect: !obscure,
+            enableSuggestions: !obscure,
             autofillHints: autofillHints,
             style: Theme.of(context).textTheme.bodyMedium,
             decoration: InputDecoration(

@@ -382,8 +382,7 @@ Future<void> openMistakeEditor(
           ),
           const SizedBox(height: 6),
           Text(
-            'Images go to your private mistake-images folder in the same Supabase project. '
-            'The app uploads the file as-is; the website converts to WebP.',
+            'Images stay private to your account.',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.stracker.muted),
           ),
           const SizedBox(height: 12),

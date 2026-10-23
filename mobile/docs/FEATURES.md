@@ -48,11 +48,12 @@ importance weighting and the 30-day Exam Mode boost.
 
 ## Test inventory
 
-12 files, 57 test cases:
+13 files, 63 test cases:
 
 | File | Cases |
 |---|---|
 | `analytics_test.dart` | 7 |
+| `connection_test.dart` | 6 |
 | `revision_test.dart` | 3 |
 | `recommend_test.dart` | 4 |
 | `codec_test.dart` | 4 |
@@ -66,5 +67,6 @@ importance weighting and the 30-day Exam Mode boost.
 | `widgets_test.dart` | 8 |
 
 They exercise the ported maths against hand-computed expectations, the JSON/cache/backup
-round trip, input validation, and the shared widgets (including night mode and 1.6× text
-scaling). Execution status: **not run here** — see `VERIFICATION.md`.
+round trip, input validation, the shared widgets (including night mode and 1.6× text scaling),
+and the connection diagnostics (project-ref parsing, the three verdicts, error wording).
+Execution status: run by CI on every build — see `VERIFICATION.md`.

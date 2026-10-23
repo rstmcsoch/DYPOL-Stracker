@@ -73,29 +73,15 @@ class SplashPage extends StatelessWidget {
             ),
             Padding(
               padding: EdgeInsets.fromLTRB(20, 12, 20, 18 + bottomInset),
-              child: Column(
-                children: <Widget>[
-                  Text(
-                    'DYPOL LABS',
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 10,
-                      letterSpacing: 2.4,
-                      fontWeight: FontWeight.w600,
-                      color: colors.palette.inkSoft,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'by Rustam Chaturvedi',
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 9.5,
-                      letterSpacing: 0.4,
-                      color: colors.palette.muted,
-                    ),
-                  ),
-                ],
+              child: Text(
+                'DYPOL LABS',
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontSize: 10,
+                  letterSpacing: 2.4,
+                  fontWeight: FontWeight.w600,
+                  color: colors.palette.inkSoft,
+                ),
               ),
             ),
           ],

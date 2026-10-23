@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config.dart';
 import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
+import '../../data/connection_check.dart';
 import '../../data/data_controller.dart';
 import 'auth_controller.dart';
+import 'connection_sheet.dart';
 
 /// Sign-in, sign-up and password reset, styled as pages of the same notebook. Inputs keep
 /// the keyboard-aware layout, validation mirrors the website's rules, and every failure is
@@ -23,6 +26,10 @@ class AuthFlow extends ConsumerStatefulWidget {
 
 class _AuthFlowState extends ConsumerState<AuthFlow> {
   late String _mode = widget.mode;
+
+  /// Which project this build signs in against — the first thing to compare when the same
+  /// email and password work on the website but not here.
+  String get _projectRef => projectRefFrom(AppConfig.supabaseUrl);
 
   @override
   Widget build(BuildContext context) {
@@ -72,20 +79,41 @@ class _AuthFlowState extends ConsumerState<AuthFlow> {
         children: <Widget>[
           if (status.error != null) ...<Widget>[
             ErrorNotice(status.error!),
-            const SizedBox(height: 12),
+            if (status.detail != null) ...<Widget>[
+              const SizedBox(height: 6),
+              Text(
+                status.detail!,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+              ),
+            ],
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                Text(
+                  'Project ${_projectRef.isEmpty ? '—' : _projectRef}',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+                ),
+                TextButton(
+                  onPressed: () => showConnectionSheet(context),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    minimumSize: const Size(0, 28),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('Check connection'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
           ],
           switch (_mode) {
             'signup' => _SignUpForm(onSwitch: _switchMode, busy: status.busy),
             'forgot' => _ForgotForm(onSwitch: _switchMode, busy: status.busy),
             _ => _LoginForm(onSwitch: _switchMode, busy: status.busy),
           },
-          const SizedBox(height: 12),
-          Text(
-            'Same account as the website. Passwords are handled by Supabase; Stracker never sees or '
-            'stores them.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
-          ),
+
         ],
       ),
     );
@@ -168,7 +196,7 @@ class _AuthShell extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'DYPOL LABS · by Rustam Chaturvedi',
+                    'DYPOL LABS',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: colors.muted,
@@ -232,6 +260,7 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
             label: 'Email',
             controller: _email,
             keyboardType: TextInputType.emailAddress,
+            textCapitalization: TextCapitalization.none,
             hint: 'you@example.com',
             error: _emailError,
             required: true,
@@ -332,7 +361,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
           AppField(
             label: 'Your name',
             controller: _name,
-            hint: 'Rustam Chaturvedi',
+            hint: 'Your full name',
             error: _nameError,
             required: true,
             textCapitalization: TextCapitalization.words,
@@ -342,6 +371,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
             label: 'Email',
             controller: _email,
             keyboardType: TextInputType.emailAddress,
+            textCapitalization: TextCapitalization.none,
             error: _emailError,
             required: true,
             autofillHints: const <String>[AutofillHints.email],
@@ -423,6 +453,7 @@ class _ForgotFormState extends ConsumerState<_ForgotForm> {
           label: 'Email',
           controller: _email,
           keyboardType: TextInputType.emailAddress,
+          textCapitalization: TextCapitalization.none,
           error: _emailError,
           required: true,
         ),
@@ -589,7 +620,7 @@ Future<void> openChangePasswordSheet(BuildContext context, WidgetRef ref) async 
           ),
           const SizedBox(height: 6),
           Text(
-            'Your other devices stay signed in. Sign out everywhere from the website if you need to.',
+            'You stay signed in on this phone with the new password.',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.stracker.muted),
           ),
         ],
@@ -622,8 +653,10 @@ class ConfigMissingPage extends StatelessWidget {
                   Text('Stracker needs its backend', style: Theme.of(context).textTheme.headlineLarge),
                   const SizedBox(height: 8),
                   Text(
-                    'This build has no Supabase URL or anonymous key, so it cannot reach the same '
-                    'database and accounts as the website. Nothing is faked in the meantime.',
+                    'This build was compiled without a project address and key, so it cannot sign '
+                    'anyone in. Whoever builds the APK has to add SUPABASE_URL and '
+                    'SUPABASE_ANON_KEY to the repository secrets and run the release workflow '
+                    'again — nothing on this phone can fix it.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 14),
@@ -645,12 +678,6 @@ class ConfigMissingPage extends StatelessWidget {
                         height: 1.5,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'The anon key is public by design and is the same key the website ships. Never put the '
-                    'service-role key in the app.',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
                   ),
                 ],
               ),
