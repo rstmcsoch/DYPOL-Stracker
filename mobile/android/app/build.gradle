@@ -76,20 +76,34 @@ android {
 
     buildTypes {
         release {
-            // Never silently ship a debug-signed build: fail the build instead.
-            if (!hasReleaseSigning) {
+            // Never silently ship a debug-signed build. A missing keystore fails the build
+            // unless the caller explicitly opts in with STRAKER_ALLOW_DEBUG_SIGNING=true,
+            // which the CI fallback uses to hand the owner an installable test build.
+            def allowDebugSigning = System.getenv("STRAKER_ALLOW_DEBUG_SIGNING") == "true"
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.release
+            } else if (allowDebugSigning) {
+                logger.warn("WARNING: building a debug-signed release APK. Do not distribute it.")
+                signingConfig = signingConfigs.debug
+            } else {
                 throw new GradleException(
                         "Release signing is not configured. Set STRAKER_KEYSTORE / " +
-                        "STRAKER_STORE_PASSWORD / STRAKER_KEY_ALIAS / STRAKER_KEY_PASSWORD " +
-                        "or add android/key.properties.")
+                        "STRAKER_STORE_PASSWORD / STRAKER_KEY_ALIAS / STRAKER_KEY_PASSWORD, " +
+                        "or add android/key.properties. Set STRAKER_ALLOW_DEBUG_SIGNING=true " +
+                        "only for a throwaway test build.")
             }
-            signingConfig = signingConfigs.release
-            minifyEnabled = true
-            shrinkResources = true
+            // Dart is AOT-compiled and its icons/dead code are tree-shaken by the Flutter
+            // tool regardless of these flags. Java/Kotlin shrinking is left off until the
+            // first build has been run on a device; enable it with -PstrackerMinify to
+            // shrink further once the runtime behaviour is confirmed.
+            minifyEnabled = project.hasProperty("strackerMinify")
+            shrinkResources = project.hasProperty("strackerMinify")
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
         debug {
-            applicationIdSuffix = ".debug"
+            // Same applicationId as the release so the icon, data directory and deep link
+            // are the real ones. A debug-signed build is not a drop-in upgrade for a
+            // release-signed one (different key), so uninstall before switching back.
             versionNameSuffix = "-debug"
         }
     }

@@ -63,6 +63,15 @@ APK is present in `dist/` yet.** This is a genuine blocker, not a skipped step.
    `api/ai/{chat,conversations,providers,test-connection,health,tasks}.ts` handlers
    (SSE event names, request body, auth header, error shape).
 
+## Running the verification without a computer
+
+`ci/flutter-release.yml` performs the same steps on GitHub's runners: `flutter pub get`,
+`flutter analyze`, `flutter test`, `flutter build apk --release`, then it prints the package
+id, label, minSdk, the native libraries for each ABI and the signer certificate into the run
+summary, and publishes the APK's SHA-256 next to the artifact. Installing it needs nothing but
+a phone browser — see [`PHONE-BUILD.md`](PHONE-BUILD.md). Treat a green run of that workflow,
+with the signer fingerprint matching §Signing, as the completed verification.
+
 ## What still has to be run on a machine with the toolchain
 
 ```bash

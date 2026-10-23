@@ -41,3 +41,12 @@ is presented as working functionality anywhere in the app.
    delivered.
 10. **Landscape tables** are capped at 760 dp and scroll; very wide tablets use the same
     single-column notebook rather than a different information architecture.
+11. **Java/Kotlin shrinking is off by default.** `minifyEnabled`/`shrinkResources` are gated
+    behind the `-PstrackerMinify` Gradle property because the R8 + plugin interaction cannot
+    be verified without a build. Dart code and icons are still AOT-compiled and tree-shaken,
+    so the released APK is a real release build, just a few megabytes larger. Enable the flag
+    once a device run confirms nothing breaks.
+12. **`flutter analyze` / `flutter test` run as advisory steps in CI.** They execute on every
+    build and their output is kept, but they do not block the artifact, because this source
+    has never been compiled and a lint-level finding should not deny the owner an installable
+    APK. Once a build is green, make them blocking.

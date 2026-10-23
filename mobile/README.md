@@ -15,6 +15,10 @@ functions), the same account you use on the website, the same paper-notebook loo
 | Output | **one universal APK** — `dist/Stracker-release.apk` (armeabi-v7a, arm64-v8a, x86_64 — see §9.7) |
 | Architecture | Flutter (Dart 3) + Riverpod, native Android shell, **no WebView** |
 
+> **No computer?** The APK can be built by GitHub Actions and installed straight from the
+> phone's browser. Follow [`docs/PHONE-BUILD.md`](docs/PHONE-BUILD.md) — about 10 minutes of
+> tapping, no toolchain, no terminal.
+
 ---
 
 ## 1. What this app is
@@ -181,22 +185,28 @@ Tests included (`test/`):
 [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for exactly what was and was not verified,
 including the honest reason.
 
-## 8. CI
+## 8. Building without a computer — and CI
 
-`ci/flutter-release.yml` is a complete GitHub Actions workflow (JDK 17, Flutter stable,
-`flutter analyze`, `flutter test`, `flutter build apk --release`, artifact upload).
-It is stored in `ci/` rather than `.github/workflows/` because this branch's GitHub token
-has no `workflows` permission, so GitHub refuses a push that creates a workflow file. To
-enable it:
+The whole build can run on GitHub's servers and be installed from a phone. The step-by-step
+guide is [`docs/PHONE-BUILD.md`](docs/PHONE-BUILD.md); in short:
 
-```bash
-mkdir -p .github/workflows && cp mobile/ci/flutter-release.yml .github/workflows/
-git add .github/workflows/flutter-release.yml && git commit -m "ci: build the Android release" && git push
-```
+1. merge this branch;
+2. create `.github/workflows/android-release.yml` in the repository and paste the contents of
+   [`ci/flutter-release.yml`](ci/flutter-release.yml) (GitHub refuses to let the automation
+   account create workflow files, so this single file must be added by the repository owner);
+3. add four Action secrets — `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+   `STRAKER_KEYSTORE_BASE64`, `STRAKER_STORE_PASSWORD`;
+4. **Actions → Stracker Android release → Run workflow**;
+5. install `Stracker-release.apk` from the repository's **Releases** page.
 
-The signing values come from repository secrets (`STRAKER_KEYSTORE_BASE64`,
-`STRAKER_STORE_PASSWORD`, `STRAKER_KEY_ALIAS`, `STRAKER_KEY_PASSWORD`,
-`SUPABASE_URL`, `SUPABASE_ANON_KEY`), so no secret is committed.
+Without the two keystore secrets the same workflow still produces an installable
+`Stracker-test-debug-signed.apk` for testing, and says so in the run summary. With them it
+builds and signs the real `Stracker-release.apk` and publishes its SHA-256 next to it.
+
+The workflow runs `flutter analyze` and `flutter test` as advisory steps (their result is
+reported but does not block the artifact), then builds every ABI into one APK, prints the
+package id, label, minSdk, native libraries and signer certificate into the run summary, and
+removes the keystore from the runner afterwards.
 
 ## 9. Deliberate limitations
 
