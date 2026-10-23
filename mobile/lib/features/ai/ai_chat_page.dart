@@ -249,7 +249,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       showToast(
         context,
         stopped
-            ? 'Stop requested. The server cancels at its next checkpoint.'
+            ? 'Stopping. The answer will finish where it is.'
             : 'That task had already finished.',
       );
     } catch (error) {
@@ -290,11 +290,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
               child: InfoBanner(
                 health.reason == 'unreachable'
-                    ? 'The AI backend could not be reached. The chat needs the deployed /api/ai '
-                        'functions and an internet connection.'
-                    : 'The AI backend is deployed but not configured'
-                        '${health.missing.isEmpty ? '' : ' (missing: ${health.missing.join(', ')})'}. '
-                        'Add the provider key in the website’s AI settings.',
+                    ? 'The assistant could not be reached. Check your connection, then try again.'
+                    : 'The assistant needs your own provider key before it can answer. '
+                        'Add one under AI providers, or from the website’s AI settings.',
                 tone: PillTone.warn,
                 icon: Icons.smart_toy_outlined,
               ),
@@ -302,7 +300,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-              child: ErrorNotice(_error!, onRetry: _checkHealth, retryLabel: 'Recheck backend'),
+              child: ErrorNotice(_error!, onRetry: _checkHealth, retryLabel: 'Try again'),
             ),
           Expanded(
             child: _messages.isEmpty
@@ -527,8 +525,8 @@ class _EmptyChat extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'Stracker AI reads your syllabus, tests, revisions and mistakes through the secure backend. '
-          'Provider keys stay on the server; nothing is generated without your data.',
+          'Stracker AI reads your syllabus, tests, revisions and mistakes, so its answers are about '
+          'your own preparation. Your key is never shown again after you save it.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
         ),
@@ -616,7 +614,7 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           InfoBanner(
-            'Keys are encrypted on the Vercel backend and never leave it. This app only sends the key '
+            'Keys are encrypted and never leave our servers. This app only sends the key '
             'you type here, once, over HTTPS with your own session token.',
             icon: Icons.lock_outline,
           ),
@@ -699,7 +697,7 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
                             final bool confirmed = await confirmAction(
                               context,
                               title: 'Remove ${provider.displayName}?',
-                              message: 'The stored key is deleted from the backend.',
+                              message: 'The saved key has been removed.',
                             );
                             if (!confirmed) return;
                             await _run(() => widget.client.deleteProvider(provider.id));
@@ -830,7 +828,7 @@ class _AddProviderSheetState extends State<_AddProviderSheet> {
               obscureText: true,
               decoration: const InputDecoration(
                 labelText: 'API key',
-                helperText: 'Sent once over HTTPS; stored encrypted on the server.',
+                helperText: 'Sent once over a secure connection and stored encrypted.',
               ),
             ),
             const SizedBox(height: 10),

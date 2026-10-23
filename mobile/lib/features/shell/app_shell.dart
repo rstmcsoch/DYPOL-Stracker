@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
@@ -30,11 +31,42 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
 
-  static const List<String> _titles = <String>['Home', 'Tests', 'Analytics', 'Profile'];
+  static const List<String> _labels = <String>['Home', 'Tests', 'Analytics', 'Profile'];
+  static const List<IconData> _icons = <IconData>[
+    Icons.home_outlined,
+    Icons.list_alt_outlined,
+    Icons.insights_outlined,
+    Icons.person_outline,
+  ];
+  static const List<IconData> _selectedIcons = <IconData>[
+    Icons.home,
+    Icons.list_alt,
+    Icons.insights,
+    Icons.person,
+  ];
+
+  void _select(int index) {
+    if (_index == index) return;
+    // A short, light tap: the same feedback Android gives its own tab bars.
+    HapticFeedback.selectionClick();
+    setState(() => _index = index);
+  }
 
   @override
   Widget build(BuildContext context) {
     final StrackerColors colors = context.stracker;
+    // Tablets and landscape phones get a side rail; a thumb-reach bar stays on phones.
+    final bool wide = MediaQuery.sizeOf(context).width >= 720;
+
+    const List<Widget> pages = <Widget>[
+      HomePage(),
+      TestsPage(),
+      AnalyticsPage(),
+      ProfilePage(),
+    ];
+
+    final Widget content = _FadeIndexedStack(index: _index, children: pages);
+
     return PopScope(
       // Back from a secondary tab returns to Home; back on Home leaves the app, which is
       // the expected Android behaviour. An open drawer is closed first by its own history
@@ -46,24 +78,74 @@ class _AppShellState extends ConsumerState<AppShell> {
       },
       child: Scaffold(
         backgroundColor: colors.palette.bg,
-        body: IndexedStack(
-          index: _index,
-          children: const <Widget>[
-            HomePage(),
-            TestsPage(),
-            AnalyticsPage(),
-            ProfilePage(),
-          ],
-        ),
-        bottomNavigationBar: _BottomTabs(index: _index, onSelected: (int index) {
-          if (_index == index) return;
-          setState(() => _index = index);
-        }),
+        body: wide
+            ? Row(
+                // Stretch gives the pages a bounded height, which the crossfade needs.
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  SafeArea(
+                    right: false,
+                    child: NavigationRail(
+                      selectedIndex: _index,
+                      onDestinationSelected: _select,
+                      backgroundColor: colors.palette.paper,
+                      labelType: NavigationRailLabelType.all,
+                      indicatorColor: colors.palette.accentLight,
+                      destinations: <NavigationRailDestination>[
+                        for (int i = 0; i < _labels.length; i += 1)
+                          NavigationRailDestination(
+                            icon: Icon(_icons[i]),
+                            selectedIcon: Icon(_selectedIcons[i]),
+                            label: Text(_labels[i]),
+                          ),
+                      ],
+                    ),
+                  ),
+                  VerticalDivider(width: 1, color: colors.palette.line),
+                  Expanded(child: content),
+                ],
+              )
+            : content,
+        bottomNavigationBar: wide
+            ? null
+            : _BottomTabs(index: _index, onSelected: _select),
       ),
     );
   }
+}
 
-  String get title => _titles[_index];
+/// Crossfades between the four tabs over 180 ms while keeping each page's state and scroll
+/// position alive. Cheaper than rebuilding on every switch, and it gives the change a bit
+/// of motion instead of a hard cut.
+class _FadeIndexedStack extends StatelessWidget {
+  const _FadeIndexedStack({required this.index, required this.children});
+
+  final int index;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        for (int i = 0; i < children.length; i += 1)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: i != index,
+              child: ExcludeSemantics(
+                excluding: i != index,
+                child: AnimatedOpacity(
+                  opacity: i == index ? 1 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  child: TickerMode(enabled: i == index, child: children[i]),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _BottomTabs extends StatelessWidget {
@@ -86,11 +168,13 @@ class _BottomTabs extends StatelessWidget {
           selectedIndex: index,
           onDestinationSelected: onSelected,
           backgroundColor: colors.palette.paper,
-          destinations: const <NavigationDestination>[
-            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-            NavigationDestination(icon: Icon(Icons.list_alt_outlined), selectedIcon: Icon(Icons.list_alt), label: 'Tests'),
-            NavigationDestination(icon: Icon(Icons.insights_outlined), selectedIcon: Icon(Icons.insights), label: 'Analytics'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          destinations: <NavigationDestination>[
+            for (int i = 0; i < _AppShellState._labels.length; i += 1)
+              NavigationDestination(
+                icon: Icon(_AppShellState._icons[i]),
+                selectedIcon: Icon(_AppShellState._selectedIcons[i]),
+                label: _AppShellState._labels[i],
+              ),
           ],
         ),
       ),
@@ -126,6 +210,7 @@ class NotebookScaffold extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final StrackerColors colors = context.stracker;
     final DataState data = ref.watch(dataControllerProvider);
+    final bool compact = MediaQuery.sizeOf(context).width < 400;
     return Scaffold(
       backgroundColor: colors.palette.bg,
       drawer: const NotebookDrawer(),
@@ -136,10 +221,13 @@ class NotebookScaffold extends ConsumerWidget {
         leading: showBack
             ? const BackButton()
             : Builder(
-                builder: (BuildContext context) => IconButton(
-                  tooltip: 'Open navigation',
-                  icon: const Icon(Icons.menu, size: 22),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
+                builder: (BuildContext context) => Semantics(
+                  label: 'Open navigation',
+                  button: true,
+                  child: IconButton(
+                    icon: const Icon(Icons.menu, size: 22),
+                    onPressed: () => Scaffold.of(context).openDrawer(),
+                  ),
                 ),
               ),
         titleSpacing: 0,
@@ -200,15 +288,21 @@ class NotebookScaffold extends ConsumerWidget {
         actions: <Widget>[
           ...actions,
           SyncPill(state: data),
-          IconButton(
-            tooltip: 'Search notebook',
-            icon: const Icon(Icons.search, size: 21),
-            onPressed: () => showAppSheet<void>(
-              context,
-              title: 'Search notebook',
-              builder: (BuildContext sheetContext) => const GlobalSearchBody(),
+          // On a narrow phone the title block and four action buttons do not fit beside
+          // each other; the search moves into the drawer there instead of overlapping.
+          if (!compact)
+            Semantics(
+              label: 'Search notebook',
+              button: true,
+              child: IconButton(
+                icon: const Icon(Icons.search, size: 21),
+                onPressed: () => showAppSheet<void>(
+                  context,
+                  title: 'Search notebook',
+                  builder: (BuildContext sheetContext) => const GlobalSearchBody(),
+                ),
+              ),
             ),
-          ),
           ThemeToggleButton(),
         ],
       ),
@@ -235,11 +329,12 @@ class SyncPill extends ConsumerWidget {
         : state.offline
             ? colors.palette.red
             : colors.palette.green;
-    return Tooltip(
-      message: state.error ??
+    return Semantics(
+      label: state.error ??
           (state.lastSyncedAt == null
-              ? 'Not synced yet — tap to refresh'
-              : 'Last synced ${formatDateTime(state.lastSyncedAt)} — tap to refresh'),
+              ? '$label — not synced yet, tap to refresh'
+              : '$label — last synced ${formatDateTime(state.lastSyncedAt)}, tap to refresh'),
+      button: true,
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: () => ref.read(dataControllerProvider.notifier).load(),
@@ -268,20 +363,23 @@ class ThemeToggleButton extends ConsumerWidget {
         ? MediaQuery.platformBrightnessOf(context)
         : (appearance.mode == ThemeMode.dark ? Brightness.dark : Brightness.light);
     final bool dark = effective == Brightness.dark;
-    return IconButton(
-      tooltip: dark ? 'Switch to light' : 'Switch to night',
-      icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, size: 20),
-      onPressed: () async {
-        await ref.read(themeControllerProvider.notifier).toggle(effective);
-        final DataController controller = ref.read(dataControllerProvider.notifier);
-        final AppData data = ref.read(dataControllerProvider).data;
-        final ThemeState next = ref.read(themeControllerProvider);
-        try {
-          await controller.saveSettings(data.settings.copyWith(theme: next.modeValue));
-        } catch (_) {
-          // The local switch already applied; the account value is retried on the next save.
-        }
-      },
+    return Semantics(
+      label: dark ? 'Switch to light' : 'Switch to night',
+      button: true,
+      child: IconButton(
+        icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, size: 20),
+        onPressed: () async {
+          await ref.read(themeControllerProvider.notifier).toggle(effective);
+          final DataController controller = ref.read(dataControllerProvider.notifier);
+          final AppData data = ref.read(dataControllerProvider).data;
+          final ThemeState next = ref.read(themeControllerProvider);
+          try {
+            await controller.saveSettings(data.settings.copyWith(theme: next.modeValue));
+          } catch (_) {
+            // The local switch already applied; the account value is retried on the next save.
+          }
+        },
+      ),
     );
   }
 }
@@ -346,6 +444,22 @@ class NotebookDrawer extends ConsumerWidget {
           ),
         );
 
+    Widget searchRow() => ListTile(
+          dense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+          leading: Icon(Icons.search, size: 19, color: colors.inkSoft),
+          title: Text('Search notebook', style: Theme.of(context).textTheme.titleSmall),
+          onTap: () {
+            final NavigatorState navigator = Navigator.of(context);
+            showAppSheet<void>(
+              context,
+              title: 'Search notebook',
+              builder: (BuildContext sheetContext) => const GlobalSearchBody(),
+            );
+            navigator.pop();
+          },
+        );
+
     Widget group(String label) => Padding(
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 4),
           child: Text(
@@ -380,11 +494,13 @@ class NotebookDrawer extends ConsumerWidget {
 
     return Drawer(
       backgroundColor: colors.palette.paper,
+      width: MediaQuery.sizeOf(context).width < 400 ? 292 : 320,
       child: SafeArea(
         child: Column(
           children: <Widget>[
             header(),
             Divider(height: 1, color: colors.palette.line),
+            searchRow(),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -429,7 +545,7 @@ class NotebookDrawer extends ConsumerWidget {
                 final bool confirmed = await confirmAction(
                   context,
                   title: 'Sign out?',
-                  message: 'The offline copy on this device is cleared. Your data stays in Supabase.',
+                  message: 'The offline copy on this device is cleared. Your account data is untouched.',
                   confirmLabel: 'Sign out',
                 );
                 if (!confirmed) return;

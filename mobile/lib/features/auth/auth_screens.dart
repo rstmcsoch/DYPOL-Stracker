@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/config.dart';
 import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
-import '../../data/connection_check.dart';
 import '../../data/data_controller.dart';
 import 'auth_controller.dart';
 import 'connection_sheet.dart';
@@ -29,8 +27,6 @@ class _AuthFlowState extends ConsumerState<AuthFlow> {
 
   /// Which project this build signs in against — the first thing to compare when the same
   /// email and password work on the website but not here.
-  String get _projectRef => projectRefFrom(AppConfig.supabaseUrl);
-
   @override
   Widget build(BuildContext context) {
     final AuthStatus status = ref.watch(authControllerProvider);
@@ -79,34 +75,20 @@ class _AuthFlowState extends ConsumerState<AuthFlow> {
         children: <Widget>[
           if (status.error != null) ...<Widget>[
             ErrorNotice(status.error!),
-            if (status.detail != null) ...<Widget>[
-              const SizedBox(height: 6),
-              Text(
-                status.detail!,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => showConnectionSheet(context),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 30),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Still not working? Check the connection'),
               ),
-            ],
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: <Widget>[
-                Text(
-                  'Project ${_projectRef.isEmpty ? '—' : _projectRef}',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
-                ),
-                TextButton(
-                  onPressed: () => showConnectionSheet(context),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    minimumSize: const Size(0, 28),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text('Check connection'),
-                ),
-              ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
           ],
           switch (_mode) {
             'signup' => _SignUpForm(onSwitch: _switchMode, busy: status.busy),
@@ -631,8 +613,8 @@ Future<void> openChangePasswordSheet(BuildContext context, WidgetRef ref) async 
   confirm.dispose();
 }
 
-/// Misconfiguration screen: explains exactly how to build with the right values instead of
-/// pretending to sign in.
+/// Shown only if a build ships without its connection details: no developer instructions,
+/// just an honest message and what the person can actually do.
 class ConfigMissingPage extends StatelessWidget {
   const ConfigMissingPage({super.key});
 
@@ -650,34 +632,18 @@ class ConfigMissingPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Stracker needs its backend', style: Theme.of(context).textTheme.headlineLarge),
+                  Text('Stracker is not set up', style: Theme.of(context).textTheme.headlineLarge),
                   const SizedBox(height: 8),
                   Text(
-                    'This build was compiled without a project address and key, so it cannot sign '
-                    'anyone in. Whoever builds the APK has to add SUPABASE_URL and '
-                    'SUPABASE_ANON_KEY to the repository secrets and run the release workflow '
-                    'again — nothing on this phone can fix it.',
+                    'This copy of the app was installed without its connection details, so it '
+                    'cannot open your notebook.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: colors.palette.paper,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: colors.palette.line),
-                    ),
-                    child: Text(
-                      'flutter build apk --release \\\n'
-                      '  --dart-define=SUPABASE_URL=https://<project>.supabase.co \\\n'
-                      '  --dart-define=SUPABASE_ANON_KEY=<anon-key>',
-                      style: TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        color: colors.palette.inkSoft,
-                        height: 1.5,
-                      ),
-                    ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Download the current version again from the same link you used before and '
+                    'install it over this one. Your account and your pages are safe either way.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.inkSoft),
                   ),
                 ],
               ),

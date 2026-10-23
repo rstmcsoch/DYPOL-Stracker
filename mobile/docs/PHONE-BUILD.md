@@ -8,23 +8,11 @@ You do all of it once. After that, every new build is one button.
 
 ---
 
-## Before you start: two values from Supabase
+## Before you start: nothing to copy
 
-The app is a client for your existing Supabase project, so it needs the project's public
-address and public key. Nothing secret, and both are the same ones the website already uses.
-
-1. Open **https://supabase.com/dashboard** in Chrome and sign in.
-2. Tap your Stracker project.
-3. Tap **Project Settings** (gear icon) → **API** (older dashboards: **API Keys**).
-4. Copy **Project URL** — it looks like `https://abcdefghijk.supabase.co`.
-5. Copy **anon / public** key — a long string starting with `eyJ…` or `sb_publishable_…`.
-
-Keep both in a note app; you paste them in step 3 below.
-
-> If you cannot find them, ask the person who deployed the website — they are the same two
-> values from the Vercel/Netlify build settings (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
-
----
+**You do not need any account keys.** The app is already built against the project the
+website uses; the address and its public key are part of the code. All you need is the
+signing key (already in your Drive folder) so Android accepts the update.
 
 ## Step 1 — Merge the pull request (1 tap)
 
@@ -58,18 +46,16 @@ only thing you have to add yourself.
 
 ---
 
-## Step 3 — Add the four settings (5 minutes)
+## Step 3 — Add the two signing settings (5 minutes)
 
 These are stored encrypted by GitHub; nobody can read them back, and they never appear in
-the code.
+the code. There are only two, and no account keys.
 
 1. Open **https://github.com/rstmcsoch/DYPOL-Stracker/settings/secrets/actions**
 2. Tap **New repository secret** and add these one at a time:
 
 | Name | Value |
 |---|---|
-| `SUPABASE_URL` | the Project URL from above |
-| `SUPABASE_ANON_KEY` | the anon/public key from above |
 | `STRAKER_KEYSTORE_BASE64` | the contents of `keystore-base64.txt` (Drive → **03 Signing keys (private)**). Open it, select all, copy. It is one very long line — that is correct. |
 | `STRAKER_STORE_PASSWORD` | the `storePassword` value from `keystore-info.json` (same Drive folder) |
 
@@ -135,7 +121,7 @@ there.
 | `TOO OLD` from **Check the Android toolchain versions** | the pinned Gradle/AGP/Kotlin is below the floor of the Flutter version in the workflow — the step names exactly which one, and it is a one-line fix in `mobile/android/` |
 | `compileSdk … requires AGP …` | the Flutter version moved ahead of the Gradle plugin — a code fix, not something you did |
 | `Gradle build failed` + a `.dart` file name | a code error; send me the line and I fix it |
-| `Error: Project not found` | the `SUPABASE_URL` secret has a typo |
+| `Wrong Supabase project` | `lib/core/config.dart` no longer points at the website's project — a code fix, and the run stops before building |
 
 Nothing about a failed build touches your live website or your data.
 

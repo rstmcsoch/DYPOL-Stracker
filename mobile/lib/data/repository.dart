@@ -111,7 +111,7 @@ class StrackerRepository {
     } on StorageException catch (error) {
       throw AppFailure(
         error.message.toLowerCase().contains('policy')
-            ? 'That image could not be uploaded to your private storage folder.'
+            ? 'That image could not be uploaded. Try again.'
             : 'The question image could not be uploaded. Try again.',
       );
     }
@@ -145,22 +145,25 @@ class StrackerRepository {
     if (error is PostgrestException) {
       final String message = error.message.toLowerCase();
       if (message.contains('row-level security') || message.contains('permission')) {
-        return 'That change was refused by the database policy for your account.';
+        return "That change isn't allowed for your account.";
+      }
+      if (message.contains('schema cache') || message.contains('could not find the table')) {
+        return 'That part of your notebook is not available right now. Pull down to refresh.';
       }
       if (message.contains('duplicate key')) {
         return 'That record already exists.';
       }
       if (message.contains('violates foreign key')) {
-        return 'That record refers to something that no longer exists. Refresh and try again.';
+        return 'That record refers to something that no longer exists. Pull down to refresh, then try again.';
       }
       if (message.contains('network') || message.contains('socket')) {
-        return 'Could not reach Supabase. Check your connection and try again.';
+        return 'Could not reach Stracker. Check your connection and try again.';
       }
       return error.message;
     }
     final String text = error.toString();
     if (text.contains('SocketException') || text.contains('Failed host lookup')) {
-      return 'Could not reach Supabase. Check your connection and try again.';
+      return 'Could not reach Stracker. Check your connection and try again.';
     }
     return 'Something went wrong saving that change. Try again.';
   }

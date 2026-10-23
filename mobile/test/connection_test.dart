@@ -19,6 +19,8 @@ void main() {
   });
 
   test('the report separates "wrong project" from "wrong password"', () {
+    // Everything the student reads stays plain; identifiers only appear in the support
+    // block they can copy on request.
     const ConnectionReport rejected = ConnectionReport(
       host: 'tkggckwksoatbswrebpu.supabase.co',
       projectRef: 'tkggckwksoatbswrebpu',
@@ -28,10 +30,13 @@ void main() {
       serverMessage: 'Invalid API key',
     );
     expect(rejected.keyAccepted, isFalse);
-    expect(rejected.headline, contains('does not belong to project'));
-    expect(rejected.advice, contains('SUPABASE_ANON_KEY'));
-    expect(rejected.report, contains('HTTP status: 401'));
-    expect(rejected.report, contains('Invalid API key'));
+    expect(rejected.headline, contains('wrong place'));
+    expect(rejected.advice, contains('fresh install'));
+    // Infrastructure words belong in the support block, never in the headline.
+    expect(rejected.headline.toLowerCase(), isNot(contains('supabase')));
+    expect(rejected.advice.toLowerCase(), isNot(contains('supabase')));
+    expect(rejected.technicalDetails, contains('HTTP status: 401'));
+    expect(rejected.technicalDetails, contains('Invalid API key'));
 
     const ConnectionReport accepted = ConnectionReport(
       host: 'tkggckwksoatbswrebpu.supabase.co',
@@ -43,9 +48,9 @@ void main() {
       autoConfirmsEmail: true,
       signupsEnabled: true,
     );
-    expect(accepted.headline, 'Connected to project tkggckwksoatbswrebpu.');
+    expect(accepted.headline, 'Connected. This phone can reach your account.');
     expect(accepted.advice, contains('Forgot password'));
-    expect(accepted.report, contains('84 ms'));
+    expect(accepted.technicalDetails, contains('84 ms'));
 
     const ConnectionReport offline = ConnectionReport(
       host: 'tkggckwksoatbswrebpu.supabase.co',
@@ -53,7 +58,7 @@ void main() {
       reachable: false,
       verdict: KeyVerdict.unknown,
     );
-    expect(offline.headline, contains('Cannot reach'));
+    expect(offline.headline, contains('cannot reach Stracker'));
     expect(offline.advice, contains('online'));
 
     const ConnectionReport unbuilt = ConnectionReport(
@@ -62,8 +67,8 @@ void main() {
       reachable: false,
       verdict: KeyVerdict.unknown,
     );
-    expect(unbuilt.headline, contains('no project address'));
-    expect(unbuilt.advice, contains('SUPABASE_URL'));
+    expect(unbuilt.headline, contains('not linked'));
+    expect(unbuilt.advice, contains('same link'));
   });
 
   test('an unexpected HTTP status is not blamed on the key', () {
@@ -74,9 +79,9 @@ void main() {
       verdict: KeyVerdict.unknown,
       statusCode: 404,
     );
-    expect(odd.headline, contains('HTTP 404'));
-    expect(odd.headline, isNot(contains('does not belong')));
-    expect(odd.advice, contains('SUPABASE_URL'));
+    expect(odd.headline, contains('unexpected way'));
+    expect(odd.technicalDetails, contains('HTTP status: 404'));
+    expect(odd.advice, contains('Try again'));
   });
 
   test('the detail line keeps the server wording and the status code', () {

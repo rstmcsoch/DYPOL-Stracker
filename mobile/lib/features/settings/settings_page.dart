@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/config.dart';
 import '../../core/date.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
@@ -10,8 +9,6 @@ import '../../core/theme/palettes.dart';
 import '../../core/theme/theme_controller.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/dialogs.dart';
-import '../../data/connection_check.dart';
-import '../auth/connection_sheet.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
@@ -20,7 +17,7 @@ import '../../data/models.dart';
 import '../../logic/exam.dart';
 import '../../logic/reminders.dart';
 import '../auth/auth_screens.dart';
-import '../owner/owner_console_page.dart';
+import '../auth/connection_sheet.dart';
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
 
@@ -481,26 +478,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
-                    leading: const Icon(Icons.admin_panel_settings_outlined, size: 19),
-                    title: const Text('Owner console'),
-                    subtitle: Text(
-                      'Administration stays on the website, behind its own second step',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
-                    ),
-                    trailing: const Icon(Icons.chevron_right, size: 18),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const OwnerConsolePage()),
-                    ),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
                     leading: const Icon(Icons.wifi_tethering, size: 19),
-                    title: const Text('Connection'),
+                    title: const Text('Connection check'),
                     subtitle: Text(
-                      projectRefFrom(AppConfig.supabaseUrl).isEmpty
-                          ? 'This build has no project address'
-                          : 'Project ${projectRefFrom(AppConfig.supabaseUrl)} · tap to test',
+                      'Test the link between this phone and your account',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
                     ),
                     trailing: const Icon(Icons.chevron_right, size: 18),
@@ -516,8 +497,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Settings are stored in app_settings for this account. The website reads the same row, so '
-              'a change here applies there and vice versa.',
+              'These settings belong to your account, so they follow you to any device you sign in on.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
             ),

@@ -11,9 +11,10 @@ presented as working functionality anywhere in the app.
    binaries, so the project cannot be compiled in that sandbox. The build runs on GitHub
    Actions instead — see `PHONE-BUILD.md`. Two CI runs have now executed the real toolchain
    (see `VERIFICATION.md` §"What the CI runs established").
-2. **No Supabase credentials were supplied.** `AppConfig` reads
-   `--dart-define=SUPABASE_URL` / `SUPABASE_ANON_KEY`. Without them the app deliberately
-   shows the configuration screen instead of failing at runtime.
+2. **The project address and public key are now compiled in** (`lib/core/config.dart`), so
+   no build-time values are needed. A `--dart-define` override still exists for a staging
+   copy; a build made with an override that is not the website's project is caught by the
+   release workflow, which fails rather than publishing it.
 3. **The automation account lacks the GitHub `workflows` permission.** A workflow file cannot
    be pushed from the automation branch, so the finished workflow ships as
    `ci/flutter-release.yml` and the repository owner adds the single `.github/workflows/…`
@@ -66,3 +67,16 @@ presented as working functionality anywhere in the app.
     delivered.
 14. **Landscape tables** are capped at 760 dp and scroll; wide tablets use the same
     single-column notebook rather than a different information architecture.
+
+## 4. Features that stay on the web, by design
+
+* **The owner console (`/control-panel/*`)** is not in the app and is no longer advertised
+  there. It needs a second verification step and server-side privileges, and a student's
+  phone must never hold either. The website keeps it.
+* **PDF and DOCX reports.** The website generates real PDF/DOCX with a JavaScript report
+  engine. The app produces the same report as a **printable page** (`Build a study report →
+  Printable report`): open it, then use the phone's own Print → *Save as PDF*. The content
+  (setup, syllabus, tests with subject marks, mistakes by type, study time, weekly goals) is
+  the same; the difference is which program does the typesetting.
+* **Marketing landing page.** The app opens on the notebook, not on the public sales page;
+  "About Stracker" carries the same message in one screen.
