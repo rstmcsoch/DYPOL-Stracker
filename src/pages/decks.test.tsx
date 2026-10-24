@@ -7,7 +7,7 @@ import { defaultExamTracks, defaultSettings } from '../lib/defaults'
 
 const harness = vi.hoisted(() => ({
   data: null as unknown as AppData,
-  upsert: vi.fn(async (_table: string, _record: unknown) => undefined),
+  upsert: vi.fn<(table: string, record: unknown) => Promise<undefined>>(async () => undefined),
   notify: vi.fn()
 }))
 vi.mock('../contexts/DataContext', () => ({
