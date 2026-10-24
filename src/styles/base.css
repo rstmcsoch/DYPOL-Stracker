@@ -82,6 +82,8 @@
   --heat-goal: #bd9b53;
   --heat-border: rgba(90, 100, 85, .13);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Trend 'Overall' series: neutral ink so it never matches a subject colour in any palette. */
+  --chart-overall: var(--ink);
   /* Per-theme tint hues (overridden by styles/themes.css). Derived surfaces,
      borders and on-surface inks follow whichever palette is active. */
   --tint-warm: #c49a46;
@@ -160,7 +162,7 @@
   --paper-muted: #252b27;
   --ink: #ecede4;
   --ink-soft: #c2c9bc;
-  --muted: #a0a89d;
+  --muted: #b2baaf;
   --line: #3c453e;
   --line-strong: #566055;
   --accent: #a9bfdc;
@@ -627,3 +629,24 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .checkpoint-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .checkpoint-logged .quick-test-illustration { color: var(--green, var(--surface-cool-accent)); }
 @media (max-width: 640px) { .checkpoint-actions { flex-direction: column; align-items: stretch; } }
+
+/* Keep the last cards clear of the fixed Ask Stracker + quick-action buttons (desktop and phone). */
+.main-area::after { content: ''; display: block; flex: none; height: calc(96px + var(--safe-bottom)); }
+.focus-app-shell .main-area::after { display: none; }
+.home-focus-clock { font-variant-numeric: tabular-nums; }
+
+/* Chalkboard (dark) readability: hard-coded paper-theme inks swapped for theme tokens. */
+:root[data-theme='dark'] .mistake-stat-note > div:nth-child(2) strong { color: var(--ink); }
+:root[data-theme='dark'] .mistake-stat-note > div:nth-child(2) span,
+:root[data-theme='dark'] .mistake-stat-help p { color: var(--ink-soft); }
+:root[data-theme='dark'] .mistake-stat-help em { color: var(--ink); }
+:root[data-theme='dark'] .mistake-stat-help > svg,
+:root[data-theme='dark'] .mistake-stat-icon { color: var(--ink-soft); }
+:root[data-theme='dark'] .mistake-stat-note:not(.retry-stat) .mistake-stat-icon { background: var(--paper-muted); }
+:root[data-theme='dark'] .mistake-type-chip { color: var(--ink); }
+:root[data-theme='dark'] .mistake-solution span { color: var(--ink-soft); }
+:root[data-theme='dark'] .mistake-delete-button { color: var(--muted); }
+
+/* Analytics: readable fractions on the syllabus card and list. */
+.analytics-kpi .kpi-denominator { font-size: max(1rem, .62em); color: var(--ink-soft); }
+.subject-syllabus-list > div > div:first-child { color: var(--ink-soft); font-size: max(.875rem, calc(12px * var(--body-scale, 1))); }

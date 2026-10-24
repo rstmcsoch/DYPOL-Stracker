@@ -29,6 +29,8 @@ interface DataContextValue {
   data: AppData
   loading: boolean
   syncState: SyncState
+  /** True once this signed-in user's settings came back from the first load/sync (success or a definite failure). */
+  profileLoaded: boolean
   pendingCount: number
   syncError: string | null
   refresh: () => Promise<void>
@@ -211,6 +213,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const userId = user?.id ?? ''
   const [syncState, setSyncState] = useState<SyncState>('loading')
+  // Which user the first load finished for. A new sign-in starts unloaded even if an older
+  // session left syncState at 'synced', so onboarding cannot flash over a stale default.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [undoAvailable, setUndoAvailable] = useState(false)
@@ -302,9 +307,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (!userId) return
     const cloud = supabase
-    if (!supabaseConfigured || !cloud || user?.isLocal) { setSyncState('local'); return }
+    if (!supabaseConfigured || !cloud || user?.isLocal) { setSyncState('local'); setLoadedFor(userId); return }
     if (!navigator.onLine) {
-      setSyncState('offline')
+      setSyncState('offline'); setLoadedFor(userId)
       setSyncError('Offline — showing your previously saved notebook.')
       return
     }
@@ -369,10 +374,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
       queryClient.setQueryData<AppData>(['stracker-data', userId], next)
       await updatePending()
-      setSyncState('synced'); setSyncError(null)
+      setSyncState('synced'); setSyncError(null); setLoadedFor(userId)
     } catch (error) {
       const offline = isNetworkError(error)
-      setSyncState(offline ? 'offline' : 'error')
+      setSyncState(offline ? 'offline' : 'error'); setLoadedFor(userId)
       setSyncError(offline ? 'Offline — your changes are safely stored on this device and will sync when you reconnect.' : 'Could not sync with the cloud. Check your Supabase setup and retry.')
     }
   }, [userId, user, flushQueue, queryClient, updatePending])
@@ -433,7 +438,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             examTracks: base.examTracks.length ? base.examTracks : examTracks
           }
         })
-        setSyncState('local')
+        setSyncState('local'); setLoadedFor(userId)
       } else void refresh()
     }
     void load()
@@ -731,9 +736,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const data = queryData ?? emptyData(userId)
   const value = useMemo<DataContextValue>(() => ({
-    data, loading: query.isLoading, syncState, pendingCount, syncError, refresh,
+    data, loading: query.isLoading, syncState, profileLoaded: Boolean(userId) && loadedFor === userId, pendingCount, syncError, refresh,
     upsert, upsertMany, updateSettings, mergeImportedData, remove, undoDelete, undoAvailable, dismissUndo, saveImage
-  }), [data, query.isLoading, syncState, pendingCount, syncError, refresh, upsert, upsertMany, updateSettings, mergeImportedData, remove, undoDelete, undoAvailable, dismissUndo, saveImage])
+  }), [data, query.isLoading, syncState, loadedFor, userId, pendingCount, syncError, refresh, upsert, upsertMany, updateSettings, mergeImportedData, remove, undoDelete, undoAvailable, dismissUndo, saveImage])
   if (!user) return <>{children}</>
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

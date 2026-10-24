@@ -17,18 +17,18 @@ type SortKey = 'date' | 'score' | 'title'
 type TestFieldErrors = Record<string, string>
 type TestFormValues = {
   title: string; test_date: string; test_type: TestType; subject: Subject | ''; chapter_id: string;
-  marks: string; total: string; correct: string; wrong: string; skipped: string; negative: string; time: string; notes: string;
+  marks: string; total: string; correct: string; wrong: string; skipped: string; questions: string; negative: string; time: string; notes: string;
   mockScores: Record<Subject, { marks: string; total: string }>; jeePattern: JeeFullPattern
 }
 const TEST_TYPES: TestType[] = ['Chapter Test', 'Subject Test', 'Full Mock', 'PYQ Practice']
 const blankValues = (subjects: readonly string[], schemeValue: ReturnType<typeof markingSchemeFor> = null, jeePattern: JeeFullPattern = 'main'): TestFormValues => ({
   title: '', test_date: indiaToday(), test_type: 'Chapter Test', subject: '', chapter_id: '', marks: '', total: '',
-  correct: '', wrong: '', skipped: '', negative: '', time: '', notes: '', jeePattern,
+  correct: '', wrong: '', skipped: '', questions: '', negative: '', time: '', notes: '', jeePattern,
   mockScores: fullMockDefaults(schemeValue, subjects, jeePattern)
 })
 
 const FORM_FIELD_BY_SCHEMA_FIELD: Record<string, string> = {
-  marks_obtained: 'marks', total_marks: 'total', test_date: 'test_date'
+  marks_obtained: 'marks', total_marks: 'total', test_date: 'test_date', total_questions: 'questions'
 }
 
 function displayFieldErrors(issues: readonly { path: PropertyKey[]; message: string }[]): TestFieldErrors {
@@ -121,7 +121,7 @@ export default function TestsPage() {
       title: values.title, test_date: values.test_date, test_type: values.test_type,
       marks_obtained: values.test_type === 'Full Mock' ? null : nullableNumberInput(values.marks),
       total_marks: values.test_type === 'Full Mock' ? null : nullableNumberInput(values.total),
-      correct: nullableNumberInput(values.correct), wrong: nullableNumberInput(values.wrong), skipped: nullableNumberInput(values.skipped),
+      correct: nullableNumberInput(values.correct), wrong: nullableNumberInput(values.wrong), skipped: nullableNumberInput(values.skipped), total_questions: nullableNumberInput(values.questions),
       negative_marks: nullableNumberInput(values.negative), time_minutes: nullableNumberInput(values.time), notes: values.notes.trim()
     })
     const errors: TestFieldErrors = parsed.success ? {} : displayFieldErrors(parsed.error.issues)
@@ -181,7 +181,7 @@ export default function TestsPage() {
       subject: values.subject || selectedChapter?.subject || null, chapter_id: values.chapter_id || null,
       marks_obtained: completeMock ? mockMarks : retainLegacyMockScore ? existingTest?.marks_obtained ?? null : parsed.data.marks_obtained,
       total_marks: completeMock ? mockTotal : retainLegacyMockScore ? existingTest?.total_marks ?? null : parsed.data.total_marks,
-      correct: parsed.data.correct, wrong: parsed.data.wrong, skipped: parsed.data.skipped,
+      correct: parsed.data.correct, wrong: parsed.data.wrong, skipped: parsed.data.skipped, total_questions: parsed.data.total_questions ?? null,
       negative_marks: parsed.data.negative_marks, time_minutes: parsed.data.time_minutes, notes: parsed.data.notes,
       created_at: existingTest?.created_at ?? now, updated_at: now
     }
@@ -310,7 +310,7 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
     return {
       ...base, title: initial.title, test_date: initial.test_date, test_type: initial.test_type, subject: initial.subject ?? '', chapter_id: initial.chapter_id ?? '',
       marks: initial.marks_obtained?.toString() ?? '', total: initial.total_marks?.toString() ?? '', correct: initial.correct?.toString() ?? '',
-      wrong: initial.wrong?.toString() ?? '', skipped: initial.skipped?.toString() ?? '', negative: initial.negative_marks?.toString() ?? '',
+      wrong: initial.wrong?.toString() ?? '', skipped: initial.skipped?.toString() ?? '', questions: initial.total_questions?.toString() ?? '', negative: initial.negative_marks?.toString() ?? '',
       time: initial.time_minutes?.toString() ?? '', notes: initial.notes, mockScores: scores
     }
   })
@@ -377,6 +377,7 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
         const totalErrorId = `mock-${subject.toLowerCase()}-total-error`
         return <div className={`mock-score-entry mock-${subject.toLowerCase()} ${marksError || totalError ? 'has-error' : ''}`} key={subject}><SubjectBadge subject={subject} /><div><input type="number" min="0" max={subjectScoreMax(part.total)} step="0.5" aria-label={`${subject} marks`} aria-invalid={marksError ? 'true' : undefined} aria-describedby={marksError ? marksErrorId : undefined} placeholder="Marks" value={part.marks} onChange={event => patchScore(subject, 'marks', event.target.value)} /><span>/</span><input type="number" min="1" max={MAX_TOTAL_MARKS} step="1" aria-label={`${subject} total marks`} aria-invalid={totalError ? 'true' : undefined} aria-describedby={totalError ? totalErrorId : undefined} placeholder="Total" value={part.total} onChange={event => patchScore(subject, 'total', event.target.value)} /></div>{marksError && <span className="field-error mock-score-error" id={marksErrorId} role="alert">{marksError}</span>}{totalError && <span className="field-error mock-score-error" id={totalErrorId} role="alert">{totalError}</span>}</div>
       })}</div></div> : <div className="form-grid two"><Field label="Marks obtained" error={errors.marks}><input type="number" min="0" max={subjectScoreMax(values.total)} step="0.5" value={values.marks} onChange={event => patch('marks', event.target.value)} placeholder="Leave blank if unknown" /></Field><Field label="Total marks" error={errors.total}><input type="number" min="1" max={MAX_TOTAL_MARKS} step="1" value={values.total} onChange={event => patch('total', event.target.value)} placeholder="e.g. 120" /></Field></div>}
+      <Field label="Total questions (optional)" error={errors.questions} hint="Correct + wrong + skipped must fit within this."><input type="number" min="1" max={100000} step="1" value={values.questions} onChange={event => patch('questions', event.target.value)} placeholder="e.g. 50" aria-invalid={errors.questions ? true : undefined} /></Field>
       <div className="form-grid three"><Field label="Correct" error={errors.correct}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.correct} onChange={event => patch('correct', event.target.value)} placeholder="—" /></Field><Field label="Wrong" error={errors.wrong}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.wrong} onChange={event => patch('wrong', event.target.value)} placeholder="—" /></Field><Field label="Skipped" error={errors.skipped}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.skipped} onChange={event => patch('skipped', event.target.value)} placeholder="—" /></Field></div>
       <div className="form-grid two"><Field label="Negative marks" error={errors.negative_marks}><input type="number" min="0" max={MAX_NEGATIVE_MARKS} step="0.25" value={values.negative} onChange={event => patch('negative', event.target.value)} placeholder="No estimate" /></Field><Field label="Time taken (minutes)" error={errors.time_minutes}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.time} onChange={event => patch('time', event.target.value)} placeholder="Optional" /></Field></div>
       <Field label="Notes" error={errors.notes}><textarea rows={3} maxLength={10_000} value={values.notes} onChange={event => patch('notes', event.target.value)} placeholder="What felt easy? What deserves another look?" /></Field>
@@ -398,7 +399,7 @@ function TestDetails({ test, onClose, onEdit }: { test: TestRecord; onClose: () 
   return <Dialog title={test.title} subtitle={`${test.test_type} · ${prettyDate(test.test_date)}`} onClose={onClose}>
     <div className="test-detail-content"><div className="test-detail-badges">{test.test_type === 'Full Mock' ? <StatusBadge tone="muted">All subjects</StatusBadge> : <SubjectBadge subject={test.subject} />}<StatusBadge>{test.test_type}</StatusBadge>{chapter && <StatusBadge tone="muted">{chapter.name}</StatusBadge>}</div>
       {test.test_type === 'Full Mock' ? <><div className="detail-score-box"><strong>{overallScore ? parentScoreLabel : scores.length ? 'Overall result incomplete' : parentScoreLabel}</strong><span>{overallPercentage === null ? scores.length ? 'A comparable percentage needs valid marks and totals for every subject score.' : parentResultMessage : `${Math.round(overallPercentage)}% of combined subject totals`}</span></div>{subjectRows}</> : subjectRows ?? <div className="detail-score-box"><strong>{parentScoreLabel}</strong><span>{overallPercentage === null ? parentResultMessage : `${Math.round(overallPercentage)}% of total marks`}</span></div>}
-      <div className="test-detail-facts">{[['Correct', test.correct], ['Wrong', test.wrong], ['Skipped', test.skipped], ['Negative marks', test.negative_marks], ['Time taken', test.time_minutes == null ? null : `${test.time_minutes} min`]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value ?? '—'}</strong></div>)}</div>
+      <div className="test-detail-facts">{[['Correct', test.correct], ['Wrong', test.wrong], ['Skipped', test.skipped], ['Total questions', test.total_questions ?? null], ['Negative marks', test.negative_marks], ['Time taken', test.time_minutes == null ? null : `${test.time_minutes} min`]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value ?? '—'}</strong></div>)}</div>
       {test.notes && <div className="test-detail-notes"><span className="eyebrow">AFTER-TEST NOTES</span><p>{test.notes}</p></div>}
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Close</Button><Button onClick={onEdit}>Edit record</Button></div>
     </div>

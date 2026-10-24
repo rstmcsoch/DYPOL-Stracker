@@ -172,3 +172,13 @@ export function shouldSeedJeeSyllabus(settings: Pick<AppSettings, 'exam_id' | 'o
 export function needsOnboarding(settings: Pick<AppSettings, 'onboarding_completed' | 'exam_id'>): boolean {
   return settings.onboarding_completed !== true && !settings.exam_id
 }
+
+/**
+ * Whether the first-run overlay may show. It waits until this user's settings have really
+ * loaded (not the empty default a fresh sign-in starts with), and once shown it stays up.
+ */
+export function shouldShowOnboarding(input: { needed: boolean; loading: boolean; profileLoaded: boolean; syncState: string; alreadyShown: boolean }): boolean {
+  if (!input.needed) return false
+  if (input.alreadyShown) return true
+  return !input.loading && input.profileLoaded && input.syncState !== 'loading' && input.syncState !== 'syncing'
+}

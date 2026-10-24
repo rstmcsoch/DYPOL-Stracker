@@ -77,4 +77,14 @@ void main() {
     expect(withTopic.topic, 'Gauss’s law');
     expect(withTopic.copyWith(isCompleted: true).toMap()['topic'], 'Gauss’s law');
   });
+
+  test('question counts never exceed the test total', () {
+    expect(Validators.questionCounts(30, 30, 30, 50), contains('(90)'));
+    expect(Validators.questionCounts(30, 15, 5, 50), isNull);
+    expect(Validators.questionCounts(30, 30, 30, null), isNull);
+    expect(Validators.questionCounts(null, null, null, 0), isNotNull);
+    final TestRecord test = TestRecord.fromMap(<String, dynamic>{'id': 't', 'title': 'T', 'total_questions': 50});
+    expect(test.totalQuestions, 50);
+    expect(test.toMap()['total_questions'], 50);
+  });
 }

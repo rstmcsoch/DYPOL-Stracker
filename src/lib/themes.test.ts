@@ -150,8 +150,9 @@ describe('captions stay readable on every surface (WCAG AA, including Chalkboard
   it('muted and text-muted captions reach 4.5:1 on paper, paper-soft, paper-muted and bg', () => {
     const problems: string[] = []
     for (const [label, palette] of palettes) {
-      for (const fg of ['muted', 'text-muted', 'ink-soft']) {
-        for (const bg of ['paper', 'paper-soft', 'paper-muted', 'bg']) {
+      for (const fg of ['muted', 'text-muted', 'ink-soft', 'ink']) {
+        for (const bg of ['paper', 'paper-soft', 'paper-muted', 'bg', 'subject-physics-bg', 'subject-chemistry-bg', 'red-bg', 'orange-bg', 'accent-light']) {
+          if ((fg === 'muted' || fg === 'text-muted') && bg.endsWith('-bg')) continue
           const a = palette[fg]; const b = palette[bg]
           if (!a || !b) continue
           const ratio = contrast(a, b)
@@ -161,6 +162,12 @@ describe('captions stay readable on every surface (WCAG AA, including Chalkboard
     }
     expect(defaultDark.muted, 'Chalkboard defines a caption colour').toBeTruthy()
     expect(problems).toEqual([])
+  })
+
+  it('Chalkboard Mistakes text uses theme tokens, and the Overall trend line has its own colour', () => {
+    expect(baseCss).toMatch(/:root\[data-theme='dark'\] \.mistake-stat-note > div:nth-child\(2\) strong \{ color: var\(--ink\); \}/)
+    expect(baseCss).toMatch(/:root\[data-theme='dark'\] \.mistake-type-chip \{ color: var\(--ink\); \}/)
+    expect(baseCss).toMatch(/--chart-overall: var\(--ink\);/)
   })
 
   it('caption rules do not fade text with opacity', () => {

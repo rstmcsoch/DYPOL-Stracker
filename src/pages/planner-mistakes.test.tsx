@@ -54,6 +54,33 @@ describe('Planner topic / subtopic', () => {
   })
 })
 
+describe('Planner QA round 2', () => {
+  it('shows a live x/120 counter and a warning at the limit', async () => {
+    harness.data = baseData()
+    const { default: PlannerPage } = await import('./PlannerPage')
+    renderAt(<PlannerPage />, '/planner')
+    fireEvent.click(screen.getAllByRole('button', { name: /Add task/ })[0]!)
+    const dialog = screen.getByRole('dialog')
+    const topic = within(dialog).getByLabelText(/Topic \/ subtopic/)
+    expect(topic.getAttribute('maxlength')).toBe('120')
+    fireEvent.change(topic, { target: { value: 'Gauss' } })
+    expect(within(dialog).getByText(/5\/120/)).toBeTruthy()
+    fireEvent.change(topic, { target: { value: 'x'.repeat(120) } })
+    expect(within(dialog).getByText(/120\/120 characters — limit reached/)).toBeTruthy()
+  })
+
+  it('groups chapters by subject when the subject is General', async () => {
+    harness.data = baseData()
+    const { default: PlannerPage } = await import('./PlannerPage')
+    renderAt(<PlannerPage />, '/planner')
+    fireEvent.click(screen.getAllByRole('button', { name: /Add task/ })[0]!)
+    const dialog = screen.getByRole('dialog')
+    const chapterSelect = within(dialog).getByLabelText(/^Chapter/) as HTMLSelectElement
+    const groups = [...chapterSelect.querySelectorAll('optgroup')].map(group => [group.label, [...group.querySelectorAll('option')].map(option => option.textContent)])
+    expect(groups).toEqual([['Physics', ['Electrostatics']], ['Chemistry', ['Mole Concept']]])
+  })
+})
+
 describe('Mistake dialog Subject → Chapter', () => {
   it('only lists chapters of the chosen subject and resets the chapter when the subject changes', async () => {
     harness.data = baseData()

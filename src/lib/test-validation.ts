@@ -22,10 +22,15 @@ export const testFormSchema = z.object({
   correct: countSchema,
   wrong: countSchema,
   skipped: countSchema,
+  total_questions: z.number().finite().int().min(1, 'Total questions must be at least 1.').max(100_000, 'Total questions can be at most 100,000.').nullable().optional(),
   negative_marks: negativeMarksSchema,
   time_minutes: timeMinutesSchema,
   notes: z.string().max(10_000, 'Notes can be at most 10,000 characters.')
 }).superRefine((value, context) => {
+  const answered = (value.correct ?? 0) + (value.wrong ?? 0) + (value.skipped ?? 0)
+  if (value.total_questions != null && answered > value.total_questions) {
+    context.addIssue({ code: 'custom', path: ['total_questions'], message: `Correct + wrong + skipped (${answered}) can’t be more than the ${value.total_questions} questions in this test.` })
+  }
   if (value.marks_obtained != null && value.total_marks == null) {
     context.addIssue({ code: 'custom', path: ['total_marks'], message: 'Add a positive whole-number total to record a score.' })
   }

@@ -6,7 +6,7 @@ import '../../logic/focus.dart';
 import '../shell/routes.dart';
 import 'focus_controller.dart';
 
-/// "Focus in progress · 18 min · Resume" on Home while a block is running or paused
+/// "Focus in progress · 18:05 · Resume" on Home while a block is running or paused
 /// with unsaved time, so leaving the Focus screen never hides or loses a block.
 class FocusIndicator extends ConsumerWidget {
   const FocusIndicator({super.key});
@@ -17,13 +17,16 @@ class FocusIndicator extends ConsumerWidget {
     final DateTime now = DateTime.now();
     if (!timer.running && !timer.hasUnsavedAt(now)) return const SizedBox.shrink();
     final StrackerColors colors = context.stracker;
-    final int minutes = timer.elapsedAt(now) ~/ 60;
-    final String label = '${timer.running ? 'Focus in progress' : 'Focus paused'} · $minutes min';
+    // mm:ss from the controller's single ticker (it rebuilds this every second while running).
+    final int elapsed = timer.elapsedAt(now);
+    final String status = timer.running ? 'Focus in progress' : 'Focus paused';
+    final String label = '$status · ${focusClock(elapsed)}';
+    final int minutes = elapsed ~/ 60;
+    final String spoken = '$status, $minutes ${minutes == 1 ? 'minute' : 'minutes'} ${elapsed % 60} seconds';
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Semantics(
-        liveRegion: true,
-        label: label,
+        label: spoken,
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
           decoration: BoxDecoration(

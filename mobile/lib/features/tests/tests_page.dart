@@ -245,6 +245,7 @@ Future<void> openTestEditor(
   final TextEditingController correct = TextEditingController(text: test?.correct?.toString() ?? '');
   final TextEditingController wrong = TextEditingController(text: test?.wrong?.toString() ?? '');
   final TextEditingController skipped = TextEditingController(text: test?.skipped?.toString() ?? '');
+  final TextEditingController totalQuestions = TextEditingController(text: test?.totalQuestions?.toString() ?? '');
   final TextEditingController notes = TextEditingController(text: test?.notes ?? '');
   final TextEditingController timeMinutes =
       TextEditingController(text: test?.timeMinutes?.toString() ?? '');
@@ -407,6 +408,12 @@ Future<void> openTestEditor(
             ],
           ),
           AppField(
+            label: 'Total questions (optional)',
+            controller: totalQuestions,
+            keyboardType: TextInputType.number,
+            inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+          ),
+          AppField(
             label: 'Time taken (minutes)',
             controller: timeMinutes,
             keyboardType: TextInputType.number,
@@ -423,7 +430,13 @@ Future<void> openTestEditor(
                   marks.text.trim().isEmpty ? null : double.tryParse(marks.text.trim());
               final double? totalValue =
                   total.text.trim().isEmpty ? null : double.tryParse(total.text.trim());
-              final String? pairError = Validators.scorePair(marksValue, totalValue);
+              final String? pairError = Validators.scorePair(marksValue, totalValue) ??
+                  Validators.questionCounts(
+                    int.tryParse(correct.text.trim()),
+                    int.tryParse(wrong.text.trim()),
+                    int.tryParse(skipped.text.trim()),
+                    int.tryParse(totalQuestions.text.trim()),
+                  );
               setSheetState(() => scoreError = pairError);
               if (title.text.trim().isEmpty || pairError != null) {
                 if (title.text.trim().isEmpty) {
@@ -445,6 +458,7 @@ Future<void> openTestEditor(
                 correct: int.tryParse(correct.text.trim()),
                 wrong: int.tryParse(wrong.text.trim()),
                 skipped: int.tryParse(skipped.text.trim()),
+                totalQuestions: int.tryParse(totalQuestions.text.trim()),
                 negativeMarks: test?.negativeMarks,
                 timeMinutes: int.tryParse(timeMinutes.text.trim()),
                 notes: notes.text,
@@ -534,6 +548,7 @@ Future<void> openTestEditor(
   correct.dispose();
   wrong.dispose();
   skipped.dispose();
+  totalQuestions.dispose();
   notes.dispose();
   timeMinutes.dispose();
   for (final TextEditingController controller in subjectMarks.values) {
