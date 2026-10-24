@@ -142,16 +142,18 @@ class _RetryTile extends ConsumerWidget {
             ),
             const SizedBox(height: 6),
             Text(mistake.questionNote, style: Theme.of(context).textTheme.bodyMedium),
-            if (mistake.solutionNote.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  mistake.solutionNote,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: context.stracker.muted,
-                      ),
-                ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                mistake.solutionNote.trim().isNotEmpty
+                    ? mistake.solutionNote
+                    : 'No note saved for this one yet. Edit it in Mistakes to add what you’ll remember.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.stracker.muted,
+                      fontStyle: mistake.solutionNote.trim().isEmpty ? FontStyle.italic : null,
+                    ),
               ),
+            ),
             const SizedBox(height: 6),
             Row(
               children: <Widget>[

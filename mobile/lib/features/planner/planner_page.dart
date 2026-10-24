@@ -234,6 +234,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
                 title: task.title,
                 subject: task.subject,
                 chapterId: task.chapterId,
+                topic: task.topic,
                 estimatedMinutes: task.estimatedMinutes,
                 priority: task.priority,
                 taskDate: _date,
@@ -298,6 +299,7 @@ class _TaskTile extends ConsumerWidget {
                           minutesLabel(task.estimatedMinutes),
                           '${task.priority} priority',
                           if (task.chapterId != null) data.chapterName(task.chapterId),
+                          if ((task.topic ?? '').isNotEmpty) task.topic!,
                         ].join(' · '),
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
                       ),
@@ -345,6 +347,7 @@ Future<void> openTaskEditor(
   String priority = task?.priority ?? 'Medium';
   String? subject = task?.subject;
   String? chapterId = task?.chapterId;
+  final TextEditingController topic = TextEditingController(text: task?.topic ?? '');
   String taskDate = task?.taskDate ?? date;
   String? titleError;
   String? minutesError;
@@ -385,6 +388,12 @@ Future<void> openTaskEditor(
             labelFor: (String? value) => value == null ? 'No chapter' : data.chapterName(value),
             onChanged: (String? value) => setSheetState(() => chapterId = value),
           ),
+          AppField(
+            label: 'Topic / subtopic (optional)',
+            controller: topic,
+            maxLength: 120,
+            hint: 'e.g. Gauss’s law',
+          ),
           Row(
             children: <Widget>[
               Expanded(
@@ -421,6 +430,7 @@ Future<void> openTaskEditor(
                 title: title.text.trim(),
                 subject: subject,
                 chapterId: chapterId,
+                topic: topic.text.trim().isEmpty ? null : topic.text.trim(),
                 estimatedMinutes: int.tryParse(minutes.text.trim()) ?? 30,
                 priority: priority,
                 isCompleted: task?.isCompleted ?? false,
@@ -445,6 +455,7 @@ Future<void> openTaskEditor(
   );
   title.dispose();
   minutes.dispose();
+  topic.dispose();
 }
 
 Future<void> openGoalEditor(

@@ -255,7 +255,16 @@ Future<void> openPracticeEditor(
   Chapter selected = data.chapter(session?.chapterId) ?? data.chapters.first;
   final TextEditingController attempted = TextEditingController(text: session?.attempted.toString() ?? '');
   final TextEditingController correct = TextEditingController(text: session?.correct.toString() ?? '');
-  final TextEditingController incorrect = TextEditingController(text: session?.incorrect.toString() ?? '');
+  // Incorrect is read-only and always attempted − correct.
+  final TextEditingController incorrect = TextEditingController();
+  void syncIncorrect() {
+    final int? value = Validators.derivedIncorrect(attempted.text, correct.text);
+    final String text = value?.toString() ?? '';
+    if (incorrect.text != text) incorrect.text = text;
+  }
+  syncIncorrect();
+  attempted.addListener(syncIncorrect);
+  correct.addListener(syncIncorrect);
   final TextEditingController minutes = TextEditingController(
     text: session?.timeMinutes?.toString() ?? '',
   );
@@ -341,8 +350,8 @@ Future<void> openPracticeEditor(
                 child: AppField(
                   label: 'Incorrect',
                   controller: incorrect,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+                  enabled: false,
+                  helper: 'Attempted − correct',
                 ),
               ),
             ],
@@ -366,15 +375,12 @@ Future<void> openPracticeEditor(
             onPressed: () async {
               final int attemptedValue = int.tryParse(attempted.text.trim()) ?? -1;
               final int correctValue = int.tryParse(correct.text.trim()) ?? -1;
-              final int incorrectValue = incorrect.text.trim().isEmpty
-                  ? 0
-                  : (int.tryParse(incorrect.text.trim()) ?? -1);
-              final String? countError =
-                  Validators.practiceCounts(
+              final String? countError = Validators.practiceCorrect(
                 attempted: attemptedValue,
                 correct: correctValue.clamp(0, 1 << 31),
-                incorrect: incorrectValue.clamp(0, 1 << 31),
               );
+              final int incorrectValue =
+                  countError == null && correctValue >= 0 ? attemptedValue - correctValue : 0;
               setSheetState(() {
                 attemptedError = attemptedValue < 0 ? 'Enter the attempted count.' : null;
                 countsError = correctValue < 0 ? 'Enter the correct count.' : countError;

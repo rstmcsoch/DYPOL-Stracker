@@ -150,7 +150,7 @@ function PlannerTaskRow({ task, chapter, dragged, onToggle, onEdit, onDuplicate,
 }) {
   return <article className={`planner-task-row ${task.is_completed ? 'task-done' : ''} ${dragged ? 'task-dragging' : ''}`} draggable onDragStart={onDragStart} onDragEnd={onDragEnd} onDrop={event => { event.preventDefault(); onDrop() }} onDragOver={event => event.preventDefault()}>
     <span className="planner-task-grip"><GripVertical size={16} /></span><button className="task-check" onClick={onToggle} aria-label={task.is_completed ? `Mark ${task.title} incomplete` : `Complete ${task.title}`} aria-pressed={task.is_completed}><Check size={14} /></button>
-    <div className="planner-task-copy"><strong>{task.title}</strong><div className="planner-task-meta">{task.subject && <SubjectBadge subject={task.subject} />}{chapter && <span>{chapter.name}</span>}<span><Clock3 size={12} /> {fmtDuration(task.estimated_minutes)}</span><span className={`priority-label label-${task.priority.toLowerCase()}`}>{task.priority}</span></div></div>
+    <div className="planner-task-copy"><strong>{task.title}</strong><div className="planner-task-meta">{task.subject && <SubjectBadge subject={task.subject} />}{chapter && <span>{chapter.name}</span>}{task.topic && <span className="planner-task-topic">{task.topic}</span>}<span><Clock3 size={12} /> {fmtDuration(task.estimated_minutes)}</span><span className={`priority-label label-${task.priority.toLowerCase()}`}>{task.priority}</span></div></div>
     <div className="planner-task-tools"><button onClick={() => onMove(-1)} aria-label="Move task up" title="Move up"><ArrowUp size={14} /></button><button onClick={() => onMove(1)} aria-label="Move task down" title="Move down"><ArrowDown size={14} /></button><button onClick={onDuplicate} aria-label="Duplicate task" title="Duplicate"><Copy size={14} /></button><button onClick={onEdit} aria-label="Edit or reschedule task" title="Edit"><ChevronDown size={14} /></button><button onClick={onDelete} aria-label="Delete task" title="Delete"><Trash2 size={14} /></button></div>
   </article>
 }
@@ -163,6 +163,7 @@ function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: 
   const [title, setTitle] = useState(initial?.title ?? '')
   const [subject, setSubject] = useState<Subject | ''>(initial?.subject ?? '')
   const [chapterId, setChapterId] = useState(initial?.chapter_id ?? '')
+  const [topic, setTopic] = useState(initial?.topic ?? '')
   const [minutes, setMinutes] = useState(String(initial?.estimated_minutes ?? 30))
   const [priority, setPriority] = useState<Priority>(initial?.priority ?? 'Medium')
   const [date, setDate] = useState(initial?.task_date ?? defaultDate)
@@ -173,7 +174,7 @@ function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (savingRef.current) return
-    const parsed = taskInputSchema.safeParse({ title: title.trim(), estimated_minutes: minutes.trim() === '' ? null : Number(minutes), task_date: date })
+    const parsed = taskInputSchema.safeParse({ title: title.trim(), topic: topic.trim() || null, estimated_minutes: minutes.trim() === '' ? null : Number(minutes), task_date: date })
     if (!parsed.success) {
       const next: Record<string, string> = {}
       for (const issue of parsed.error.issues) next[String(issue.path[0] ?? 'form')] ??= issue.message
@@ -192,7 +193,7 @@ function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: 
     savingRef.current = true
     setSaving(true)
     const task: DailyTask = {
-      id: taskId, title: parsed.data.title, subject: subject || null, chapter_id: chapterId || null,
+      id: taskId, title: parsed.data.title, subject: subject || null, chapter_id: chapterId || null, topic: parsed.data.topic ?? null,
       estimated_minutes: parsed.data.estimated_minutes, priority, is_completed: initial?.is_completed ?? false,
       task_date: parsed.data.task_date, position: initial?.position ?? data.tasks.filter(item => item.task_date === date).length,
       created_at: initial?.created_at ?? now, updated_at: now
@@ -204,6 +205,7 @@ function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: 
     <form className="form-stack" noValidate onSubmit={submit}><Field label="Task" required error={errors.title}><input autoFocus required maxLength={200} value={title} onChange={event => { setTitle(event.target.value); clearError('title') }} placeholder="e.g. Practice 15 integration problems" /></Field>
       <div className="form-grid two"><Field label="Date" error={errors.task_date}><input type="date" required value={date} onChange={event => { setDate(event.target.value); clearError('task_date') }} /></Field><Field label="Estimated minutes" error={errors.estimated_minutes}><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => { setMinutes(event.target.value); clearError('estimated_minutes') }} /></Field></div>
       <div className="form-grid three"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{taskSubjects.map(item => <option key={item}>{item}</option>)}</select></Field><Field label="Chapter" error={errors.chapter_id}><select value={chapterId} onChange={event => { setChapterId(event.target.value); clearError('chapter_id') }}><option value="">None</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field><Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
+      <Field label="Topic / subtopic" hint="Optional — e.g. Gauss’s law, or Integration by parts." error={errors.topic}><input maxLength={120} value={topic} onChange={event => { setTopic(event.target.value); clearError('topic') }} placeholder="Optional" /></Field>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button><Button type="submit" loading={saving}>{initial ? 'Save task' : 'Add task'}</Button></div>
     </form>
   </Dialog>

@@ -219,8 +219,9 @@ function PracticeDialog({ data, initialChapterId = '', existing, onClose, onSave
   }
   const attempted = Number(form.attempted)
   const correct = Number(form.correct)
-  const accuracy = attempted > 0 && Number.isFinite(correct) && form.correct !== '' ? (correct / attempted) * 100 : null
-  return <Dialog title={existing ? 'Edit practice block' : 'Log practice'} subtitle="Correct + incorrect can’t exceed attempted." onClose={onClose} className="jee-dialog">
+  const accuracy = attempted > 0 && Number.isFinite(correct) && form.correct !== '' && correct <= attempted ? (correct / attempted) * 100 : null
+  const derivedIncorrect = form.attempted.trim() !== '' && form.correct.trim() !== '' && Number.isInteger(attempted) && Number.isInteger(correct) && correct >= 0 && correct <= attempted ? String(attempted - correct) : ''
+  return <Dialog title={existing ? 'Edit practice block' : 'Log practice'} subtitle="Incorrect is worked out for you: attempted − correct." onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <div className="form-grid two">
         <SubjectSelect value={subject} onChange={value => { setSubject(value as Subject | 'all'); set('chapterId', '') }} allowAll label="Subject filter" />
@@ -231,7 +232,7 @@ function PracticeDialog({ data, initialChapterId = '', existing, onClose, onSave
       <div className="form-grid three">
         <Field label="Attempted" error={errors.attempted} required><input inputMode="numeric" value={form.attempted} onChange={event => set('attempted', event.target.value)} placeholder="120" /></Field>
         <Field label="Correct" error={errors.correct} required><input inputMode="numeric" value={form.correct} onChange={event => set('correct', event.target.value)} placeholder="92" /></Field>
-        <Field label="Incorrect" error={errors.incorrect} required><input inputMode="numeric" value={form.incorrect} onChange={event => set('incorrect', event.target.value)} placeholder="28" /></Field>
+        <Field label="Incorrect" hint="Attempted − correct"><input inputMode="numeric" value={derivedIncorrect} readOnly aria-readonly="true" tabIndex={-1} placeholder="—" className="jee-derived-input" /></Field>
       </div>
       <div className="form-grid two">
         <Field label="Source"><select value={form.source} onChange={event => set('source', event.target.value)}>{PRACTICE_SOURCES.map(item => <option key={item} value={item}>{item}</option>)}</select></Field>

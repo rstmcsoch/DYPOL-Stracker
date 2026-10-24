@@ -301,7 +301,11 @@ Future<void> openMistakeEditor(
   final TextEditingController question = TextEditingController(text: mistake?.questionNote ?? '');
   final TextEditingController solution = TextEditingController(text: mistake?.solutionNote ?? '');
   String type = mistake?.mistakeType ?? mistakeTypes.first;
-  String chapterId = mistake?.chapterId ?? data.chapters.first.id;
+  String? chapterId = mistake?.chapterId;
+  String? subject = data.chapter(chapterId)?.subject;
+  final List<String> subjects = data.subjects
+      .where((String name) => data.chapters.any((Chapter chapter) => chapter.subject == name))
+      .toList();
   String? testId = mistake?.testId;
   bool retryLater = mistake?.retryLater ?? true;
   String retryStatus = mistake?.retryStatus ?? 'pending';
@@ -321,12 +325,30 @@ Future<void> openMistakeEditor(
             items: mistakeTypes,
             onChanged: (String? value) => setSheetState(() => type = value ?? type),
           ),
-          AppSelect<String>(
+          AppSelect<String?>(
+            label: 'Subject',
+            value: subject,
+            items: <String?>[null, ...subjects],
+            labelFor: (String? value) => value ?? 'Choose a subject',
+            onChanged: (String? value) => setSheetState(() {
+              if (value == subject) return;
+              subject = value;
+              chapterId = null;
+            }),
+          ),
+          AppSelect<String?>(
             label: 'Chapter',
             value: chapterId,
-            items: <String>[for (final Chapter chapter in data.chapters) chapter.id],
-            labelFor: (String id) => data.chapterName(id),
-            onChanged: (String? value) => setSheetState(() => chapterId = value ?? chapterId),
+            enabled: subject != null,
+            items: <String?>[
+              null,
+              for (final Chapter chapter in data.chapters)
+                if (chapter.subject == subject) chapter.id,
+            ],
+            labelFor: (String? id) => id == null
+                ? (subject == null ? 'Pick a subject first' : 'Choose a chapter')
+                : data.chapterName(id),
+            onChanged: (String? value) => setSheetState(() => chapterId = value),
           ),
           AppSelect<String?>(
             label: 'From a test (optional)',
@@ -391,10 +413,15 @@ Future<void> openMistakeEditor(
                 setSheetState(() => error = 'Describe the question.');
                 return;
               }
+              final Chapter? chosen = data.chapter(chapterId);
+              if (subject == null || chosen == null || chosen.subject != subject) {
+                setSheetState(() => error = 'Choose a subject, then one of its chapters.');
+                return;
+              }
               final Mistake next = Mistake(
                 id: mistake?.id ?? newId(),
                 userId: data.userId,
-                chapterId: chapterId,
+                chapterId: chosen.id,
                 testId: testId,
                 mistakeType: type,
                 questionNote: question.text,

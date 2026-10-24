@@ -1246,6 +1246,7 @@ class DailyTask {
     required this.title,
     this.subject,
     this.chapterId,
+    this.topic,
     this.estimatedMinutes = 30,
     this.priority = 'Medium',
     this.isCompleted = false,
@@ -1260,6 +1261,9 @@ class DailyTask {
   final String title;
   final String? subject;
   final String? chapterId;
+
+  /// Optional topic / subtopic. Null on older rows.
+  final String? topic;
   final int estimatedMinutes;
   final String priority;
   final bool isCompleted;
@@ -1274,6 +1278,7 @@ class DailyTask {
         title: _str(raw['title']),
         subject: _strOrNull(raw['subject']),
         chapterId: _strOrNull(raw['chapter_id']),
+        topic: _strOrNull(raw['topic']),
         estimatedMinutes: _int(raw['estimated_minutes'], 30),
         priority: _str(raw['priority'], 'Medium'),
         isCompleted: _bool(raw['is_completed']),
@@ -1289,6 +1294,7 @@ class DailyTask {
         'title': title,
         'subject': subject,
         'chapter_id': chapterId,
+        'topic': topic,
         'estimated_minutes': estimatedMinutes,
         'priority': priority,
         'is_completed': isCompleted,
@@ -1302,6 +1308,7 @@ class DailyTask {
         title: title ?? this.title,
         subject: subject,
         chapterId: chapterId,
+        topic: topic,
         estimatedMinutes: estimatedMinutes ?? this.estimatedMinutes,
         priority: priority,
         isCompleted: isCompleted ?? this.isCompleted,
