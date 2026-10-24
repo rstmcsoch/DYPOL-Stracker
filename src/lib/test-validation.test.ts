@@ -66,3 +66,16 @@ describe('test numeric validation', () => {
     expect(testFormSchema.safeParse({ ...validTest, time_minutes: -1 }).success).toBe(false)
   })
 })
+
+describe('question counts fit the test', () => {
+  it('blocks correct + wrong + skipped above the total questions', () => {
+    const result = testFormSchema.safeParse({ ...validTest, total_questions: 50, correct: 30, wrong: 30, skipped: 30 })
+    expect(result.success).toBe(false)
+    expect(result.error?.issues.map(issue => [issue.path[0], issue.message])).toEqual([['total_questions', 'Correct + wrong + skipped (90) can’t be more than the 50 questions in this test.']])
+  })
+  it('accepts counts that fit, and old tests with no question count', () => {
+    expect(testFormSchema.safeParse({ ...validTest, total_questions: 50, correct: 30, wrong: 15, skipped: 5 }).success).toBe(true)
+    expect(testFormSchema.safeParse({ ...validTest, correct: 30, wrong: 30, skipped: 30 }).success).toBe(true)
+    expect(testFormSchema.safeParse({ ...validTest, total_questions: 0 }).success).toBe(false)
+  })
+})

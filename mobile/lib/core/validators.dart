@@ -126,6 +126,17 @@ class Validators {
     return null;
   }
 
+  /// Correct + wrong + skipped can never be more than the test's question count.
+  static String? questionCounts(int? correct, int? wrong, int? skipped, int? totalQuestions) {
+    if (totalQuestions == null) return null;
+    if (totalQuestions < 1) return 'Total questions must be at least 1.';
+    final int answered = (correct ?? 0) + (wrong ?? 0) + (skipped ?? 0);
+    if (answered > totalQuestions) {
+      return 'Correct + wrong + skipped ($answered) can’t be more than the $totalQuestions questions in this test.';
+    }
+    return null;
+  }
+
   /// Score sanity shared by tests, subject scores and chapter links.
   static String? scorePair(double? obtained, double? total) {
     if (obtained != null && total == null) {

@@ -22,7 +22,7 @@ import type { SiteValues } from '../lib/site-content/content'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
 import { chosenExamTitle, isJeeSettings } from '../lib/jee/exam'
 import { OnboardingDialog } from './OnboardingDialog'
-import { needsOnboarding } from '../lib/defaults'
+import { needsOnboarding, shouldShowOnboarding } from '../lib/defaults'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
 interface NavigationGroup { caption: string; items: NavigationItem[] }
@@ -79,7 +79,7 @@ function currentNavLabel(pathname: string, values: SiteValues): string | undefin
 export function AppFrame() {
   const siteValues = useSiteValues()
   const { user } = useAuth()
-  const { data, loading, syncState, pendingCount, syncError, refresh, undoAvailable, undoDelete, dismissUndo } = useData()
+  const { data, loading, syncState, profileLoaded, pendingCount, syncError, refresh, undoAvailable, undoDelete, dismissUndo } = useData()
   const { notify } = useToast()
   const navigate = useNavigate()
   const location = useLocation()
@@ -100,10 +100,9 @@ export function AppFrame() {
   // First-run setup waits for the first sync so a stale device cache never flashes it, then
   // stays up (even through later sync states) until the student completes it.
   const onboardingNeeded = needsOnboarding(data.settings)
-  const syncSettled = !loading && syncState !== 'loading' && syncState !== 'syncing'
   const [onboardingShown, setOnboardingShown] = useState(false)
-  useEffect(() => { if (onboardingNeeded && syncSettled) setOnboardingShown(true) }, [onboardingNeeded, syncSettled])
-  const onboarding = onboardingNeeded && (syncSettled || onboardingShown)
+  const onboarding = shouldShowOnboarding({ needed: onboardingNeeded, loading, profileLoaded, syncState, alreadyShown: onboardingShown })
+  useEffect(() => { if (onboarding) setOnboardingShown(true) }, [onboarding])
   const onboardingRef = useRef(onboarding)
   onboardingRef.current = onboarding
 

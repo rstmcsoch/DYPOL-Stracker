@@ -266,6 +266,8 @@ export interface TestRecord extends BaseRecord {
   correct: number | null
   wrong: number | null
   skipped: number | null
+  /** Optional question count; correct + wrong + skipped can never exceed it. */
+  total_questions?: number | null
   negative_marks: number | null
   time_minutes: number | null
   notes: string

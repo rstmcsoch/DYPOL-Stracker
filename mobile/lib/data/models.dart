@@ -521,6 +521,7 @@ class TestRecord {
     this.correct,
     this.wrong,
     this.skipped,
+    this.totalQuestions,
     this.negativeMarks,
     this.timeMinutes,
     this.notes = '',
@@ -540,6 +541,8 @@ class TestRecord {
   final int? correct;
   final int? wrong;
   final int? skipped;
+  /// Optional question count; correct + wrong + skipped never exceed it.
+  final int? totalQuestions;
   final double? negativeMarks;
   final int? timeMinutes;
   final String notes;
@@ -566,6 +569,7 @@ class TestRecord {
         correct: _intOrNull(raw['correct']),
         wrong: _intOrNull(raw['wrong']),
         skipped: _intOrNull(raw['skipped']),
+        totalQuestions: _intOrNull(raw['total_questions']),
         negativeMarks: _numOrNull(raw['negative_marks']),
         timeMinutes: _intOrNull(raw['time_minutes']),
         notes: _str(raw['notes']),
@@ -586,6 +590,7 @@ class TestRecord {
         'correct': correct,
         'wrong': wrong,
         'skipped': skipped,
+        'total_questions': totalQuestions,
         'negative_marks': negativeMarks,
         'time_minutes': timeMinutes,
         'notes': notes,
