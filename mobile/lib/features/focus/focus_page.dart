@@ -13,11 +13,15 @@ import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/aggregation.dart';
+import '../../logic/focus.dart';
+import 'focus_controller.dart';
 import '../shell/app_shell.dart';
 
-/// Focus timer. Counts real elapsed seconds, works while the app is in the foreground,
-/// and writes a `study_sessions` row with `completion_state` `completed` or `abandoned`
-/// — the same shape the website's focus page writes.
+/// Focus page. The timer itself lives in [focusControllerProvider], so a block keeps
+/// running or stays paused while the student uses other screens (Home shows it), and the
+/// elapsed time is measured from timestamps across every pause. Ending early asks to save
+/// or discard; a saved partial block is a `study_sessions` row with `completion_state`
+/// `interrupted` and a natural finish is `completed` — the same shape the website writes.
 class FocusPage extends ConsumerStatefulWidget {
   const FocusPage({super.key});
 
@@ -25,153 +29,78 @@ class FocusPage extends ConsumerStatefulWidget {
   ConsumerState<FocusPage> createState() => _FocusPageState();
 }
 
-class _FocusPageState extends ConsumerState<FocusPage> with WidgetsBindingObserver {
-  static const int _pomodoroSeconds = 25 * 60;
+enum _EndChoice { save, discard, keep }
 
-  int _total = _pomodoroSeconds;
-  int _remaining = _pomodoroSeconds;
-  bool _running = false;
-  Timer? _ticker;
-  DateTime? _startedAt;
-  String _activity = 'Practice';
-  String? _subject;
-  String? _chapterId;
-  int _sessionsToday = 0;
+class _FocusPageState extends ConsumerState<FocusPage> {
+  bool _dialogOpen = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
+  FocusController get _focus => ref.read(focusControllerProvider.notifier);
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _ticker?.cancel();
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // The timer is wall-clock based, so a background pause does not distort the result;
-    // we only stop ticking to avoid needless wakeups.
-    if (state == AppLifecycleState.paused && _running) {
-      _ticker?.cancel();
-      _ticker = null;
-    } else if (state == AppLifecycleState.resumed && _running) {
-      _startTicker();
-      _recompute();
-    }
-  }
-
-  void _startTicker() {
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _recompute());
-  }
-
-  void _recompute() {
-    final DateTime? started = _startedAt;
-    if (started == null) return;
-    final int elapsed = DateTime.now().difference(started).inSeconds;
-    final int remaining = _total - elapsed;
-    if (remaining <= 0) {
-      setState(() {
-        _remaining = 0;
-        _running = false;
-      });
-      _ticker?.cancel();
-      _ticker = null;
-      _finish('completed', _total);
-      return;
-    }
-    setState(() => _remaining = remaining);
-  }
-
-  void _start() {
-    setState(() {
-      _running = true;
-      _startedAt = DateTime.now();
-      _remaining = _total;
-    });
-    _startTicker();
-  }
-
-  void _pause() {
-    setState(() => _running = false);
-    _ticker?.cancel();
-    _ticker = null;
-  }
-
-  void _reset() {
-    _ticker?.cancel();
-    _ticker = null;
-    setState(() {
-      _running = false;
-      _startedAt = null;
-      _remaining = _total;
-    });
-  }
-
-  Future<void> _stopAndSave() async {
-    final DateTime? started = _startedAt;
-    if (started == null) return;
-    final int elapsedMinutes = DateTime.now().difference(started).inMinutes;
-    if (elapsedMinutes < 1) {
-      showToast(context, 'Less than a minute — nothing to save.');
-      return;
-    }
-    final bool confirmed = await confirmAction(
-      context,
-      title: 'End this session?',
-      message: '${minutesLabel(elapsedMinutes)} will be saved as an abandoned session, which still '
-          'counts towards study time (the website does the same).',
-      confirmLabel: 'End and save',
+  /// One confirmation for End: save the real elapsed minutes, discard, or keep studying.
+  Future<void> _end() async {
+    if (_dialogOpen) return;
+    final FocusTimerState current = ref.read(focusControllerProvider);
+    final int seconds = current.elapsedAt(DateTime.now());
+    final int minutes = loggableMinutes(seconds);
+    _dialogOpen = true;
+    final _EndChoice? choice = await showDialog<_EndChoice>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        backgroundColor: context.stracker.palette.paper,
+        title: Text(
+          minutes >= 1 ? 'Save $minutes min of study time?' : 'Less than a minute studied',
+          style: Theme.of(dialogContext).textTheme.headlineSmall,
+        ),
+        content: Text(
+          minutes >= 1
+              ? 'You studied ${focusClock(seconds)} in this block. Save it to your study time, or discard it.'
+              : 'Blocks under a minute are not recorded. You can discard it or keep studying.',
+          style: Theme.of(dialogContext).textTheme.bodyMedium,
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(_EndChoice.keep),
+            child: const Text('Keep studying'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(_EndChoice.discard),
+            child: const Text('Discard & end'),
+          ),
+          FilledButton(
+            onPressed: minutes >= 1 ? () => Navigator.of(dialogContext).pop(_EndChoice.save) : null,
+            child: const Text('Save & end'),
+          ),
+        ],
+      ),
     );
-    if (!confirmed) return;
-    await _finish('abandoned', elapsedMinutes);
-    _reset();
-  }
-
-  Future<void> _finish(String state, int minutes) async {
-    final AppData data = ref.read(dataControllerProvider).data;
-    final DateTime? started = _startedAt;
-    final StudySession session = StudySession(
-      id: newId(),
-      userId: data.userId,
-      subject: _subject,
-      chapterId: _chapterId,
-      startedAt: (started ?? DateTime.now()).toUtc().toIso8601String(),
-      endedAt: isoNow(),
-      durationMinutes: minutes,
-      completionState: state,
-      mode: 'Pomodoro',
-      activity: _activity,
-      createdAt: isoNow(),
-      updatedAt: isoNow(),
-    );
-    try {
-      await ref.read(dataControllerProvider.notifier).saveSession(session);
-      if (!mounted) return;
-      setState(() => _sessionsToday += 1);
-      showToast(
-        context,
-        state == 'completed'
-            ? 'Session complete. ${minutesLabel(minutes)} recorded.'
-            : '${minutesLabel(minutes)} recorded as abandoned.',
-      );
-    } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+    _dialogOpen = false;
+    if (!mounted || choice == null || choice == _EndChoice.keep) return;
+    final FocusSaveResult result = await _focus.end(save: choice == _EndChoice.save);
+    if (!mounted) return;
+    if (result.error != null) {
+      showToast(context, result.error!, error: true);
+    } else if (choice == _EndChoice.save && result.minutes > 0) {
+      showToast(context, '${minutesLabel(result.minutes)} saved to your study time.');
+    } else if (choice == _EndChoice.discard) {
+      showToast(context, 'Block discarded. Nothing was recorded.');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final AppData data = ref.watch(dataControllerProvider).data;
+    final FocusTimerState timer = ref.watch(focusControllerProvider);
     final StrackerColors colors = context.stracker;
     final StudyTotals totals = studyTotals(data);
-    final double progress = _total == 0 ? 0 : (_total - _remaining) / _total;
-    final int minutes = _remaining ~/ 60;
-    final int seconds = _remaining % 60;
+    final DateTime now = DateTime.now();
+    final int total = timer.totalSeconds;
+    final int remaining = timer.remainingAt(now);
+    final int elapsed = timer.elapsedAt(now);
+    final bool running = timer.running;
+    final bool unsaved = timer.hasUnsavedAt(now);
+    final double progress = total == 0 ? 0 : (total - remaining) / total;
+    final int minutes = remaining ~/ 60;
+    final int seconds = remaining % 60;
 
     return SectionPage(
       title: 'Focus',
@@ -209,34 +138,47 @@ class _FocusPageState extends ConsumerState<FocusPage> with WidgetsBindingObserv
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _running ? 'focusing' : (_startedAt == null ? 'ready' : 'paused'),
+                        running ? 'focusing' : (unsaved ? 'paused' : (timer.finished ? 'block complete' : 'ready')),
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
                       ),
                     ],
                   ),
                 ),
+                if (running || unsaved) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Elapsed ${focusClock(elapsed)} · Remaining ${focusClock(remaining)}',
+                    key: const ValueKey<String>('focus-elapsed-line'),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colors.palette.ink,
+                          fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+                        ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    if (!_running)
+                    if (!running)
                       FilledButton.icon(
-                        onPressed: _startedAt == null ? _start : _start,
+                        onPressed: _focus.start,
                         icon: const Icon(Icons.play_arrow, size: 19),
-                        label: Text(_startedAt == null ? 'Start ${_total ~/ 60} min' : 'Resume'),
+                        label: Text(unsaved ? 'Resume' : 'Start ${total ~/ 60} min'),
                       )
                     else
                       FilledButton.icon(
-                        onPressed: _pause,
+                        onPressed: _focus.pause,
                         icon: const Icon(Icons.pause, size: 19),
                         label: const Text('Pause'),
                       ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: _running || _startedAt != null ? _stopAndSave : _reset,
-                      icon: const Icon(Icons.stop, size: 18),
-                      label: Text(_startedAt == null ? 'Reset' : 'End'),
-                    ),
+                    if (unsaved) ...<Widget>[
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: _end,
+                        icon: const Icon(Icons.stop, size: 18),
+                        label: const Text('End'),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -251,7 +193,7 @@ class _FocusPageState extends ConsumerState<FocusPage> with WidgetsBindingObserv
               children: <Widget>[
                 AppSelect<String>(
                   label: 'Activity',
-                  value: _activity,
+                  value: timer.activity,
                   items: const <String>[
                     'Lecture',
                     'Practice',
@@ -260,11 +202,11 @@ class _FocusPageState extends ConsumerState<FocusPage> with WidgetsBindingObserv
                     'PYQ practice',
                   ],
                   onChanged: (String? value) {
-                    if (_running) {
+                    if (running) {
                       showToast(context, 'Pause before changing the activity.');
                       return;
                     }
-                    setState(() => _activity = value ?? _activity);
+                    if (value != null) _focus.setActivity(value);
                   },
                 ),
                 Row(
@@ -272,21 +214,21 @@ class _FocusPageState extends ConsumerState<FocusPage> with WidgetsBindingObserv
                     Expanded(
                       child: AppSelect<String?>(
                         label: 'Subject',
-                        value: _subject,
+                        value: timer.subject,
                         items: <String?>[null, ...data.subjects],
                         labelFor: (String? value) => value ?? 'Any',
-                        onChanged: (String? value) => setState(() => _subject = value),
+                        onChanged: (String? value) => _focus.setSubject(value),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: AppSelect<String?>(
                         label: 'Chapter',
-                        value: _chapterId,
+                        value: timer.chapterId,
                         items: <String?>[null, ...data.chapters.map((Chapter chapter) => chapter.id)],
                         labelFor: (String? value) =>
                             value == null ? 'None' : data.chapterName(value),
-                        onChanged: (String? value) => setState(() => _chapterId = value),
+                        onChanged: (String? value) => _focus.setChapter(value),
                       ),
                     ),
                   ],
@@ -299,9 +241,9 @@ class _FocusPageState extends ConsumerState<FocusPage> with WidgetsBindingObserv
             children: <Widget>[
               Expanded(
                 child: StatTile(
-                  value: '${_sessionsToday + data.sessions.where((StudySession session) => session.startedAt.startsWith(todayIso())).length}',
+                  value: '${data.sessions.where((StudySession session) => countsAsStudyTime(session) && isoDate(DateTime.parse(session.startedAt).toUtc().add(const Duration(hours: 5, minutes: 30))) == todayIso()).length}',
                   label: 'Sessions today',
-                  hint: 'completed and abandoned',
+                  hint: 'finished and saved early',
                 ),
               ),
               const SizedBox(width: 8),
@@ -320,7 +262,7 @@ class _FocusPageState extends ConsumerState<FocusPage> with WidgetsBindingObserv
           const SizedBox(height: 10),
           InfoBanner(
             'The timer keeps the real elapsed time, so pausing the app (or the screen) cannot inflate a '
-            'session. Nothing runs while the timer is stopped, and no background service is used.',
+            'session. It keeps going if you open another screen — Home shows it until you end the block.',
             icon: Icons.timer_outlined,
           ),
         ],
@@ -329,8 +271,9 @@ class _FocusPageState extends ConsumerState<FocusPage> with WidgetsBindingObserv
   }
 
   Future<void> _pickLength() async {
-    if (_running) {
-      showToast(context, 'Pause first.');
+    final FocusTimerState timer = ref.read(focusControllerProvider);
+    if (timer.started) {
+      showToast(context, 'End this block before changing its length.');
       return;
     }
     final int? minutes = await showModalBottomSheet<int>(
@@ -343,7 +286,7 @@ class _FocusPageState extends ConsumerState<FocusPage> with WidgetsBindingObserv
             for (final int option in <int>[15, 25, 30, 45, 60, 90])
               ListTile(
                 title: Text('$option minutes'),
-                trailing: _total ~/ 60 == option ? const Icon(Icons.check, size: 18) : null,
+                trailing: timer.totalSeconds ~/ 60 == option ? const Icon(Icons.check, size: 18) : null,
                 onTap: () => Navigator.of(sheetContext).pop(option),
               ),
           ],
@@ -351,10 +294,6 @@ class _FocusPageState extends ConsumerState<FocusPage> with WidgetsBindingObserv
       ),
     );
     if (minutes == null) return;
-    setState(() {
-      _total = minutes * 60;
-      _remaining = _total;
-      _startedAt = null;
-    });
+    _focus.setLength(minutes);
   }
 }

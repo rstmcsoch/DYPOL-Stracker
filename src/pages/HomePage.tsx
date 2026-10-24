@@ -12,6 +12,7 @@ import { getSmartTip, getTodayStudyMinutes } from '../lib/analytics'
 import { computeStreaks } from '../lib/jee/study-time'
 import { StudyNowCard } from '../components/jee/StudyNowCard'
 import { HomeSnapshot } from '../components/jee/HomeSnapshot'
+import { FocusIndicator } from '../components/jee/FocusIndicator'
 import { currentExamMode } from '../lib/jee/exam'
 import { fmtDuration } from '../lib/format'
 import { indiaToday, prettyDate } from '../lib/date'
@@ -89,6 +90,8 @@ export default function HomePage() {
 
   return <div className="dashboard-page">
     <PageHeader eyebrow={new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' }).format(new Date()).toUpperCase()} title={`Good ${getGreeting()}, ${data.settings.owner_name || data.profile?.display_name || 'future engineer'}.`} doodle={<span className="header-atom">✦</span>} />
+
+    <FocusIndicator />
 
     <section className="hero-row" aria-label="Exam countdown and syllabus progress">
       <NotebookCard className="countdown-card">

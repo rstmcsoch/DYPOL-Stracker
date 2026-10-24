@@ -4,8 +4,8 @@ import { useData } from './DataContext'
 import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 import { createId } from '../lib/id'
-import type { StudyActivity, StudySession, Subject } from '../types'
-import { defaultTimerState as defaults, safeCustomMinutes, sanitizeTimerState, type FocusMode, type TimerState } from '../lib/focus-timer'
+import type { StudyActivity, Subject } from '../types'
+import { buildFocusSession, defaultTimerState as defaults, hasUnsavedFocus, isFocusMode, liveElapsedSeconds, safeCustomMinutes, sanitizeTimerState, type FocusMode, type TimerState } from '../lib/focus-timer'
 export type { FocusMode } from '../lib/focus-timer'
 
 interface FocusContextValue extends TimerState {
@@ -20,6 +20,16 @@ interface FocusContextValue extends TimerState {
   setTask: (taskId: string | null) => void
   setCustomMinutes: (minutes: number) => void
   focusMinutes: number
+  /** Live studied seconds in this block (paused segments + the running one). */
+  liveElapsed: number
+  /** True when this focus block has studied time that is not saved yet. */
+  unsaved: boolean
+  /**
+   * Ends the current focus block. `save: true` logs the elapsed time as one
+   * study_sessions row (idempotent per block); `save: false` discards it. Returns the
+   * minutes saved (0 when nothing was recorded).
+   */
+  endBlock: (save: boolean) => number
 }
 
 const KEY = 'stracker-focus-state'
@@ -28,6 +38,14 @@ const FocusContext = createContext<FocusContextValue | null>(null)
 function restoreTimer(key: string): TimerState {
   try { return sanitizeTimerState(JSON.parse(sessionStorage.getItem(key) ?? 'null')) }
   catch { return defaults }
+}
+
+/** A new, idle block in the given mode that keeps the student's chosen subject/chapter/activity. */
+function freshBlock(current: TimerState, mode: FocusMode = current.mode): TimerState {
+  return {
+    ...current, mode, remainingSeconds: current.durations[mode] * 60, running: false, endsAt: null, segmentStartedAt: null,
+    focusStartedAt: null, elapsedSeconds: 0, finished: false, blockId: null
+  }
 }
 
 export function FocusProvider({ children }: { children: ReactNode }) {
@@ -45,31 +63,26 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     try { sessionStorage.setItem(storageKey, JSON.stringify(timer)) } catch { /* A blocked session store does not stop the timer. */ }
   }, [timer, storageKey])
 
-  const logSession = useCallback(async (state: TimerState, completed: boolean, endedAt = Date.now()) => {
-    if (state.mode !== 'Pomodoro' && state.mode !== 'Custom') return
-    const effectiveEnd = state.running && state.endsAt !== null ? Math.min(endedAt, state.endsAt) : endedAt
-    const tail = state.running && state.segmentStartedAt ? Math.max(0, (effectiveEnd - state.segmentStartedAt) / 1000) : 0
-    const elapsed = Math.min(180 * 60, state.elapsedSeconds + tail)
-    if (elapsed <= 0) return
-    const now = new Date(endedAt).toISOString()
-    const session: StudySession = {
-      id: createId(), subject: state.subject, chapter_id: state.chapterId,
-      started_at: state.focusStartedAt ?? new Date(endedAt - elapsed * 1000).toISOString(), ended_at: now,
-      duration_minutes: Math.max(0, Math.round(elapsed / 60)), completion_state: completed ? 'completed' : 'interrupted',
-      mode: state.mode, activity: state.activity ?? 'Practice', created_at: now, updated_at: now
-    }
-    try { await upsert('study_sessions', session) }
-    catch (error) { notify(error instanceof Error ? error.message : 'Session saved on this device but could not sync.', 'error') }
+  /** Block ids already written in this tab, so a double End/Save/completion cannot double-log. */
+  const loggedBlocks = useRef(new Set<string>())
+
+  const logSession = useCallback((state: TimerState, completed: boolean, endedAt = Date.now()): number => {
+    if (state.blockId && loggedBlocks.current.has(state.blockId)) return 0
+    const session = buildFocusSession(state, completed, endedAt, createId())
+    if (!session) return 0
+    loggedBlocks.current.add(session.id)
+    upsert('study_sessions', session).catch(error => notify(error instanceof Error ? error.message : 'Session saved on this device but could not sync.', 'error'))
+    return session.duration_minutes
   }, [upsert, notify])
 
   const finish = useCallback((snapshot: TimerState) => {
     if (ending.current) return
     ending.current = true
     const endedAt = snapshot.endsAt ?? Date.now()
-    timerRef.current = { ...snapshot, remainingSeconds: 0, running: false, endsAt: null, segmentStartedAt: null, focusStartedAt: null, elapsedSeconds: 0, finished: true }
-    setTimer(current => ({ ...current, remainingSeconds: 0, running: false, endsAt: null, segmentStartedAt: null, focusStartedAt: null, elapsedSeconds: 0, finished: true }))
-    if (snapshot.mode === 'Pomodoro' || snapshot.mode === 'Custom') {
-      void logSession(snapshot, true, endedAt)
+    timerRef.current = { ...snapshot, remainingSeconds: 0, running: false, endsAt: null, segmentStartedAt: null, focusStartedAt: null, elapsedSeconds: 0, finished: true, blockId: null }
+    setTimer(current => ({ ...current, remainingSeconds: 0, running: false, endsAt: null, segmentStartedAt: null, focusStartedAt: null, elapsedSeconds: 0, finished: true, blockId: null }))
+    if (isFocusMode(snapshot.mode)) {
+      logSession(snapshot, true, endedAt)
       if (data.settings.sound_enabled) playTone()
       notify('Focus block complete. Take a breath before the next one.')
     } else notify('Break complete. Ready when you are.')
@@ -119,24 +132,55 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       return {
         ...current, remainingSeconds: remaining, running: true, endsAt: now + remaining * 1000,
         segmentStartedAt: now,
-        focusStartedAt: focus ? current.focusStartedAt ?? new Date(now).toISOString() : null,
-        elapsedSeconds: current.remainingSeconds <= 0 ? 0 : current.elapsedSeconds, finished: false
+        focusStartedAt: focus ? (current.remainingSeconds <= 0 ? null : current.focusStartedAt) ?? new Date(now).toISOString() : null,
+        elapsedSeconds: current.remainingSeconds <= 0 ? 0 : current.elapsedSeconds, finished: false,
+        blockId: focus ? (current.remainingSeconds <= 0 ? null : current.blockId) ?? createId() : null
       }
     })
   }, [])
 
+  const endBlock = useCallback((save: boolean): number => {
+    const snapshot = timerRef.current
+    const now = Date.now()
+    // A block whose deadline already passed is a natural completion, not a partial one.
+    if (snapshot.running && snapshot.endsAt !== null && snapshot.endsAt <= now) {
+      finish(snapshot)
+      return 0
+    }
+    const minutes = save ? logSession(snapshot, false, now) : 0
+    if (snapshot.blockId) loggedBlocks.current.add(snapshot.blockId)
+    const next = freshBlock(snapshot)
+    timerRef.current = next
+    setTimer(current => freshBlock(current))
+    return minutes
+  }, [finish, logSession])
+
+  /**
+   * Reset never throws away studied time silently: the Focus page asks first (save /
+   * discard / keep studying). If any other caller resets a block with unsaved time, it
+   * is saved as a partial session rather than lost.
+   */
   const reset = useCallback(() => {
     const snapshot = timerRef.current
-    if (snapshot.mode === 'Pomodoro' || snapshot.mode === 'Custom') void logSession(snapshot, false)
-    setTimer(current => ({ ...current, remainingSeconds: current.durations[current.mode] * 60, running: false, endsAt: null, segmentStartedAt: null, focusStartedAt: null, elapsedSeconds: 0, finished: false }))
-  }, [logSession])
+    if (hasUnsavedFocus(snapshot)) { endBlock(true); return }
+    setTimer(current => freshBlock(current))
+  }, [endBlock])
 
   const switchMode = useCallback((mode: FocusMode) => {
     const snapshot = timerRef.current
     if (snapshot.running) return
-    if ((snapshot.mode === 'Pomodoro' || snapshot.mode === 'Custom') && snapshot.elapsedSeconds > 0) void logSession(snapshot, false)
-    setTimer(current => current.running ? current : ({ ...current, mode, remainingSeconds: current.durations[mode] * 60, running: false, endsAt: null, segmentStartedAt: null, focusStartedAt: null, elapsedSeconds: 0, finished: false }))
-  }, [logSession])
+    if (hasUnsavedFocus(snapshot)) endBlock(true)
+    setTimer(current => current.running ? current : freshBlock(current, mode))
+  }, [endBlock])
+
+  // Closing the tab would drop the in-memory block; ask the browser to warn first.
+  const unsavedNow = hasUnsavedFocus(timer)
+  useEffect(() => {
+    if (!unsavedNow) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [unsavedNow])
 
   const setSubject = useCallback((subject: Subject | null) => setTimer(current => ({ ...current, subject })), [])
   const setChapter = useCallback((chapterId: string | null) => setTimer(current => ({ ...current, chapterId })), [])
@@ -150,8 +194,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<FocusContextValue>(() => ({
     ...timer, progress: focusMinutes > 0 ? Math.min(100, Math.max(0, (1 - timer.remainingSeconds / (focusMinutes * 60)) * 100)) : 0,
-    start, pause, reset, switchMode, setSubject, setChapter, setActivity, setTask, setCustomMinutes, focusMinutes
-  }), [timer, focusMinutes, start, pause, reset, switchMode, setSubject, setChapter, setActivity, setTask, setCustomMinutes])
+    start, pause, reset, switchMode, setSubject, setChapter, setActivity, setTask, setCustomMinutes, focusMinutes,
+    liveElapsed: liveElapsedSeconds(timer), unsaved: hasUnsavedFocus(timer), endBlock
+  }), [timer, focusMinutes, start, pause, reset, switchMode, setSubject, setChapter, setActivity, setTask, setCustomMinutes, endBlock])
   return <FocusContext.Provider value={value}>{children}</FocusContext.Provider>
 }
 
@@ -171,4 +216,9 @@ export function useFocus(): FocusContextValue {
   const context = useContext(FocusContext)
   if (!context) throw new Error('useFocus must be used inside FocusProvider')
   return context
+}
+
+/** Same timer, or null outside a FocusProvider (lets summary widgets render in isolation). */
+export function useFocusOptional(): FocusContextValue | null {
+  return useContext(FocusContext)
 }

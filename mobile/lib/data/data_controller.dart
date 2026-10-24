@@ -75,6 +75,22 @@ class DataController extends StateNotifier<DataState> {
 
   String get _cacheKey => 'stracker.cache.$_userId';
 
+  /// Device-only value for this account (never synced), e.g. the running focus timer.
+  String? readDeviceValue(String name) => _prefs.getString('stracker.$name.$_userId');
+
+  Future<void> writeDeviceValue(String name, String? value) async {
+    try {
+      final String key = 'stracker.$name.$_userId';
+      if (value == null) {
+        await _prefs.remove(key);
+      } else {
+        await _prefs.setString(key, value);
+      }
+    } catch (_) {
+      // Losing a device-only value never blocks the app.
+    }
+  }
+
   void _restoreSnapshot() {
     final String? raw = _prefs.getString(_cacheKey);
     if (raw == null) return;

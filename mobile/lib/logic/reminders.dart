@@ -2,6 +2,7 @@ import '../core/date.dart';
 import '../core/format.dart';
 import '../data/app_data.dart';
 import '../data/models.dart';
+import 'focus.dart';
 import 'revision.dart';
 
 /// Reminders inside the app.
@@ -60,7 +61,7 @@ List<String> reminderLines(AppData data, {String? today, DateTime? now}) {
   if (settings.reminderTypes.contains('goal')) {
     final int minutes = data.sessions
         .where((StudySession session) =>
-            session.startedAt.startsWith(day) && session.completionState == 'completed')
+            session.startedAt.startsWith(day) && countsAsStudyTime(session))
         .fold<int>(0, (int sum, StudySession session) => sum + session.durationMinutes);
     if (minutes < settings.dailyStudyGoalMinutes) {
       lines.add('${minutesLabel(settings.dailyStudyGoalMinutes - minutes)} short of today’s goal');

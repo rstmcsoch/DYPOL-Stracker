@@ -1,6 +1,7 @@
 import '../core/date.dart';
 import '../data/app_data.dart';
 import '../data/models.dart';
+import 'focus.dart';
 
 /// Study-time, consistency and weekly-report maths (src/lib/study-aggregation.ts and
 /// src/lib/jee/weekly-report.ts).
@@ -42,8 +43,7 @@ Map<String, DayActivity> dailyActivity(AppData data) {
   void put(DayActivity value) => days[value.date] = value;
 
   for (final StudySession session in data.sessions) {
-    if (session.mode == 'Short Break' || session.mode == 'Long Break') continue;
-    if (session.completionState != 'completed') continue;
+    if (!countsAsStudyTime(session)) continue;
     final String key = session.startedAt.isEmpty
         ? todayIso()
         : isoDate(DateTime.parse(session.startedAt).toUtc().add(const Duration(hours: 5, minutes: 30)));
@@ -121,8 +121,7 @@ StudyTotals studyTotals(AppData data, {String? today}) {
     for (final String name in <String>['Lecture', 'Practice', 'Revision', 'Mock/Test', 'PYQ practice']) name: 0,
   };
   for (final StudySession session in data.sessions) {
-    if (session.mode == 'Short Break' || session.mode == 'Long Break') continue;
-    if (session.completionState != 'completed') continue;
+    if (!countsAsStudyTime(session)) continue;
     totalMinutes += session.durationMinutes;
     byActivity[session.activity] = (byActivity[session.activity] ?? 0) + session.durationMinutes;
   }
@@ -215,8 +214,7 @@ WeeklyReport weeklyReport(AppData data, {String? today}) {
     int revisions = 0;
     int tests = 0;
     for (final StudySession session in data.sessions) {
-      if (session.mode == 'Short Break' || session.mode == 'Long Break') continue;
-      if (session.completionState != 'completed') continue;
+      if (!countsAsStudyTime(session)) continue;
       final String key = session.startedAt.isEmpty
           ? day
           : isoDate(DateTime.parse(session.startedAt).toUtc().add(const Duration(hours: 5, minutes: 30)));
