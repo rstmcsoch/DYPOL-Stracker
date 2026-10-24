@@ -202,7 +202,9 @@ export function recommendStudyNow(data: AppData, today: string): StudyNowResult 
   const hasAnyChapter = data.chapters.length > 0
   const emptyReason = primary ? null
     : !hasAnyChapter ? 'Your syllabus is empty. Add chapters to get recommendations.'
-    : 'Nothing is urgent right now. Log a practice block or a test and the next recommendation will sharpen.'
+    : data.tests.some(test => test.test_date === today)
+      ? 'Today’s test is logged and nothing else is urgent right now. Review it, or log a practice block.'
+      : 'Nothing is urgent right now. Log a practice block or a test and the next recommendation will sharpen.'
 
   return {
     primary, alternatives, examMode: exam.active, examLabel: exam.label, emptyReason

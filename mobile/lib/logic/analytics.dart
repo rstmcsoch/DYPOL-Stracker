@@ -209,8 +209,16 @@ List<ChapterPerformance> weakChapters(AppData data) {
   return rows;
 }
 
+/// Whether any saved test covers the chapter, directly or through a chapter link, even
+/// when its score was left blank — the same evidence the web "Tested" stage uses.
+bool chapterHasTestEvidence(AppData data, String chapterId) =>
+    data.tests.any((TestRecord test) => test.chapterId == chapterId) ||
+    data.testChapterLinks.any((TestChapterLink link) => link.chapterId == chapterId);
+
+/// Chapters with no saved test at all, so saving any test for a chapter removes it.
 List<ChapterPerformance> untestedChapters(AppData data) => chapterPerformance(data)
-    .where((ChapterPerformance row) => row.classification == 'Untested')
+    .where((ChapterPerformance row) =>
+        row.classification == 'Untested' && !chapterHasTestEvidence(data, row.chapter.id))
     .toList();
 
 /* ------------------------------------------------------------------ */
