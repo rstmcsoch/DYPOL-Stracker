@@ -8,13 +8,13 @@ import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { Button, EmptyState, NotebookCard, PageHeader, ProgressBar, ProgressRing, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
-import { getSmartTip, getTodayStudyMinutes } from '../lib/analytics'
+import { latestTestOn, getOverallTestPercentage, getOverallTestScore, getSmartTip, getTodayStudyMinutes } from '../lib/analytics'
 import { computeStreaks } from '../lib/jee/study-time'
 import { StudyNowCard } from '../components/jee/StudyNowCard'
 import { HomeSnapshot } from '../components/jee/HomeSnapshot'
 import { FocusIndicator } from '../components/jee/FocusIndicator'
 import { currentExamMode } from '../lib/jee/exam'
-import { fmtDuration } from '../lib/format'
+import { fmtDuration, fmtNumber } from '../lib/format'
 import { indiaToday, prettyDate } from '../lib/date'
 import { completeRevision as completeRevisionAction } from '../lib/revision-actions'
 import type { AppData, DailyTask, Revision } from '../types'
@@ -171,11 +171,7 @@ export default function HomePage() {
     <HomeSnapshot />
 
     <section className="dashboard-bottom-row">
-      <NotebookCard className="quick-test-card">
-        <div className="quick-test-illustration" aria-hidden="true"><NotebookPen size={25} /><span>✦</span></div>
-        <div><span className="eyebrow">A FRESH CHECKPOINT</span><h2>How did the practice go?</h2><p>Log a chapter test, a PYQ session, or your latest mock.</p></div>
-        <Button onClick={() => navigate('/tests?add=1')}><Plus size={17} /> Add test</Button>
-      </NotebookCard>
+      <CheckpointCard data={data} today={today} onView={id => navigate(`/tests?view=${encodeURIComponent(id)}`)} onAdd={() => navigate('/tests?add=1')} />
       <NotebookCard className="syllabus-mini-card">
         <div className="syllabus-mini-head"><div><span className="eyebrow">THE LONG GAME</span><h3>Syllabus progress</h3></div><ProgressRing value={totalChapters ? completedChapters / totalChapters * 100 : 0} size={62} label={<span className="ring-value small">{Math.round(totalChapters ? completedChapters / totalChapters * 100 : 0)}<small>%</small></span>} /></div>
         {trackedSubjects.length === 0 ? <p className="subject-mini-hint">Add chapters in Syllabus to track a subject.</p> : <div className="subject-mini-bars">{trackedSubjects.slice(0, HOME_SUBJECT_LIMIT).map(subject => {
@@ -187,6 +183,29 @@ export default function HomePage() {
       </NotebookCard>
     </section>
   </div>
+}
+
+function CheckpointCard({ data, today, onView, onAdd }: { data: AppData; today: string; onView: (id: string) => void; onAdd: () => void }) {
+  const latest = latestTestOn(data, today)
+  if (!latest) {
+    return <NotebookCard className="quick-test-card">
+      <div className="quick-test-illustration" aria-hidden="true"><NotebookPen size={25} /><span>✦</span></div>
+      <div><span className="eyebrow">A FRESH CHECKPOINT</span><h2>How did the practice go?</h2><p>Log a chapter test, a PYQ session, or your latest mock.</p></div>
+      <Button onClick={onAdd}><Plus size={17} /> Add test</Button>
+    </NotebookCard>
+  }
+  const score = getOverallTestScore(latest, data.testSubjectScores)
+  const percent = score ? getOverallTestPercentage(latest, data.testSubjectScores) : null
+  const result = score ? `${fmtNumber(score.marks, 1)} / ${fmtNumber(score.total, 1)}${percent === null ? '' : ` · ${Math.round(percent)}%`}` : 'Score not recorded'
+  const countToday = data.tests.filter(test => test.test_date === today).length
+  return <NotebookCard className="quick-test-card checkpoint-logged">
+    <div className="quick-test-illustration" aria-hidden="true"><Check size={25} /><span>✦</span></div>
+    <div><span className="eyebrow">{countToday > 1 ? `TODAY’S CHECKPOINTS · ${countToday}` : 'TODAY’S CHECKPOINT'}</span><h2>{latest.title}</h2><p>{latest.test_type} · {result}</p></div>
+    <div className="checkpoint-actions">
+      <Button variant="secondary" onClick={() => onView(latest.id)}><ArrowUpRight size={16} /> View it</Button>
+      <Button variant="quiet" onClick={onAdd}><Plus size={16} /> Add another test</Button>
+    </div>
+  </NotebookCard>
 }
 
 function RevisionPeek({ revision, data, onDone }: { revision: Revision; data: AppData; onDone: () => void }) {

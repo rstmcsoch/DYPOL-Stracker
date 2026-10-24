@@ -205,7 +205,7 @@ class _TestCard extends ConsumerWidget {
                   ],
                 ),
               ),
-            if (test.correct != null || test.wrong != null || test.notes.isNotEmpty)
+            if (test.correct != null || test.wrong != null || test.skipped != null || test.timeMinutes != null || test.notes.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(

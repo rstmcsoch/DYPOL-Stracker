@@ -121,6 +121,27 @@ export function getOverallTestTotal(test: TestRecord, scores: TestSubjectScore[]
     : null
 }
 
+/**
+ * Whether any saved test covers this chapter — directly or through a chapter link — even
+ * when its score was left blank. This is the same evidence the "Tested" pipeline stage uses,
+ * so saving a test always moves the untested count, scored or not.
+ */
+export function chapterHasTestEvidence(data: Pick<AppData, 'tests' | 'testChapterLinks'>, chapterId: string): boolean {
+  return data.tests.some(test => test.chapter_id === chapterId) || data.testChapterLinks.some(link => link.chapter_id === chapterId)
+}
+
+/** The most recently saved test dated `date` (an IST yyyy-MM-dd), or null when none exists. */
+export function latestTestOn(data: Pick<AppData, 'tests'>, date: string): TestRecord | null {
+  return data.tests
+    .filter(test => test.test_date === date)
+    .sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '') || b.id.localeCompare(a.id))[0] ?? null
+}
+
+/** Chapters with no saved test at all. */
+export function countUntestedChapters(data: AppData): number {
+  return data.chapters.filter(chapter => !chapterHasTestEvidence(data, chapter.id)).length
+}
+
 export function getChapterPerformance(data: AppData): ChapterPerformance[] {
   return data.chapters.map(chapter => {
     const resultMap = new Map<string, { test: TestRecord; percentage: number }>()
@@ -268,13 +289,13 @@ export function getSmartTip(data: AppData): string {
       return `${lowest.subject} is currently below your other subject averages. Plan one focused practice block and review the last mistakes.`
     }
   }
-  const untested = getChapterPerformance(data).filter(item => item.classification === 'Untested').length
+  const untested = countUntestedChapters(data)
   if (untested >= 5) return `You have ${untested} untested chapters. Short chapter tests can reveal gaps before the next full mock.`
   const overdue = data.revisions.filter(item => !item.completed_at && item.due_on < indiaToday()).length
   if (overdue > 0) return `You have ${overdue} overdue revision${overdue === 1 ? '' : 's'}. Clear the oldest one before adding low-priority tasks.`
   const declining = getChapterPerformance(data).find(item => item.dropping)
   if (declining) return `${declining.chapter.name} is down by ${Math.round((declining.results[1]?.percentage ?? 0) - (declining.latest ?? 0))} points on the latest test. Review the paper before attempting another.`
-  const untestedTotal = getChapterPerformance(data).filter(item => item.classification === 'Untested').length
+  const untestedTotal = untested
   if (untestedTotal > 0) return `${untestedTotal} chapter${untestedTotal === 1 ? ' is' : 's are'} still untested. Try a short test to establish a baseline.`
   if (data.tasks.some(task => task.task_date === indiaToday() && !task.is_completed)) return 'Start with one high-priority task. A small, finished block is a good way into the day.'
   return 'Your study data is up to date. Keep logging tests and focus sessions to make your next insight more useful.'

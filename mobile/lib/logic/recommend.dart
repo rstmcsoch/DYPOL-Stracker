@@ -375,8 +375,10 @@ StudyNowResult recommendStudyNow(AppData data, String today) {
   });
 
   final String? emptyReason = scored.isEmpty
-      ? 'Nothing is due and no chapter needs attention yet. Log a test, a practice block or a '
-          'revision and the ranking appears here.'
+      ? (data.tests.any((TestRecord test) => test.testDate == today)
+          ? 'Today\u2019s test is logged and nothing else is urgent right now. Review it, or log a practice block.'
+          : 'Nothing is due and no chapter needs attention yet. Log a test, a practice block or a '
+              'revision and the ranking appears here.')
       : null;
 
   return StudyNowResult(

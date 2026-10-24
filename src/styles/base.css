@@ -622,3 +622,8 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .home-focus-indicator .focus-live-dot.live { background: #7f9b3f; }
 .home-focus-indicator strong { font-weight: 700; }
 .home-focus-indicator .home-focus-actions { display: flex; gap: 6px; margin-left: auto; }
+
+/* Home checkpoint once a test is logged today */
+.checkpoint-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.checkpoint-logged .quick-test-illustration { color: var(--green, var(--surface-cool-accent)); }
+@media (max-width: 640px) { .checkpoint-actions { flex-direction: column; align-items: stretch; } }

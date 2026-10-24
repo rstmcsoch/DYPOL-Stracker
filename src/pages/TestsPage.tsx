@@ -68,6 +68,16 @@ export default function TestsPage() {
   const deletingRef = useRef(false)
 
   useEffect(() => {
+    // Home's "View it" opens one test's details directly.
+    const viewId = searchParams.get('view')
+    if (viewId) {
+      const target = data.tests.find(test => test.id === viewId)
+      if (target) setViewing(target)
+      const params = new URLSearchParams(searchParams)
+      params.delete('view')
+      setSearchParams(params, { replace: true })
+      return
+    }
     if (searchParams.get('add') === '1') {
       // A chapter preselect (e.g. from Weak areas) opens the same dialog with that
       // chapter already chosen, so the user never has to pick it twice.
@@ -78,7 +88,7 @@ export default function TestsPage() {
       params.delete('chapter')
       setSearchParams(params, { replace: true })
     }
-  }, [searchParams, setSearchParams])
+  }, [searchParams, setSearchParams, data.tests])
 
   const sortedTests = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -270,7 +280,7 @@ function TestRow({ test, onView, onEdit, onDelete }: { test: TestRecord; onView:
     <td data-label="Test"><button className="test-title-button" title={test.title} onClick={onView}><strong>{test.title}</strong><span>{(chapter?.name ?? test.notes) || 'Open test details'}</span></button></td>
     <td data-label="Type / subject"><span className="test-type-label">{test.test_type}</span>{test.test_type === 'Full Mock' ? <StatusBadge tone="muted">All subjects</StatusBadge> : <SubjectBadge subject={test.subject} />}</td>
     <td data-label="Score"><div className="score-cell"><strong>{scoreLabel}</strong>{score !== null && <StatusBadge tone={score < data.settings.weak_threshold ? 'Weak' : score <= data.settings.strong_threshold ? 'Okay' : 'Strong'}>{Math.round(score)}%</StatusBadge>}{scoreReview && <small className="score-review-note">{hasSubjectScores ? 'Incomplete or invalid subject results' : 'Review saved score'}</small>}</div></td>
-    <td data-label="Accuracy">{accuracy === null ? <span className="muted-dash">—</span> : `${accuracy}%`}<small>{test.correct ?? '—'} correct · {test.wrong ?? '—'} wrong</small></td>
+    <td data-label="Accuracy">{accuracy === null ? <span className="muted-dash">—</span> : `${accuracy}%`}<small>{test.correct ?? '—'} correct · {test.wrong ?? '—'} wrong · {test.skipped ?? '—'} skipped</small></td>
     <td data-label="Actions"><div className="table-actions"><button onClick={onView} aria-label={`View ${test.title}`}><Eye size={15} /></button><button onClick={onEdit} aria-label={`Edit ${test.title}`}>Edit</button><button onClick={onDelete} aria-label={`Delete ${test.title}`}><Trash2 size={15} /></button></div></td>
   </tr>
 }
