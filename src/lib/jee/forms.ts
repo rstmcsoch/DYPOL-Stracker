@@ -39,9 +39,11 @@ export function validatePractice(input: PracticeFormInput, today: string): Valid
   else if (input.date > today) errors.date = 'Practice dates cannot be in the future.'
   const attempted = count(input.attempted, 'attempted', errors, { min: 1, label: 'questions attempted' })
   const correct = count(input.correct, 'correct', errors, { label: 'correct answers' })
-  const incorrect = count(input.incorrect, 'incorrect', errors, { label: 'incorrect answers' })
-  if (attempted !== null && correct !== null && incorrect !== null && correct + incorrect > attempted) {
-    errors.incorrect = `Correct (${correct}) and incorrect (${incorrect}) cannot add up to more than attempted (${attempted}).`
+  // Incorrect is always derived (attempted − correct) so the three numbers can never disagree.
+  let incorrect: number | null = null
+  if (attempted !== null && correct !== null) {
+    if (correct > attempted) errors.correct = `Correct (${correct}) can’t be more than attempted (${attempted}).`
+    else incorrect = attempted - correct
   }
   let minutes: number | null = null
   if (input.minutes.trim() !== '') {

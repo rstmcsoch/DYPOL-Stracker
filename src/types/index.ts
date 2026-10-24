@@ -303,6 +303,8 @@ export interface DailyTask extends BaseRecord {
   title: string
   subject: Subject | null
   chapter_id: string | null
+  /** Optional topic / subtopic within the chapter. Older rows (and databases without the column) omit it. */
+  topic?: string | null
   estimated_minutes: number
   priority: Priority
   is_completed: boolean

@@ -400,9 +400,13 @@ describe('form validation', () => {
   it('accepts the spec example and rejects over-counted answers', () => {
     const ok = validatePractice(base, TODAY)
     expect(ok.ok).toBe(true)
-    const bad = validatePractice({ ...base, correct: '100', incorrect: '40' }, TODAY)
+    expect(ok.value?.incorrect).toBe(28)
+    // Incorrect is derived, so a stale typed value is ignored.
+    expect(validatePractice({ ...base, incorrect: '999' }, TODAY).value?.incorrect).toBe(28)
+    expect(validatePractice({ ...base, correct: '120' }, TODAY).value?.incorrect).toBe(0)
+    const bad = validatePractice({ ...base, correct: '121' }, TODAY)
     expect(bad.ok).toBe(false)
-    expect(bad.errors.incorrect).toMatch(/cannot add up/)
+    expect(bad.errors.correct).toMatch(/can’t be more than attempted/)
   })
   it('rejects future dates, missing chapters and fractional counts', () => {
     expect(validatePractice({ ...base, date: '2027-01-01' }, TODAY).errors.date).toMatch(/future/)

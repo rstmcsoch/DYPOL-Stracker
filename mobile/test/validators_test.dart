@@ -1,3 +1,4 @@
+import 'package:stracker/data/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stracker/core/validators.dart';
 
@@ -58,5 +59,22 @@ void main() {
     expect(Validators.date('10/01/2026'), isNotNull);
     expect(Validators.name('x' * 161), isNotNull);
     expect(Validators.name('Kinematics'), isNull);
+  });
+
+  test('practice incorrect is derived from attempted − correct', () {
+    expect(Validators.derivedIncorrect('120', '92'), 28);
+    expect(Validators.derivedIncorrect('10', '10'), 0);
+    expect(Validators.derivedIncorrect('10', '12'), isNull);
+    expect(Validators.derivedIncorrect('', '3'), isNull);
+    expect(Validators.practiceCorrect(attempted: 10, correct: 12), contains('can’t be more than attempted'));
+    expect(Validators.practiceCorrect(attempted: 10, correct: 7), isNull);
+  });
+
+  test('planner tasks carry an optional topic and old rows still load', () {
+    final DailyTask legacy = DailyTask.fromMap(<String, dynamic>{'id': 't', 'user_id': 'u', 'title': 'Revise', 'task_date': '2026-10-08'});
+    expect(legacy.topic, isNull);
+    final DailyTask withTopic = DailyTask.fromMap(<String, dynamic>{...legacy.toMap(), 'topic': 'Gauss’s law'});
+    expect(withTopic.topic, 'Gauss’s law');
+    expect(withTopic.copyWith(isCompleted: true).toMap()['topic'], 'Gauss’s law');
   });
 }

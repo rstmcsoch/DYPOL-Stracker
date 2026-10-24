@@ -55,7 +55,9 @@ describe('Practice log page', () => {
     fireEvent.change(within(dialog).getByRole('combobox', { name: /^Chapter/ }), { target: { value: 'elec' } })
     fireEvent.change(within(dialog).getByLabelText(/^Attempted/), { target: { value: '120' } })
     fireEvent.change(within(dialog).getByLabelText(/^Correct/), { target: { value: '92' } })
-    fireEvent.change(within(dialog).getByLabelText(/^Incorrect/), { target: { value: '28' } })
+    const incorrect = within(dialog).getByLabelText(/^Incorrect/) as HTMLInputElement
+    expect(incorrect.readOnly).toBe(true)
+    expect(incorrect.value).toBe('28')
     fireEvent.change(within(dialog).getByLabelText(/Time spent/), { target: { value: '45' } })
     expect(within(dialog).getByText('76.7%')).toBeTruthy()
     fireEvent.click(within(dialog).getByRole('button', { name: /Log practice/ }))
@@ -64,18 +66,18 @@ describe('Practice log page', () => {
     expect(harness.upsert).toHaveBeenNthCalledWith(2, 'study_sessions', expect.objectContaining({ activity: 'Practice', duration_minutes: 45, chapter_id: 'elec' }))
   })
 
-  it('refuses to save when correct + incorrect exceed attempted', async () => {
+  it('refuses to save when correct exceeds attempted', async () => {
     harness.data = baseData()
     const { default: PracticePage } = await import('./PracticePage')
     renderPage(<PracticePage />, '/practice?add=1')
     const dialog = screen.getByRole('dialog')
     fireEvent.change(within(dialog).getByRole('combobox', { name: /^Chapter/ }), { target: { value: 'elec' } })
     fireEvent.change(within(dialog).getByLabelText(/^Attempted/), { target: { value: '10' } })
-    fireEvent.change(within(dialog).getByLabelText(/^Correct/), { target: { value: '8' } })
-    fireEvent.change(within(dialog).getByLabelText(/^Incorrect/), { target: { value: '5' } })
+    fireEvent.change(within(dialog).getByLabelText(/^Correct/), { target: { value: '12' } })
+    expect((within(dialog).getByLabelText(/^Incorrect/) as HTMLInputElement).value).toBe('')
     fireEvent.click(within(dialog).getByRole('button', { name: /Log practice/ }))
-    expect(await within(dialog).findByText(/cannot add up to more than attempted/)).toBeTruthy()
-    expect(within(dialog).getAllByText(/cannot add up to more than attempted/)).toHaveLength(1)
+    expect(await within(dialog).findByText(/can’t be more than attempted/)).toBeTruthy()
+    expect(within(dialog).getAllByText(/can’t be more than attempted/)).toHaveLength(1)
     expect(harness.upsert).not.toHaveBeenCalled()
   })
 

@@ -297,3 +297,6 @@
 .jee-review-ratings .button { flex-direction: column; gap: 2px; min-height: 52px; }
 .jee-rating-when { display: block; font-size: max(.75rem, calc(11px * var(--body-scale, 1))); opacity: .85; }
 @media (max-width: 560px) { .jee-review-ratings { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.retry-solution-empty { color: var(--muted); font-style: italic; }
+.jee-derived-input { background: var(--paper-soft, transparent); cursor: default; }
+.planner-task-topic { font-style: italic; }

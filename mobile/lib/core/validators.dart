@@ -59,6 +59,21 @@ class Validators {
     return null;
   }
 
+  /// Incorrect is always derived: attempted − correct. Null until both are valid.
+  static int? derivedIncorrect(String attempted, String correct) {
+    final int? a = int.tryParse(attempted.trim());
+    final int? c = int.tryParse(correct.trim());
+    if (a == null || c == null || a < 0 || c < 0 || c > a) return null;
+    return a - c;
+  }
+
+  static String? practiceCorrect({required int attempted, required int correct}) {
+    if (attempted < 0 || attempted > 100000) return 'Attempted must be between 0 and 100,000.';
+    if (correct < 0) return 'Counts cannot be negative.';
+    if (correct > attempted) return 'Correct ($correct) can’t be more than attempted ($attempted).';
+    return null;
+  }
+
   static String? minutes(String? value, {int max = 1440, String label = 'Minutes'}) {
     final String text = (value ?? '').trim();
     if (text.isEmpty) return null;
