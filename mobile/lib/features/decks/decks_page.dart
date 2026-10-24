@@ -13,8 +13,9 @@ import '../../data/models.dart';
 import '../../logic/cards.dart';
 import '../shell/app_shell.dart';
 
-/// Formulas and flashcards. Each card moves along the R1 → R7 → R30 ladder; a difficult
-/// rating holds it on the shorter rung, exactly like the website's decks page.
+/// Formulas and flashcards. Each card moves along the Settings revision ladder
+/// (R1 → R7 → R30 by default) with Again / Hard / Good / Easy, exactly like the
+/// website's decks page.
 class DecksPage extends ConsumerStatefulWidget {
   const DecksPage({super.key});
 
@@ -25,6 +26,7 @@ class DecksPage extends ConsumerStatefulWidget {
 class _DecksPageState extends ConsumerState<DecksPage> {
   String _kind = 'flashcard';
   bool _dueOnly = true;
+  String? _subject;
   String? _chapterId;
   bool _revealed = false;
 
@@ -34,9 +36,18 @@ class _DecksPageState extends ConsumerState<DecksPage> {
     final StrackerColors colors = context.stracker;
     final String today = todayIso();
     final List<StudyCard> all = data.studyCards.where((StudyCard card) => card.kind == _kind).toList();
+    final List<int> gaps = data.settings.revisionGaps;
+    // A card's subject comes from its chapter.
+    bool inSubject(StudyCard card) =>
+        _subject == null || data.chapter(card.chapterId)?.subject == _subject;
     final List<StudyCard> due = dueCards(all, today: today);
     final List<StudyCard> visible = (_dueOnly ? due : all)
+        .where(inSubject)
         .where((StudyCard card) => _chapterId == null || card.chapterId == _chapterId)
+        .toList();
+    final List<String> cardSubjects = data.subjects
+        .where((String subject) =>
+            all.any((StudyCard card) => data.chapter(card.chapterId)?.subject == subject))
         .toList();
     final StudyCard? current = visible.firstOrNull;
 
@@ -47,7 +58,8 @@ class _DecksPageState extends ConsumerState<DecksPage> {
         IconButton(
           tooltip: 'Add card',
           icon: const Icon(Icons.add, size: 22),
-          onPressed: () => openCardEditor(context, ref, data, null, _kind),
+          onPressed: () => openCardEditor(context, ref, data, null, _kind,
+              initialChapterId: _chapterId, initialSubject: _subject),
         ),
       ],
       child: PageBody(
@@ -76,11 +88,23 @@ class _DecksPageState extends ConsumerState<DecksPage> {
             onChanged: (bool value) => setState(() => _dueOnly = value),
           ),
           AppSelect<String?>(
+            label: 'Subject',
+            value: cardSubjects.contains(_subject) ? _subject : null,
+            items: <String?>[null, ...cardSubjects],
+            labelFor: (String? value) => value ?? 'All subjects',
+            onChanged: (String? value) => setState(() {
+              _subject = value;
+              _chapterId = null;
+              _revealed = false;
+            }),
+          ),
+          AppSelect<String?>(
             label: 'Chapter',
             value: _chapterId,
             items: <String?>[
               null,
               ...data.chapters
+                  .where((Chapter chapter) => _subject == null || chapter.subject == _subject)
                   .where((Chapter chapter) =>
                       all.any((StudyCard card) => card.chapterId == chapter.id))
                   .map((Chapter chapter) => chapter.id),
@@ -94,14 +118,19 @@ class _DecksPageState extends ConsumerState<DecksPage> {
           if (current == null)
             NotebookCard(
               child: EmptyState(
-                title: all.isEmpty ? 'This deck is empty' : 'Nothing due right now',
+                title: all.isEmpty
+                    ? 'This deck is empty'
+                    : _subject != null && !all.any(inSubject)
+                        ? 'No $_subject cards yet'
+                        : 'Nothing due right now',
                 message: all.isEmpty
                     ? 'Add the formulas you keep forgetting, or the facts you want to recall cold. '
-                        'Cards resurface on the R1 / R7 / R30 ladder.'
+                        'Cards resurface on your revision ladder.'
                     : 'Come back when the next rung is due, or switch “Due only” off to review early.',
                 icon: Icons.style_outlined,
                 action: ElevatedButton(
-                  onPressed: () => openCardEditor(context, ref, data, null, _kind),
+                  onPressed: () => openCardEditor(context, ref, data, null, _kind,
+                      initialChapterId: _chapterId, initialSubject: _subject),
                   child: const Text('Add a card'),
                 ),
               ),
@@ -109,9 +138,9 @@ class _DecksPageState extends ConsumerState<DecksPage> {
           else ...<Widget>[
             NotebookCard(
               title: data.chapterName(current.chapterId),
-              subtitle: '${cardLadderLabel(current)} · reviewed ${current.reviews} '
+              subtitle: '${cardLadderLabel(current, gaps)} · reviewed ${current.reviews} '
                   'time${current.reviews == 1 ? '' : 's'}'
-                  '${current.difficulty == null ? '' : ' · ${current.difficulty}'}',
+                  '${current.lastRating != null ? ' · last: ${cardRatingLabels[current.lastRating]}' : current.difficulty == null ? '' : ' · ${current.difficulty}'}',
               accent: colors.subjectColor(
                 data.chapter(current.chapterId)?.subject ?? 'Physics',
               ),
@@ -154,14 +183,32 @@ class _DecksPageState extends ConsumerState<DecksPage> {
                       style: Theme.of(context).textTheme.labelMedium,
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
                       children: <Widget>[
-                        for (final String rating in const <String>['difficult', 'okay', 'easy'])
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
+                        for (final String rating in cardRatings)
+                          Semantics(
+                            label: '${cardRatingLabels[rating]} — next review '
+                                '${ratingPreview(current, rating, gaps)}',
+                            button: true,
+                            excludeSemantics: true,
                             child: OutlinedButton(
+                              key: ValueKey<String>('rate-$rating'),
                               onPressed: () => _review(context, ref, data, current, rating),
-                              child: Text(rating),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Text(cardRatingLabels[rating]!),
+                                  Text(
+                                    ratingPreview(current, rating, gaps),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(color: colors.muted),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                       ],
@@ -198,7 +245,7 @@ class _DecksPageState extends ConsumerState<DecksPage> {
                           data.chapterName(card.chapterId),
                           style: Theme.of(context).textTheme.labelSmall,
                         ),
-                        trailing: Text(cardLadderLabel(card)),
+                        trailing: Text(cardLadderLabel(card, gaps)),
                         onTap: () => openCardEditor(context, ref, data, card, _kind),
                       ),
                   ],
@@ -217,12 +264,13 @@ class _DecksPageState extends ConsumerState<DecksPage> {
     StudyCard card,
     String rating,
   ) async {
-    final StudyCard next = reviewCard(card, rating);
+    final StudyCard next = reviewCard(card, rating, gaps: data.settings.revisionGaps);
     try {
       await ref.read(dataControllerProvider.notifier).saveCard(next);
       if (!mounted) return;
       setState(() => _revealed = false);
-      showToast(context, 'Next review in ${next.nextReviewAt!.substring(0, 10)}.');
+      final String when = next.nextReviewAt!.substring(0, 10);
+      showToast(context, when == todayIso() ? 'Back again later today.' : 'Next review on $when.');
     } catch (error) {
       if (mounted) showToast(context, error.toString(), error: true);
     }
@@ -234,8 +282,10 @@ Future<void> openCardEditor(
   WidgetRef ref,
   AppData data,
   StudyCard? card,
-  String kind,
-) async {
+  String kind, {
+  String? initialChapterId,
+  String? initialSubject,
+}) async {
   if (data.chapters.isEmpty) {
     showToast(context, 'Add a chapter in the syllabus first.', error: true);
     return;
@@ -244,7 +294,16 @@ Future<void> openCardEditor(
   final TextEditingController front = TextEditingController(text: card?.front ?? '');
   final TextEditingController back = TextEditingController(text: card?.back ?? '');
   final TextEditingController hint = TextEditingController(text: card?.hint ?? '');
-  String chapterId = card?.chapterId ?? data.chapters.first.id;
+  Chapter? firstIn(String? subject) =>
+      data.chapters.where((Chapter chapter) => chapter.subject == subject).firstOrNull;
+  final Chapter startChapter = data.chapter(card?.chapterId ?? initialChapterId) ??
+      firstIn(initialSubject) ??
+      data.chapters.first;
+  String subject = startChapter.subject;
+  String? chapterId = startChapter.id;
+  final List<String> subjects = data.subjects
+      .where((String name) => data.chapters.any((Chapter chapter) => chapter.subject == name))
+      .toList();
   String cardKind = card?.kind ?? kind;
 
   await showAppSheet<void>(
@@ -262,11 +321,27 @@ Future<void> openCardEditor(
             onChanged: (String? value) => setSheetState(() => cardKind = value ?? cardKind),
           ),
           AppSelect<String>(
+            label: 'Subject',
+            value: subject,
+            items: subjects,
+            labelFor: (String value) => value,
+            onChanged: (String? value) => setSheetState(() {
+              if (value == null || value == subject) return;
+              subject = value;
+              // A chapter from the old subject would file the card in the wrong place.
+              chapterId = null;
+            }),
+          ),
+          AppSelect<String?>(
             label: 'Chapter',
             value: chapterId,
-            items: <String>[for (final Chapter chapter in data.chapters) chapter.id],
-            labelFor: (String id) => data.chapterName(id),
-            onChanged: (String? value) => setSheetState(() => chapterId = value ?? chapterId),
+            items: <String?>[
+              null,
+              for (final Chapter chapter in data.chapters)
+                if (chapter.subject == subject) chapter.id,
+            ],
+            labelFor: (String? id) => id == null ? 'Choose a chapter' : data.chapterName(id),
+            onChanged: (String? value) => setSheetState(() => chapterId = value),
           ),
           AppField(
             label: cardKind == 'formula' ? 'Formula / front' : 'Question / front',
@@ -283,16 +358,22 @@ Future<void> openCardEditor(
                 showToast(context, 'A card needs a front and a back.', error: true);
                 return;
               }
+              final Chapter? chosen = data.chapter(chapterId);
+              if (chosen == null || chosen.subject != subject) {
+                showToast(context, 'Choose a chapter from the selected subject.', error: true);
+                return;
+              }
               final StudyCard next = StudyCard(
                 id: card?.id ?? newId(),
                 userId: data.userId,
-                chapterId: chapterId,
+                chapterId: chosen.id,
                 kind: cardKind,
                 front: front.text.trim(),
                 back: back.text.trim(),
                 hint: hint.text.trim(),
                 position: card?.position ?? data.studyCards.length,
                 difficulty: card?.difficulty,
+                lastRating: card?.lastRating,
                 reviews: card?.reviews ?? 0,
                 lastReviewedAt: card?.lastReviewedAt,
                 nextReviewAt: card?.nextReviewAt,

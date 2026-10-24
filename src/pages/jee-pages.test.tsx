@@ -136,7 +136,7 @@ describe('Backlog page', () => {
 })
 
 describe('Formula & flashcard decks', () => {
-  it('reviews a due card: reveal, then Known schedules it on the R1 ladder', async () => {
+  it('reviews a due card: reveal, then Good schedules it on the R1 ladder', async () => {
     const card: StudyCard = {
       id: 'c1', user_id: USER, chapter_id: 'elec', kind: 'formula', front: 'Capacitance', back: 'C = eps0 A / d', hint: '',
       position: 0, difficulty: null, reviews: 0, last_reviewed_at: null, next_review_at: null, created_at: NOW, updated_at: NOW
@@ -147,9 +147,9 @@ describe('Formula & flashcard decks', () => {
     fireEvent.click(screen.getByRole('button', { name: /Review 1 due/ }))
     const dialog = screen.getByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /Reveal answer/ }))
-    fireEvent.click(within(dialog).getByRole('button', { name: /Known/ }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Good/ }))
     await vi.waitFor(() => expect(harness.upsert).toHaveBeenCalled())
-    expect(harness.upsert).toHaveBeenCalledWith('study_cards', expect.objectContaining({ id: 'c1', reviews: 1, difficulty: 'known', next_review_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/) }))
+    expect(harness.upsert).toHaveBeenCalledWith('study_cards', expect.objectContaining({ id: 'c1', reviews: 1, difficulty: 'known', last_rating: 'good', next_review_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/) }))
   })
 })
 

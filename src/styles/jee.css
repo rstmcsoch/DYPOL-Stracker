@@ -291,3 +291,9 @@
   .jee-year { min-width: 50px; }
   .jee-snap-reminders { grid-column: auto; }
 }
+
+/* Four review ratings: one row on wide screens, two by two on phones */
+.jee-review-ratings { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.jee-review-ratings .button { flex-direction: column; gap: 2px; min-height: 52px; }
+.jee-rating-when { display: block; font-size: max(.75rem, calc(11px * var(--body-scale, 1))); opacity: .85; }
+@media (max-width: 560px) { .jee-review-ratings { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
