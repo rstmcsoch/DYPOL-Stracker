@@ -5,7 +5,7 @@ import { AlertOctagon, Bell, CalendarDays, Check, Cloud, Database, KeyRound, Log
 import { Button, Dialog, Field, InfoTip, NotebookCard, PageHeader, StatusBadge } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
-import { useReadingFontPreview } from '../contexts/AppearanceContext'
+import { useAppearancePreview, useReadingFontPreview } from '../contexts/AppearanceContext'
 import { useToast } from '../contexts/ToastContext'
 import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
@@ -77,6 +77,7 @@ export default function SettingsPage() {
   // The unsaved Appearance draft previews live across the app. Leaving this page clears the
   // preview, so an unsaved font never outlives the draft that produced it.
   useReadingFontPreview(draft.interface_font)
+  useAppearancePreview(draft.theme, draft.color_theme)
 
   // Layout phase: when saved settings arrive (or change externally), the draft adopts them before
   // the browser paints, so the live font preview never shows a stale draft for a frame.
@@ -368,7 +369,7 @@ export default function SettingsPage() {
       {activeTab === 'appearance' && <div className="settings-panel" role="tabpanel" id="settings-panel-appearance" aria-labelledby="settings-tab-appearance">
         <form className="settings-form" noValidate onSubmit={event => void saveTab('appearance', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'appearance'}>
-            <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Notebook theme" /><div className="settings-section-content"><div className="theme-choice-grid" role="radiogroup" aria-label="Theme preference">{([['light','Warm paper','Light notebook paper'],['dark','Chalkboard','Dark, high-contrast study mode'],['auto','Auto','Follow your device setting']] as const).map(([value,title,desc]) => <label className={`theme-choice theme-choice-${value} ${draft.theme === value ? 'selected' : ''}`} key={value}><input type="radio" name="theme" value={value} checked={draft.theme === value} onChange={() => patch('theme', value as ThemeMode)} /><span className="theme-swatch"><i /><i /><i /></span><strong>{title}</strong><small>{desc}</small>{draft.theme === value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> {auto ? 'Auto theme follows the device appearance.' : 'Theme choice is saved with your account.'}</div></div></NotebookCard>
+            <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Notebook theme" /><div className="settings-section-content"><div className="theme-choice-grid" role="radiogroup" aria-label="Theme preference">{([['light','Warm paper','Light notebook paper'],['dark','Chalkboard','Dark, high-contrast study mode'],['auto','Auto','Follow your device setting']] as const).map(([value,title,desc]) => <label className={`theme-choice theme-choice-${value} ${draft.theme === value ? 'selected' : ''}`} key={value}><input type="radio" name="theme" value={value} checked={draft.theme === value} onChange={() => patch('theme', value as ThemeMode)} /><span className="theme-swatch"><i /><i /><i /></span><strong>{title}</strong><small>{desc}</small>{draft.theme === value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> {auto ? 'Auto theme follows the device appearance.' : 'You’re seeing a live preview. Save keeps it; leaving Settings without saving puts your saved look back.'}</div></div></NotebookCard>
 
             <NotebookCard className="settings-section"><SectionLabel icon={<Palette size={18} />} title="Color theme" note="Light/dark variant follows the mode above." /><div className="settings-section-content"><div className="color-theme-grid" role="radiogroup" aria-label="Color theme">{COLOR_THEME_OPTIONS.map(option => <label className={`color-theme-choice ${draft.color_theme === option.value ? 'selected' : ''}`} key={option.value}><input type="radio" name="color_theme" value={option.value} checked={draft.color_theme === option.value} onChange={() => patch('color_theme', option.value)} /><span className="color-theme-swatch" aria-hidden="true"><span className="swatch-half light"><i style={{ background: option.light[0] }} /><i style={{ background: option.light[1] }} /><i style={{ background: option.light[2] }} /></span><span className="swatch-half dark"><i style={{ background: option.dark[0] }} /><i style={{ background: option.dark[1] }} /><i style={{ background: option.dark[2] }} /></span></span><strong>{option.label}</strong><small>{option.description}</small>{draft.color_theme === option.value && <span className="theme-check"><Check size={13} /></span>}</label>)}</div><div className="settings-note-line"><Palette size={15} /> The top-right Light/Night switch keeps this palette and only changes the mode.</div></div></NotebookCard>
 
