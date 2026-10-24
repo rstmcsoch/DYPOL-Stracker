@@ -232,7 +232,7 @@
 :root[data-color='dracula-midnight'][data-theme='dark'] {
   --tint-warm: #ffb86c; --tint-cool: #8be9fd; --tint-tip: #bd93f9;
   --bg: #282a36; --paper: #343746; --paper-soft: #3a3d4d; --paper-muted: #2e3040;
-  --ink: #f8f8f2; --ink-soft: #dcdcd2; --muted: #a0a2b4;
+  --ink: #f8f8f2; --ink-soft: #dcdcd2; --muted: #acaebf;
   --line: #44475a; --line-strong: #6272a4;
   --accent: #bd93f9; --accent-dark: #cab0ff; --accent-light: #3d3458;
   --text-muted: #b3b5c6; --text-accent: #cab0ff;

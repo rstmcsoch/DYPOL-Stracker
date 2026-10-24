@@ -202,11 +202,14 @@ describe('Settings → Appearance: draft, preview and Save', () => {
     chooseFont('sora')
     chooseTheme('dark')
     expect(rootFont()).toBe(stackOf('sora'))
-    expect(rootTheme()).toBe('light')
+    // The draft theme previews live, but nothing is written until Save.
+    await waitFor(() => expect(rootTheme()).toBe('dark'))
+    expect(await persisted()).toMatchObject({ interface_font: 'open-sans', theme: 'light' })
 
     fireEvent.click(discardButton('appearance'))
 
     await waitFor(() => expect(rootFont()).toBe(stackOf('open-sans')))
+    await waitFor(() => expect(rootTheme()).toBe('light'))
     expect(fontRadio('open-sans').checked).toBe(true)
     expect(themeRadio('light').checked).toBe(true)
     expect(isDirty('appearance')).toBe(false)
@@ -214,20 +217,44 @@ describe('Settings → Appearance: draft, preview and Save', () => {
     expect(await persisted()).toMatchObject({ interface_font: 'open-sans', theme: 'light' })
   })
 
-  it('theme edits stay in the draft until they are saved', async () => {
+  it('theme edits preview live but stay in the draft until they are saved', async () => {
     await seedSettings({ interface_font: 'open-sans', theme: 'light' })
     renderNotebook(LOCAL_USER)
     await waitForRootFont('open-sans')
     openTab('appearance')
 
     chooseTheme('dark')
-    expect(rootTheme()).toBe('light')
+    await waitFor(() => expect(rootTheme()).toBe('dark'))
     expect(isDirty('appearance')).toBe(true)
+    expect(await persisted()).toMatchObject({ theme: 'light' })
 
     fireEvent.click(saveButton('appearance'))
 
     await waitFor(() => expect(rootTheme()).toBe('dark'))
     expect(await persisted()).toMatchObject({ theme: 'dark', interface_font: 'open-sans' })
+  })
+
+  it('previews theme and colour palette live; leaving Settings restores the saved look and writes nothing', async () => {
+    await seedSettings({ interface_font: 'open-sans', theme: 'light', color_theme: 'default' })
+    const view = renderNotebook(LOCAL_USER)
+    await waitForRootFont('open-sans')
+    openTab('appearance')
+    const before = await persisted()
+    const writes = watchSettingsWrites()
+
+    chooseTheme('dark')
+    const palette = screen.getAllByRole('radio').find(radio => (radio as HTMLInputElement).name === 'color_theme' && (radio as HTMLInputElement).value !== 'default') as HTMLInputElement
+    fireEvent.click(palette)
+    await waitFor(() => expect(rootTheme()).toBe('dark'))
+    await waitFor(() => expect(document.documentElement.dataset.color).toBe(palette.value))
+
+    view.leaveSettings()
+
+    await waitFor(() => expect(rootTheme()).toBe('light'))
+    await waitFor(() => expect(document.documentElement.dataset.color).toBeUndefined())
+    await settle()
+    expect(writes).not.toHaveBeenCalled()
+    expect(await persisted()).toEqual(before)
   })
 
   it('leaving Settings without saving persists nothing and reverts the preview', async () => {

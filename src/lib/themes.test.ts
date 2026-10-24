@@ -131,6 +131,47 @@ describe('theme palettes meet WCAG contrast in both modes', () => {
   })
 })
 
+describe('captions stay readable on every surface (WCAG AA, including Chalkboard)', () => {
+  // Captions (small/muted text: theme-card descriptions, notes, hints) sit on paper, the
+  // softer card surface, the muted inset and the page background. Each must reach 4.5:1.
+  const themesCss = readFileSync(`${process.cwd()}/src/styles/themes.css`, 'utf8')
+  const baseCss = readFileSync(`${process.cwd()}/src/styles/base.css`, 'utf8')
+  const defaultLight = blocks(baseCss, /^(:root)\s*{([^]*?)}/gm).get(':root') ?? {}
+  const defaultDark = blocks(baseCss, /(:root\[data-theme='dark'\])\s*{([^]*?)}/g).get(":root[data-theme='dark']") ?? {}
+  const lights = blocks(themesCss, /:root\[data-color='([^']+)'\]\s*(?!\[data-theme)\s*{([^}]*)}/g)
+  const darks = blocks(themesCss, /:root\[data-color='([^']+)'\]\[data-theme='dark'\]\s*{([^}]*)}/g)
+  const palettes: [string, Palette][] = [
+    ['default·light (Warm paper)', defaultLight],
+    ['default·dark (Chalkboard)', defaultDark],
+    ...[...lights].map(([name, palette]) => [`${name}·light`, { ...defaultLight, ...palette }] as [string, Palette]),
+    ...[...darks].map(([name, palette]) => [`${name}·dark`, { ...defaultDark, ...palette }] as [string, Palette])
+  ]
+
+  it('muted and text-muted captions reach 4.5:1 on paper, paper-soft, paper-muted and bg', () => {
+    const problems: string[] = []
+    for (const [label, palette] of palettes) {
+      for (const fg of ['muted', 'text-muted', 'ink-soft']) {
+        for (const bg of ['paper', 'paper-soft', 'paper-muted', 'bg']) {
+          const a = palette[fg]; const b = palette[bg]
+          if (!a || !b) continue
+          const ratio = contrast(a, b)
+          if (ratio < 4.5) problems.push(`${label}: ${fg} on ${bg} ${ratio.toFixed(2)}:1 (${a} on ${b})`)
+        }
+      }
+    }
+    expect(defaultDark.muted, 'Chalkboard defines a caption colour').toBeTruthy()
+    expect(problems).toEqual([])
+  })
+
+  it('caption rules do not fade text with opacity', () => {
+    const css = ['base.css', 'jee.css', 'layout.css'].map(file => readFileSync(`${process.cwd()}/src/styles/${file}`, 'utf8')).join('\n')
+    const faded = [...css.matchAll(/([^{}]*(?:small|caption|-note|-hint|-when)[^{}]*)\{([^}]*)\}/g)]
+      .filter(match => /color:\s*var\(--(?:muted|text-muted)\)/.test(match[2]!) && /(?:^|;)\s*opacity:\s*0?\.[0-9]+/.test(match[2]!))
+      .map(match => match[1]!.trim())
+    expect(faded).toEqual([])
+  })
+})
+
 describe('semantic token ownership (no accidental fixed surfaces)', () => {
   const baseCss = readFileSync(`${process.cwd()}/src/styles/base.css`, 'utf8')
 

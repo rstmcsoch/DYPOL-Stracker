@@ -7,6 +7,7 @@ import { normalizeColorTheme } from '../lib/themes'
 import type { ColorTheme, ReadingFont, ThemeMode } from '../types'
 
 export type ResolvedTheme = 'light' | 'dark'
+export interface AppearancePreview { theme: ThemeMode; color_theme: ColorTheme }
 
 interface AppearanceContextValue {
   /** Stored display-mode preference, including `auto`. */
@@ -24,6 +25,8 @@ interface AppearanceContextValue {
   setColorTheme: (colorTheme: ColorTheme) => void
   /** Runtime-only Reading-font preview, driven by the Settings draft. Never persists anything. */
   previewReadingFont: (font: ReadingFont | null) => void
+  /** Runtime-only display-mode / palette preview, driven by the Settings draft. Never persists anything. */
+  previewAppearance: (preview: AppearancePreview | null) => void
   saving: boolean
 }
 
@@ -64,11 +67,13 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   const { notify } = useToast()
   const systemPrefersDark = useSystemPrefersDark()
   const [fontPreview, setFontPreview] = useState<ReadingFont | null>(null)
+  const [appearancePreview, setAppearancePreview] = useState<AppearancePreview | null>(null)
   const [saving, setSaving] = useState(false)
 
   const settings = data.settings
-  const theme = settings.theme
-  const colorTheme = normalizeColorTheme(settings.color_theme)
+  // An unsaved Settings draft (if any) wins while Settings is open; otherwise the saved values.
+  const theme = appearancePreview?.theme ?? settings.theme
+  const colorTheme = normalizeColorTheme(appearancePreview?.color_theme ?? settings.color_theme)
   const resolvedTheme: ResolvedTheme = theme === 'auto' ? (systemPrefersDark ? 'dark' : 'light') : theme
   const readingFont = fontPreview ?? normalizeReadingFont(settings.interface_font)
 
@@ -118,7 +123,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppearanceContextValue>(() => ({
     theme, resolvedTheme, isDark: resolvedTheme === 'dark', colorTheme, readingFont,
-    setTheme, setColorTheme, previewReadingFont: setFontPreview, saving
+    setTheme, setColorTheme, previewReadingFont: setFontPreview, previewAppearance: setAppearancePreview, saving
   }), [theme, resolvedTheme, colorTheme, readingFont, setTheme, setColorTheme, saving])
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>
@@ -143,4 +148,17 @@ export function useReadingFontPreview(font: ReadingFont): void {
     previewReadingFont(font)
     return () => previewReadingFont(null)
   }, [font, previewReadingFont])
+}
+
+/**
+ * Previews the display mode and colour palette across the whole app while the calling component
+ * is mounted. Settings passes its unsaved draft; unmounting (leaving Settings) clears the preview so
+ * the saved appearance returns. Previewing never writes; only the Settings Save action persists.
+ */
+export function useAppearancePreview(theme: ThemeMode, colorTheme: ColorTheme): void {
+  const { previewAppearance } = useAppearance()
+  useLayoutEffect(() => {
+    previewAppearance({ theme, color_theme: colorTheme })
+  }, [theme, colorTheme, previewAppearance])
+  useLayoutEffect(() => () => previewAppearance(null), [previewAppearance])
 }
