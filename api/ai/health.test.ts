@@ -1,6 +1,14 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import handler from './health.js'
+
+vi.mock('../_lib/supabase.js', () => ({
+  authenticateRequest: async (req: { headers: Record<string, string> }) => {
+    const { ApiError } = await import('../_lib/http.js')
+    if (!req.headers.authorization) throw new ApiError(401, 'unauthenticated', 'Sign in to use Stracker AI.')
+    return { userId: 'test-user', user: { id: 'test-user' }, userClient: {}, adminClient: {} }
+  }
+}))
 
 const SERVER_VARS = [
   'SUPABASE_URL',
@@ -50,18 +58,22 @@ function mockResponse(): MockResponse {
   }
 }
 
-function mockRequest(method: string): ApiRequest {
-  return { method, headers: {}, query: {} } as unknown as ApiRequest
+function mockRequest(method: string, auth = true): ApiRequest {
+  return {
+    method,
+    headers: auth ? { authorization: 'Bearer test-token' } : {},
+    query: {}
+  } as unknown as ApiRequest
 }
 
-async function call(method: string): Promise<{ status: number; body: Record<string, unknown> }> {
+async function call(method: string, auth = true): Promise<{ status: number; body: Record<string, unknown> }> {
   const res = mockResponse()
-  await handler(mockRequest(method), res as unknown as ApiResponse)
+  await handler(mockRequest(method, auth), res as unknown as ApiResponse)
   return { status: res.statusCode, body: JSON.parse(res.body) as Record<string, unknown> }
 }
 
 describe('GET /api/ai/health', () => {
-  it('reports configured:true when the server-only environment is complete', async () => {
+  it('reports configured:true to a signed-in caller when the server-only environment is complete', async () => {
     clearServerEnv()
     process.env.SUPABASE_URL = 'https://example.supabase.co'
     process.env.SUPABASE_ANON_KEY = 'public-anon-key'
@@ -76,7 +88,7 @@ describe('GET /api/ai/health', () => {
     expect(body.invalid).toEqual([])
   })
 
-  it('reports configured:false with safe reason codes and variable names when misconfigured', async () => {
+  it('reports configured:false with safe reason codes and variable names to a signed-in caller when misconfigured', async () => {
     clearServerEnv()
     const { status, body } = await call('GET')
     expect(status).toBe(200)
@@ -96,22 +108,39 @@ describe('GET /api/ai/health', () => {
     expect(body.missing).toEqual(['SUPABASE_SERVICE_ROLE_KEY'])
   })
 
+  it('returns only a bare status payload without a session and hides all configuration detail', async () => {
+    clearServerEnv()
+    const { status, body } = await call('GET', false)
+    expect(status).toBe(200)
+    expect(body).toEqual({ service: 'stracker-ai', status: 'ok' })
+    expect(body).not.toHaveProperty('configured')
+    expect(body).not.toHaveProperty('checks')
+    expect(body).not.toHaveProperty('reason')
+    expect(body).not.toHaveProperty('missing')
+    expect(body).not.toHaveProperty('invalid')
+  })
+
   it('never exposes secret values, only variable names', async () => {
     clearServerEnv()
     process.env.SUPABASE_URL = 'https://example.supabase.co'
     process.env.SUPABASE_ANON_KEY = 'public-anon-key'
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'server-only-service-role-secret'
     process.env.AI_CREDENTIALS_ENCRYPTION_KEY = 'cd'.repeat(32)
-    const res = mockResponse()
-    await handler(mockRequest('GET'), res as unknown as ApiResponse)
-    expect(res.body).not.toContain('server-only-service-role-secret')
-    expect(res.body).not.toContain('cd'.repeat(32))
-    expect(res.body).not.toContain('public-anon-key')
+    const authed = mockResponse()
+    await handler(mockRequest('GET'), authed as unknown as ApiResponse)
+    expect(authed.body).not.toContain('server-only-service-role-secret')
+    expect(authed.body).not.toContain('cd'.repeat(32))
+    expect(authed.body).not.toContain('public-anon-key')
+    const anon = mockResponse()
+    await handler(mockRequest('GET', false), anon as unknown as ApiResponse)
+    expect(anon.body).not.toContain('server-only-service-role-secret')
+    expect(anon.body).not.toContain('cd'.repeat(32))
+    expect(anon.body).not.toContain('public-anon-key')
   })
 
-  it('does not require an Authorization header', async () => {
+  it('answers anonymous callers with 200 (no Authorization header required)', async () => {
     clearServerEnv()
-    const { status } = await call('GET')
+    const { status } = await call('GET', false)
     expect(status).toBe(200)
   })
 

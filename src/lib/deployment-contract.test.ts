@@ -30,7 +30,14 @@ describe('production deployment freshness contract', () => {
     expect(csp).not.toContain('unsafe-eval')
     expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/)
     expect(csp).toContain('https://*.supabase.co')
-    expect(vercel.rewrites).toContainEqual({ source: '/(.*)', destination: '/index.html' })
+    // SA-2610-02: known SPA routes rewrite to the shell; there is deliberately no catch-all,
+    // so unknown paths fall through to the platform's real 404 instead of index.html.
+    expect(vercel.rewrites.some(rule => rule.source === '/(.*)')).toBe(false)
+    const spaRules = vercel.rewrites.filter(rule => rule.destination === '/index.html')
+    expect(spaRules.length).toBeGreaterThanOrEqual(20)
+    expect(spaRules).toContainEqual({ source: '/login', destination: '/index.html' })
+    expect(spaRules).toContainEqual({ source: '/syllabus', destination: '/index.html' })
+    expect(spaRules).toContainEqual({ source: '/control-panel(.*)', destination: '/index.html' })
   })
 
   it('gives only content-hashed Vite assets a long immutable cache lifetime', () => {

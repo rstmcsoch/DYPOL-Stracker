@@ -196,28 +196,35 @@ export function AIProvider({ children }: { children:ReactNode }) {
   },[accessToken])
 
   /**
-   * Public, unauthenticated configuration health check. It reports only booleans, a safe reason
-   * code, and the names of missing environment variables — never secret values — so the UI can
-   * distinguish a misconfigured/unavailable Stracker AI backend from ordinary per-user states
-   * (no provider connected, invalid key, rate limit) before the user attempts anything.
+   * Configuration health check (SA-2610-01). When a session exists the Authorization header is
+   * attached so the server returns the full diagnosis (booleans, safe reason code, names of
+   * missing environment variables). Anonymous callers only receive a bare {"status":"ok"}
+   * acknowledgment, so deployment-configuration detail is no longer public.
    */
   const checkBackendHealth = useCallback(async () => {
     try {
-      const response = await fetch('/api/ai/health',{ headers:{ Accept:'application/json' }, cache:'no-store' })
+      const token = await accessToken()
+      const response = await fetch('/api/ai/health',{ headers:{ Accept:'application/json', ...(token ? { Authorization:`Bearer ${token}` } : {}) }, cache:'no-store' })
       const text = await response.text().catch(() => '')
-      let payload:AIBackendHealth|null = null
-      try { payload = text ? JSON.parse(text) as AIBackendHealth : null } catch { payload = null }
-      if (!payload || typeof payload !== 'object' || typeof payload.configured !== 'boolean') {
-        // A non-JSON body means the /api routes are not deployed here (SPA fallback, local dev).
-        setBackendStatus('unreachable'); setBackendHealth(null)
+      let payload:(AIBackendHealth & { status?:string })|null = null
+      try { payload = text ? JSON.parse(text) as AIBackendHealth & { status?:string } : null } catch { payload = null }
+      if (payload && typeof payload === 'object' && typeof payload.configured === 'boolean') {
+        setBackendHealth(payload)
+        setBackendStatus(payload.configured ? 'ok' : 'misconfigured')
         return
       }
-      setBackendHealth(payload)
-      setBackendStatus(payload.configured ? 'ok' : 'misconfigured')
+      if (payload && typeof payload === 'object' && payload.status === 'ok') {
+        // Bare liveness payload (no session): backend answered; configuration detail needs a session.
+        setBackendHealth(null)
+        setBackendStatus('ok')
+        return
+      }
+      // A non-JSON body means the /api routes are not deployed here (SPA fallback, local dev).
+      setBackendStatus('unreachable'); setBackendHealth(null)
     } catch {
       setBackendStatus('unreachable'); setBackendHealth(null)
     }
-  },[])
+  },[accessToken])
 
   const refreshProviders = useCallback(async () => {
     if (!user || user.isLocal) { setProviders([]); setProvidersError(null); return }

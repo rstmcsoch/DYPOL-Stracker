@@ -57,9 +57,9 @@ export async function readJson(req: ApiRequest, maxBytes = 32_000): Promise<Reco
   }
 }
 
-export function methodNotAllowed(res: ApiResponse, allowed: string[]): void {
+export function methodNotAllowed(res: ApiResponse, allowed: string[], message = 'That AI request method is not supported.'): void {
   res.setHeader('Allow', allowed.join(', '))
-  sendJson(res, 405, { error: 'method_not_allowed', message: 'That AI request method is not supported.' })
+  sendJson(res, 405, { error: 'method_not_allowed', message })
 }
 
 export interface PublicErrorBody { error: string; message: string; reference?: string; code?: string; provider?: string | null; retryable?: boolean; fallbackEligible?: boolean; reason?: string }

@@ -116,8 +116,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
 
     const parsed = deleteSchema.safeParse(body)
     if (!parsed.success) throw new ApiError(400, 'invalid_provider', 'That provider configuration could not be removed.')
-    const { error } = await adminClient.from('ai_provider_configs').delete().eq('user_id', userId).eq('id', parsed.data.id)
+    const { data: deleted, error } = await adminClient.from('ai_provider_configs').delete().eq('user_id', userId).eq('id', parsed.data.id).select('id')
     if (error) throw new ApiError(503, 'provider_remove_failed', 'The provider key could not be removed. Try again.')
-    sendJson(res, 200, { removed: true })
+    // Honest result: `removed` is true only when a row owned by this user was actually deleted.
+    // A foreign or unknown id returns `removed: false` (indistinguishable — no existence oracle),
+    // so this stays enumeration-safe while never claiming success for a no-op (SA-2610-12).
+    sendJson(res, 200, { removed: (deleted?.length ?? 0) > 0 })
   })
 }

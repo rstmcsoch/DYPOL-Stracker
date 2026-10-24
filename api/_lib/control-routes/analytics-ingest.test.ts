@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest'
-import { clampTimestamp, ingestBatch, sanitizeUnknownEventDetail, userRef } from './analytics-ingest.js'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { analyticsSecret, clampTimestamp, ingestBatch, sanitizeUnknownEventDetail, userRef } from './analytics-ingest.js'
+
+// analyticsSecret() fails closed without an entropy source (STR-NEW-08 hardening), so the
+// suite provides one explicitly for ingest paths.
+const PREVIOUS_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+beforeAll(() => { process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key-for-ingest' })
+afterAll(() => {
+  if (PREVIOUS_SERVICE_ROLE_KEY === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+  else process.env.SUPABASE_SERVICE_ROLE_KEY = PREVIOUS_SERVICE_ROLE_KEY
+})
 
 const session = '3f2c9d1e-1111-4222-8333-444455556666'
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -92,5 +101,18 @@ describe('analytics ingest', () => {
     expect(clampTimestamp('2026-10-10T23:00:00Z', now)).toBe('2026-10-10T23:00:00.000Z')
     expect(userRef('ABC', 's')).toBe(userRef('abc', 's'))
     expect(userRef('abc', 's')).not.toBe(userRef('abc', 't'))
+  })
+
+  it('fails closed when no entropy source exists instead of deriving a predictable secret', () => {
+    const hadKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const hadSecret = process.env.ANALYTICS_HASH_SECRET
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    delete process.env.ANALYTICS_HASH_SECRET
+    try {
+      expect(() => analyticsSecret()).toThrow('analytics_secret_unavailable')
+    } finally {
+      if (hadKey !== undefined) process.env.SUPABASE_SERVICE_ROLE_KEY = hadKey
+      if (hadSecret !== undefined) process.env.ANALYTICS_HASH_SECRET = hadSecret
+    }
   })
 })
