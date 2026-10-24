@@ -14,6 +14,7 @@ import '../../logic/exam.dart';
 import '../../logic/progress.dart';
 import '../../logic/recommend.dart';
 import '../../logic/revision.dart';
+import '../focus/focus_indicator.dart';
 import '../revision/revision_actions.dart';
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
@@ -61,6 +62,7 @@ class HomePage extends ConsumerWidget {
                 icon: Icons.cloud_off_outlined,
               ),
             ),
+          const FocusIndicator(),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[

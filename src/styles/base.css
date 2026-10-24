@@ -607,3 +607,18 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 @media (min-width: 1450px) {
   .dashboard-page { gap: 24px; }.notebook-card { border-radius: 17px 19px 16px 18px; }
 }
+
+/* Focus: live elapsed + remaining line, End button and the save/discard confirmation. */
+.focus-elapsed-line { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin: -4px 0 12px; color: var(--focus-muted); font: 600 14px var(--font-body); font-variant-numeric: tabular-nums; }
+.focus-elapsed-line strong { color: var(--focus-ink); font-weight: 700; }
+.focus-end-button { color: var(--focus-ink); }
+.focus-end-body { display: grid; gap: 14px; padding: 4px 2px 2px; }
+.focus-end-body p { margin: 0; color: var(--muted); }
+.focus-end-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.focus-end-actions .button { flex: 1 1 140px; justify-content: center; }
+/* Home: compact indicator for an active or paused focus block. */
+.home-focus-indicator { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); }
+.home-focus-indicator .focus-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.home-focus-indicator .focus-live-dot.live { background: #7f9b3f; }
+.home-focus-indicator strong { font-weight: 700; }
+.home-focus-indicator .home-focus-actions { display: flex; gap: 6px; margin-left: auto; }

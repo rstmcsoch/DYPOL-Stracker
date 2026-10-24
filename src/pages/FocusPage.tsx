@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, BookOpen, CalendarCheck, Check, ChevronRight, Coffee, Focus, Link2, Moon, Pause, Play, RotateCcw, Search, Sparkles, Timer, Unlink, X } from 'lucide-react'
+import { ArrowLeft, BookOpen, CalendarCheck, Check, ChevronRight, Coffee, Focus, Link2, Moon, Pause, Play, RotateCcw, Search, Sparkles, Square, Timer, Unlink, X } from 'lucide-react'
 import { Button, Dialog, ProgressRing, SubjectBadge } from '../components/ui'
 import { useFocus, type FocusMode } from '../contexts/FocusContext'
 import { useData } from '../contexts/DataContext'
@@ -8,6 +8,7 @@ import { indiaToday } from '../lib/date'
 import type { StudyActivity, Subject } from '../types'
 import { STUDY_ACTIVITIES } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
+import { formatClock, isFocusMode, loggableMinutes } from '../lib/focus-timer'
 
 const MODES: { name: FocusMode; minutes: number; label: string; icon: React.ReactNode }[] = [
   { name: 'Pomodoro', minutes: 25, label: 'Focus', icon: <Focus size={15} /> },
@@ -24,6 +25,13 @@ export default function FocusPage() {
   const navigate = useNavigate()
   const [chapterPickerOpen, setChapterPickerOpen] = useState(false)
   const [taskPickerOpen, setTaskPickerOpen] = useState(false)
+  /**
+   * One confirmation for every way out of an unsaved block: End, Exit, Esc, Reset and a
+   * mode switch. `then` says what happens after the student picks Save or Discard.
+   */
+  const [confirmEnd, setConfirmEnd] = useState<null | { then: 'stay' | 'exit' | { mode: FocusMode } }>(null)
+  const unsaved = timer.unsaved
+  const focusBlock = isFocusMode(timer.mode)
   const selectedTask = data.tasks.find(task => task.id === timer.taskId)
   const selectedChapter = data.chapters.find(chapter => chapter.id === timer.chapterId)
   const availableChapters = data.chapters.filter(chapter => !timer.subject || chapter.subject === timer.subject).sort((a, b) => a.position - b.position)
@@ -35,12 +43,28 @@ export default function FocusPage() {
       const target = event.target as HTMLElement | null
       const typing = target && (['INPUT','TEXTAREA','SELECT'].includes(target.tagName) || target.isContentEditable)
       if (typing) return
+      // An open dialog owns the keyboard (its own Esc closes it); never stack a second action on top.
+      if (confirmEnd || document.body.classList.contains('modal-open')) return
       if (event.code === 'Space') { event.preventDefault(); if (timerRunning) pauseTimer(); else startTimer() }
-      if (event.key === 'Escape') { event.preventDefault(); navigate('/') }
+      if (event.key === 'Escape') { event.preventDefault(); if (unsaved) setConfirmEnd({ then: 'exit' }); else navigate('/') }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [timerRunning, pauseTimer, startTimer, navigate])
+  }, [timerRunning, pauseTimer, startTimer, navigate, unsaved, confirmEnd])
+
+  const requestExit = () => { if (unsaved) setConfirmEnd({ then: 'exit' }); else navigate('/') }
+  const requestMode = (mode: FocusMode) => {
+    if (mode === timer.mode) return
+    if (unsaved) setConfirmEnd({ then: { mode } }); else timer.switchMode(mode)
+  }
+  const resolveEnd = (save: boolean) => {
+    const pending = confirmEnd
+    setConfirmEnd(null)
+    if (!pending) return
+    timer.endBlock(save)
+    if (pending.then === 'exit') navigate('/')
+    else if (typeof pending.then === 'object') timer.switchMode(pending.then.mode)
+  }
 
   const chooseSubject = (value: string) => {
     const nextSubject = value ? value as Subject : null
@@ -51,19 +75,22 @@ export default function FocusPage() {
 
   return <div className="focus-page" data-mode={timer.mode.toLowerCase().replace(' ', '-') }>
     <div className="focus-vignette" aria-hidden="true" />
-    <header className="focus-topbar"><button className="focus-exit" onClick={() => navigate('/')}><ArrowLeft size={17} /> Exit focus</button><div className="focus-wordmark"><span className="focus-mark">S</span><span>Stracker <i>focus mode</i></span></div><div className="focus-top-note"><span className={timer.running ? 'focus-live-dot live' : 'focus-live-dot'} />{timer.running ? 'BLOCK IN PROGRESS' : 'DISTRACTION-FREE SPACE'}</div></header>
+    <header className="focus-topbar"><button className="focus-exit" onClick={requestExit}><ArrowLeft size={17} /> Exit focus</button><div className="focus-wordmark"><span className="focus-mark">S</span><span>Stracker <i>focus mode</i></span></div><div className="focus-top-note"><span className={timer.running ? 'focus-live-dot live' : 'focus-live-dot'} />{timer.running ? 'BLOCK IN PROGRESS' : 'DISTRACTION-FREE SPACE'}</div></header>
     <main className="focus-main">
       <div className="focus-prelude"><span className="focus-star">✳</span><span className="eyebrow">MAKE THIS MOMENT COUNT</span><span className="focus-star">✦</span></div>
       <h1>{timer.mode === 'Pomodoro' || timer.mode === 'Custom' ? 'One thing at a time.' : 'Take the pause.'}</h1>
       <p className="focus-subtitle">{subtitle}</p>
-      <div className="focus-mode-selector" role="group" aria-label="Timer mode">{MODES.map(mode => <button key={mode.name} className={timer.mode === mode.name ? 'selected' : ''} onClick={() => timer.switchMode(mode.name)} disabled={timer.running} aria-pressed={timer.mode === mode.name}>{mode.icon}<span>{mode.label}</span>{mode.name !== 'Custom' && <small>{timer.durations[mode.name]}m</small>}</button>)}</div>
+      <div className="focus-mode-selector" role="group" aria-label="Timer mode">{MODES.map(mode => <button key={mode.name} className={timer.mode === mode.name ? 'selected' : ''} onClick={() => requestMode(mode.name)} disabled={timer.running} aria-pressed={timer.mode === mode.name}>{mode.icon}<span>{mode.label}</span>{mode.name !== 'Custom' && <small>{timer.durations[mode.name]}m</small>}</button>)}</div>
       {timer.mode === 'Custom' && <label className="custom-time-control">Custom focus minutes <input type="number" min="1" max="180" step="1" value={timer.durations.Custom} disabled={timer.running} onChange={event => { const minutes = event.currentTarget.valueAsNumber; if (Number.isFinite(minutes) && Number.isInteger(minutes)) timer.setCustomMinutes(minutes) }} /></label>}
       <div className={`focus-clock-wrap ${timer.running ? 'is-running' : ''} ${timer.finished ? 'is-finished' : ''}`}>
         <span className="focus-clock-orbit orbit-one" aria-hidden="true" /><span className="focus-clock-orbit orbit-two" aria-hidden="true" />
         <ProgressRing value={timer.progress} size={332} color="var(--focus-accent)" label={<span className="focus-clock" aria-live="off">{clock}</span>} />
-        <div className="focus-clock-caption">{timer.finished ? <><Check size={15} /> BLOCK COMPLETE</> : timer.running ? 'STAY WITH THIS PAGE' : 'READY WHEN YOU ARE'}</div>
+        <div className="focus-clock-caption">{timer.finished ? <><Check size={15} /> BLOCK COMPLETE</> : timer.running ? 'STAY WITH THIS PAGE' : unsaved ? 'PAUSED' : 'READY WHEN YOU ARE'}</div>
       </div>
-      <div className="focus-primary-actions">{timer.running ? <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.pause}><Pause size={18} /> Pause <kbd>Space</kbd></Button> : <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.start}><Play size={17} fill="currentColor" /> {timer.finished ? 'Start another block' : timer.remainingSeconds < timer.focusMinutes * 60 ? 'Resume focus' : 'Begin focus'} <kbd>Space</kbd></Button>}{(timer.running || timer.elapsedSeconds > 0 || timer.finished) && <button className="focus-reset-button" onClick={timer.reset} aria-label="Reset timer"><RotateCcw size={16} /> Reset</button>}</div>
+      {focusBlock && (unsaved || timer.running) && <p className="focus-elapsed-line" aria-live="off"><span>Elapsed <strong>{formatClock(timer.liveElapsed)}</strong></span><span aria-hidden="true"> · </span><span>Remaining <strong>{clock}</strong></span></p>}
+      <div className="focus-primary-actions">{timer.running ? <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.pause}><Pause size={18} /> Pause <kbd>Space</kbd></Button> : <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.start}><Play size={17} fill="currentColor" /> {timer.finished ? 'Start another block' : timer.remainingSeconds < timer.focusMinutes * 60 ? 'Resume focus' : 'Begin focus'} <kbd>Space</kbd></Button>}
+        {unsaved && <button className="focus-reset-button focus-end-button" onClick={() => setConfirmEnd({ then: 'stay' })} aria-label="End focus block"><Square size={14} /> End</button>}
+        {!unsaved && (timer.running || timer.finished || timer.remainingSeconds < timer.focusMinutes * 60) && <button className="focus-reset-button" onClick={timer.reset} aria-label="Reset timer"><RotateCcw size={16} /> Reset</button>}</div>
       <div className="focus-context-card"><div className="focus-context-head"><BookOpen size={15} /><span>KEEP THIS BLOCK GROUNDED</span><span className="context-free-note">Optional</span></div><div className="focus-context-fields">
         <label><span>Activity</span><select value={timer.activity} disabled={timer.running} onChange={event => timer.setActivity(event.target.value as StudyActivity)} aria-describedby="focus-activity-note">{STUDY_ACTIVITIES.map(item => <option key={item} value={item}>{item}</option>)}</select><small id="focus-activity-note" className="jee-small jee-muted">Lecture, practice, revision — tracked separately.</small></label>
         <label><span>Subject</span><select value={timer.subject ?? ''} disabled={timer.running} onChange={event => chooseSubject(event.target.value)}><option value="">Choose a subject</option>{focusSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></label>
@@ -83,8 +110,9 @@ export default function FocusPage() {
       {chapterPickerOpen && <ChapterSearchPicker chapters={availableChapters} selectedId={timer.chapterId} onClose={() => setChapterPickerOpen(false)} onChoose={chapterId => { timer.setChapter(chapterId); setChapterPickerOpen(false) }} />}
       {taskPickerOpen && <TaskLinkPicker tasks={data.tasks.filter(task => task.task_date === indiaToday())} linkedId={timer.taskId} onClose={() => setTaskPickerOpen(false)} onChoose={taskId => { timer.setTask(taskId); setTaskPickerOpen(false) }} />}
       </div>
-      <div className="focus-footer-note"><Sparkles size={14} /> Your timer continues if you leave focus mode. Study time is logged when the focus block finishes.</div>
+      <div className="focus-footer-note"><Sparkles size={14} /> Your timer keeps going if you step away — Home shows it until you end the block. Ending early lets you save the time you studied.</div>
     </main>
+    {confirmEnd && <EndBlockDialog seconds={timer.liveElapsed} onSave={() => resolveEnd(true)} onDiscard={() => resolveEnd(false)} onKeep={() => setConfirmEnd(null)} exiting={confirmEnd.then === 'exit'} />}
     <footer className="focus-bottom"><span>Stracker <strong>by DYPOL LABS</strong></span><span>Press <kbd>Esc</kbd> to exit · <kbd>Space</kbd> to pause or resume</span></footer>
   </div>
 }
@@ -155,6 +183,25 @@ function TaskLinkPicker({ tasks, linkedId, onClose, onChoose }: {
         ))}
       </div>}
       {linkedId && <button type="button" className="chapter-picker-clear" onClick={() => onChoose(null)}><X size={14} aria-hidden="true" /> Unlink the current task</button>}
+    </div>
+  </Dialog>
+}
+
+/**
+ * Save / discard / keep-studying confirmation for an unfinished focus block. The
+ * minutes shown are the ones a save records: real elapsed time across every segment.
+ */
+function EndBlockDialog({ seconds, onSave, onDiscard, onKeep, exiting }: { seconds: number; onSave: () => void; onDiscard: () => void; onKeep: () => void; exiting: boolean }) {
+  const minutes = loggableMinutes(seconds)
+  const title = minutes >= 1 ? `Save ${minutes} min of study time?` : 'Less than a minute studied'
+  return <Dialog title={title} onClose={onKeep} className="dialog-narrow focus-end-dialog">
+    <div className="focus-end-body">
+      <p>{minutes >= 1 ? `You studied ${formatClock(seconds)} in this block. Save it to your study time, or discard it.` : 'Blocks under a minute are not recorded. You can discard it or keep studying.'}</p>
+      <div className="focus-end-actions">
+        <Button variant="marker" onClick={onSave} disabled={minutes < 1}><Check size={15} /> {exiting ? 'Save & exit' : 'Save & end'}</Button>
+        <Button variant="secondary" onClick={onDiscard}><X size={15} /> {exiting ? 'Discard & exit' : 'Discard & end'}</Button>
+        <Button variant="quiet" onClick={onKeep}><Play size={15} /> Keep studying</Button>
+      </div>
     </div>
   </Dialog>
 }

@@ -1415,7 +1415,10 @@ class StudySession {
         'started_at': startedAt,
         'ended_at': endedAt,
         'duration_minutes': durationMinutes,
-        'completion_state': completionState,
+        // The schema accepts only 'completed' and 'interrupted'. Older app builds wrote
+        // 'abandoned' for an ended-early block, which the server rejected; map it so the
+        // same meaning (a saved partial block) can be stored.
+        'completion_state': completionState == 'abandoned' ? 'interrupted' : completionState,
         'mode': mode,
         'activity': activity,
       };
