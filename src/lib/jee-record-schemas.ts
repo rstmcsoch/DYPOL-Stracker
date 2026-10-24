@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import {
-  BACKLOG_TYPES, CARD_DIFFICULTIES, CARD_KINDS, CHAPTER_STAGE_KEYS, ERROR_CATEGORIES,
+  BACKLOG_TYPES, CARD_DIFFICULTIES, CARD_KINDS, CARD_RATINGS, CHAPTER_STAGE_KEYS, ERROR_CATEGORIES,
   PRACTICE_SOURCES, PYQ_EXAMS, TRACK_IDS
 } from '../types/index.js'
 import { POSTGRES_INTEGER_MAX } from './test-validation.js'
@@ -75,7 +75,8 @@ export const studyCardSchema = z.object({
   difficulty: z.enum(CARD_DIFFICULTIES).nullable(),
   reviews: z.number().finite().int().min(0).max(POSTGRES_INTEGER_MAX),
   last_reviewed_at: timestampValue.nullable(),
-  next_review_at: timestampValue.nullable()
+  next_review_at: timestampValue.nullable(),
+  last_rating: z.enum(CARD_RATINGS).nullable().optional()
 })
 
 export const testErrorLogSchema = z.object({

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { BACKLOG_TYPES, CARD_DIFFICULTIES, CARD_KINDS, CHAPTER_STAGE_KEYS, ERROR_CATEGORIES, PRACTICE_SOURCES, PYQ_EXAMS, STUDY_ACTIVITIES, TRACK_IDS, type TableName } from '../types/index.js'
+import { BACKLOG_TYPES, CARD_DIFFICULTIES, CARD_KINDS, CARD_RATINGS, CHAPTER_STAGE_KEYS, ERROR_CATEGORIES, PRACTICE_SOURCES, PYQ_EXAMS, STUDY_ACTIVITIES, TRACK_IDS, type TableName } from '../types/index.js'
 import { goalSchema } from './goal-validation.js'
 import { settingsSchema } from './settings-validation.js'
 import { taskInputSchema } from './task-validation.js'
@@ -57,7 +57,8 @@ const studyCardSchema = z.object({
   front: z.string().trim().min(1).max(5000),
   back: z.string().trim().min(1).max(10000),
   position: nonNegativePostgresInteger,
-  difficulty: z.enum(CARD_DIFFICULTIES).nullable().optional()
+  difficulty: z.enum(CARD_DIFFICULTIES).nullable().optional(),
+  last_rating: z.enum(CARD_RATINGS).nullable().optional()
 })
 
 const testErrorLogSchema = z.object({

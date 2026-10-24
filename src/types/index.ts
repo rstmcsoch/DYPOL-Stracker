@@ -151,6 +151,9 @@ export const CARD_KINDS = ['formula', 'flashcard'] as const
 export type CardKind = (typeof CARD_KINDS)[number]
 export const CARD_DIFFICULTIES = ['easy', 'known', 'difficult'] as const
 export type CardDifficulty = (typeof CARD_DIFFICULTIES)[number]
+/** The four review buttons. Stored in `study_cards.last_rating` (nullable; older rows have none). */
+export const CARD_RATINGS = ['again', 'hard', 'good', 'easy'] as const
+export type CardRating = (typeof CARD_RATINGS)[number]
 
 export interface StudyCard extends BaseRecord {
   chapter_id: string
@@ -163,6 +166,8 @@ export interface StudyCard extends BaseRecord {
   reviews: number
   last_reviewed_at: string | null
   next_review_at: string | null
+  /** Rating from the most recent review. Optional so cards saved before the column existed still load. */
+  last_rating?: CardRating | null
 }
 
 /* ------------------------------------------------------------------ */

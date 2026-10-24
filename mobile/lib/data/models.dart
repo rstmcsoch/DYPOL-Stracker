@@ -931,6 +931,11 @@ class BacklogItem {
 /* Study cards (formulas / flashcards)                                 */
 /* ------------------------------------------------------------------ */
 
+String? _cardRating(Object? raw) {
+  final String? value = _strOrNull(raw);
+  return const <String>['again', 'hard', 'good', 'easy'].contains(value) ? value : null;
+}
+
 class StudyCard {
   const StudyCard({
     required this.id,
@@ -942,6 +947,7 @@ class StudyCard {
     this.hint = '',
     this.position = 0,
     this.difficulty,
+    this.lastRating,
     this.reviews = 0,
     this.lastReviewedAt,
     this.nextReviewAt,
@@ -958,6 +964,10 @@ class StudyCard {
   final String hint;
   final int position;
   final String? difficulty;
+
+  /// Again / Hard / Good / Easy. Null for cards reviewed before the four-button
+  /// review existed (or on a database without the column).
+  final String? lastRating;
   final int reviews;
   final String? lastReviewedAt;
   final String? nextReviewAt;
@@ -974,6 +984,7 @@ class StudyCard {
         hint: _str(raw['hint']),
         position: _int(raw['position']),
         difficulty: _strOrNull(raw['difficulty']),
+        lastRating: _cardRating(raw['last_rating']),
         reviews: _int(raw['reviews']),
         lastReviewedAt: _strOrNull(raw['last_reviewed_at']),
         nextReviewAt: _strOrNull(raw['next_review_at']),
@@ -991,6 +1002,7 @@ class StudyCard {
         'hint': hint,
         'position': position,
         'difficulty': difficulty,
+        'last_rating': lastRating,
         'reviews': reviews,
         'last_reviewed_at': lastReviewedAt,
         'next_review_at': nextReviewAt,
@@ -1002,6 +1014,7 @@ class StudyCard {
     String? hint,
     int? position,
     Object? difficulty = _sentinel,
+    Object? lastRating = _sentinel,
     int? reviews,
     Object? lastReviewedAt = _sentinel,
     Object? nextReviewAt = _sentinel,
@@ -1016,6 +1029,7 @@ class StudyCard {
         hint: hint ?? this.hint,
         position: position ?? this.position,
         difficulty: difficulty == _sentinel ? this.difficulty : difficulty as String?,
+        lastRating: lastRating == _sentinel ? this.lastRating : lastRating as String?,
         reviews: reviews ?? this.reviews,
         lastReviewedAt:
             lastReviewedAt == _sentinel ? this.lastReviewedAt : lastReviewedAt as String?,
