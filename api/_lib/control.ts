@@ -274,7 +274,7 @@ export async function controlHandler(
 ): Promise<void> {
   res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')
   if (!methods.includes(req.method ?? '')) {
-    methodNotAllowed(res, methods)
+    methodNotAllowed(res, methods, 'That control request method is not supported.')
     return
   }
   try {

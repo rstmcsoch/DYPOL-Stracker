@@ -1,30 +1,27 @@
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import { methodNotAllowed, sendJson } from '../_lib/http.js'
 import { evaluateServerConfig, type ServerConfigStatus } from '../_lib/server-config.js'
+import { authenticateRequest } from '../_lib/supabase.js'
 import { logAIEvent } from '../_lib/diagnostics.js'
 
 /**
- * Safe configuration health check for the Stracker AI backend.
+ * Configuration health check for the Stracker AI backend (SA-2610-01 hardening).
  *
- * GET /api/ai/health -> {"service":"stracker-ai","configured":true,"checks":{...},"reason":null,"missing":[],"invalid":[]}
- *                   or {"configured":false,"reason":"supabase_server_config_missing","missing":["SUPABASE_SERVICE_ROLE_KEY"],...}
+ * Two-tier response:
  *
- * This endpoint is intentionally unauthenticated: it reports deployment configuration status
- * only — booleans, a normalized reason code, and the NAMES of missing or malformed environment
- * variables. It never returns secret values, user data, or provider credentials, so the
- * frontend can distinguish these states before the user attempts anything:
+ *   - Verified signed-in caller (Bearer session):
+ *       {"service":"stracker-ai","configured":true,"checks":{...},"reason":null,"missing":[],"invalid":[]}
+ *       Booleans, a normalized reason code, and the NAMES of missing or malformed environment
+ *       variables — never secret values, user data, or provider credentials. Used by the
+ *       AI settings UI to show the administrator exactly what to fix.
  *
- *   - backend deployed and configured        -> configured: true
- *   - backend deployed but server config
- *     incomplete (the exact cause of the
- *     "secure AI backend is not configured"
- *     message)                               -> configured: false + reason + missing names
- *   - /api routes not deployed at all
- *     (SPA fallback serves HTML)             -> the client sees a non-JSON response
+ *   - Anonymous caller (no/invalid session):
+ *       {"service":"stracker-ai","status":"ok"}
+ *       A bare liveness acknowledgment only. The deployment-configuration detail that used to be
+ *       public here is now reserved for signed-in users (external finding SA-2610-01).
  *
- * When the configuration is incomplete, a structured warning naming the missing variables is
- * written to the server log (names only, never values) so the administrator can diagnose the
- * deployment directly from the Vercel function logs.
+ * A structured warning naming missing variables (names only, never values) is always written to
+ * the server log so the administrator can diagnose the deployment from the Vercel function logs.
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   if (req.method !== 'GET') {
@@ -40,5 +37,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       invalid: status.invalid.join(',')
     })
   }
-  sendJson(res, 200, { service: 'stracker-ai', ...status })
+  let authenticated = false
+  try {
+    await authenticateRequest(req)
+    authenticated = true
+  } catch {
+    // Missing/invalid session: fall back to the minimal public payload below.
+  }
+  sendJson(res, 200, authenticated
+    ? { service: 'stracker-ai', ...status }
+    : { service: 'stracker-ai', status: 'ok' })
 }

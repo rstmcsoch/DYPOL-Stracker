@@ -50,7 +50,13 @@ export function userRef(userId: string, secret: string): string {
 export function analyticsSecret(): string {
   const configured = process.env.ANALYTICS_HASH_SECRET
   if (configured && configured.length >= 16) return configured
-  return createHash('sha256').update(`derived:${process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'unset'}`).digest('hex')
+  // Fail closed: without a real entropy source the pseudonymization key would be predictable
+  // (STR-NEW-08). In any working deployment SUPABASE_SERVICE_ROLE_KEY always exists; if even
+  // that is missing the backend cannot function and the caller drops the batch instead of
+  // writing predictable user_ref values.
+  const derived = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!derived) throw new Error('analytics_secret_unavailable')
+  return createHash('sha256').update(`derived:${derived}`).digest('hex')
 }
 
 /** Sanitizes unknown event names so arbitrary non-identifier strings or control/HTML chars never enter analytics_ingest_stats. */

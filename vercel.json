@@ -160,7 +160,91 @@
       "destination": "/api/control/system?route=not-found"
     },
     {
-      "source": "/(.*)",
+      "source": "/syllabus",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/tests",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/mistakes",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/retry",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/planner",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/revision",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/analytics",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/weak-areas",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/backup",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/settings",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/profile",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/focus",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/practice",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/pyqs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/backlog",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/mock-analysis",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/decks",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/study-now",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/signup",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/reset-password",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/control-panel(.*)",
       "destination": "/index.html"
     }
   ]

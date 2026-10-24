@@ -390,7 +390,9 @@ describe('Settings → Appearance: other writers and other tabs', () => {
     fireEvent.click(saveButton('account'))
 
     await waitFor(async () => expect((await persisted()).owner_name).toBe('Aarav'))
-    expect((await localDb.profiles.get(USER))?.display_name).toBe('Aarav')
+    // The profile row is written asynchronously alongside the settings save; wait for it so a
+    // slow runner cannot assert against the initial 'Study notebook' default (CI race).
+    await waitFor(async () => expect((await localDb.profiles.get(USER))?.display_name).toBe('Aarav'))
     expect((await persisted()).interface_font).toBe('open-sans')
     openTab('appearance')
     expect(fontRadio('sora').checked).toBe(true)
