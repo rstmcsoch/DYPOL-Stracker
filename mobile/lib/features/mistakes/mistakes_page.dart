@@ -501,7 +501,7 @@ Future<void> openMistakeEditor(
             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.stracker.muted),
           ),
           const SizedBox(height: 12),
-          ElevatedButton(
+          SaveButton(
             onPressed: () async {
               final Chapter? chosen = data.chapter(chapterId);
               if (subject == null || chosen == null || chosen.subject != subject) {
@@ -543,7 +543,7 @@ Future<void> openMistakeEditor(
                 if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
-            child: Text(creating ? 'Add to notebook' : 'Save note'),
+            label: creating ? 'Add to notebook' : 'Save note',
           ),
           if (!creating)
             DangerButton(
@@ -563,12 +563,13 @@ Future<void> openMistakeEditor(
                   if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              
             ),
         ],
       ),
     ),
+    onDisposed: () {
+      question.dispose();
+      solution.dispose();
+    },
   );
-  question.dispose();
-  solution.dispose();
 }

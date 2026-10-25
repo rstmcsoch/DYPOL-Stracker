@@ -103,14 +103,106 @@ class FakeBackend {
       );
     }
     if (request.method == 'GET') {
-      return http.Response(
-        jsonEncode(tables[recorded.target] ?? const <Map<String, dynamic>>[]),
+      // UTF-8 bytes: rows hold non-Latin text such as "JEE Main — Session 1".
+      return http.Response.bytes(
+        utf8.encode(jsonEncode(tables[recorded.target] ?? const <Map<String, dynamic>>[])),
         200,
         request: request,
-        headers: <String, String>{'content-type': 'application/json'},
+        headers: <String, String>{'content-type': 'application/json; charset=utf-8'},
       );
     }
+    if (request.method == 'POST' || request.method == 'PATCH') {
+      final String? clash = _store(recorded.target, recorded.rows);
+      if (clash != null) {
+        return http.Response(
+          jsonEncode(postgrestError('23505', 'duplicate key value violates unique constraint "$clash"')),
+          409,
+          request: request,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      }
+    } else if (request.method == 'DELETE') {
+      _remove(recorded.target, recorded.url.queryParameters);
+    }
     return http.Response('', request.method == 'POST' ? 201 : 204, request: request);
+  }
+
+  /// The live database's UNIQUE constraints besides the primary key (from the schema).
+  static const Map<String, List<List<String>>> uniqueKeys = <String, List<List<String>>>{
+    'profiles': <List<String>>[
+      <String>['user_id']
+    ],
+    'app_settings': <List<String>>[
+      <String>['user_id']
+    ],
+    'chapters': <List<String>>[
+      <String>['user_id', 'subject', 'name']
+    ],
+    'chapter_revisions': <List<String>>[
+      <String>['chapter_id', 'revision_number']
+    ],
+    'test_subject_scores': <List<String>>[
+      <String>['test_id', 'subject']
+    ],
+    'test_chapter_links': <List<String>>[
+      <String>['test_id', 'chapter_id']
+    ],
+    'pyq_records': <List<String>>[
+      <String>['chapter_id', 'exam', 'year']
+    ],
+    'chapter_stages': <List<String>>[
+      <String>['chapter_id', 'stage']
+    ],
+    'user_exam_tracks': <List<String>>[
+      <String>['user_id', 'track']
+    ],
+  };
+
+  /// Applies an upsert like PostgREST (merge on `id`) and enforces the UNIQUE keys, so a
+  /// reload sees what the server would hold. Returns the violated constraint, if any.
+  String? _store(String table, List<Map<String, dynamic>> rows) {
+    final List<Map<String, dynamic>> current = <Map<String, dynamic>>[...?tables[table]];
+    for (final Map<String, dynamic> row in rows) {
+      for (final List<String> key in uniqueKeys[table] ?? const <List<String>>[]) {
+        final bool clash = current.any((Map<String, dynamic> other) =>
+            other['id'] != row['id'] && key.every((String column) => other[column] == row[column]));
+        if (clash) return '${table}_${key.join('_')}_key';
+      }
+      final int at = current.indexWhere((Map<String, dynamic> other) => other['id'] == row['id']);
+      if (at >= 0) {
+        current[at] = <String, dynamic>{...current[at], ...row};
+      } else {
+        // Server-side defaults the app leaves out of its payloads.
+        current.add(<String, dynamic>{
+          'created_at': '2026-10-25T10:00:00Z',
+          'updated_at': '2026-10-25T10:00:00Z',
+          ...row,
+        });
+      }
+    }
+    tables[table] = current;
+    return null;
+  }
+
+  void _remove(String table, Map<String, String> filters) {
+    final Map<String, String> equal = <String, String>{
+      for (final MapEntry<String, String> f in filters.entries)
+        if (f.value.startsWith('eq.')) f.key: f.value.substring(3),
+    };
+    tables[table] = <Map<String, dynamic>>[
+      for (final Map<String, dynamic> row in tables[table] ?? const <Map<String, dynamic>>[])
+        if (!equal.entries.every((MapEntry<String, String> f) => '${row[f.key]}' == f.value)) row,
+    ];
+  }
+
+  /// Every row this backend was sent, checked against the live schema.
+  void expectAllWritesFit(SchemaSnapshot schema) {
+    for (final RecordedRequest r in requests) {
+      if (r.service != 'rest' || (r.method != 'POST' && r.method != 'PATCH')) continue;
+      for (final Map<String, dynamic> row in r.rows) {
+        expectFitsSchema(schema, r.target, row);
+      }
+    }
   }
 }
 

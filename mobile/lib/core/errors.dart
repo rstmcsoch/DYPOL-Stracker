@@ -139,3 +139,7 @@ void logFailure(String where, Object error, [StackTrace? stack]) {
   // Expected failures (a refused write, no connection) need no stack; bugs do.
   if (stack != null && error is! AppFailure) debugPrint(stack.toString());
 }
+
+/// Whether [error] means the device could not reach the server (nothing was written).
+bool isOfflineError(Object error) =>
+    userMessage(error, fallback: '').startsWith('Could not reach Stracker');

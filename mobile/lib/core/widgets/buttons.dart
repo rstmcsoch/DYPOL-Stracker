@@ -67,3 +67,35 @@ final ButtonStyle _compactStyle = OutlinedButton.styleFrom(
   visualDensity: VisualDensity.compact,
   tapTargetSize: MaterialTapTargetSize.padded,
 );
+
+/// The main Save button of an editor. It disables itself and reads "Saving…" while
+/// [onPressed] runs, so a double tap can never write the same new item twice.
+class SaveButton extends StatefulWidget {
+  const SaveButton({super.key, required this.label, required this.onPressed});
+
+  final String label;
+  final Future<void> Function()? onPressed;
+
+  @override
+  State<SaveButton> createState() => _SaveButtonState();
+}
+
+class _SaveButtonState extends State<SaveButton> {
+  bool _busy = false;
+
+  Future<void> _press() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.onPressed!();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ElevatedButton(
+        onPressed: widget.onPressed == null || _busy ? null : _press,
+        child: Text(_busy ? 'Saving…' : widget.label),
+      );
+}

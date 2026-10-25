@@ -539,10 +539,12 @@ Future<void> openErrorLogEditor(
         ],
       ),
     ),
+    onDisposed: () {
+      marks.dispose();
+      questions.dispose();
+      note.dispose();
+    },
   );
-  marks.dispose();
-  questions.dispose();
-  note.dispose();
 }
 
 /// Website TimeDialog: one row per exam subject (minutes, attempted, unattempted), saved
@@ -686,10 +688,12 @@ Future<void> openTimeDataEditor(BuildContext context, WidgetRef ref, AppData dat
         ],
       ),
     ),
+    onDisposed: () {
+      for (final List<TextEditingController> list in fields.values) {
+        for (final TextEditingController controller in list) {
+          controller.dispose();
+        }
+      }
+    },
   );
-  for (final List<TextEditingController> list in fields.values) {
-    for (final TextEditingController controller in list) {
-      controller.dispose();
-    }
-  }
 }

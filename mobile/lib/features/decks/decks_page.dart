@@ -540,13 +540,14 @@ Future<void> openCardEditor(
                   if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              
             ),
         ],
       ),
     ),
+    onDisposed: () {
+      front.dispose();
+      back.dispose();
+      hint.dispose();
+    },
   );
-  front.dispose();
-  back.dispose();
-  hint.dispose();
 }

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -90,6 +92,13 @@ class _BacklogPageState extends ConsumerState<BacklogPage> {
   String _groupBy = 'Due date';
   bool _showDone = false;
 
+  /// Cleared items are listed a page at a time so a long history stays quick to scroll.
+  static const int _donePage = 30;
+  int _doneShown = _donePage;
+
+  /// A cleared item opened from search, revealed even when it sits beyond the first page.
+  String? _focusDoneId;
+
   @override
   void initState() {
     super.initState();
@@ -101,7 +110,19 @@ class _BacklogPageState extends ConsumerState<BacklogPage> {
           .data
           .backlogItems
           .any((BacklogItem item) => item.id == focus.id && item.isDone);
+      if (_showDone) _focusDoneId = focus.id;
     }
+  }
+
+  /// How many cleared items to list: the current page, stretched to include a searched item.
+  int _doneVisible(List<BacklogItem> completed) {
+    final String? focusId = _focusDoneId;
+    if (focusId != null) {
+      final int index = completed.indexWhere((BacklogItem item) => item.id == focusId);
+      if (index >= _doneShown) _doneShown = ((index ~/ _donePage) + 1) * _donePage;
+      _focusDoneId = null;
+    }
+    return math.min(_doneShown, completed.length);
   }
 
   @override
@@ -231,9 +252,23 @@ class _BacklogPageState extends ConsumerState<BacklogPage> {
               ),
               child: const SizedBox.shrink(),
             ),
-            if (_showDone)
-              for (final BacklogItem item in completed.take(60))
+            if (_showDone) ...<Widget>[
+              for (final BacklogItem item in completed.take(_doneVisible(completed)))
                 SearchTarget(id: item.id, child: _BacklogTile(item: item, data: data, today: today)),
+              if (completed.length > _doneVisible(completed))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 8),
+                  child: Center(
+                    child: SecondaryButton(
+                      key: const ValueKey<String>('backlog-show-more-done'),
+                      icon: Icons.expand_more,
+                      label: 'Show ${math.min(_donePage, completed.length - _doneVisible(completed))} more '
+                          '(${completed.length - _doneVisible(completed)} left)',
+                      onPressed: () => setState(() => _doneShown = _doneVisible(completed) + _donePage),
+                    ),
+                  ),
+                ),
+            ],
           ],
           const SizedBox(height: 10),
           InfoBanner(
@@ -547,7 +582,7 @@ Future<void> openBacklogEditor(
             onChanged: (String? value) => setSheetState(() => dueOn = value),
           ),
           AppField(label: 'Notes (optional)', controller: notes, maxLines: 2, maxLength: 5000),
-          ElevatedButton(
+          SaveButton(
             onPressed: () async {
               if (title.text.trim().isEmpty) {
                 setSheetState(() => titleError = 'Give the item a short name, e.g. “Lecture 8 — EMI”.');
@@ -578,7 +613,7 @@ Future<void> openBacklogEditor(
                 if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
-            child: Text(creating ? 'Add to backlog' : 'Save changes'),
+            label: creating ? 'Add to backlog' : 'Save changes',
           ),
           if (!creating)
             DangerButton(
@@ -598,12 +633,13 @@ Future<void> openBacklogEditor(
                   if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              
             ),
         ],
       ),
     ),
+    onDisposed: () {
+      title.dispose();
+      notes.dispose();
+    },
   );
-  title.dispose();
-  notes.dispose();
 }

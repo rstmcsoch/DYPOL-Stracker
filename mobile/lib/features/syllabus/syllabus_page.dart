@@ -701,11 +701,13 @@ Future<void> openChapterEditor(
         );
       },
     ),
+    onDisposed: () {
+      name.dispose();
+      notes.dispose();
+      formulas.dispose();
+      weightage.dispose();
+    },
   );
-  name.dispose();
-  notes.dispose();
-  formulas.dispose();
-  weightage.dispose();
 }
 
 /// Website `persistChapterStatus`: saving a chapter as Done/Revised lays out the revision

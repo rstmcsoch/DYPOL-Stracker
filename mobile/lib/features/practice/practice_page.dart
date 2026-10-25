@@ -387,7 +387,7 @@ Future<void> openPracticeEditor(
             error: Validators.minutes(minutes.text, label: 'Minutes'),
           ),
           AppField(label: 'Notes', controller: notes, maxLines: 3, maxLength: 5000),
-          ElevatedButton(
+          SaveButton(
             onPressed: () async {
               final int attemptedValue = int.tryParse(attempted.text.trim()) ?? -1;
               final int correctValue = int.tryParse(correct.text.trim()) ?? -1;
@@ -407,6 +407,8 @@ Future<void> openPracticeEditor(
                 countsError = correctValue < 0 ? 'Enter the correct count.' : countError;
               });
               if (attemptedError != null || countError != null || skippedError != null) return;
+              // The field already shows this error; never send a value the database rejects.
+              if (Validators.minutes(minutes.text, label: 'Minutes') != null) return;
               final int minutesValue = int.tryParse(minutes.text.trim()) ?? 0;
               final PracticeSession next = PracticeSession(
                 id: session?.id ?? newId(),
@@ -431,7 +433,7 @@ Future<void> openPracticeEditor(
                 if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
-            child: Text(creating ? 'Log practice' : 'Save changes'),
+            label: creating ? 'Log practice' : 'Save changes',
           ),
           if (!creating)
             DangerButton(
@@ -451,18 +453,19 @@ Future<void> openPracticeEditor(
                   if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              
             ),
         ],
       ),
     ),
+    onDisposed: () {
+      attempted.dispose();
+      correct.dispose();
+      incorrect.dispose();
+      skipped.dispose();
+      minutes.dispose();
+      notes.dispose();
+    },
   );
-  attempted.dispose();
-  correct.dispose();
-  incorrect.dispose();
-  skipped.dispose();
-  minutes.dispose();
-  notes.dispose();
 }
 
 Future<Chapter?> _pickChapter(BuildContext context, AppData data, Chapter current) {

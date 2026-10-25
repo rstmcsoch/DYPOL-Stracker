@@ -297,8 +297,10 @@ class ProfilePage extends ConsumerWidget {
           ),
         ],
       ),
+      onDisposed: () {
+        name.dispose();
+      },
     );
-    name.dispose();
   }
 }
 
@@ -417,9 +419,11 @@ class _TrackRow extends ConsumerWidget {
           ],
         ),
       ),
+      onDisposed: () {
+        target.dispose();
+        notes.dispose();
+      },
     );
-    target.dispose();
-    notes.dispose();
   }
 }
 

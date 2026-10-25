@@ -605,9 +605,11 @@ Future<void> openChangePasswordSheet(BuildContext context, WidgetRef ref) async 
         ],
       ),
     ),
+    onDisposed: () {
+      password.dispose();
+      confirm.dispose();
+    },
   );
-  password.dispose();
-  confirm.dispose();
 }
 
 /// Shown only if a build ships without its connection details: no developer instructions,

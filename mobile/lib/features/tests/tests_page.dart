@@ -347,7 +347,12 @@ Future<void> openTestEditor(
   final Chapter? preset = creating && presetChapterId != null ? data.chapter(presetChapterId) : null;
   String jeePattern = inferJeePattern(test?.testType, oldScores);
 
-  String text(num? value) => value == null ? '' : numberLabel(value, digits: 2);
+  // Whole numbers prefill without decimals: totals must parse as integers, so "60.00" would block every edit.
+  String text(num? value) => value == null
+      ? ''
+      : value == value.roundToDouble()
+          ? value.round().toString()
+          : numberLabel(value, digits: 2).replaceFirst(RegExp(r'0+$'), '');
   final TextEditingController title = TextEditingController(text: test?.title ?? '');
   final TextEditingController marks = TextEditingController(text: text(test?.marksObtained));
   final TextEditingController total = TextEditingController(
@@ -768,23 +773,25 @@ Future<void> openTestEditor(
         );
       },
     ),
+    onDisposed: () {
+      for (final TextEditingController c in <TextEditingController>[
+        title,
+        marks,
+        total,
+        correct,
+        wrong,
+        skipped,
+        questions,
+        negative,
+        time,
+        notes,
+      ]) {
+        c.dispose();
+      }
+      for (final (TextEditingController m, TextEditingController t) in mock.values) {
+        m.dispose();
+        t.dispose();
+      }
+    },
   );
-  for (final TextEditingController c in <TextEditingController>[
-    title,
-    marks,
-    total,
-    correct,
-    wrong,
-    skipped,
-    questions,
-    negative,
-    time,
-    notes,
-  ]) {
-    c.dispose();
-  }
-  for (final (TextEditingController m, TextEditingController t) in mock.values) {
-    m.dispose();
-    t.dispose();
-  }
 }

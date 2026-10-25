@@ -285,7 +285,10 @@ class DataController extends StateNotifier<DataState> {
 
   /// Optimistic write: the change shows on screen at once, the cloud write follows, and a
   /// failure rolls the screen back (or reloads if other edits landed meanwhile) and rethrows.
-  Future<void> _run(Future<void> Function() action, Future<void> Function() apply) async {
+  ///
+  /// [multiStep] writes touch several rows; if one fails part-way the cloud may hold some of
+  /// them, so after rolling back the screen is re-synced from the cloud.
+  Future<void> _run(Future<void> Function() action, Future<void> Function() apply, {bool multiStep = false}) async {
     final AppData before = state.data;
     state = state.copyWith(saving: true, error: null);
     AppData? optimistic;
@@ -299,6 +302,7 @@ class DataController extends StateNotifier<DataState> {
       final String message = userMessage(error);
       if (optimistic == null || identical(state.data, optimistic)) {
         _apply(before);
+        if (multiStep && !isOfflineError(error)) unawaited(load(silent: true));
       } else {
         unawaited(load(silent: true));
       }
@@ -416,6 +420,7 @@ class DataController extends StateNotifier<DataState> {
               state.data.testChapterLinks.where((TestChapterLink row) => row.chapterId != chapter.id).toList(),
         ));
       },
+      multiStep: true,
     );
   }
 
@@ -510,6 +515,7 @@ class DataController extends StateNotifier<DataState> {
           testChapterLinks: links,
         ));
       },
+      multiStep: true,
     );
   }
 
@@ -534,6 +540,7 @@ class DataController extends StateNotifier<DataState> {
         errorLogs: state.data.errorLogs.where((TestErrorLog row) => row.testId != test.id).toList(),
         timeEntries: state.data.timeEntries.where((TestTimeEntry row) => row.testId != test.id).toList(),
       )),
+      multiStep: true,
     );
   }
 
@@ -681,12 +688,19 @@ class DataController extends StateNotifier<DataState> {
         await _repository.deleteRow('mistakes', mistake.id, _userId);
         final String? path = mistake.imagePath;
         if (path != null && path.isNotEmpty) {
-          await _repository.removeStorageObject(path);
+          // The note is already gone; a leftover private image is harmless, so a failed
+          // cleanup must not bring the deleted mistake back on screen.
+          try {
+            await _repository.removeStorageObject(path);
+          } catch (error, stack) {
+            logFailure('mistake image cleanup', error, stack);
+          }
         }
       },
       () async => _apply(state.data.copyWith(
         mistakes: _drop(state.data.mistakes, mistake.id, (Mistake row) => row.id),
       )),
+      multiStep: true,
     );
   }
 

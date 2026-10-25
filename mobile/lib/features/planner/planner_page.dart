@@ -804,10 +804,12 @@ Future<void> openTaskEditor(
         );
       },
     ),
+    onDisposed: () {
+      title.dispose();
+      minutes.dispose();
+      topic.dispose();
+    },
   );
-  title.dispose();
-  minutes.dispose();
-  topic.dispose();
 }
 
 /// The website's QuickTaskDialog from the quick-action menu: "Add a task" for today.
@@ -947,9 +949,11 @@ Future<void> openQuickTask(BuildContext context, WidgetRef ref) async {
         ],
       ),
     ),
+    onDisposed: () {
+      title.dispose();
+      minutes.dispose();
+    },
   );
-  title.dispose();
-  minutes.dispose();
 }
 
 /// The website's GoalDialog: "Set a weekly goal" for the shown week.
@@ -1063,8 +1067,10 @@ Future<void> openGoalEditor(BuildContext context, WidgetRef ref, AppData data, S
         );
       },
     ),
+    onDisposed: () {
+      title.dispose();
+      target.dispose();
+      unit.dispose();
+    },
   );
-  title.dispose();
-  target.dispose();
-  unit.dispose();
 }
