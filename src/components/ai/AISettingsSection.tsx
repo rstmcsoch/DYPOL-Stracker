@@ -1,10 +1,12 @@
 import { modelPreferences } from '../../lib/ai/model-preferences'
 import { pickDefaultModel, rankModels } from '../../lib/ai/model-ranking'
-import { useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, Check, CircleHelp, KeyRound, LoaderCircle, Pencil, Plus, RefreshCw, ShieldCheck, Sparkles, Star, Trash2 } from 'lucide-react'
 import { AI_PROVIDERS, AI_STATUS_COPY, DEFAULT_CAPABILITIES, providerLabel, statusTone, type AIModelOption, type AIProviderConfig, type AIProviderId } from '../../lib/ai/catalog'
 import { defaultModelFor } from '../../lib/ai/model-catalog'
-import { useAI, type AIProviderDraft } from '../../contexts/AIContext'
+import { useAI } from '../../contexts/AIContext'
+import type { AIPreference, AIProviderDraft, ProviderManager, StrackerAIStatus } from './useProviderManager'
+import { StrackerAIRow } from './StrackerAIRow'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
 import { Button, Dialog, Field, NotebookCard, StatusBadge } from '../ui'
@@ -12,9 +14,56 @@ import { AIProviderMark } from './AIProviderMark'
 
 const DEFAULT_MODEL:Record<AIProviderId,string> = { gemini:defaultModelFor('gemini'),openai:defaultModelFor('openai'),anthropic:defaultModelFor('anthropic'),deepseek:defaultModelFor('deepseek'),qwen:defaultModelFor('qwen'),custom:'' }
 
+/** Settings → AI Assistant: Stracker AI (Default) on top, then the student's own providers. */
 export function AISettingsSection() {
   const { user } = useAuth()
-  const { providers,providersLoading,providersError,backendStatus,backendHealth,checkBackendHealth,refreshProviders,saveProvider,testProvider,patchProvider,removeProvider,discoverModels,openPanel } = useAI()
+  const { providerManager,backendStatus,backendHealth,checkBackendHealth,openPanel,stracker,preference,preferStracker } = useAI()
+  const { notify } = useToast()
+  const [preferring,setPreferring] = useState(false)
+  const choose = async () => {
+    setPreferring(true)
+    try { await preferStracker(); notify('Stracker AI (Default) is now your preferred AI.') }
+    catch (error) { notify(error instanceof Error ? error.message : 'The preferred AI could not be updated. Try again.', 'error') }
+    finally { setPreferring(false) }
+  }
+  const local = Boolean(user?.isLocal)
+  const notices = <>
+    {local && <div className="ai-service-notice"><AlertTriangle size={17} /><span>AI requires a signed-in cloud account and the secure server configuration. Local preview stays available without AI or network dependencies.</span></div>}
+    {!local && backendStatus === 'misconfigured' && <div className="ai-service-notice" role="alert"><AlertTriangle size={17} /><span><strong>The Stracker AI backend is not configured for this deployment.</strong> The administrator must finish the server setup. The server reports: {backendHealth?.reason ?? 'incomplete server configuration'}{(backendHealth?.missing?.length || backendHealth?.invalid?.length) ? <> Missing or malformed: {[...(backendHealth?.missing ?? []),...(backendHealth?.invalid ?? [])].map(name => <code key={name}>{name}</code>)}</> : null} The health endpoint <code>/api/ai/health</code> shows this diagnosis; provider keys cannot be saved until it is fixed.</span><Button variant="quiet" size="sm" onClick={() => void checkBackendHealth()}>Recheck</Button></div>}
+    {!local && backendStatus === 'unreachable' && <div className="ai-service-notice" role="alert"><AlertTriangle size={17} /><span><strong>The Stracker AI backend is unavailable.</strong> The deployed app has no <code>/api/ai/*</code> functions. Deploy the Vercel AI backend (see the README) and reload.</span><Button variant="quiet" size="sm" onClick={() => void checkBackendHealth()}>Recheck</Button></div>}
+  </>
+  return <AIProviderSettings
+    manager={providerManager}
+    variant="student"
+    local={local}
+    hideListError={backendStatus === 'misconfigured' || backendStatus === 'unreachable'}
+    notices={notices}
+    headerAction={<Button type="button" variant="secondary" onClick={openPanel}><Sparkles size={15} /> Open assistant</Button>}
+    stracker={stracker}
+    preference={preference}
+    onPreferStracker={choose}
+    preferring={preferring}
+  />
+}
+
+interface AIProviderSettingsProps {
+  manager:ProviderManager
+  /** student: Settings → AI Assistant. site: Control Center, Stracker AI (Default) models. */
+  variant:'student'|'site'
+  local?:boolean
+  hideListError?:boolean
+  notices?:ReactNode
+  headerAction?:ReactNode
+  stracker?:StrackerAIStatus|null
+  preference?:AIPreference
+  onPreferStracker?:()=>void
+  preferring?:boolean
+}
+
+/** Shared add / Discover / test / enable / preferred / remove UI for both scopes. */
+export function AIProviderSettings({ manager,variant,local = false,hideListError = false,notices,headerAction,stracker = null,preference = 'stracker',onPreferStracker,preferring = false }:AIProviderSettingsProps) {
+  const { providers,providersLoading,providersError,refreshProviders,saveProvider,testProvider,patchProvider,removeProvider,discoverModels } = manager
+  const site = variant === 'site'
   const { notify } = useToast()
   const [editing,setEditing] = useState<AIProviderConfig|null>(null)
   const [draft,setDraft] = useState<AIProviderDraft|null>(null)
@@ -38,6 +87,17 @@ export function AISettingsSection() {
     setEditing(provider); setModels([]); setModelsMessage(''); setDiscoveryAvailable(false); setAutoModel(false)
     setDraft({ id:provider.id,providerId:provider.provider_id,displayName:provider.display_name,modelId:provider.model_id,apiKey:'',baseUrl:provider.base_url,protocol:provider.protocol,organizationId:provider.organization_id,region:provider.region === 'china' ? 'china' : 'international',capabilities:{...provider.capabilities} })
   }
+  const openedFromLink = useRef(false)
+  useEffect(() => {
+    if (site || local || openedFromLink.current || typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('add-ai') !== '1') return
+    openedFromLink.current = true
+    params.delete('add-ai')
+    const query = params.toString()
+    window.history.replaceState(window.history.state,'',`${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`)
+    openNew()
+  },[site,local])
   const closeEditor = () => { setApprovals({}); setDraft(null); setEditing(null); setModels([]); setModelsMessage(''); setSaving(false); setDiscovering(false) }
   const patchDraft = (patch:Partial<AIProviderDraft>) => {
     // A changed endpoint, protocol or key invalidates the models tested by Discover.
@@ -183,38 +243,37 @@ export function AISettingsSection() {
   return <>
     <NotebookCard className="settings-section ai-settings-card" id="ai-provider-settings">
       <div className="ai-settings-heading">
-        <div className="settings-section-heading"><span className="settings-section-icon ai-settings-spark"><Sparkles size={18} /></span><div><h2>AI Assistant</h2><p>Connect an AI provider with your own API key. Stracker does not provide or pay for AI usage.</p></div></div>
-        <Button type="button" variant="secondary" onClick={openPanel}><Sparkles size={15} /> Open assistant</Button>
+        <div className="settings-section-heading"><span className="settings-section-icon ai-settings-spark"><Sparkles size={18} /></span><div><h2>{site ? 'Stracker AI (Default) models' : 'AI Assistant'}</h2><p>{site ? 'Every signed-in student can use these models without adding a key. Students only ever see “Stracker AI (Default)” and the model name.' : 'Stracker AI (Default) works right away. You can also add your own AI model and choose which one to prefer.'}</p></div></div>
+        {headerAction}
       </div>
-      <div className="ai-privacy-note" role="note"><ShieldCheck size={17} /><span><strong>Your key stays server-side.</strong> Provider credentials are encrypted at rest and are never stored in browser storage or returned to the app. Your messages and relevant Stracker data are sent to the provider you choose; provider billing, quota, and privacy terms apply.</span></div>
+      <div className="ai-privacy-note" role="note"><ShieldCheck size={17} /><span>{site ? <><strong>Keys stay server-side.</strong> Credentials are encrypted at rest with the same protection as student keys and are never sent to any browser or app. Students never see the key, endpoint or provider account.</> : <><strong>Your key stays server-side.</strong> Provider credentials are encrypted at rest and are never stored in browser storage or returned to the app. Your messages and relevant Stracker data are sent to the AI you use; for your own models, provider billing, quota, and privacy terms apply.</>}</span></div>
 
-      {user?.isLocal && <div className="ai-service-notice"><AlertTriangle size={17} /><span>AI requires a signed-in cloud account and the secure server configuration. Local preview stays available without AI or network dependencies.</span></div>}
-      {!user?.isLocal && backendStatus === 'misconfigured' && <div className="ai-service-notice" role="alert"><AlertTriangle size={17} /><span><strong>The Stracker AI backend is not configured for this deployment.</strong> The administrator must finish the server setup. The server reports: {backendHealth?.reason ?? 'incomplete server configuration'}{(backendHealth?.missing?.length || backendHealth?.invalid?.length) ? <> Missing or malformed: {[...(backendHealth?.missing ?? []),...(backendHealth?.invalid ?? [])].map(name => <code key={name}>{name}</code>)}</> : null} The health endpoint <code>/api/ai/health</code> shows this diagnosis; provider keys cannot be saved until it is fixed.</span><Button variant="quiet" size="sm" onClick={() => void checkBackendHealth()}>Recheck</Button></div>}
-      {!user?.isLocal && backendStatus === 'unreachable' && <div className="ai-service-notice" role="alert"><AlertTriangle size={17} /><span><strong>The Stracker AI backend is unavailable.</strong> The deployed app has no <code>/api/ai/*</code> functions. Deploy the Vercel AI backend (see the README) and reload.</span><Button variant="quiet" size="sm" onClick={() => void checkBackendHealth()}>Recheck</Button></div>}
-      {providersError && !user?.isLocal && backendStatus !== 'misconfigured' && backendStatus !== 'unreachable' && <div className="ai-service-notice"><AlertTriangle size={17} /><span>{providersError}</span><Button variant="quiet" size="sm" onClick={() => void refreshProviders()}>Retry</Button></div>}
+      {notices}
+      {providersError && !local && !hideListError && <div className="ai-service-notice"><AlertTriangle size={17} /><span>{providersError}</span><Button variant="quiet" size="sm" onClick={() => void refreshProviders()}>Retry</Button></div>}
 
       <div className="ai-provider-list" aria-live="polite">
+        {!site && !local && <StrackerAIRow stracker={stracker} preferred={preference === 'stracker' || !providers.some(provider => provider.enabled && provider.connection_status === 'connected')} onPrefer={onPreferStracker} busy={preferring} onAddOwn={openNew} loading={providersLoading && !stracker} />}
         {providersLoading && providers.length === 0 ? <div className="ai-settings-loading"><LoaderCircle size={17} className="spin" /> Checking provider connections…</div> : providers.length ? providers.map(provider => {
           const busy = workingId === provider.id
           const canEnable = !provider.enabled && provider.connection_status === 'connected'
           return <div className="ai-provider-row" key={provider.id}>
             <AIProviderMark provider={provider.provider_id} />
-            <div className="ai-provider-copy"><div className="ai-provider-title"><strong>{provider.display_name || providerLabel(provider.provider_id)}</strong><StatusBadge tone={statusTone(provider.connection_status)}>{AI_STATUS_COPY[provider.connection_status]}</StatusBadge>{provider.is_default && <span className="ai-preferred-tag"><Star size={11} fill="currentColor" /> Preferred</span>}</div><div className="ai-provider-meta"><span>{provider.model_id}</span><span>{provider.masked_key}</span>{provider.enabled ? <span>Enabled</span> : <span>Disabled</span>}</div></div>
+            <div className="ai-provider-copy"><div className="ai-provider-title"><strong>{provider.display_name || providerLabel(provider.provider_id)}</strong><StatusBadge tone={statusTone(provider.connection_status)}>{AI_STATUS_COPY[provider.connection_status]}</StatusBadge>{provider.is_default && (site || preference === 'own') && <span className="ai-preferred-tag"><Star size={11} fill="currentColor" /> Preferred</span>}</div><div className="ai-provider-meta"><span>{provider.model_id}</span><span>{provider.masked_key}</span>{provider.enabled ? <span>Enabled</span> : <span>Disabled</span>}</div></div>
             <div className="ai-provider-actions">
               <Button size="sm" variant="quiet" onClick={() => void runProviderAction(provider.id,'test')} disabled={busy}>{busy ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />} <span className="ai-action-label">Test</span></Button>
               {canEnable ? <Button size="sm" variant="secondary" onClick={() => void runProviderAction(provider.id,'enable')} disabled={busy}><Check size={14} /><span className="ai-action-label">Enable</span></Button> : provider.enabled ? <Button size="sm" variant="quiet" onClick={() => void runProviderAction(provider.id,'disable')} disabled={busy}><span className="ai-action-label">Disable</span></Button> : null}
-              {provider.enabled && !provider.is_default && <Button size="sm" variant="quiet" onClick={() => void runProviderAction(provider.id,'default')} disabled={busy}><Star size={14} /><span className="ai-action-label">Preferred</span></Button>}
+              {provider.enabled && (!provider.is_default || (!site && preference !== 'own')) && <Button size="sm" variant="quiet" onClick={() => void runProviderAction(provider.id,'default')} disabled={busy}><Star size={14} /><span className="ai-action-label">Preferred</span></Button>}
               <Button size="sm" variant="quiet" aria-label={`Edit ${provider.display_name}`} onClick={() => openEdit(provider)}><Pencil size={14} /><span className="ai-action-label">Edit</span></Button>
               <Button size="sm" variant="quiet" aria-label={`Remove ${provider.display_name}`} onClick={() => setRemoveTarget(provider)}><Trash2 size={14} /><span className="ai-action-label">Remove</span></Button>
             </div>
           </div>
-        }) : !providersError && !user?.isLocal ? <div className="ai-provider-empty"><AIProviderMark provider="gemini" /><div><strong>No AI provider connected yet.</strong><span>Add your own API key to get started.</span></div></div> : null}
+        }) : !providersError && !local ? <div className="ai-provider-empty"><AIProviderMark provider="gemini" /><div><strong>{site ? 'No Stracker AI model yet.' : 'No model of your own yet.'}</strong><span>{site ? 'Add a provider and key so every student can use Stracker AI.' : 'Optional: add your own API key to use your own model.'}</span></div></div> : null}
       </div>
-      {!user?.isLocal && <div className="ai-settings-footer"><span><CircleHelp size={14} /> Configure one or more providers for transparent fallback.</span><Button type="button" size="sm" onClick={openNew}><Plus size={15} /> Add provider</Button></div>}
-      <p className="ai-privacy-footnote">Data retention is set by the provider. Never enter someone else’s credentials or sensitive data.</p>
+      {!local && <div className="ai-settings-footer"><span><CircleHelp size={14} /> {site ? 'Add more than one model for automatic fallback; Preferred is tried first.' : 'Configure one or more providers for transparent fallback.'}</span><Button type="button" size="sm" onClick={openNew}><Plus size={15} /> {site ? 'Add model' : 'Add your own model'}</Button></div>}
+      <p className="ai-privacy-footnote">{site ? 'Use a key from an account you control. Its provider’s billing, quota and data terms apply to all student requests.' : 'Data retention is set by the provider. Never enter someone else’s credentials or sensitive data.'}</p>
     </NotebookCard>
 
-    {draft && selectedProvider && <Dialog title={editing ? `Edit ${providerLabel(editing.provider_id)}` : 'Connect an AI provider'} subtitle="Use a key from your provider account. Stracker never supplies a substitute key." onClose={closeEditor} className="dialog-ai-provider">
+    {draft && selectedProvider && <Dialog title={editing ? `Edit ${providerLabel(editing.provider_id)}` : 'Connect an AI provider'} subtitle={site ? 'Students will use this model as Stracker AI (Default). The key is encrypted and never shown to them.' : 'Use a key from your provider account. Stracker AI (Default) stays available separately.'} onClose={closeEditor} className="dialog-ai-provider">
       <div className="ai-provider-choice-grid" role="group" aria-label="AI provider">
         {AI_PROVIDERS.map(provider => <button type="button" key={provider.id} className={`ai-provider-choice ${draft.providerId === provider.id ? 'selected' : ''}`} onClick={() => providerChanged(provider.id)} aria-pressed={draft.providerId === provider.id}><AIProviderMark provider={provider.id} small /><span>{provider.shortLabel}</span></button>)}
       </div>
@@ -234,6 +293,6 @@ export function AISettingsSection() {
       <div className="dialog-actions ai-editor-actions"><Button type="button" variant="secondary" onClick={closeEditor} disabled={saving}>Cancel</Button><Button type="button" loading={saving} onClick={() => void save()}><Check size={15} /> {saving ? 'Saving provider…' : editing ? 'Save changes' : 'Save provider'}</Button></div>
     </Dialog>}
 
-    {removeTarget && <Dialog title="Remove this provider?" subtitle="Its encrypted API key and saved connection settings will be deleted from your Stracker account." onClose={() => setRemoveTarget(null)} className="dialog-narrow"><div className="ai-remove-copy"><AIProviderMark provider={removeTarget.provider_id} /><div><strong>{removeTarget.display_name || providerLabel(removeTarget.provider_id)}</strong><span>{removeTarget.masked_key} · {removeTarget.model_id}</span></div></div><div className="dialog-actions"><Button variant="secondary" onClick={() => setRemoveTarget(null)}>Keep provider</Button><Button variant="danger" onClick={() => void confirmRemove()}><Trash2 size={15} /> Remove key</Button></div></Dialog>}
+    {removeTarget && <Dialog title="Remove this provider?" subtitle={site ? 'Its encrypted API key and connection settings will be deleted. Students fall back to the next Stracker AI model, if any.' : 'Its encrypted API key and saved connection settings will be deleted from your Stracker account.'} onClose={() => setRemoveTarget(null)} className="dialog-narrow"><div className="ai-remove-copy"><AIProviderMark provider={removeTarget.provider_id} /><div><strong>{removeTarget.display_name || providerLabel(removeTarget.provider_id)}</strong><span>{removeTarget.masked_key} · {removeTarget.model_id}</span></div></div><div className="dialog-actions"><Button variant="secondary" onClick={() => setRemoveTarget(null)}>Keep provider</Button><Button variant="danger" onClick={() => void confirmRemove()}><Trash2 size={15} /> Remove key</Button></div></Dialog>}
   </>
 }

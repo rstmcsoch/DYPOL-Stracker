@@ -163,7 +163,8 @@ describe('AI request path', () => {
 
   it('explains each "no provider" state with the next step', async () => {
     const { runAssistant } = await import('../_lib/agent.js')
-    await expect(runAssistant(runInput('hello'))).rejects.toMatchObject({ code: 'provider_not_configured' })
+    // No own provider and no Stracker AI (Default) configured: the friendly default warning.
+    await expect(runAssistant(runInput('hello'))).rejects.toMatchObject({ code: 'stracker_ai_unavailable' })
     db.ai_provider_configs = [{ id: crypto.randomUUID(), user_id: USER, enabled: false, connection_status: 'not_tested' }]
     await expect(runAssistant(runInput('hello'))).rejects.toMatchObject({ code: 'provider_not_ready' })
     db.ai_provider_configs[0]!.connection_status = 'connected'
@@ -229,5 +230,114 @@ describe('chat reliability', () => {
     const result = await runAssistant(input('Hello'))
     expect(result).toMatchObject({ status: 'completed', content: 'Hello!' })
     expect(bodies[0]).not.toContain('functionDeclarations')
+  })
+})
+
+describe('Stracker AI (Default)', () => {
+  const SITE_KEY = 'sk-site-secret-key-9876'
+  const SITE_URL = 'https://hidden-vendor.example.com/v1'
+  const runInput = (message: string, emit: (event: string, data: unknown) => void = () => undefined) => ({
+    userId: USER, conversationId: crypto.randomUUID(), taskId: crypto.randomUUID(), message, pageContext: null, priorMessages: [],
+    userClient: adminClient as never, adminClient: adminClient as never, signal: new AbortController().signal, emit: emit as never
+  })
+  const siteRow = async (overrides: Row = {}) => {
+    const { encryptCredential } = await import('../_lib/secrets.js')
+    return { id: crypto.randomUUID(), provider_id: 'gemini', display_name: 'Owner Gemini', encrypted_api_key: encryptCredential(SITE_KEY), key_hint: '9876', model_id: 'models/gemini-3.6-flash', base_url: null, protocol: 'google', organization_id: null, provider_config: {}, capabilities: {}, enabled: true, is_default: true, connection_status: 'connected', last_checked_at: null, cooldown_until: null, failure_count: 0, updated_by: '00000000-0000-4000-8000-0000000000aa', ...overrides }
+  }
+  const ownRow = async () => {
+    const { encryptCredential } = await import('../_lib/secrets.js')
+    return { id: crypto.randomUUID(), user_id: USER, provider_id: 'gemini', display_name: 'My Gemini', encrypted_api_key: encryptCredential('AIza-own-key'), key_hint: '-key', model_id: 'gemini-2.5-flash', base_url: null, protocol: 'google', organization_id: null, provider_config: {}, capabilities: {}, enabled: true, is_default: true, connection_status: 'connected', last_checked_at: null, cooldown_until: null, failure_count: 0 }
+  }
+
+  it('public provider payload never contains the key, key hint, base URL, vendor or owner', async () => {
+    db.site_ai_providers = [await siteRow({ provider_id: 'custom', base_url: SITE_URL, protocol: 'openai-compatible', model_id: 'openai/gpt-oss-20b' })]
+    const list = await call(await providers(), 'GET')
+    expect(list.status).toBe(200)
+    const stracker = list.json.stracker as Row
+    expect(Object.keys(stracker).sort()).toEqual(['dailyLimit', 'model', 'name', 'preferred', 'status', 'usedToday'])
+    expect(stracker).toMatchObject({ name: 'Stracker AI (Default)', model: 'openai/gpt-oss-20b', status: 'ready', preferred: true })
+    const text = JSON.stringify(list.json)
+    for (const secret of [SITE_KEY, '9876', SITE_URL, 'hidden-vendor', 'Owner Gemini', 'encrypted', 'base_url', 'key_hint', 'baseUrl', 'apiKey', '0000000000aa']) expect(text).not.toContain(secret)
+    expect(list.json.preference).toBe('stracker')
+  })
+
+  it('publicStrackerStatus only copies safe fields and reports unavailable when switched off', async () => {
+    const { publicStrackerStatus, DEFAULT_SITE_AI_SETTINGS } = await import('../_lib/stracker-default.js')
+    const row = await siteRow({ base_url: SITE_URL })
+    const ready = publicStrackerStatus({ settings: DEFAULT_SITE_AI_SETTINGS, rows: [row as never], preference: 'own', usedToday: 3 })
+    expect(ready).toEqual({ name: 'Stracker AI (Default)', model: 'gemini-3.6-flash', status: 'ready', preferred: false, dailyLimit: DEFAULT_SITE_AI_SETTINGS.perUserDaily, usedToday: 3 })
+    const off = publicStrackerStatus({ settings: { ...DEFAULT_SITE_AI_SETTINGS, enabled: false }, rows: [row as never], preference: 'stracker', usedToday: 0 })
+    expect(off).toMatchObject({ status: 'unavailable', model: null })
+    expect(JSON.stringify(off)).not.toContain(SITE_URL)
+  })
+
+  it('a brand-new student with no key chats through Stracker AI, recorded as "stracker"', async () => {
+    db.site_ai_providers = [await siteRow()]
+    providerReply = () => new Response('data: {"candidates":[{"content":{"parts":[{"text":"Hi there"}]}}]}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    const events: Array<[string, unknown]> = []
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(runInput('hello', (event, data) => events.push([event, data])))
+    expect(result).toMatchObject({ status: 'completed', providerId: 'stracker' })
+    expect(db.ai_messages![0]).toMatchObject({ provider_id: 'stracker' })
+    const emitted = JSON.stringify(events)
+    expect(emitted).toContain('Stracker AI (Default)')
+    expect(emitted).not.toContain('Owner Gemini')
+    expect(emitted).not.toContain('"gemini"')
+  })
+
+  it('a failing default shows the friendly warning without vendor details', async () => {
+    db.site_ai_providers = [await siteRow()]
+    providerReply = () => new Response(JSON.stringify({ error: { code: 500, message: 'internal', status: 'INTERNAL' } }), { status: 500, headers: { 'content-type': 'application/json' } })
+    const { runAssistant } = await import('../_lib/agent.js')
+    const error = await runAssistant(runInput('hello')).catch(failure => failure as { code: string; message: string })
+    expect(error).toMatchObject({ code: 'stracker_ai_unavailable' })
+    expect((error as { message: string }).message).toBe('Stracker AI is temporarily unavailable. You can add your own AI model to keep going.')
+  })
+
+  it('falls back to the student’s own provider when the default fails', async () => {
+    db.site_ai_providers = [await siteRow()]
+    db.ai_provider_configs = [await ownRow()]
+    db.ai_user_preferences = [{ user_id: USER, preferred: 'stracker' }]
+    let calls = 0
+    providerReply = () => (++calls === 1
+      ? new Response(JSON.stringify({ error: { code: 503, message: 'overloaded', status: 'UNAVAILABLE' } }), { status: 503, headers: { 'content-type': 'application/json' } })
+      : new Response('data: {"candidates":[{"content":{"parts":[{"text":"From yours"}]}}]}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } }))
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(runInput('hello'))
+    expect(result).toMatchObject({ status: 'completed', providerId: 'gemini', fallbackFrom: 'stracker' })
+    // A temporary vendor problem never switches the shared default off for everyone.
+    expect(db.site_ai_providers[0]).toMatchObject({ enabled: true })
+  })
+
+  it('respects the preferred choice: own provider by default for existing users, Stracker after prefer_stracker', async () => {
+    db.site_ai_providers = [await siteRow()]
+    db.ai_provider_configs = [await ownRow()]
+    const { runAssistant } = await import('../_lib/agent.js')
+    expect(await runAssistant(runInput('hello'))).toMatchObject({ providerId: 'gemini' })
+    expect((await call(await providers(), 'GET')).json.preference).toBe('own')
+    expect((await call(await providers(), 'PATCH', { action: 'prefer_stracker' })).status).toBe(200)
+    expect(await runAssistant(runInput('hello'))).toMatchObject({ providerId: 'stracker' })
+    const id = db.ai_provider_configs[0]!.id as string
+    expect((await call(await providers(), 'PATCH', { id, action: 'default' })).json.preference).toBe('own')
+  })
+
+  it('enforces the per-student Stracker AI limit with a clear message', async () => {
+    db.site_ai_providers = [await siteRow()]
+    rpcAllowed = false
+    const { runAssistant } = await import('../_lib/agent.js')
+    await expect(runAssistant(runInput('hello'))).rejects.toMatchObject({ code: 'stracker_ai_limit', status: 429 })
+  })
+
+  it('the owner switch turns the default off for students', async () => {
+    db.site_ai_providers = [await siteRow()]
+    db.site_ai_settings = [{ id: 1, enabled: false, per_user_per_minute: 4, per_user_daily: 40 }]
+    const { runAssistant } = await import('../_lib/agent.js')
+    await expect(runAssistant(runInput('hello'))).rejects.toMatchObject({ code: 'stracker_ai_unavailable' })
+    expect(((await call(await providers(), 'GET')).json.stracker as Row).status).toBe('unavailable')
+  })
+
+  it('students cannot reach the owner settings route', async () => {
+    const res = await call(await providers(), 'PUT', { settings: { enabled: false, perUserPerMinute: 1, perUserDaily: 1 } })
+    expect(res.status).toBe(405)
   })
 })

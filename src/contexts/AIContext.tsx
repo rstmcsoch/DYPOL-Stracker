@@ -1,10 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { AIModelOption, AIProviderConfig, AIProviderId } from '../lib/ai/catalog'
+import type { AIProviderConfig } from '../lib/ai/catalog'
 import { redactPotentialSecrets } from '../lib/ai/sanitize'
 import { createId } from '../lib/id'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { useProviderManager, type AIPreference, type AIProviderDraft, type DiscoverResult, type ProviderManager, type StrackerAIStatus } from '../components/ai/useProviderManager'
 import { useData } from './DataContext'
 
 export interface AIConversationSummary { id:string; title:string; created_at:string; updated_at:string }
@@ -28,6 +29,8 @@ export interface AIMessage {
   confirmation?:AIActionConfirmation
   result?:Record<string,unknown>|null
   error?:string|null
+  /** Server error code, e.g. stracker_ai_unavailable (shows the "Add your own model" action). */
+  errorCode?:string|null
   retryable?:boolean
   createdAt:string
 }
@@ -42,20 +45,7 @@ export interface AITaskState {
   cancellable?:boolean
   startedAt:string
 }
-export interface AIProviderDraft {
-  id?:string
-  providerId:AIProviderId
-  displayName?:string
-  modelId:string
-  apiKey?:string
-  baseUrl?:string|null
-  protocol?:'google'|'openai-compatible'|'anthropic-compatible'
-  organizationId?:string|null
-  region?:'international'|'china'
-  capabilities?:Record<string,boolean>
-  /** Custom providers only: signed proof from Discover that this model passed a real chat test. */
-  approvalToken?:string
-}
+export type { AIProviderDraft } from '../components/ai/useProviderManager'
 /**
  * Deployment-level AI backend status, from the public /api/ai/health check:
  * - 'ok': the serverless AI backend is deployed and its server configuration is complete.
@@ -81,11 +71,17 @@ interface AIContextValue {
   backendHealth:AIBackendHealth|null
   checkBackendHealth:()=>Promise<void>
   refreshProviders:()=>Promise<void>
-  discoverModels:(draft:AIProviderDraft)=>Promise<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>;approvals?:Record<string,string>;probe?:{listed:number;tried:number;passed:number}}>
+  discoverModels:(draft:AIProviderDraft)=>Promise<DiscoverResult>
   saveProvider:(draft:AIProviderDraft)=>Promise<AIProviderConfig>
   testProvider:(id:string)=>Promise<{latencyMs?:number}>
   patchProvider:(id:string,action:'enable'|'disable'|'default')=>Promise<void>
   removeProvider:(id:string)=>Promise<void>
+  /** The student's provider manager (same logic the Control Center uses for Stracker AI). */
+  providerManager:ProviderManager
+  /** Stracker AI (Default): brand, model name and availability only. */
+  stracker:StrackerAIStatus|null
+  preference:AIPreference
+  preferStracker:()=>Promise<void>
   recentConversations:AIConversationSummary[]
   recentTasks:AIRecentTask[]
   loadConversations:()=>Promise<void>
@@ -143,9 +139,6 @@ function mapStoredMessage(value:Record<string,unknown>):AIMessage {
 export function AIProvider({ children }: { children:ReactNode }) {
   const { user } = useAuth()
   const { refresh } = useData()
-  const [providers,setProviders] = useState<AIProviderConfig[]>([])
-  const [providersLoading,setProvidersLoading] = useState(false)
-  const [providersError,setProvidersError] = useState<string|null>(null)
   const [backendStatus,setBackendStatus] = useState<AIBackendStatus>('unknown')
   const [backendHealth,setBackendHealth] = useState<AIBackendHealth|null>(null)
   const [recentConversations,setRecentConversations] = useState<AIConversationSummary[]>([])
@@ -228,17 +221,8 @@ export function AIProvider({ children }: { children:ReactNode }) {
     }
   },[accessToken])
 
-  const refreshProviders = useCallback(async () => {
-    if (!user || user.isLocal) { setProviders([]); setProvidersError(null); return }
-    setProvidersLoading(true)
-    try {
-      const result = await apiFetch<{providers:AIProviderConfig[]}>('/api/ai/providers',{method:'GET'})
-      setProviders(result.providers ?? [])
-      setProvidersError(null)
-    } catch (error) {
-      setProvidersError(error instanceof Error ? error.message : 'Provider settings could not be loaded.')
-    } finally { setProvidersLoading(false) }
-  },[user,apiFetch])
+  const manager = useProviderManager(apiFetch,'user',Boolean(user && !user.isLocal))
+  const { providers,providersLoading,providersError,refreshProviders,discoverModels,saveProvider,testProvider,patchProvider,removeProvider,stracker,preference,preferStracker,reset:resetProviders } = manager
 
   const loadConversations = useCallback(async () => {
     if (!user || user.isLocal) { setRecentConversations([]); return }
@@ -258,65 +242,18 @@ export function AIProvider({ children }: { children:ReactNode }) {
 
   useEffect(() => {
     if (!user) {
-      setProviders([]); setRecentConversations([]); setRecentTasks([]); setConversationId(null); setMessages([]); setActiveTask(null)
+      resetProviders(); setRecentConversations([]); setRecentTasks([]); setConversationId(null); setMessages([]); setActiveTask(null)
       setBackendStatus('unknown'); setBackendHealth(null)
       return
     }
     if (user.isLocal) {
-      setProviders([]); setProvidersError(null); setRecentConversations([]); setRecentTasks([]); setConversationId(null); setMessages([])
+      resetProviders(); setRecentConversations([]); setRecentTasks([]); setConversationId(null); setMessages([])
       setBackendStatus('unknown'); setBackendHealth(null)
       return
     }
     void checkBackendHealth()
     void Promise.all([refreshProviders(),loadConversations(),loadTasks()])
-  },[user?.id,user?.isLocal,checkBackendHealth,refreshProviders,loadConversations,loadTasks,user])
-
-  const discoverModels = useCallback(async (draft:AIProviderDraft) => {
-    const { id,...setup } = draft
-    const useSavedConfiguration = Boolean(id && !draft.apiKey)
-    const { approvalToken:_unused,...discovery } = setup
-    void _unused
-    return apiFetch<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>;approvals?:Record<string,string>;probe?:{listed:number;tried:number;passed:number}}>('/api/ai/models',{method:'POST',body:JSON.stringify(useSavedConfiguration ? { configId:id } : discovery)})
-  },[apiFetch])
-
-  // Every write returns the saved row, so the list is updated in place instead of re-downloading
-  // all providers after each action (each GET is another authenticated serverless round trip).
-  const putProvider = useCallback((provider:AIProviderConfig) => {
-    setProviders(current => {
-      const others = current.filter(item => item.id !== provider.id)
-      const next = provider.is_default ? others.map(item => item.is_default ? { ...item,is_default:false } : item) : others
-      const index = current.findIndex(item => item.id === provider.id)
-      if (index < 0) return [...next,provider]
-      const merged = [...next]; merged.splice(Math.min(index,merged.length),0,provider); return merged
-    })
-  },[])
-
-  const saveProvider = useCallback(async (draft:AIProviderDraft) => {
-    const result = await apiFetch<{provider?:AIProviderConfig}>('/api/ai/providers',{method:'POST',body:JSON.stringify(draft)})
-    if (!result.provider) throw new AIRequestError('The provider was not saved. Try again.','provider_not_returned',200)
-    putProvider(result.provider)
-    return result.provider
-  },[apiFetch,putProvider])
-
-  const testProvider = useCallback(async (id:string) => {
-    try { return await apiFetch<{latencyMs?:number}>('/api/ai/test-connection',{method:'POST',body:JSON.stringify({configId:id})}) ?? {} }
-    // The test writes connection status server-side; reload it in the background, not before returning.
-    finally { void refreshProviders() }
-  },[apiFetch,refreshProviders])
-
-  const patchProvider = useCallback(async (id:string,action:'enable'|'disable'|'default') => {
-    const result = await apiFetch<{provider?:AIProviderConfig}>('/api/ai/providers',{method:'PATCH',body:JSON.stringify({id,action})})
-    if (result?.provider) putProvider(result.provider)
-    else void refreshProviders()
-  },[apiFetch,putProvider,refreshProviders])
-
-  /** Optimistic: the row disappears at once and is restored if the server refuses. */
-  const removeProvider = useCallback(async (id:string) => {
-    let snapshot:AIProviderConfig[] = []
-    setProviders(current => { snapshot = current; return current.filter(item => item.id !== id) })
-    try { await apiFetch('/api/ai/providers',{method:'DELETE',body:JSON.stringify({id})}) }
-    catch (error) { setProviders(snapshot); throw error }
-  },[apiFetch])
+  },[user?.id,user?.isLocal,checkBackendHealth,refreshProviders,loadConversations,loadTasks,user,resetProviders])
 
   const openConversation = useCallback(async (id:string) => {
     if (requestLockRef.current) return
@@ -482,7 +419,10 @@ export function AIProvider({ children }: { children:ReactNode }) {
       } else if (name === 'error') {
         flushDelta(); finalEventSeen = true
         const messageText = typeof payload.message === 'string' ? payload.message : 'Stracker could not complete that AI request. Try again.'
-        setAssistant({status:'failed',content:messageText,error:messageText})
+        const errorCode = typeof payload.error === 'string' ? payload.error : null
+        setAssistant({status:'failed',content:messageText,error:messageText,errorCode})
+        // Stracker AI (Default) availability changed: refresh what Settings and the window show.
+        if (errorCode?.startsWith('stracker_ai')) void refreshProviders()
         setActiveTask(current => current ? { ...current,status:'failed',progress:'Request failed.' } : current)
       } else if (name === 'cancelled') {
         flushDelta(); finalEventSeen = true
@@ -533,7 +473,7 @@ export function AIProvider({ children }: { children:ReactNode }) {
       controllerRef.current = null
       if (finalEventSeen) void Promise.all([loadConversations(),loadTasks()])
     }
-  },[accessToken,loadConversations,loadTasks])
+  },[accessToken,loadConversations,loadTasks,refreshProviders])
 
   const retryLast = useCallback(async () => {
     if (!lastRequest || requestLockRef.current) return
@@ -590,9 +530,10 @@ export function AIProvider({ children }: { children:ReactNode }) {
   const isBusy = activeTask !== null && ['queued','running','tool_call','fallback','retrying'].includes(activeTask.status)
   const value = useMemo<AIContextValue>(() => ({
     providers,providersLoading,providersError,backendStatus,backendHealth,checkBackendHealth,refreshProviders,discoverModels,saveProvider,testProvider,patchProvider,removeProvider,
+    providerManager:manager,stracker,preference,preferStracker,
     recentConversations,recentTasks,loadConversations,loadTasks,openConversation,clearConversation,newConversation,conversationId,conversationTitle,messages,activeTask,isBusy,lastRequest,
     sendMessage,retryLast,stopTask,confirmAction,panelOpen,minimized,largeOpen,openPanel,minimizePanel,closePanel,restorePanel,expandPanel,collapseLarge
-  }),[providers,providersLoading,providersError,backendStatus,backendHealth,checkBackendHealth,refreshProviders,discoverModels,saveProvider,testProvider,patchProvider,removeProvider,recentConversations,recentTasks,loadConversations,loadTasks,openConversation,clearConversation,newConversation,conversationId,conversationTitle,messages,activeTask,isBusy,lastRequest,sendMessage,retryLast,stopTask,confirmAction,panelOpen,minimized,largeOpen,openPanel,minimizePanel,closePanel,restorePanel,expandPanel,collapseLarge])
+  }),[providers,providersLoading,providersError,backendStatus,backendHealth,checkBackendHealth,refreshProviders,discoverModels,saveProvider,testProvider,patchProvider,removeProvider,manager,stracker,preference,preferStracker,recentConversations,recentTasks,loadConversations,loadTasks,openConversation,clearConversation,newConversation,conversationId,conversationTitle,messages,activeTask,isBusy,lastRequest,sendMessage,retryLast,stopTask,confirmAction,panelOpen,minimized,largeOpen,openPanel,minimizePanel,closePanel,restorePanel,expandPanel,collapseLarge])
   return <AIContext.Provider value={value}>{children}</AIContext.Provider>
 }
 

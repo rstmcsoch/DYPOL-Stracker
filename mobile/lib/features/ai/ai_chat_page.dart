@@ -44,13 +44,30 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   String? _error;
   String? _status;
   AiHealth? _health;
+  AiProviderList? _models;
+  bool _strackerFailed = false;
   List<AiConversation> _conversations = <AiConversation>[];
 
   @override
   void initState() {
     super.initState();
     _checkHealth();
+    _loadModels();
     _loadConversations();
+  }
+
+  /// Which models the student can use: Stracker AI (Default) first, then their own.
+  Future<void> _loadModels() async {
+    try {
+      final AiProviderList models = await _client.providerList();
+      if (!mounted) return;
+      setState(() {
+        _models = models;
+        if (models.stracker?.ready ?? false) _strackerFailed = false;
+      });
+    } catch (_) {
+      // The chat still works; the strip simply stays hidden until the next load.
+    }
   }
 
   @override
@@ -205,12 +222,15 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               reply.text += '\n\n(Stopped.)';
             });
           case 'error':
+            final bool strackerIssue = '${event.data['error'] ?? ''}'.startsWith('stracker_ai');
             setState(() {
               _status = null;
               reply.streaming = false;
               reply.failed = true;
+              if (strackerIssue) _strackerFailed = true;
               _error = event.data['message']?.toString() ?? 'The assistant failed to answer.';
             });
+            if (strackerIssue) unawaited(_loadModels());
         }
       }
     } catch (error) {
@@ -273,7 +293,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           onPressed: _showHistory,
         ),
         IconButton(
-          tooltip: 'AI providers',
+          tooltip: 'AI models',
           icon: const Icon(Icons.hub_outlined, size: 20),
           onPressed: _showProviders,
         ),
@@ -286,12 +306,16 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               child: InfoBanner(
                 health.reason == 'unreachable'
                     ? 'The assistant could not be reached. Check your connection, then try again.'
-                    : 'The assistant needs your own provider key before it can answer. '
-                        'Add one under AI providers, or from the website’s AI settings.',
+                    : 'Stracker AI is not available on this server right now. Try again in a moment.',
                 tone: PillTone.warn,
                 icon: Icons.smart_toy_outlined,
               ),
             ),
+          _ModelStrip(
+            models: _models,
+            strackerFailed: _strackerFailed,
+            onAddOwn: _showProviders,
+          ),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
@@ -494,8 +518,78 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   Future<void> _showProviders() async {
     await showAppSheet<void>(
       context,
-      title: 'AI providers',
+      title: 'AI models',
       builder: (BuildContext sheetContext) => _ProvidersBody(client: _client),
+    );
+    if (mounted) unawaited(_loadModels());
+  }
+}
+
+/// Compact line under the title: which model answers, a small "Add your own model" button,
+/// and the professional warning when Stracker AI (Default) is unavailable.
+class _ModelStrip extends StatelessWidget {
+  const _ModelStrip({required this.models, required this.strackerFailed, required this.onAddOwn});
+
+  final AiProviderList? models;
+  final bool strackerFailed;
+  final VoidCallback onAddOwn;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final AiProviderList? list = models;
+    if (list == null) return const SizedBox.shrink();
+    final StrackerAiStatus? stracker = list.stracker;
+    final bool strackerReady = (stracker?.ready ?? false) && !strackerFailed;
+    final List<AiProvider> own = <AiProvider>[for (final AiProvider row in list.providers) if (row.isReady) row];
+    final AiProvider? ownPreferred = own.isEmpty
+        ? null
+        : own.firstWhere((AiProvider row) => row.isDefault, orElse: () => own.first);
+    final bool useStracker = strackerReady && (!list.prefersOwn || ownPreferred == null);
+    final String? using = useStracker
+        ? '${StrackerAiStatus.label}${stracker?.model == null ? '' : ' · ${stracker!.model}'}'
+        : ownPreferred == null
+            ? null
+            : '${ownPreferred.displayName} · ${ownPreferred.modelId}';
+    final bool showWarning = stracker != null && !strackerReady;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  using == null ? 'Ask about your studies' : 'Using $using',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onAddOwn,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+                icon: const Icon(Icons.add, size: 15),
+                label: const Text('Add your own model'),
+              ),
+            ],
+          ),
+          if (showWarning) ...<Widget>[
+            const SizedBox(height: 4),
+            InfoBanner(
+              own.isEmpty
+                  ? StrackerAiStatus.unavailableMessage
+                  : 'Stracker AI is temporarily unavailable, so your own model is answering.',
+              tone: PillTone.warn,
+              icon: Icons.warning_amber_rounded,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -521,7 +615,7 @@ class _EmptyChat extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           'Stracker AI reads your syllabus, tests, revisions and mistakes, so its answers are about '
-          'your own preparation. Your key is never shown again after you save it.',
+          'your own preparation. Stracker AI (Default) is ready to use, or add your own model.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
         ),
@@ -560,6 +654,8 @@ class _ProvidersBody extends StatefulWidget {
 
 class _ProvidersBodyState extends State<_ProvidersBody> {
   List<AiProvider> _rows = <AiProvider>[];
+  StrackerAiStatus? _stracker;
+  String _preference = 'stracker';
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -572,10 +668,12 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
 
   Future<void> _load() async {
     try {
-      final List<AiProvider> rows = await widget.client.providers();
+      final AiProviderList list = await widget.client.providerList();
       if (!mounted) return;
       setState(() {
-        _rows = rows;
+        _rows = list.providers;
+        _stracker = list.stracker;
+        _preference = list.preference;
         _loading = false;
         _error = null;
       });
@@ -609,8 +707,17 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          if (_stracker != null) ...<Widget>[
+            _StrackerCard(
+              stracker: _stracker!,
+              preferred: _preference != 'own',
+              onPrefer: () => _run(widget.client.preferStracker),
+              onAddOwn: () => _addProvider(context),
+            ),
+            const SizedBox(height: 10),
+          ],
           InfoBanner(
-            'Keys are encrypted and never leave our servers. This app only sends the key '
+            'Your own keys are encrypted and never leave our servers. This app only sends the key '
             'you type here, once, over HTTPS with your own session token.',
             icon: Icons.lock_outline,
           ),
@@ -623,9 +730,9 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
             )
           else if (_rows.isEmpty)
             const EmptyState(
-              title: 'No providers configured',
-              message: 'Add your own Gemini, OpenAI-compatible, Anthropic-compatible or Qwen key. '
-                  'The website’s AI setup screen offers the same options.',
+              title: 'No models of your own yet',
+              message: 'Optional: add your own Gemini, OpenAI-compatible, Anthropic-compatible or Qwen key. '
+                  'The website’s AI settings offer the same options.',
               icon: Icons.hub_outlined,
             )
           else
@@ -649,8 +756,8 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
                         ),
-                        if (provider.isDefault)
-                          const Pill('default', tone: PillTone.accent, dense: true),
+                        if (provider.isDefault && _preference == 'own')
+                          const Pill('preferred', tone: PillTone.accent, dense: true),
                         const SizedBox(width: 4),
                         Pill(
                           provider.connectionStatus,
@@ -686,7 +793,7 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
                         TextButton(
                           onPressed: () =>
                               _run(() => widget.client.providerAction(provider.id, 'default')),
-                          child: const Text('Make default'),
+                          child: const Text('Prefer'),
                         ),
                         TextButton(
                           onPressed: () async {
@@ -724,7 +831,7 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
           OutlinedButton.icon(
             onPressed: () => _addProvider(context),
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add a provider'),
+            label: const Text('Add your own model'),
           ),
         ],
       ),
@@ -743,6 +850,81 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
           Navigator.of(sheetContext).pop();
           _load();
         },
+      ),
+    );
+  }
+}
+
+/// Stracker AI (Default): brand, model name and availability only. It can be preferred but
+/// never edited or removed.
+class _StrackerCard extends StatelessWidget {
+  const _StrackerCard({
+    required this.stracker,
+    required this.preferred,
+    required this.onPrefer,
+    required this.onAddOwn,
+  });
+
+  final StrackerAiStatus stracker;
+  final bool preferred;
+  final VoidCallback onPrefer;
+  final VoidCallback onAddOwn;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.palette.paperSoft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: stracker.ready ? colors.palette.green : colors.palette.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(Icons.auto_awesome, size: 17, color: colors.palette.accent),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(StrackerAiStatus.label, style: Theme.of(context).textTheme.titleSmall),
+              ),
+              if (preferred) const Pill('preferred', tone: PillTone.accent, dense: true),
+              const SizedBox(width: 4),
+              Pill(
+                stracker.ready ? 'ready' : 'unavailable',
+                tone: stracker.ready ? PillTone.good : PillTone.warn,
+                dense: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            <String>[
+              if (stracker.model != null) stracker.model!,
+              'Included with Stracker',
+              if (stracker.ready && stracker.dailyLimit > 0)
+                '${(stracker.dailyLimit - stracker.usedToday).clamp(0, stracker.dailyLimit)} of ${stracker.dailyLimit} left today',
+            ].join(' · '),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+          ),
+          if (!stracker.ready) ...<Widget>[
+            const SizedBox(height: 8),
+            const InfoBanner(
+              StrackerAiStatus.unavailableMessage,
+              tone: PillTone.warn,
+              icon: Icons.warning_amber_rounded,
+            ),
+            const SizedBox(height: 4),
+            TextButton.icon(
+              onPressed: onAddOwn,
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add your own model'),
+            ),
+          ] else if (!preferred)
+            TextButton(onPressed: onPrefer, child: const Text('Prefer')),
+        ],
       ),
     );
   }

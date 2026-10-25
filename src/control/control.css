@@ -643,3 +643,11 @@ textarea.cc-input { resize: vertical; min-height: 84px; }
 .cc-an-note .cc-input { min-height: 32px; padding: 4px 8px; font-size: 13px; }
 .cc-an-foot { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 @media (max-width: 640px) { .cc-an-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Stracker AI (Default) page: limits form plus the shared provider settings. */
+.cc-ai-defaults { display: grid; gap: 18px; }
+.cc-toggle-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; cursor: pointer; }
+.cc-toggle-row input { margin-top: 3px; }
+.cc-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.cc-row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.cc-ai-provider-settings { min-width: 0; }

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowDown, ArrowUpRight, Check, ChevronDown, CircleAlert, Clock3, History, LoaderCircle, Maximize2, MessageSquarePlus, Minimize2, Minus, RefreshCw, RotateCcw, Send, ShieldCheck, Sparkles, Square, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUpRight, Check, ChevronDown, CircleAlert, Plus, Clock3, History, LoaderCircle, Maximize2, MessageSquarePlus, Minimize2, Minus, RefreshCw, RotateCcw, Send, ShieldCheck, Sparkles, Square, Trash2, X } from 'lucide-react'
 import { useAI, type AIActionConfirmation, type AIMessage } from '../../contexts/AIContext'
 import { providerLabel } from '../../lib/ai/catalog'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
 import { Button, Dialog, IconButton, StatusBadge } from '../ui'
 import { AIProviderMark } from './AIProviderMark'
+import { STRACKER_AI_NAME, StrackerUnavailableNotice } from './StrackerAIRow'
 import { useScrollExpanded } from '../../lib/ui/scroll-expand'
 import { useExit } from '../../lib/ui/use-exit'
 import { isSafeAppPath } from '../../lib/safe-path'
@@ -18,10 +19,32 @@ const SUGGESTIONS = [
   'Add a study task for today.'
 ]
 
+/** Settings link that opens the "add your own model" editor straight away. */
+export const ADD_OWN_MODEL_PATH = '/settings?add-ai=1#ai-provider-settings'
+
 function activeProviderLabel(providerId:string|undefined|null,providers:Array<{provider_id:string;display_name:string}>):string {
   if (!providerId) return 'AI Assistant'
+  if (providerId === 'stracker') return STRACKER_AI_NAME
   const configured = providers.find(item => item.provider_id === providerId)
   return configured?.display_name || providerLabel(providerId)
+}
+
+/**
+ * Which AI answers next: Stracker AI (Default) unless the student prefers (and has) their own
+ * working model. When the default is unavailable, their own models take over automatically.
+ */
+function useActiveAI() {
+  const { providers,stracker,preference } = useAI()
+  return useMemo(() => {
+    const own = providers.filter(provider => provider.enabled && provider.connection_status === 'connected')
+    const ownPreferred = own.find(provider => provider.is_default) ?? own[0] ?? null
+    const strackerReady = stracker?.status === 'ready'
+    const useStracker = strackerReady && (preference === 'stracker' || !ownPreferred)
+    const active = useStracker
+      ? { providerId:'stracker',name:STRACKER_AI_NAME,model:stracker?.model ?? null }
+      : ownPreferred ? { providerId:ownPreferred.provider_id,name:ownPreferred.display_name || providerLabel(ownPreferred.provider_id),model:ownPreferred.model_id } : null
+    return { configured:Boolean(active),active,strackerUnavailable:stracker?.status === 'unavailable',hasOwn:own.length > 0 }
+  },[providers,stracker,preference])
 }
 
 function MessageBody({ content }: { content:string }) {
@@ -65,7 +88,7 @@ function AssistantMessage({ message }: { message:AIMessage }) {
       {message.confirmation && <ActionConfirmationCard action={message.confirmation} messageId={message.id} />}
       {message.fallbackFrom && message.status === 'completed' && <div className="ai-fallback-note"><ArrowUpRight size={13} /><span>Switched from {fallbackName} to {providerName}; this answer came from the displayed model.</span></div>}
       {message.result && message.status === 'completed' && <div className="ai-result-proof"><span><Check size={14} /> Saved and verified in Stracker</span>{resultRoute && <button onClick={() => navigate(resultRoute)}>View in Stracker <ArrowUpRight size={13} /></button>}</div>}
-      {message.status === 'failed' && <div className="ai-retry-row"><span><CircleAlert size={14} /> {message.error ?? 'The request did not complete.'}</span>{message.retryable !== false && <Button size="sm" variant="secondary" onClick={() => void retryLast()}><RotateCcw size={14} /> Retry</Button>}</div>}
+      {message.status === 'failed' && <div className="ai-retry-row"><span><CircleAlert size={14} /> {message.error ?? 'The request did not complete.'}</span>{message.errorCode?.startsWith('stracker_ai') && <Button size="sm" variant="secondary" onClick={() => navigate(ADD_OWN_MODEL_PATH)}><Plus size={14} /> Add your own model</Button>}{message.retryable !== false && <Button size="sm" variant="secondary" onClick={() => void retryLast()}><RotateCcw size={14} /> Retry</Button>}</div>}
       {message.status === 'cancelled' && <div className="ai-cancelled-note"><Square size={12} /> Request stopped. No Stracker change was made.</div>}
       {(providerId || message.status === 'completed') && <div className="ai-message-meta">{providerId && <><AIProviderMark provider={providerId} small /><span>{providerName}</span>{message.modelId && <span className="ai-model-name">{message.modelId}</span>}</>}{message.createdAt && <time dateTime={message.createdAt}>{new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit'}).format(new Date(message.createdAt))}</time>}</div>}
     </div>
@@ -77,13 +100,13 @@ function UserMessage({ message }: { message:AIMessage }) {
 }
 
 function ConversationMessages({ compact=false }: { compact?:boolean }) {
-  const { messages,providers,sendMessage,activeTask,isBusy } = useAI()
+  const { messages,providers,sendMessage,activeTask,isBusy,providersLoading } = useAI()
   const location = useLocation()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const bottomRef = useRef<HTMLDivElement>(null)
   const [autoScroll,setAutoScroll] = useState(true)
-  const configured = providers.some(provider => provider.enabled && provider.connection_status === 'connected')
-  const defaultProvider = providers.find(provider => provider.is_default && provider.enabled && provider.connection_status === 'connected')
+  const { configured,active,strackerUnavailable,hasOwn } = useActiveAI()
   const showWelcome = messages.length === 0
   useEffect(() => { if (autoScroll) bottomRef.current?.scrollIntoView({behavior:'smooth',block:'end'}) },[messages,activeTask?.progress,autoScroll])
   const prompt = (text:string) => { void sendMessage(text,location.pathname) }
@@ -97,7 +120,10 @@ function ConversationMessages({ compact=false }: { compact?:boolean }) {
         <span className="eyebrow">A STUDY PARTNER, ON YOUR TERMS</span>
         <h2>{user?.displayName ? `Hi, ${user.displayName.split(' ')[0]}.` : 'Let’s make your next step clearer.'}</h2>
         <p>Ask about your saved tests, chapters, revisions, mistakes, or study plan. I’ll use your Stracker data—not invented estimates.</p>
-        {!configured ? <div className="ai-connect-nudge"><KeyRoundIcon /><span><strong>Connect your own AI provider to begin.</strong><small>BYOK only · provider billing applies · no DYPOL-owned key</small></span><Link to="/settings" className="button button-secondary button-sm">Set up AI</Link></div> : <div className="ai-provider-ready"><AIProviderMark provider={defaultProvider?.provider_id ?? 'gemini'} small /><span>Using your preferred <strong>{defaultProvider ? activeProviderLabel(defaultProvider.provider_id,providers) : 'configured provider'}</strong>{defaultProvider?.model_id ? ` · ${defaultProvider.model_id}` : ''}</span></div>}
+        {!configured ? (strackerUnavailable ? <StrackerUnavailableNotice onAddOwn={() => navigate(ADD_OWN_MODEL_PATH)} /> : providersLoading ? null : <div className="ai-connect-nudge"><KeyRoundIcon /><span><strong>Stracker AI is getting ready.</strong><small>You can also add your own AI model in Settings.</small></span><Link to={ADD_OWN_MODEL_PATH} className="button button-secondary button-sm">Add your own model</Link></div>) : <>
+          <div className="ai-provider-ready"><AIProviderMark provider={active?.providerId ?? 'custom'} small /><span>Using <strong>{active?.name}</strong>{active?.model ? ` · ${active.model}` : ''}</span></div>
+          {strackerUnavailable && hasOwn && <div className="ai-provider-ready"><CircleAlert size={14} /><span>Stracker AI is temporarily unavailable, so your own model is answering.</span></div>}
+        </>}
         {configured && <div className="ai-suggestion-grid">{SUGGESTIONS.map((suggestion,index) => <button key={suggestion} onClick={() => prompt(suggestion)} disabled={isBusy}><span>{index === 0 ? '01' : index === 1 ? '02' : index === 2 ? '03' : '04'}</span>{suggestion}<ArrowUpRight size={14} /></button>)}</div>}
       </div> : <div className="ai-messages-list">{messages.map(message => message.role === 'user' ? <UserMessage key={message.id} message={message} /> : <AssistantMessage key={message.id} message={message} />)}</div>}
       {activeTask && isBusy && <div className="ai-task-progress" role="status"><LoaderCircle size={14} className="spin" /><span>{activeTask.progress}</span>{activeTask.providerId && <small>{activeProviderLabel(activeTask.providerId,providers)}{activeTask.modelId ? ` · ${activeTask.modelId}` : ''}</small>}</div>}
@@ -110,11 +136,11 @@ function ConversationMessages({ compact=false }: { compact?:boolean }) {
 function KeyRoundIcon() { return <span className="ai-connect-icon"><ShieldCheck size={17} /></span> }
 
 function ChatComposer({ compact=false }: { compact?:boolean }) {
-  const { providers,isBusy,activeTask,lastRequest,sendMessage,stopTask,retryLast } = useAI()
+  const { isBusy,activeTask,lastRequest,sendMessage,stopTask,retryLast } = useAI()
+  const { configured,active } = useActiveAI()
   const location = useLocation()
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [value,setValue] = useState('')
-  const configured = providers.some(provider => provider.enabled && provider.connection_status === 'connected')
   const send = (event?:FormEvent) => {
     event?.preventDefault()
     if (isBusy) { if (activeTask?.cancellable !== false) stopTask(); return }
@@ -135,10 +161,10 @@ function ChatComposer({ compact=false }: { compact?:boolean }) {
   }
   return <div className={`ai-composer-wrap ${compact ? 'ai-composer-compact' : ''}`}>
     <form className="ai-composer" onSubmit={send}>
-      <textarea ref={inputRef} rows={1} maxLength={4000} value={value} onChange={event => { setValue(event.target.value); fit() }} onKeyDown={keyDown} placeholder={configured ? 'Ask about your study progress…' : 'Connect an AI provider in Settings first'} aria-label="Message Stracker AI" disabled={!configured || isBusy} />
+      <textarea ref={inputRef} rows={1} maxLength={4000} value={value} onChange={event => { setValue(event.target.value); fit() }} onKeyDown={keyDown} placeholder={configured ? 'Ask about your study progress…' : 'Add your own AI model to keep going'} aria-label="Message Stracker AI" disabled={!configured || isBusy} />
       <div className="ai-composer-footer"><span>Enter to send · Shift + Enter for a new line</span><div><span className="ai-message-limit">{value.length}/4000</span><button type="submit" className={`ai-send-button ${isBusy && activeTask?.cancellable !== false ? 'ai-stop-button' : ''}`} disabled={isBusy ? activeTask?.cancellable === false : !value.trim() && !lastRequest} aria-label={isBusy ? activeTask?.cancellable === false ? 'Confirmed change is being saved' : 'Stop the current AI task' : value.trim() ? 'Send message' : 'Retry last request'} title={isBusy ? activeTask?.cancellable === false ? 'Saving the confirmed change' : 'Stop this task' : 'Send message'}>{isBusy ? activeTask?.cancellable === false ? <LoaderCircle size={15} className="spin" /> : <Square size={15} fill="currentColor" /> : value.trim() ? <Send size={16} /> : lastRequest ? <RotateCcw size={15} /> : <Send size={16} />}</button></div></div>
     </form>
-    <div className="ai-composer-disclaimer"><ShieldCheck size={12} /> Your provider handles AI processing and billing. Review before changes are saved.</div>
+    <div className="ai-composer-disclaimer"><ShieldCheck size={12} /> {active?.providerId === 'stracker' ? 'Stracker AI is included with your account.' : 'Your provider handles AI processing and billing.'} Review before changes are saved.</div>
   </div>
 }
 
@@ -169,17 +195,16 @@ export function AIExperience() {
   const closeAnimated = () => (largeOpen ? largeExit : floatingExit).exit(closePanel)
   const minimizeAnimated = () => (largeOpen ? largeExit : floatingExit).exit(minimizePanel)
   const collapseAnimated = () => largeExit.exit(collapseLarge)
-  const { providers,backendStatus } = useAI()
+  const { backendStatus } = useAI()
+  const { configured,active } = useActiveAI()
   const [clearConfirmOpen,setClearConfirmOpen] = useState(false)
   const [historyOpen,setHistoryOpen] = useState(false)
   const [smallScreen,setSmallScreen] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width:520px)').matches)
   const [clearing,setClearing] = useState(false)
   const historyOpenRef = useRef(historyOpen)
   const historyToggleRef = useRef<HTMLButtonElement>(null)
-  const configured = providers.some(provider => provider.enabled && provider.connection_status === 'connected')
   const navigate = useNavigate()
   const { notify } = useToast()
-  const providerNames = useMemo(() => providers.filter(provider => provider.enabled).map(provider => provider.display_name || providerLabel(provider.provider_id)),[providers])
   useEffect(() => { historyOpenRef.current = historyOpen },[historyOpen])
   useEffect(() => {
     const media = window.matchMedia('(max-width:520px)')
@@ -212,11 +237,11 @@ export function AIExperience() {
   },[largeOpen,collapseLarge,largeExitFn])
 
   const content = <>
-    <header className="ai-window-header"><div className="ai-window-brand"><span className="ai-brand-mark"><Sparkles size={16} /></span><div><strong>Stracker AI</strong><span>{conversationId ? conversationTitle : configured ? `Ready${providerNames.length ? ` · ${providerNames[0]}` : ''}` : 'Your study copilot'}</span></div></div><div className="ai-window-tools">{conversationId && <IconButton label="Start a new conversation" onClick={() => newConversation()} disabled={isBusy}><MessageSquarePlus size={16} /></IconButton>}{!largeOpen && <IconButton label="Conversation history and workspace" onClick={() => { setHistoryOpen(true); expandPanel() }}><History size={16} /></IconButton>}{largeOpen && <button ref={historyToggleRef} type="button" className="icon-button" aria-label={historyOpen ? 'Hide recent chats' : 'Show recent chats'} aria-expanded={historyOpen} onClick={() => setHistoryOpen(open => !open)}><History size={16} /></button>}{largeOpen && <IconButton label="Close workspace" onClick={collapseAnimated}><Minimize2 size={16} /></IconButton>}{!largeOpen && <IconButton label="Open large workspace" onClick={expandPanel}><Maximize2 size={16} /></IconButton>}<IconButton label="Minimize assistant; task continues" onClick={minimizeAnimated}><Minus size={17} /></IconButton><IconButton label="Close assistant; task continues" onClick={closeAnimated}><X size={18} /></IconButton></div></header>
+    <header className="ai-window-header"><div className="ai-window-brand"><span className="ai-brand-mark"><Sparkles size={16} /></span><div><strong>Stracker AI</strong><span>{conversationId ? conversationTitle : configured ? `Ready${active ? ` · ${active.name}` : ''}` : 'Your study copilot'}</span></div></div><div className="ai-window-tools">{conversationId && <IconButton label="Start a new conversation" onClick={() => newConversation()} disabled={isBusy}><MessageSquarePlus size={16} /></IconButton>}{!largeOpen && <IconButton label="Conversation history and workspace" onClick={() => { setHistoryOpen(true); expandPanel() }}><History size={16} /></IconButton>}{largeOpen && <button ref={historyToggleRef} type="button" className="icon-button" aria-label={historyOpen ? 'Hide recent chats' : 'Show recent chats'} aria-expanded={historyOpen} onClick={() => setHistoryOpen(open => !open)}><History size={16} /></button>}{largeOpen && <IconButton label="Close workspace" onClick={collapseAnimated}><Minimize2 size={16} /></IconButton>}{!largeOpen && <IconButton label="Open large workspace" onClick={expandPanel}><Maximize2 size={16} /></IconButton>}<IconButton label="Minimize assistant; task continues" onClick={minimizeAnimated}><Minus size={17} /></IconButton><IconButton label="Close assistant; task continues" onClick={closeAnimated}><X size={18} /></IconButton></div></header>
     {backendStatus === 'misconfigured' && <div className="ai-service-notice" role="alert"><CircleAlert size={15} /><span><strong>The Stracker AI backend is not configured for this deployment.</strong> The administrator must finish the server setup before AI can run.</span></div>}
     {backendStatus === 'unreachable' && <div className="ai-service-notice" role="alert"><CircleAlert size={15} /><span><strong>The Stracker AI backend is unavailable.</strong> The deployed app has no <code>/api/ai/*</code> functions.</span></div>}
     {largeOpen ? <div className={`ai-workspace-body ${historyOpen ? 'history-open' : ''}`}><button className="ai-history-backdrop" aria-label="Close recent conversations" onClick={() => setHistoryOpen(false)} tabIndex={historyOpen ? 0 : -1} /><HistorySidebar hidden={smallScreen && !historyOpen} onSelect={() => { setHistoryOpen(false); if (smallScreen) historyToggleRef.current?.focus() }} /><div className="ai-workspace-chat"><div className="ai-workspace-toolbar"><div><span className="eyebrow">YOUR PRIVATE STUDY WORKSPACE</span><strong>{conversationTitle}</strong></div><div><Button variant="quiet" size="sm" onClick={() => setClearConfirmOpen(true)} disabled={!conversationId || isBusy}><Trash2 size={14} /> Clear chat</Button><Button variant="quiet" size="sm" onClick={() => navigate('/settings#ai-provider-settings')}><KeyRoundIcon /> Providers</Button></div></div><ConversationMessages /><ChatComposer /></div></div>
-      : <><div className="ai-compact-titlebar"><span>{conversationId ? conversationTitle : 'Ask about your studies'}</span>{configured && <span className="ai-ready-dot">Ready</span>}</div><ConversationMessages compact /><ChatComposer compact /></>}
+      : <><div className="ai-compact-titlebar"><span>{conversationId ? conversationTitle : 'Ask about your studies'}</span><span className="ai-compact-titlebar-actions"><button type="button" className="ai-add-own-model" onClick={() => navigate(ADD_OWN_MODEL_PATH)} title="Add your own AI model"><Plus size={12} /> Add your own model</button>{configured && <span className="ai-ready-dot">Ready</span>}</span></div><ConversationMessages compact /><ChatComposer compact /></>}
   </>
   return <>
     {!panelOpen && !largeOpen && <div className={`ai-launcher-wrap ${minimized ? 'ai-launcher-minimized' : ''} ${minimized || launcherExpanded ? 'ai-launcher-expanded' : ''}`}>
