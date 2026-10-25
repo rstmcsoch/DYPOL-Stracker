@@ -98,6 +98,18 @@ class StrackerRepository {
     }
   }
 
+  /// Deletes every row of [table] owned by [userId] whose [column] equals [value], in one request
+  /// (instead of downloading the table and deleting rows one by one). RLS still applies.
+  Future<void> deleteWhere(String table, String column, String value, String userId) async {
+    try {
+      await _client.from(table).delete().eq(column, value).eq('user_id', userId);
+    } on PostgrestException catch (error) {
+      throw AppFailure(_friendly(error), code: error.code);
+    } catch (error) {
+      throw AppFailure(_friendly(error));
+    }
+  }
+
   /// Private `mistake-images` bucket. The path is `<user uuid>/<file uuid>.webp`.
   Future<String> uploadMistakeImage(String userId, File file, String objectId) async {
     final String path = '$userId/$objectId.webp';

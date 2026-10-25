@@ -10,6 +10,7 @@ import { relatedRowsForRemoval } from '../lib/data-relations'
 import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { useToast } from './ToastContext'
 import { trackStudentWrite } from '../lib/telemetry/client'
 import { fetchPublishedOverrides } from './SiteContentContext'
 import { resolveSiteValues } from '../lib/site-content/content'
@@ -236,6 +237,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     queryDataRef.current = next
     queryClient.setQueryData<AppData>(key, next)
   }, [queryClient, userId])
+  const { notify } = useToast()
+  // Cloud writes run in the background, one after another in the order they were made, so a save
+  // returns as soon as IndexedDB and the cache hold the row (local-first) while the cloud still
+  // receives edits in order. Failures are queued for retry and surfaced, never swallowed.
+  const cloudWrites = useRef<Promise<unknown>>(Promise.resolve())
+  const inBackground = useCallback((job: () => Promise<void>) => {
+    const next = cloudWrites.current.then(job).catch(() => undefined)
+    cloudWrites.current = next
+    return next
+  }, [])
   const updatePending = useCallback(async () => {
     if (userId) setPendingCount(await localDb.sync_queue.where('user_id').equals(userId).count())
   }, [userId])
@@ -484,36 +495,43 @@ export function DataProvider({ children }: { children: ReactNode }) {
     })
     setData(current => records.reduce((next, row) => updateOne(next, table, row), current))
     if (supabase && !user?.isLocal && navigator.onLine) {
-      trackWrite('attempted', table, records)
-      try {
-        if (table === 'mistakes') {
-          records = await Promise.all(records.map(row => uploadPendingImage(row, userId)))
-          await localDb.table(table).bulkPut(records as object[])
-          setData(current => records.reduce((next, row) => updateOne(next, table, row), current))
+      const cloud = supabase
+      // Queue first so a closed tab or crash mid-request still syncs later; cleared on success.
+      await queueChanges(records.map(record => ({ user_id: userId, table, operation: 'upsert', id: String(record.id), record, queued_at: new Date().toISOString() })))
+      void inBackground(async () => {
+        trackWrite('attempted', table, records)
+        try {
+          if (table === 'mistakes') {
+            records = await Promise.all(records.map(row => uploadPendingImage(row, userId)))
+            await localDb.table(table).bulkPut(records as object[])
+            setData(current => records.reduce((next, row) => updateOne(next, table, row), current))
+          }
+          const { error } = await cloud.from(table).upsert(records.map(cleanForCloud))
+          if (error) throw error
+          trackWrite('succeeded', table, records)
+          if (table === 'mistakes') {
+            records = await Promise.all(records.map(retirePreviousMistakeImage))
+            await localDb.mistakes.bulkPut(records as unknown as Mistake[])
+            setData(current => records.reduce((next, row) => updateOne(next, table, row), current))
+          }
+          await Promise.all(records.map(record => clearQueuedChange(userId, table, String(record.id))))
+          await updatePending()
+        } catch (error) {
+          // Keep the latest prepared copy (uploaded image path) queued for retry.
+          await queueChanges(records.map(record => ({ user_id: userId, table, operation: 'upsert', id: String(record.id), record, queued_at: new Date().toISOString() })))
+          const offline = isNetworkError(error)
+          trackWrite('failed', table, records, offline ? 'offline' : 'server')
+          setSyncState(offline ? 'offline' : 'error')
+          setSyncError(offline ? 'Offline — the edit is saved here and will sync automatically.' : 'The edit is saved locally but could not reach the cloud. Retry sync when ready.')
+          if (!offline) notify('Saved on this device; cloud sync failed. Use Retry sync to try again.', 'error')
         }
-        const { error } = await supabase.from(table).upsert(records.map(cleanForCloud))
-        if (error) throw error
-        trackWrite('succeeded', table, records)
-        if (table === 'mistakes') {
-          records = await Promise.all(records.map(retirePreviousMistakeImage))
-          await localDb.mistakes.bulkPut(records as unknown as Mistake[])
-          setData(current => records.reduce((next, row) => updateOne(next, table, row), current))
-        }
-        await Promise.all(records.map(record => clearQueuedChange(userId, table, String(record.id))))
-      } catch (error) {
-        await queueChanges(records.map(record => ({ user_id: userId, table, operation: 'upsert', id: String(record.id), record, queued_at: new Date().toISOString() })))
-        const offline = isNetworkError(error)
-        trackWrite('failed', table, records, offline ? 'offline' : 'server')
-        setSyncState(offline ? 'offline' : 'error')
-        setSyncError(offline ? 'Offline — the edit is saved here and will sync automatically.' : 'The edit is saved locally but could not reach the cloud. Retry sync when ready.')
-        if (!offline) throw new Error('Saved on this device; cloud sync failed. Use Retry sync to try again.')
-      }
+      })
     } else if (supabase && !user?.isLocal) {
       await queueChanges(records.map(record => ({ user_id: userId, table, operation: 'upsert', id: String(record.id), record, queued_at: new Date().toISOString() })))
       setSyncState('offline')
     } else setSyncState('local')
     await updatePending()
-  }, [userId, user, setData, queueChanges, updatePending])
+  }, [userId, user, setData, queueChanges, updatePending, inBackground, notify])
 
   const upsert = useCallback(async <T extends TableName>(table: T, record: RecordFor<T>) => upsertMany(table, [record]), [upsertMany])
 
@@ -636,14 +654,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
       id, user_id: userId, image_path: record.image_path, image_previous_path: record.image_previous_path
     } : undefined
     if (supabase && !user?.isLocal && navigator.onLine) {
-      trackStudentWrite('attempted', table, 'delete', 1)
-      const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', userId)
-      trackStudentWrite(error ? 'failed' : 'succeeded', table, 'delete', 1, error ? (isNetworkError(error) ? 'offline' : 'server') : undefined)
-      if (error) {
-        await queueChanges([{ user_id: userId, table, operation: 'delete', id, record: imageQueueRecord, queued_at: new Date().toISOString() }])
-        setSyncState(isNetworkError(error) ? 'offline' : 'error')
-        setSyncError(isNetworkError(error) ? 'Offline — deletion will sync when you reconnect.' : 'Deletion is pending sync. Retry when ready.')
-      }
+      const cloud = supabase
+      void inBackground(async () => {
+        trackStudentWrite('attempted', table, 'delete', 1)
+        const { error } = await cloud.from(table).delete().eq('id', id).eq('user_id', userId)
+        trackStudentWrite(error ? 'failed' : 'succeeded', table, 'delete', 1, error ? (isNetworkError(error) ? 'offline' : 'server') : undefined)
+        if (!error) await clearQueuedChange(userId, table, id)
+        if (error) {
+          await queueChanges([{ user_id: userId, table, operation: 'delete', id, record: imageQueueRecord, queued_at: new Date().toISOString() }])
+          setSyncState(isNetworkError(error) ? 'offline' : 'error')
+          setSyncError(isNetworkError(error) ? 'Offline — deletion will sync when you reconnect.' : 'Deletion is pending sync. Retry when ready.')
+        }
+      })
     } else if (supabase && !user?.isLocal) {
       await queueChanges([{ user_id: userId, table, operation: 'delete', id, record: imageQueueRecord, queued_at: new Date().toISOString() }])
       setSyncState('offline')
@@ -651,7 +673,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     if (options.undo === false) await finalizeDeleted(entry)
     await updatePending()
-  }, [userId, user, setData, queueChanges, updatePending, finalizeDeleted])
+  }, [userId, user, setData, queueChanges, updatePending, finalizeDeleted, inBackground])
 
   const undoDelete = useCallback(async () => {
     const entry = undoRef.current
