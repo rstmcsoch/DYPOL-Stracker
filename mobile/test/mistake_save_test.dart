@@ -73,15 +73,19 @@ void main() {
     expect(data.state.saving, isFalse);
   });
 
-  test('offline save says so in plain words and rolls back', () async {
+  test('offline save is kept on the device and queued, then synced', () async {
     final (FakeBackend backend, DataController data) = await seeded();
     backend.offline = true;
     final Mistake m = data.state.data.mistakes.single;
-    await expectLater(
-      data.saveMistake(m.copyWith(retryStatus: 'retried')),
-      throwsA(isA<AppFailure>().having((AppFailure f) => f.message, 'message', contains('connection'))),
-    );
-    expect(data.state.data.mistakes.single.retryStatus, 'pending');
+    await expectLater(data.saveMistake(m.copyWith(retryStatus: 'retried')), completes);
+    expect(data.state.data.mistakes.single.retryStatus, 'retried', reason: 'no rollback offline');
+    expect(data.state.pending, 1);
+    expect(data.state.error, isNull);
+    backend.offline = false;
+    await data.syncNow();
+    expect(backend.tables['mistakes']!.single['retry_status'], 'retried');
+    expect(data.state.pending, 0);
+    data.dispose();
   });
 
   test('a new image is uploaded to the private bucket, then the row stores its path', () async {

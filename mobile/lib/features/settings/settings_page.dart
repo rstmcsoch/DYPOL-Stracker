@@ -17,7 +17,6 @@ import '../../logic/exam.dart';
 import '../../logic/reminders.dart';
 import '../auth/auth_controller.dart';
 import '../auth/auth_screens.dart';
-import '../auth/connection_sheet.dart';
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
 
@@ -439,18 +438,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     ),
                     trailing: const Icon(Icons.chevron_right, size: 18),
                     onTap: () => Routes.open(context, Routes.backup),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    leading: const Icon(Icons.wifi_tethering, size: 19),
-                    title: const Text('Connection check'),
-                    subtitle: Text(
-                      'Test the link between this phone and your account',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
-                    ),
-                    trailing: const Icon(Icons.chevron_right, size: 18),
-                    onTap: () => showConnectionSheet(context),
                   ),
                   // The only sign-out in the app (not in the menu or sidebar), always confirmed.
                   ListTile(

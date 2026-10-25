@@ -263,7 +263,8 @@ class ProfilePage extends ConsumerWidget {
 
   Future<void> _editName(BuildContext context, WidgetRef ref, AppData data, String current) async {
     final TextEditingController name = TextEditingController(text: current);
-    await showAppSheet<void>(
+    // A single field: the compact centred window, not the tall form sheet.
+    await showCompactDialog<void>(
       context,
       title: 'Your name',
       builder: (BuildContext sheetContext) => Column(

@@ -363,7 +363,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('an offline add keeps the editor open with what was typed', (WidgetTester tester) async {
+    testWidgets('an offline add is saved on the phone at once and synced later', (WidgetTester tester) async {
       final (FakeBackend backend, DataController data) = (await tester.runAsync(seeded))!;
       await pumpSignedIn(tester, const BacklogPage(), data: data);
       await tester.tap(find.text('Add item').first);
@@ -371,12 +371,14 @@ void main() {
       await tester.enterText(field('What is it?'), 'DPP 12 rotation');
       backend.offline = true;
       await tapButton(tester, 'Add to backlog');
-      expect(find.textContaining('Check your connection'), findsOneWidget);
+      expect(find.textContaining('Check your connection'), findsNothing, reason: 'no failure toast offline');
       expect(find.text('DPP 12 rotation'), findsOneWidget, reason: 'nothing typed is lost');
-      expect(data.state.data.backlogItems, isEmpty, reason: 'rolled back');
+      expect(data.state.data.backlogItems.single.title, 'DPP 12 rotation', reason: 'kept, not rolled back');
+      expect(data.state.pending, 1);
       backend.offline = false;
-      await tapButton(tester, 'Add to backlog');
-      expect(data.state.data.backlogItems.single.title, 'DPP 12 rotation');
+      await tester.runAsync(() => data.syncNow());
+      expect(data.state.pending, 0);
+      expect(backend.tables['backlog_items']!.single['title'], 'DPP 12 rotation');
       expect(tester.takeException(), isNull);
     });
 

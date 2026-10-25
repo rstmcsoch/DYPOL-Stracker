@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/errors.dart';
@@ -13,6 +14,7 @@ import 'app_data.dart';
 import 'app_data_codec.dart';
 import 'models.dart';
 import 'repository.dart';
+import 'sync_queue.dart';
 import 'syllabus_seed.dart';
 
 /// Everything the notebook shows, plus the state of the last sync.
@@ -25,6 +27,8 @@ class DataState {
     this.offline = false,
     this.lastSyncedAt,
     this.followUps = const <RevisionFollowUp>[],
+    this.pending = 0,
+    this.syncing = false,
   });
 
   final AppData data;
@@ -41,6 +45,12 @@ class DataState {
   /// successful refresh, and from the visible Retry banner.
   final List<RevisionFollowUp> followUps;
 
+  /// Changes saved on this device that have not reached the cloud yet (offline queue).
+  final int pending;
+
+  /// True while the offline queue is being sent.
+  final bool syncing;
+
   DataState copyWith({
     AppData? data,
     bool? loading,
@@ -49,6 +59,8 @@ class DataState {
     bool? offline,
     Object? lastSyncedAt = _none,
     List<RevisionFollowUp>? followUps,
+    int? pending,
+    bool? syncing,
   }) =>
       DataState(
         data: data ?? this.data,
@@ -58,6 +70,8 @@ class DataState {
         offline: offline ?? this.offline,
         lastSyncedAt: lastSyncedAt == _none ? this.lastSyncedAt : lastSyncedAt as String?,
         followUps: followUps ?? this.followUps,
+        pending: pending ?? this.pending,
+        syncing: syncing ?? this.syncing,
       );
 }
 
@@ -125,6 +139,7 @@ class DataController extends StateNotifier<DataState> {
         super(DataState(data: AppData.empty(userId), loading: true)) {
     _restoreSnapshot();
     _restoreFollowUps();
+    _restoreQueue();
   }
 
   final StrackerRepository _repository;
@@ -149,11 +164,18 @@ class DataController extends StateNotifier<DataState> {
     }
   }
 
+  bool _hasLocalCopy = false;
+
+  /// True when this device holds a saved copy of the notebook (restored at start), so the
+  /// app can open from it at once, with or without a connection.
+  bool get hasLocalCopy => _hasLocalCopy;
+
   void _restoreSnapshot() {
     final String? raw = _prefs.getString(_cacheKey);
     if (raw == null) return;
     final AppData? cached = AppDataCodec.decode(raw, _userId);
     if (cached != null) {
+      _hasLocalCopy = true;
       state = state.copyWith(data: cached);
     }
   }
@@ -172,6 +194,16 @@ class DataController extends StateNotifier<DataState> {
     // Silent refreshes keep the current frame on screen: pull-to-refresh and the sync pill
     // should not replace a populated page with a spinner.
     state = silent ? state.copyWith(error: null) : state.copyWith(loading: true, error: null);
+    // Offline changes go up first, so the refresh can never bring back a row deleted on
+    // this device or overwrite an edit with the older cloud copy.
+    if (_queue.isNotEmpty) {
+      await syncNow(reload: false);
+      if (_queue.isNotEmpty) {
+        // Still unreachable: keep showing this device's copy, quietly.
+        state = state.copyWith(loading: false, offline: true, error: null);
+        return;
+      }
+    }
     try {
       final List<Object> results = await Future.wait<Object>(<Future<Object>>[
         _repository.fetchRows('app_settings', _userId),
@@ -231,11 +263,17 @@ class DataController extends StateNotifier<DataState> {
         hasProfile: profileRows.isNotEmpty,
       );
 
+      // A save made while this refresh was in flight wins over the older cloud copy.
+      if (_queue.isNotEmpty) {
+        state = state.copyWith(loading: false);
+        return;
+      }
       state = DataState(
         data: data,
         loading: false,
         lastSyncedAt: isoNow(),
         followUps: state.followUps,
+        pending: _queue.length,
       );
       await _writeSnapshot(data);
       // Back online: finish any revision dates that were left unsaved.
@@ -342,11 +380,15 @@ class DataController extends StateNotifier<DataState> {
   /* Generic write plumbing                                             */
   /* ------------------------------------------------------------------ */
 
-  /// Optimistic write: the change shows on screen at once, the cloud write follows, and a
-  /// failure rolls the screen back (or reloads if other edits landed meanwhile) and rethrows.
+  /// Optimistic write: the change shows on screen at once and is stored on this device,
+  /// then the cloud write follows. If the cloud cannot be reached (no connection, a
+  /// timeout) the change stays and its writes join the offline queue, which is sent
+  /// automatically when the connection returns. Only a real rejection (validation, a
+  /// server error) rolls the screen back (or reloads if other edits landed meanwhile) and
+  /// rethrows.
   ///
-  /// [multiStep] writes touch several rows; if one fails part-way the cloud may hold some of
-  /// them, so after rolling back the screen is re-synced from the cloud.
+  /// [multiStep] writes touch several rows; if one is rejected part-way the cloud may hold
+  /// some of them, so after rolling back the screen is re-synced from the cloud.
   Future<void> _run(Future<void> Function() action, Future<void> Function() apply, {bool multiStep = false}) async {
     final AppData before = state.data;
     state = state.copyWith(saving: true, error: null);
@@ -354,9 +396,27 @@ class DataController extends StateNotifier<DataState> {
     try {
       await apply();
       optimistic = state.data;
+      // Earlier changes are still waiting (or the device knows it is offline): queue this
+      // one behind them so the cloud receives every change in the order it was made.
+      if (_queue.isNotEmpty || _flushing || !_networkAvailable) {
+        await _queueWrites(action);
+        state = state.copyWith(saving: false);
+        _kickSync();
+        return;
+      }
       await action();
       state = state.copyWith(saving: false, offline: false);
     } catch (error, stack) {
+      if (optimistic != null && _isConnectionError(error)) {
+        try {
+          await _queueWrites(action);
+          state = state.copyWith(saving: false, offline: true, error: null);
+          _scheduleRetry();
+          return;
+        } catch (queueError, queueStack) {
+          logFailure('offline queue', queueError, queueStack);
+        }
+      }
       logFailure('save', error, stack);
       final String message = userMessage(error);
       if (optimistic == null || identical(state.data, optimistic)) {
@@ -368,6 +428,230 @@ class DataController extends StateNotifier<DataState> {
       state = state.copyWith(saving: false, error: message);
       throw AppFailure(message);
     }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Offline queue                                                      */
+  /* ------------------------------------------------------------------ */
+
+  static const Symbol _recorderKey = #strackerSyncRecorder;
+  List<SyncOp> _queue = <SyncOp>[];
+  bool _flushing = false;
+  Future<void>? _flushRun;
+  bool _networkAvailable = true;
+  int _retryAttempt = 0;
+  Timer? _retryTimer;
+
+  /// The writes waiting for the cloud, oldest first (read-only; for tests and the UI).
+  List<SyncOp> get pendingWrites => List<SyncOp>.unmodifiable(_queue);
+
+  bool _isConnectionError(Object error) =>
+      isOfflineError(error) || error is SocketException || error is TimeoutException || error is HttpException;
+
+  List<SyncOp>? get _recorder => Zone.current[_recorderKey] as List<SyncOp>?;
+
+  Future<void> _upsertRow(String table, Map<String, dynamic> row) async {
+    final List<SyncOp>? recorder = _recorder;
+    if (recorder != null) return recorder.add(SyncOp.upsert(table, <Map<String, dynamic>>[row]));
+    await _repository.upsertRow(table, row);
+  }
+
+  Future<void> _upsertRows(String table, List<Map<String, dynamic>> rows) async {
+    if (rows.isEmpty) return;
+    final List<SyncOp>? recorder = _recorder;
+    if (recorder != null) return recorder.add(SyncOp.upsert(table, rows));
+    await _repository.upsertRows(table, rows);
+  }
+
+  Future<void> _deleteRow(String table, String id) async {
+    final List<SyncOp>? recorder = _recorder;
+    if (recorder != null) return recorder.add(SyncOp.delete(table, <String>[id]));
+    await _repository.deleteRow(table, id, _userId);
+  }
+
+  Future<void> _deleteIds(String table, List<String> ids) async {
+    final List<SyncOp>? recorder = _recorder;
+    if (recorder != null) {
+      if (ids.isNotEmpty) recorder.add(SyncOp.delete(table, ids));
+      return;
+    }
+    await _repository.deleteIds(table, ids, _userId);
+  }
+
+  Future<void> _deleteWhere(String table, String column, String value) async {
+    final List<SyncOp>? recorder = _recorder;
+    if (recorder != null) return recorder.add(SyncOp.deleteWhere(table, column, value));
+    await _repository.deleteWhere(table, column, value, _userId);
+  }
+
+  /// Runs [action] again with its writes recorded instead of sent (in a zone, so a save
+  /// running at the same time still talks to the cloud), then stores them in the queue.
+  Future<void> _queueWrites(Future<void> Function() action) async {
+    final List<SyncOp> recorded = <SyncOp>[];
+    await runZoned(action, zoneValues: <Object, Object>{_recorderKey: recorded});
+    List<SyncOp> next = _queue;
+    for (final SyncOp op in recorded) {
+      next = enqueueSyncOp(next, op);
+    }
+    await _setQueue(next);
+  }
+
+  Future<void> _setQueue(List<SyncOp> next) async {
+    _queue = next;
+    if (mounted) state = state.copyWith(pending: next.length);
+    await writeDeviceValue(
+      'sync-queue',
+      next.isEmpty ? null : jsonEncode(next.map((SyncOp op) => op.toJson()).toList()),
+    );
+  }
+
+  void _restoreQueue() {
+    final String? raw = readDeviceValue('sync-queue');
+    if (raw == null) return;
+    try {
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      _queue = decoded.map(SyncOp.fromJson).whereType<SyncOp>().toList();
+      state = state.copyWith(pending: _queue.length);
+    } catch (_) {
+      // An unreadable queue cannot be replayed safely; the device copy still shows it.
+      _queue = <SyncOp>[];
+    }
+  }
+
+  /// Connectivity reports from the platform. Back online sends the queue at once; known
+  /// offline skips the doomed request, so saves are queued instantly.
+  void setNetworkAvailable(bool available) {
+    final bool wasOffline = !_networkAvailable;
+    _networkAvailable = available;
+    if (available && (wasOffline || _queue.isNotEmpty)) {
+      _retryAttempt = 0;
+      _kickSync();
+    }
+  }
+
+  void _kickSync() {
+    if (_queue.isEmpty || !mounted) return;
+    unawaited(syncNow());
+  }
+
+  void _scheduleRetry() {
+    _retryTimer?.cancel();
+    if (_queue.isEmpty || !mounted) return;
+    final Duration wait = syncRetryDelay(_retryAttempt);
+    _retryAttempt += 1;
+    _retryTimer = Timer(wait, _kickSync);
+  }
+
+  /// Sends the offline queue now (the Sync button, app resume, connection back, retries).
+  /// With [reload] the notebook is refreshed from the cloud afterwards. Never throws.
+  Future<void> syncNow({bool reload = true}) {
+    final Future<void>? running = _flushRun;
+    if (running != null) return running;
+    final Future<void> run = _flush(reload: reload).whenComplete(() => _flushRun = null);
+    _flushRun = run;
+    return run;
+  }
+
+  Future<void> _flush({required bool reload}) async {
+    if (_queue.isEmpty) {
+      // Nothing waiting: a plain refresh, as the sync button always did.
+      if (reload) await load();
+      return;
+    }
+    _flushing = true;
+    _retryTimer?.cancel();
+    state = state.copyWith(syncing: true);
+    bool rejected = false;
+    try {
+      while (_queue.isNotEmpty && mounted) {
+        final SyncOp op = _queue.first;
+        try {
+          await _send(op);
+        } catch (error, stack) {
+          if (_isConnectionError(error) || _isAuthFailure(error)) {
+            // Still offline (or signed out): keep everything and try again later.
+            if (mounted) state = state.copyWith(offline: true);
+            _scheduleRetry();
+            return;
+          }
+          // The cloud refused this write (for example a row that no longer fits). It
+          // can never succeed, so it is dropped and the screen re-synced from the cloud.
+          logFailure('offline sync', error, stack);
+          rejected = true;
+        }
+        await _setQueue(_queue.isEmpty ? _queue : _queue.sublist(1));
+      }
+      _retryAttempt = 0;
+      if (!mounted) return;
+      state = state.copyWith(
+        offline: false,
+        lastSyncedAt: isoNow(),
+        error: rejected ? 'Some changes made offline could not be saved and were undone.' : null,
+      );
+    } finally {
+      _flushing = false;
+      if (mounted) state = state.copyWith(syncing: false);
+    }
+    if (mounted && _queue.isEmpty && (reload || rejected)) {
+      await load(silent: true);
+      if (rejected && mounted) {
+        state = state.copyWith(error: 'Some changes made offline could not be saved and were undone.');
+      }
+    }
+  }
+
+  Future<void> _send(SyncOp op) async {
+    switch (op.kind) {
+      case SyncOp.upsertKind:
+        // One row goes as one object, exactly as the live save sends it.
+        if (op.rows.length == 1) {
+          await _repository.upsertRow(op.table, op.rows.single);
+        } else {
+          await _repository.upsertRows(op.table, op.rows);
+        }
+      case SyncOp.deleteKind:
+        await _repository.deleteIds(op.table, op.ids, _userId);
+      case SyncOp.deleteWhereKind:
+        await _repository.deleteWhere(op.table, op.column!, op.value!, _userId);
+      case SyncOp.mistakeImageKind:
+        final Map<String, dynamic> row = Map<String, dynamic>.from(op.rows.first);
+        final File file = File(op.filePath!);
+        if (file.existsSync()) {
+          final String path = await _repository.uploadMistakeImage(_userId, file, '${row['id']}');
+          row['image_path'] = path;
+          final Mistake stored = Mistake.fromMap(row);
+          if (mounted && state.data.mistakes.any((Mistake m) => m.id == stored.id)) {
+            _apply(state.data.copyWith(mistakes: _put(state.data.mistakes, stored, (Mistake m) => m.id)));
+          }
+        }
+        await _repository.upsertRow('mistakes', row);
+        if (op.filePath!.contains('${Platform.pathSeparator}stracker-pending-')) {
+          try {
+            if (file.existsSync()) file.deleteSync();
+          } catch (_) {
+            // A leftover copy in app storage is harmless.
+          }
+        }
+    }
+  }
+
+  /// Copies a picked photo into app storage so it survives until the queue is sent (the
+  /// picker's file lives in a cache the system may clear). Falls back to the original.
+  Future<String> _keepPendingImage(File image, String mistakeId) async {
+    try {
+      final Directory dir = await getApplicationSupportDirectory();
+      final File copy = await image.copy('${dir.path}${Platform.pathSeparator}stracker-pending-$mistakeId.img');
+      return copy.path;
+    } catch (_) {
+      return image.path;
+    }
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    super.dispose();
   }
 
   List<T> _put<T>(List<T> rows, T row, String Function(T) id) => <T>[
@@ -394,14 +678,14 @@ class DataController extends StateNotifier<DataState> {
   Future<void> saveSettings(AppSettings settings) async {
     final AppSettings next = settings.copyWithUpdated();
     await _run(
-      () => _repository.upsertRow('app_settings', next.toMap()),
+      () => _upsertRow('app_settings', next.toMap()),
       () async => _apply(state.data.copyWith(settings: next)),
     );
   }
 
   Future<void> saveProfile(Profile profile) async {
     await _run(
-      () => _repository.upsertRow('profiles', <String, dynamic>{
+      () => _upsertRow('profiles', <String, dynamic>{
         'id': profile.id,
         'user_id': _userId,
         'display_name': profile.displayName,
@@ -413,7 +697,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> saveExamTrack(UserExamTrack track) async {
     await _run(
-      () => _repository.upsertRow('user_exam_tracks', track.toMap()),
+      () => _upsertRow('user_exam_tracks', track.toMap()),
       () async => _apply(state.data.copyWith(
         examTracks: _put(state.data.examTracks, track, (UserExamTrack row) => row.track),
       )),
@@ -426,7 +710,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> saveChapter(Chapter chapter) async {
     await _run(
-      () => _repository.upsertRow('chapters', chapter.toMap()),
+      () => _upsertRow('chapters', chapter.toMap()),
       () async => _apply(state.data.copyWith(
         chapters: _put(state.data.chapters, chapter, (Chapter row) => row.id),
       )),
@@ -436,7 +720,7 @@ class DataController extends StateNotifier<DataState> {
   Future<void> saveChapters(List<Chapter> chapters) async {
     if (chapters.isEmpty) return;
     await _run(
-      () => _repository.upsertRows('chapters', chapters.map((Chapter row) => row.toMap()).toList()),
+      () => _upsertRows('chapters', chapters.map((Chapter row) => row.toMap()).toList()),
       () async {
         List<Chapter> rows = state.data.chapters;
         for (final Chapter chapter in chapters) {
@@ -462,9 +746,9 @@ class DataController extends StateNotifier<DataState> {
             'study_cards',
             'test_chapter_links',
           ])
-            _repository.deleteWhere(table, 'chapter_id', chapter.id, _userId),
+            _deleteWhere(table, 'chapter_id', chapter.id),
         ]);
-        await _repository.deleteRow('chapters', chapter.id, _userId);
+        await _deleteRow('chapters', chapter.id);
       },
       () async {
         _apply(state.data.copyWith(
@@ -486,7 +770,7 @@ class DataController extends StateNotifier<DataState> {
   Future<void> saveRevisions(List<Revision> revisions) async {
     if (revisions.isEmpty) return;
     await _run(
-      () => _repository.upsertRows('chapter_revisions', revisions.map((Revision row) => row.toMap()).toList()),
+      () => _upsertRows('chapter_revisions', revisions.map((Revision row) => row.toMap()).toList()),
       () async {
         List<Revision> rows = state.data.revisions;
         for (final Revision revision in revisions) {
@@ -501,7 +785,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> deleteRevision(Revision revision) async {
     await _run(
-      () => _repository.deleteRow('chapter_revisions', revision.id, _userId),
+      () => _deleteRow('chapter_revisions', revision.id),
       () async => _apply(state.data.copyWith(
         revisions: _drop(state.data.revisions, revision.id, (Revision row) => row.id),
       )),
@@ -551,8 +835,8 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> _applyLadder(RevisionFollowUp job) => _run(
         () async {
-          await _repository.upsertRows('chapter_revisions', job.add.map((Revision row) => row.toMap()).toList());
-          await _repository.deleteIds('chapter_revisions', job.removeIds, _userId);
+          await _upsertRows('chapter_revisions', job.add.map((Revision row) => row.toMap()).toList());
+          await _deleteIds('chapter_revisions', job.removeIds);
         },
         () async {
           List<Revision> rows = state.data.revisions;
@@ -632,25 +916,25 @@ class DataController extends StateNotifier<DataState> {
     final bool relink = replaceChapterLinks || fullMock || chapterLink != null;
     await _run(
       () async {
-        await _repository.upsertRow('tests', test.toMap());
+        await _upsertRow('tests', test.toMap());
         if (subjectScores != null) {
           if (subjectScores.isNotEmpty) {
-            await _repository.upsertRows(
+            await _upsertRows(
               'test_subject_scores',
               subjectScores.map((TestSubjectScore row) => row.toMap()).toList(),
             );
           }
           for (final TestSubjectScore old in oldScores) {
             if (!subjectScores.any((TestSubjectScore next) => next.subject == old.subject)) {
-              await _repository.deleteRow('test_subject_scores', old.id, _userId);
+              await _deleteRow('test_subject_scores', old.id);
             }
           }
         }
         if (relink) {
           final TestChapterLink? link = fullMock ? null : chapterLink;
-          if (link != null) await _repository.upsertRow('test_chapter_links', link.toMap());
+          if (link != null) await _upsertRow('test_chapter_links', link.toMap());
           for (final TestChapterLink old in oldLinks) {
-            if (old.id != link?.id) await _repository.deleteRow('test_chapter_links', old.id, _userId);
+            if (old.id != link?.id) await _deleteRow('test_chapter_links', old.id);
           }
         }
       },
@@ -691,9 +975,9 @@ class DataController extends StateNotifier<DataState> {
             'test_error_logs',
             'test_time_entries',
           ])
-            _repository.deleteWhere(table, 'test_id', test.id, _userId),
+            _deleteWhere(table, 'test_id', test.id),
         ]);
-        await _repository.deleteRow('tests', test.id, _userId);
+        await _deleteRow('tests', test.id);
       },
       () async => _apply(state.data.copyWith(
         tests: _drop(state.data.tests, test.id, (TestRecord row) => row.id),
@@ -708,7 +992,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> saveErrorLog(TestErrorLog log) async {
     await _run(
-      () => _repository.upsertRow('test_error_logs', log.toMap()),
+      () => _upsertRow('test_error_logs', log.toMap()),
       () async => _apply(state.data.copyWith(
         errorLogs: _put(state.data.errorLogs, log, (TestErrorLog row) => row.id),
       )),
@@ -717,7 +1001,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> deleteErrorLog(TestErrorLog log) async {
     await _run(
-      () => _repository.deleteRow('test_error_logs', log.id, _userId),
+      () => _deleteRow('test_error_logs', log.id),
       () async => _apply(state.data.copyWith(
         errorLogs: _drop(state.data.errorLogs, log.id, (TestErrorLog row) => row.id),
       )),
@@ -726,7 +1010,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> saveTimeEntry(TestTimeEntry entry) async {
     await _run(
-      () => _repository.upsertRow('test_time_entries', entry.toMap()),
+      () => _upsertRow('test_time_entries', entry.toMap()),
       () async => _apply(state.data.copyWith(
         timeEntries: _put(state.data.timeEntries, entry, (TestTimeEntry row) => row.id),
       )),
@@ -735,7 +1019,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> deleteTimeEntry(TestTimeEntry entry) async {
     await _run(
-      () => _repository.deleteRow('test_time_entries', entry.id, _userId),
+      () => _deleteRow('test_time_entries', entry.id),
       () async => _apply(state.data.copyWith(
         timeEntries: _drop(state.data.timeEntries, entry.id, (TestTimeEntry row) => row.id),
       )),
@@ -748,7 +1032,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> savePractice(PracticeSession session) async {
     await _run(
-      () => _repository.upsertRow('practice_sessions', session.toMap()),
+      () => _upsertRow('practice_sessions', session.toMap()),
       () async => _apply(state.data.copyWith(
         practiceSessions: _put(
           state.data.practiceSessions,
@@ -761,7 +1045,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> deletePractice(PracticeSession session) async {
     await _run(
-      () => _repository.deleteRow('practice_sessions', session.id, _userId),
+      () => _deleteRow('practice_sessions', session.id),
       () async => _apply(state.data.copyWith(
         practiceSessions: _drop(
           state.data.practiceSessions,
@@ -774,7 +1058,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> savePyq(PyqRecord record) async {
     await _run(
-      () => _repository.upsertRow('pyq_records', record.toMap()),
+      () => _upsertRow('pyq_records', record.toMap()),
       () async => _apply(state.data.copyWith(
         pyqRecords: _put(state.data.pyqRecords, record, (PyqRecord row) => row.id),
       )),
@@ -784,7 +1068,7 @@ class DataController extends StateNotifier<DataState> {
   Future<void> savePyqMany(List<PyqRecord> records) async {
     if (records.isEmpty) return;
     await _run(
-      () => _repository.upsertRows(
+      () => _upsertRows(
         'pyq_records',
         records.map((PyqRecord row) => row.toMap()).toList(),
       ),
@@ -800,7 +1084,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> saveStage(ChapterStageRow stage) async {
     await _run(
-      () => _repository.upsertRow('chapter_stages', stage.toMap()),
+      () => _upsertRow('chapter_stages', stage.toMap()),
       () async => _apply(state.data.copyWith(
         chapterStages: _put(
           state.data.chapterStages,
@@ -823,14 +1107,20 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () async {
         if (image == null) {
-          await _repository.upsertRow('mistakes', mistake.toMap());
+          await _upsertRow('mistakes', mistake.toMap());
+          return;
+        }
+        final List<SyncOp>? recorder = _recorder;
+        if (recorder != null) {
+          // Offline: the photo is kept in app storage and uploaded when the queue is sent.
+          recorder.add(SyncOp.mistakeImage(mistake.toMap(), await _keepPendingImage(image, mistake.id)));
           return;
         }
         // Uploaded under <user uuid>/<mistake id>.webp, the same private bucket and
         // content type the website uses, so both clients see the same object.
         final String path = await _repository.uploadMistakeImage(_userId, image, mistake.id);
         final Mistake stored = mistake.copyWith(imagePath: path);
-        await _repository.upsertRow('mistakes', stored.toMap());
+        await _upsertRow('mistakes', stored.toMap());
         _apply(state.data.copyWith(mistakes: _put(state.data.mistakes, stored, (Mistake row) => row.id)));
       },
       () async => _apply(state.data.copyWith(
@@ -847,9 +1137,9 @@ class DataController extends StateNotifier<DataState> {
   Future<void> deleteMistake(Mistake mistake) async {
     await _run(
       () async {
-        await _repository.deleteRow('mistakes', mistake.id, _userId);
+        await _deleteRow('mistakes', mistake.id);
         final String? path = mistake.imagePath;
-        if (path != null && path.isNotEmpty) {
+        if (path != null && path.isNotEmpty && _recorder == null) {
           // The note is already gone; a leftover private image is harmless, so a failed
           // cleanup must not bring the deleted mistake back on screen.
           try {
@@ -868,7 +1158,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> saveTask(DailyTask task) async {
     await _run(
-      () => _repository.upsertRow('daily_tasks', task.toMap()),
+      () => _upsertRow('daily_tasks', task.toMap()),
       () async => _apply(state.data.copyWith(
         tasks: _put(state.data.tasks, task, (DailyTask row) => row.id),
       )),
@@ -880,7 +1170,7 @@ class DataController extends StateNotifier<DataState> {
   Future<void> saveTasks(List<DailyTask> tasks) async {
     if (tasks.isEmpty) return;
     await _run(
-      () => _repository.upsertRows('daily_tasks', tasks.map((DailyTask row) => row.toMap()).toList()),
+      () => _upsertRows('daily_tasks', tasks.map((DailyTask row) => row.toMap()).toList()),
       () async {
         List<DailyTask> rows = state.data.tasks;
         for (final DailyTask task in tasks) {
@@ -893,7 +1183,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> deleteTask(DailyTask task) async {
     await _run(
-      () => _repository.deleteRow('daily_tasks', task.id, _userId),
+      () => _deleteRow('daily_tasks', task.id),
       () async => _apply(state.data.copyWith(
         tasks: _drop(state.data.tasks, task.id, (DailyTask row) => row.id),
       )),
@@ -902,7 +1192,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> saveGoal(WeeklyGoal goal) async {
     await _run(
-      () => _repository.upsertRow('weekly_goals', goal.toMap()),
+      () => _upsertRow('weekly_goals', goal.toMap()),
       () async => _apply(state.data.copyWith(
         goals: _put(state.data.goals, goal, (WeeklyGoal row) => row.id),
       )),
@@ -911,7 +1201,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> deleteGoal(WeeklyGoal goal) async {
     await _run(
-      () => _repository.deleteRow('weekly_goals', goal.id, _userId),
+      () => _deleteRow('weekly_goals', goal.id),
       () async => _apply(state.data.copyWith(
         goals: _drop(state.data.goals, goal.id, (WeeklyGoal row) => row.id),
       )),
@@ -920,7 +1210,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> saveBacklog(BacklogItem item) async {
     await _run(
-      () => _repository.upsertRow('backlog_items', item.toMap()),
+      () => _upsertRow('backlog_items', item.toMap()),
       () async => _apply(state.data.copyWith(
         backlogItems: _put(state.data.backlogItems, item, (BacklogItem row) => row.id),
       )),
@@ -929,7 +1219,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> deleteBacklog(BacklogItem item) async {
     await _run(
-      () => _repository.deleteRow('backlog_items', item.id, _userId),
+      () => _deleteRow('backlog_items', item.id),
       () async => _apply(state.data.copyWith(
         backlogItems: _drop(state.data.backlogItems, item.id, (BacklogItem row) => row.id),
       )),
@@ -938,7 +1228,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> saveCard(StudyCard card) async {
     await _run(
-      () => _repository.upsertRow('study_cards', card.toMap()),
+      () => _upsertRow('study_cards', card.toMap()),
       () async => _apply(state.data.copyWith(
         studyCards: _put(state.data.studyCards, card, (StudyCard row) => row.id),
       )),
@@ -947,7 +1237,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> deleteCard(StudyCard card) async {
     await _run(
-      () => _repository.deleteRow('study_cards', card.id, _userId),
+      () => _deleteRow('study_cards', card.id),
       () async => _apply(state.data.copyWith(
         studyCards: _drop(state.data.studyCards, card.id, (StudyCard row) => row.id),
       )),
@@ -956,7 +1246,7 @@ class DataController extends StateNotifier<DataState> {
 
   Future<void> saveSession(StudySession session) async {
     await _run(
-      () => _repository.upsertRow('study_sessions', session.toMap()),
+      () => _upsertRow('study_sessions', session.toMap()),
       () async => _apply(state.data.copyWith(
         sessions: _put(state.data.sessions, session, (StudySession row) => row.id),
       )),

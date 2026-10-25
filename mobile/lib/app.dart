@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +18,8 @@ import 'features/focus/focus_controller.dart';
 import 'features/onboarding/onboarding_overlay.dart';
 import 'features/shell/app_shell.dart';
 import 'features/splash/splash_page.dart';
+import 'features/splash/startup_gate.dart';
+import 'features/sync/sync_triggers.dart';
 import 'logic/onboarding.dart';
 import 'main.dart' show preferencesProvider;
 
@@ -71,7 +75,7 @@ class StrackerApp extends ConsumerWidget {
           ),
         );
       },
-      home: const RootGate(),
+      home: const StartupGate(child: RootGate()),
     );
   }
 }
@@ -83,6 +87,11 @@ class RootGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AuthStatus status = ref.watch(authControllerProvider);
+    // Every screen but the notebook is ready as soon as the session check is done; the
+    // notebook reports its own readiness (see _NotebookApp).
+    if (!status.initializing && (status.misconfigured || !status.signedIn || status.recoveryMode)) {
+      StartupSignal.report(context, true);
+    }
     if (status.misconfigured) return const ConfigMissingPage();
     if (status.initializing) return const SplashPage();
     if (!status.signedIn) return const AuthFlow();
@@ -132,7 +141,8 @@ class _SignedInScopeState extends ConsumerState<SignedInScope> {
   Widget build(BuildContext context) {
     return UncontrolledProviderScope(
       container: _container,
-      child: const _NotebookApp(),
+      // Sends offline changes when the connection returns, the app resumes, or on retry.
+      child: SyncTriggers(controller: _data, child: const _NotebookApp()),
     );
   }
 }
@@ -147,6 +157,20 @@ class _NotebookApp extends ConsumerStatefulWidget {
 class _NotebookAppState extends ConsumerState<_NotebookApp> {
   AppSettings? _applied;
   bool _onboardingShown = false;
+  Timer? _retry;
+
+  void _scheduleRetry() {
+    if (_retry?.isActive ?? false) return;
+    _retry = Timer(const Duration(seconds: 3), () {
+      if (mounted) unawaited(ref.read(dataControllerProvider.notifier).load(silent: true));
+    });
+  }
+
+  @override
+  void dispose() {
+    _retry?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -163,8 +187,13 @@ class _NotebookAppState extends ConsumerState<_NotebookApp> {
       });
     }
 
-    if (state.error != null && state.data.chapters.isEmpty && state.loading) {
-      return const SplashPage();
+    // Ready to open: this device's copy is on screen (works offline), or the first cloud
+    // load has finished. Until then the startup splash, then the loader, cover the app.
+    final bool ready = ref.read(dataControllerProvider.notifier).hasLocalCopy || state.lastSyncedAt != null;
+    StartupSignal.report(context, ready);
+    if (!ready && !state.loading) {
+      // First open on this device with no connection yet: keep trying quietly.
+      _scheduleRetry();
     }
     // First-run setup waits for this account's real settings (a successful cloud load),
     // so a cached or default copy never flashes it, and once up it stays until saved.

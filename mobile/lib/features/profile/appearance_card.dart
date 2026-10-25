@@ -44,7 +44,7 @@ class AppearanceCard extends ConsumerWidget {
           Text('Notebook theme', style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(height: 6),
           WrapGrid(
-            minItemWidth: 150,
+            minItemWidth: 96,
             children: <Widget>[
               for (final (ThemeMode mode, String title, String desc) in const <(ThemeMode, String, String)>[
                 (ThemeMode.light, 'Warm paper', 'Light notebook paper'),
@@ -56,6 +56,7 @@ class AppearanceCard extends ConsumerWidget {
                   title: title,
                   description: desc,
                   selected: appearance.mode == mode,
+                  paletteId: appearance.paletteId,
                   onTap: () async {
                     unawaited(HapticFeedback.selectionClick());
                     await controller.setMode(mode);
@@ -76,23 +77,22 @@ class AppearanceCard extends ConsumerWidget {
           ),
           Text('Color theme', style: Theme.of(context).textTheme.labelMedium),
           const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
+          // Small cards in a grid, each previewing the palette's page, surface and accent.
+          WrapGrid(
+            minItemWidth: 96,
             children: <Widget>[
               for (final ({String id, String label, String description}) option in strackerPaletteOptions)
-                Tooltip(
-                  message: option.description,
-                  child: ChoiceChip(
-                    label: Text(option.label),
-                    selected: appearance.paletteId == option.id,
-                    showCheckmark: false,
-                    onSelected: (_) async {
-                      await controller.setPalette(option.id);
-                      if (context.mounted)
-                        await _save(context, ref, (AppSettings s) => s.copyWith(colorTheme: option.id));
-                    },
-                  ),
+                PaletteChoiceCard(
+                  key: ValueKey<String>('palette-${option.id}'),
+                  id: option.id,
+                  label: option.label,
+                  description: option.description,
+                  selected: appearance.paletteId == option.id,
+                  onTap: () async {
+                    unawaited(HapticFeedback.selectionClick());
+                    await controller.setPalette(option.id);
+                    if (context.mounted) await _save(context, ref, (AppSettings s) => s.copyWith(colorTheme: option.id));
+                  },
                 ),
             ],
           ),
@@ -120,7 +120,146 @@ class AppearanceCard extends ConsumerWidget {
   }
 }
 
-/// Website theme card: a three-line paper swatch, title, description and a check when chosen.
+/// Background, surface and accent of a palette in the given brightness, for previews.
+(Color, Color, Color) paletteSwatches(String id, Brightness brightness) {
+  final Map<String, StrackerPalette> variants = strackerPalettes[id] ?? strackerPalettes['default']!;
+  final StrackerPalette palette = variants[brightness == Brightness.dark ? 'dark' : 'light'] ?? variants.values.first;
+  return (palette.bg, palette.paper, palette.accent);
+}
+
+/// A row of colour swatches with a hairline border, used by both kinds of theme card.
+class _Swatches extends StatelessWidget {
+  const _Swatches(this.colors);
+
+  final List<Color> colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color border = context.stracker.palette.line;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(7),
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: border),
+        ),
+        child: SizedBox(
+          height: 24,
+          child: Row(
+            children: <Widget>[
+              for (final Color color in colors) Expanded(child: ColoredBox(color: color)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shared compact card: preview, name and a clear selected state (accent border, tint, tick).
+class _ChoiceTile extends StatelessWidget {
+  const _ChoiceTile({
+    required this.label,
+    required this.semantics,
+    required this.preview,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String semantics;
+  final Widget preview;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: semantics,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: semantics,
+        excludeFromSemantics: true,
+        child: Material(
+          color: selected ? colors.palette.accentLight.withValues(alpha: 0.35) : colors.palette.paperSoft,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: selected ? colors.palette.accentDark : colors.palette.line,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 7),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  preview,
+                  const SizedBox(height: 6),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                              ),
+                        ),
+                      ),
+                      if (selected) Icon(Icons.check_circle, size: 14, color: colors.palette.accentDark),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Colour theme card: swatches of the palette's background, surface and accent plus its name.
+class PaletteChoiceCard extends StatelessWidget {
+  const PaletteChoiceCard({
+    super.key,
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String id;
+  final String label;
+  final String description;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final (Color bg, Color surface, Color accent) = paletteSwatches(id, Theme.of(context).brightness);
+    return _ChoiceTile(
+      label: label,
+      semantics: '$label. $description',
+      preview: _Swatches(<Color>[bg, surface, accent]),
+      selected: selected,
+      onTap: onTap,
+    );
+  }
+}
+
+/// Notebook theme card (Warm paper, Chalkboard or Auto): a compact preview and the name.
 class ThemeChoiceCard extends StatelessWidget {
   const ThemeChoiceCard({
     super.key,
@@ -129,9 +268,12 @@ class ThemeChoiceCard extends StatelessWidget {
     required this.description,
     required this.selected,
     required this.onTap,
+    this.paletteId = 'default',
   });
 
   final ThemeMode mode;
+  /// The chosen colour theme, so the preview shows its paper and chalkboard variants.
+  final String paletteId;
   final String title;
   final String description;
   final bool selected;
@@ -139,59 +281,20 @@ class ThemeChoiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final StrackerColors colors = context.stracker;
-    final (Color paper, Color line) = switch (mode) {
-      ThemeMode.dark => (const Color(0xFF1F2A26), const Color(0xFF3C4A44)),
-      ThemeMode.light => (const Color(0xFFFFFBF2), const Color(0xFFE4D9C4)),
-      ThemeMode.system => (colors.palette.paperSoft, colors.palette.line),
+    final (Color lightBg, Color lightSurface, Color lightAccent) = paletteSwatches(paletteId, Brightness.light);
+    final (Color darkBg, Color darkSurface, Color darkAccent) = paletteSwatches(paletteId, Brightness.dark);
+    final List<Color> preview = switch (mode) {
+      ThemeMode.light => <Color>[lightBg, lightSurface, lightAccent],
+      ThemeMode.dark => <Color>[darkBg, darkSurface, darkAccent],
+      // Auto: half paper, half chalkboard.
+      ThemeMode.system => <Color>[lightSurface, lightAccent, darkAccent, darkSurface],
     };
-    return Semantics(
+    return _ChoiceTile(
+      label: title,
+      semantics: '$title. $description',
+      preview: _Swatches(preview),
       selected: selected,
-      button: true,
-      label: '$title. $description',
-      excludeSemantics: true,
-      child: Material(
-        color: colors.palette.paperSoft,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: selected ? colors.palette.accentDark : colors.palette.line, width: selected ? 2 : 1),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Container(
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: paper,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: line),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: <Widget>[
-                      for (int i = 0; i < 3; i++) Container(height: 1.5, color: line),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: <Widget>[
-                    Expanded(child: Text(title, style: Theme.of(context).textTheme.titleSmall)),
-                    if (selected) Icon(Icons.check_circle, size: 16, color: colors.palette.accentDark),
-                  ],
-                ),
-                Text(description, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted)),
-              ],
-            ),
-          ),
-        ),
-      ),
+      onTap: onTap,
     );
   }
 }
