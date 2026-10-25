@@ -251,6 +251,84 @@ List<TrendPoint> testTrend(AppData data, {int limit = 12}) {
   ];
 }
 
+/// The website's subject base: JEE Advanced "Physics — Paper 1/2" rows share one subject.
+String scoreSubjectBase(String subject) =>
+    subject.replaceFirst(RegExp(r'\s+—\s+Paper\s+[12]$', caseSensitive: false), '');
+
+/// Mirrors the website's subjectsFor: exam subjects, then any subject used by chapters,
+/// tests or subject score rows, in first-seen order.
+List<String> trendSubjects(AppData data) {
+  final List<String> list = <String>[...data.subjects];
+  void add(String? subject) {
+    if (subject != null && subject.isNotEmpty && !list.contains(subject)) list.add(subject);
+  }
+
+  for (final TestRecord test in data.tests) {
+    add(test.subject);
+  }
+  for (final TestSubjectScore score in data.testSubjectScores) {
+    add(score.subject);
+  }
+  return list;
+}
+
+/// JavaScript's String(number), so the CSV matches the website's byte for byte
+/// (50 rather than 50.0).
+String _jsNumber(double value) =>
+    value == value.truncateToDouble() && value.abs() < 1e15 ? value.toInt().toString() : value.toString();
+
+/// The website's "Export trend CSV" (Analytics header): one row per test by date, the
+/// overall % and each subject's %. Blank cells are left blank, never filled in.
+String trendCsv(AppData data) {
+  final List<String> subjects = trendSubjects(data);
+  final List<({int index, TestRecord test})> ordered = <({int index, TestRecord test})>[
+    for (int i = 0; i < data.tests.length; i++) (index: i, test: data.tests[i]),
+  ]..sort((({int index, TestRecord test}) a, ({int index, TestRecord test}) b) {
+      final int byDate = a.test.testDate.compareTo(b.test.testDate);
+      return byDate != 0 ? byDate : a.index.compareTo(b.index);
+    });
+
+  final List<List<String>> rows = <List<String>>[
+    <String>['Date', 'Overall %', for (final String subject in subjects) '$subject %'],
+  ];
+  for (final ({int index, TestRecord test}) entry in ordered) {
+    final TestRecord test = entry.test;
+    final Map<String, double?> bySubject = <String, double?>{};
+    if (test.testType == 'Full Mock') {
+      final Set<String> seen = <String>{};
+      final Map<String, ({double marks, double total, bool incomplete})> grouped =
+          <String, ({double marks, double total, bool incomplete})>{};
+      for (final TestSubjectScore score in data.testSubjectScores) {
+        if (score.testId != test.id || !seen.add(score.subject)) continue;
+        final String base = scoreSubjectBase(score.subject);
+        final ({double marks, double total, bool incomplete}) current =
+            grouped[base] ?? (marks: 0, total: 0, incomplete: false);
+        grouped[base] = (
+          marks: current.marks + (score.marksObtained ?? 0),
+          total: current.total + (score.totalMarks ?? 0),
+          incomplete: current.incomplete || score.marksObtained == null || score.totalMarks == null,
+        );
+      }
+      grouped.forEach((String subject, ({double marks, double total, bool incomplete}) value) {
+        bySubject[subject] = value.incomplete ? null : validPercentage(value.marks, value.total);
+      });
+    } else if (test.subject != null && test.subject!.isNotEmpty) {
+      bySubject[test.subject!] = testPercentage(test);
+    }
+    final double? overall = overallTestPercentage(test, data.testSubjectScores);
+    rows.add(<String>[
+      test.testDate,
+      overall == null ? '' : _jsNumber(overall),
+      for (final String subject in subjects)
+        bySubject[subject] == null ? '' : _jsNumber(bySubject[subject]!),
+    ]);
+  }
+  final String csv = rows
+      .map((List<String> row) => row.map((String value) => '"${value.replaceAll('"', '""')}"').join(','))
+      .join('\r\n');
+  return '\ufeff$csv';
+}
+
 /* ------------------------------------------------------------------ */
 /* Subject signals                                                     */
 /* ------------------------------------------------------------------ */
