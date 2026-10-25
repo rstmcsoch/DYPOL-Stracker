@@ -3,8 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
+import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
@@ -14,6 +17,9 @@ import '../../logic/revision.dart';
 /// Shared by the dashboard and the revision page so both write the same rows.
 /// Revisions being saved right now: a double tap cannot schedule the next rung twice.
 final Set<String> _completing = <String>{};
+
+/// Chapters whose first revision is being scheduled right now (double-tap guard).
+final Set<String> _scheduling = <String>{};
 
 Future<void> completeRevision(
   BuildContext context,
@@ -44,7 +50,7 @@ Future<void> completeRevision(
     }
     await HapticFeedback.lightImpact();
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   } finally {
     _completing.remove(revision.id);
   }
@@ -57,7 +63,7 @@ Future<void> snoozeRevision(BuildContext context, WidgetRef ref, Revision revisi
     if (context.mounted) showToast(context, 'Moved to tomorrow. It is still in your queue.');
     await HapticFeedback.selectionClick();
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   }
 }
 
@@ -68,19 +74,25 @@ Future<void> scheduleRevision(
   AppData data,
   Chapter chapter,
 ) async {
+  // Read the live data, not the caller's snapshot: an open sheet's snapshot misses a
+  // revision that was just scheduled from it.
+  final AppData live = ref.read(dataControllerProvider).data;
   final bool exists =
-      data.revisions.any((Revision revision) => revision.chapterId == chapter.id && revision.completedAt == null);
-  if (exists) {
+      live.revisions.any((Revision revision) => revision.chapterId == chapter.id && revision.completedAt == null);
+  if (exists || _scheduling.contains(chapter.id)) {
     if (context.mounted) showToast(context, 'That chapter already has a revision scheduled.');
     return;
   }
+  _scheduling.add(chapter.id);
   try {
-    await ref.read(dataControllerProvider.notifier).saveRevision(startRevisionChain(data, chapter.id));
+    await ref.read(dataControllerProvider.notifier).saveRevision(startRevisionChain(live, chapter.id));
     if (context.mounted) {
       showToast(context, 'Revision scheduled for ${chapter.name}.');
     }
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
+  } finally {
+    _scheduling.remove(chapter.id);
   }
 }
 
@@ -176,6 +188,57 @@ class RevisionTile extends ConsumerWidget {
           ] else
             Icon(Icons.check_circle, size: 18, color: colors.palette.green),
         ],
+      ),
+    );
+  }
+}
+
+/// Shown while a chapter's revision dates are waiting to be saved (the chapter itself was
+/// saved). Retry writes them now; Dismiss drops them (revisions can be scheduled by hand).
+class RevisionFollowUpBanner extends ConsumerWidget {
+  const RevisionFollowUpBanner({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final List<RevisionFollowUp> jobs = ref.watch(dataControllerProvider.select((DataState s) => s.followUps));
+    if (jobs.isEmpty) return const SizedBox.shrink();
+    final String names = jobs.map((RevisionFollowUp job) => job.chapterName).where((String n) => n.isNotEmpty).join(', ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: NotebookCard(
+        key: const ValueKey<String>('revision-followups'),
+        title: 'Revision dates not saved yet',
+        subtitle: '${names.isEmpty ? 'Some chapters' : names}: the chapter was saved but its revision dates '
+            'could not reach Stracker. They retry automatically when you are back online.',
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: SaveButton(
+                label: 'Retry',
+                onPressed: () async {
+                  final String? error = await ref.read(dataControllerProvider.notifier).retryFollowUps();
+                  if (!context.mounted) return;
+                  showToast(context, error ?? 'Revision dates saved.', error: error != null);
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SecondaryButton(
+                label: 'Dismiss',
+                onPressed: () async {
+                  final bool confirmed = await confirmAction(
+                    context,
+                    title: 'Drop these revision dates?',
+                    message: 'The chapters stay saved. You can schedule their revisions by hand later.',
+                    confirmLabel: 'Drop',
+                  );
+                  if (confirmed) ref.read(dataControllerProvider.notifier).dismissFollowUps();
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

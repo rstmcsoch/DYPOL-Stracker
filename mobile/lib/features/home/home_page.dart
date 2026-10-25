@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
@@ -223,7 +224,7 @@ class HomePage extends ConsumerWidget {
                                 task.copyWith(isCompleted: value ?? false),
                               );
                         } catch (error) {
-                          if (context.mounted) showToast(context, error.toString(), error: true);
+                          if (context.mounted) showToast(context, userMessage(error), error: true);
                         }
                       },
                       dense: true,

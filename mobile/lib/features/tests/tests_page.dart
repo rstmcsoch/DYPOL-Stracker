@@ -7,6 +7,7 @@ import '../../core/errors.dart';
 import '../../core/format.dart';
 import '../../core/iterables.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -16,6 +17,7 @@ import '../../data/models.dart';
 import '../../logic/analytics.dart';
 import '../../logic/marking.dart';
 import '../../logic/test_form.dart';
+import '../search/search_focus.dart';
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
 
@@ -213,7 +215,7 @@ class _TestsPageState extends ConsumerState<TestsPage> {
               ),
             )
           else
-            for (final TestRecord test in rows) _TestCard(test: test, data: data),
+            for (final TestRecord test in rows) SearchTarget(id: test.id, child: _TestCard(test: test, data: data)),
         ],
       ),
     );
@@ -345,7 +347,12 @@ Future<void> openTestEditor(
   final Chapter? preset = creating && presetChapterId != null ? data.chapter(presetChapterId) : null;
   String jeePattern = inferJeePattern(test?.testType, oldScores);
 
-  String text(num? value) => value == null ? '' : numberLabel(value, digits: 2);
+  // Whole numbers prefill without decimals: totals must parse as integers, so "60.00" would block every edit.
+  String text(num? value) => value == null
+      ? ''
+      : value == value.roundToDouble()
+          ? value.round().toString()
+          : numberLabel(value, digits: 2).replaceFirst(RegExp(r'0+$'), '');
   final TextEditingController title = TextEditingController(text: test?.title ?? '');
   final TextEditingController marks = TextEditingController(text: text(test?.marksObtained));
   final TextEditingController total = TextEditingController(
@@ -724,20 +731,24 @@ Future<void> openTestEditor(
                 ),
               ],
             ),
-            if (!creating)
+            if (!creating) ...<Widget>[
+              const SizedBox(height: 10),
               Row(
                 children: <Widget>[
                   Expanded(
-                    child: TextButton(
+                    child: SecondaryButton(
+                      icon: Icons.insights_outlined,
+                      label: 'Mock analysis',
                       onPressed: () {
                         Navigator.of(sheetContext).pop();
                         Routes.open(context, Routes.mockAnalysis);
                       },
-                      child: const Text('Mock analysis'),
                     ),
                   ),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: TextButton(
+                    child: DangerButton(
+                      label: 'Delete',
                       onPressed: () async {
                         final bool confirmed = await confirmAction(
                           context,
@@ -750,35 +761,37 @@ Future<void> openTestEditor(
                           if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                           if (context.mounted) showToast(context, 'Test deleted.');
                         } catch (error) {
-                          if (context.mounted) showToast(context, 'Could not delete test.', error: true);
+                          if (context.mounted) showToast(context, userMessage(error), error: true);
                         }
                       },
-                      child: Text('Delete', style: TextStyle(color: context.stracker.palette.red)),
                     ),
                   ),
                 ],
               ),
+            ],
           ],
         );
       },
     ),
+    onDisposed: () {
+      for (final TextEditingController c in <TextEditingController>[
+        title,
+        marks,
+        total,
+        correct,
+        wrong,
+        skipped,
+        questions,
+        negative,
+        time,
+        notes,
+      ]) {
+        c.dispose();
+      }
+      for (final (TextEditingController m, TextEditingController t) in mock.values) {
+        m.dispose();
+        t.dispose();
+      }
+    },
   );
-  for (final TextEditingController c in <TextEditingController>[
-    title,
-    marks,
-    total,
-    correct,
-    wrong,
-    skipped,
-    questions,
-    negative,
-    time,
-    notes,
-  ]) {
-    c.dispose();
-  }
-  for (final (TextEditingController m, TextEditingController t) in mock.values) {
-    m.dispose();
-    t.dispose();
-  }
 }

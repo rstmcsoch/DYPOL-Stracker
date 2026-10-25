@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/errors.dart';
 import '../../core/format.dart';
 import '../../core/iterables.dart';
 import '../../core/theme/app_theme.dart';
@@ -205,7 +206,7 @@ class _PyqChapterCard extends ConsumerWidget {
     try {
       await ref.read(dataControllerProvider.notifier).savePyq(next);
     } catch (error) {
-      if (context.mounted) showToast(context, error.toString(), error: true);
+      if (context.mounted) showToast(context, userMessage(error), error: true);
     }
   }
 
@@ -237,7 +238,7 @@ class _PyqChapterCard extends ConsumerWidget {
         showToast(context, '${chapter.name}: ${done ? 'all' : 'no'} $exam years marked.');
       }
     } catch (error) {
-      if (context.mounted) showToast(context, error.toString(), error: true);
+      if (context.mounted) showToast(context, userMessage(error), error: true);
     }
   }
 }

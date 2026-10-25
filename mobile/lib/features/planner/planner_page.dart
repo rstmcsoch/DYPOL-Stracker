@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
@@ -13,6 +14,8 @@ import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/home_summary.dart' show prettyDate;
 import '../../logic/planner.dart';
+import '../../logic/search.dart';
+import '../search/search_focus.dart';
 import '../shell/app_shell.dart';
 
 /// Planner, as src/pages/PlannerPage.tsx: a Monday-first week strip, the selected day's
@@ -28,6 +31,21 @@ class PlannerPage extends ConsumerStatefulWidget {
 class _PlannerPageState extends ConsumerState<PlannerPage> {
   String _weekStart = startOfWeek(todayIso());
   String _selected = todayIso();
+
+  @override
+  void initState() {
+    super.initState();
+    // Opened from a search result: show the week and day that hold the task.
+    final SearchFocus? focus = SearchFocusScope.of(context);
+    if (focus != null && focus.kind == SearchKind.task) {
+      final DailyTask? task =
+          ref.read(dataControllerProvider).data.tasks.where((DailyTask t) => t.id == focus.id).firstOrNull;
+      if (task != null) {
+        _selected = task.taskDate;
+        _weekStart = startOfWeek(task.taskDate);
+      }
+    }
+  }
 
   void _selectWeek(String start) => setState(() {
         _weekStart = start;
@@ -48,27 +66,30 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     );
     if (!confirmed) return;
     try {
-      final int start = data.tasksOn(_selected).length;
-      for (int i = 0; i < source.length; i += 1) {
-        final DailyTask task = source[i];
-        await ref.read(dataControllerProvider.notifier).saveTask(DailyTask(
-              id: newId(),
-              userId: data.userId,
-              title: task.title,
-              subject: task.subject,
-              chapterId: task.chapterId,
-              topic: task.topic,
-              estimatedMinutes: task.estimatedMinutes,
-              priority: task.priority,
-              taskDate: _selected,
-              position: start + i,
-              createdAt: isoNow(),
-              updatedAt: isoNow(),
-            ));
-      }
+      // Live count (not the snapshot from before the dialog), and one request for all the
+      // copies: either every task is copied or none is.
+      final int start = ref.read(dataControllerProvider).data.tasksOn(_selected).length;
+      final String now = isoNow();
+      await ref.read(dataControllerProvider.notifier).saveTasks(<DailyTask>[
+        for (int i = 0; i < source.length; i += 1)
+          DailyTask(
+            id: newId(),
+            userId: data.userId,
+            title: source[i].title,
+            subject: source[i].subject,
+            chapterId: source[i].chapterId,
+            topic: source[i].topic,
+            estimatedMinutes: source[i].estimatedMinutes,
+            priority: source[i].priority,
+            taskDate: _selected,
+            position: start + i,
+            createdAt: now,
+            updatedAt: now,
+          ),
+      ]);
       if (context.mounted) showToast(context, 'Copied ${source.length} tasks.');
     } catch (error) {
-      if (context.mounted) showToast(context, 'Could not copy tasks.', error: true);
+      if (context.mounted) showToast(context, userMessage(error, fallback: 'Could not copy tasks.'), error: true);
     }
   }
 
@@ -182,7 +203,11 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
                   )
                 else
                   for (int i = 0; i < tasks.length; i += 1)
-                    _TaskRow(task: tasks[i], index: i, tasks: tasks, data: data),
+                    SearchTarget(
+                      id: tasks[i].id,
+                      radius: 12,
+                      child: _TaskRow(task: tasks[i], index: i, tasks: tasks, data: data),
+                    ),
                 Divider(color: colors.palette.line),
                 Row(
                   children: <Widget>[
@@ -362,20 +387,23 @@ class _TaskRow extends ConsumerWidget {
   final AppData data;
 
   Future<void> _move(BuildContext context, WidgetRef ref, int direction) async {
-    final int to = index + direction;
-    if (to < 0 || to >= tasks.length) return;
+    // Live order: a quick second tap must move from where the first one left the task.
+    final List<DailyTask> live = ref.read(dataControllerProvider).data.tasksOn(task.taskDate);
+    final int from = live.indexWhere((DailyTask row) => row.id == task.id);
+    final int to = from + direction;
+    if (from < 0 || to < 0 || to >= live.length) return;
     await HapticFeedback.selectionClick();
-    final List<DailyTask> reordered = <DailyTask>[...tasks];
-    final DailyTask moved = reordered.removeAt(index);
+    final List<DailyTask> reordered = <DailyTask>[...live];
+    final DailyTask moved = reordered.removeAt(from);
     reordered.insert(to, moved);
     try {
-      for (int position = 0; position < reordered.length; position += 1) {
-        if (reordered[position].position != position) {
-          await ref.read(dataControllerProvider.notifier).saveTask(reordered[position].copyWith(position: position));
-        }
-      }
+      // One request: the new order is stored whole or not at all.
+      await ref.read(dataControllerProvider.notifier).saveTasks(<DailyTask>[
+        for (int position = 0; position < reordered.length; position += 1)
+          if (reordered[position].position != position) reordered[position].copyWith(position: position),
+      ]);
     } catch (error) {
-      if (context.mounted) showToast(context, 'Could not reorder tasks.', error: true);
+      if (context.mounted) showToast(context, userMessage(error, fallback: 'Could not reorder tasks.'), error: true);
     }
   }
 
@@ -397,7 +425,9 @@ class _TaskRow extends ConsumerWidget {
               try {
                 await ref.read(dataControllerProvider.notifier).saveTask(task.copyWith(isCompleted: value ?? false));
               } catch (error) {
-                if (context.mounted) showToast(context, 'Could not update task.', error: true);
+                if (context.mounted) {
+                  showToast(context, userMessage(error, fallback: 'Could not update task.'), error: true);
+                }
               }
             },
           ),
@@ -458,7 +488,9 @@ class _TaskRow extends ConsumerWidget {
                         ));
                     if (context.mounted) showToast(context, 'Task duplicated.');
                   } catch (error) {
-                    if (context.mounted) showToast(context, 'Could not duplicate task.', error: true);
+                    if (context.mounted) {
+                      showToast(context, userMessage(error, fallback: 'Could not duplicate task.'), error: true);
+                    }
                   }
                 case 'edit':
                   await openTaskEditor(context, ref, data, task, task.taskDate);
@@ -473,7 +505,9 @@ class _TaskRow extends ConsumerWidget {
                     await ref.read(dataControllerProvider.notifier).deleteTask(task);
                     if (context.mounted) showToast(context, 'Task deleted.');
                   } catch (error) {
-                    if (context.mounted) showToast(context, 'Could not delete task.', error: true);
+                    if (context.mounted) {
+                      showToast(context, userMessage(error, fallback: 'Could not delete task.'), error: true);
+                    }
                   }
               }
             },
@@ -525,7 +559,7 @@ class _GoalRowState extends ConsumerState<_GoalRow> {
           ));
       if (mounted) showToast(context, 'Weekly goal saved.');
     } catch (error) {
-      if (mounted) showToast(context, 'Could not save goal.', error: true);
+      if (mounted) showToast(context, userMessage(error, fallback: 'Could not save goal.'), error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -554,7 +588,9 @@ class _GoalRowState extends ConsumerState<_GoalRow> {
                     await ref.read(dataControllerProvider.notifier).deleteGoal(goal);
                     if (context.mounted) showToast(context, 'Goal deleted.');
                   } catch (error) {
-                    if (context.mounted) showToast(context, 'Could not delete goal.', error: true);
+                    if (context.mounted) {
+                      showToast(context, userMessage(error, fallback: 'Could not delete goal.'), error: true);
+                    }
                   }
                 },
               ),
@@ -771,7 +807,9 @@ Future<void> openTaskEditor(
                               showToast(context, creating ? 'Task added to your plan.' : 'Task updated.');
                             }
                           } catch (error) {
-                            if (context.mounted) showToast(context, 'Could not save task.', error: true);
+                            if (context.mounted) {
+                              showToast(context, userMessage(error, fallback: 'Could not save task.'), error: true);
+                            }
                             setSheetState(() => saving = false);
                           }
                         },
@@ -783,10 +821,12 @@ Future<void> openTaskEditor(
         );
       },
     ),
+    onDisposed: () {
+      title.dispose();
+      minutes.dispose();
+      topic.dispose();
+    },
   );
-  title.dispose();
-  minutes.dispose();
-  topic.dispose();
 }
 
 /// The website's QuickTaskDialog from the quick-action menu: "Add a task" for today.
@@ -914,7 +954,9 @@ Future<void> openQuickTask(BuildContext context, WidgetRef ref) async {
                           if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                           if (context.mounted) showToast(context, 'Task added to today.');
                         } catch (error) {
-                          if (context.mounted) showToast(context, 'Could not save task. Retry.', error: true);
+                          if (context.mounted) {
+                            showToast(context, userMessage(error, fallback: 'Could not save task. Retry.'), error: true);
+                          }
                           setSheetState(() => saving = false);
                         }
                       },
@@ -926,9 +968,11 @@ Future<void> openQuickTask(BuildContext context, WidgetRef ref) async {
         ],
       ),
     ),
+    onDisposed: () {
+      title.dispose();
+      minutes.dispose();
+    },
   );
-  title.dispose();
-  minutes.dispose();
 }
 
 /// The website's GoalDialog: "Set a weekly goal" for the shown week.
@@ -1030,7 +1074,9 @@ Future<void> openGoalEditor(BuildContext context, WidgetRef ref, AppData data, S
                             if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                             if (context.mounted) showToast(context, 'Weekly goal saved.');
                           } catch (error) {
-                            if (context.mounted) showToast(context, 'Could not save goal.', error: true);
+                            if (context.mounted) {
+                              showToast(context, userMessage(error, fallback: 'Could not save goal.'), error: true);
+                            }
                             setSheetState(() => saving = false);
                           }
                         },
@@ -1042,8 +1088,10 @@ Future<void> openGoalEditor(BuildContext context, WidgetRef ref, AppData data, S
         );
       },
     ),
+    onDisposed: () {
+      title.dispose();
+      target.dispose();
+      unit.dispose();
+    },
   );
-  title.dispose();
-  target.dispose();
-  unit.dispose();
 }

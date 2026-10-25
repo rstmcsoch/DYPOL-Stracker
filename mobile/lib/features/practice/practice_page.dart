@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/validators.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -385,7 +387,7 @@ Future<void> openPracticeEditor(
             error: Validators.minutes(minutes.text, label: 'Minutes'),
           ),
           AppField(label: 'Notes', controller: notes, maxLines: 3, maxLength: 5000),
-          ElevatedButton(
+          SaveButton(
             onPressed: () async {
               final int attemptedValue = int.tryParse(attempted.text.trim()) ?? -1;
               final int correctValue = int.tryParse(correct.text.trim()) ?? -1;
@@ -405,6 +407,8 @@ Future<void> openPracticeEditor(
                 countsError = correctValue < 0 ? 'Enter the correct count.' : countError;
               });
               if (attemptedError != null || countError != null || skippedError != null) return;
+              // The field already shows this error; never send a value the database rejects.
+              if (Validators.minutes(minutes.text, label: 'Minutes') != null) return;
               final int minutesValue = int.tryParse(minutes.text.trim()) ?? 0;
               final PracticeSession next = PracticeSession(
                 id: session?.id ?? newId(),
@@ -426,13 +430,14 @@ Future<void> openPracticeEditor(
                 if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                 if (context.mounted) showToast(context, creating ? 'Practice logged.' : 'Practice updated.');
               } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
+                if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
-            child: Text(creating ? 'Log practice' : 'Save changes'),
+            label: creating ? 'Log practice' : 'Save changes',
           ),
           if (!creating)
-            TextButton(
+            DangerButton(
+              label: 'Delete',
               onPressed: () async {
                 final bool confirmed = await confirmAction(
                   context,
@@ -445,21 +450,22 @@ Future<void> openPracticeEditor(
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, 'Practice block deleted.');
                 } catch (error) {
-                  if (context.mounted) showToast(context, error.toString(), error: true);
+                  if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              child: Text('Delete', style: TextStyle(color: context.stracker.palette.red)),
             ),
         ],
       ),
     ),
+    onDisposed: () {
+      attempted.dispose();
+      correct.dispose();
+      incorrect.dispose();
+      skipped.dispose();
+      minutes.dispose();
+      notes.dispose();
+    },
   );
-  attempted.dispose();
-  correct.dispose();
-  incorrect.dispose();
-  skipped.dispose();
-  minutes.dispose();
-  notes.dispose();
 }
 
 Future<Chapter?> _pickChapter(BuildContext context, AppData data, Chapter current) {

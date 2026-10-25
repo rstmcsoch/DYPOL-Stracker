@@ -6,17 +6,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
+import '../../core/widgets/wandering_eyes.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/analytics.dart';
+import '../search/search_focus.dart';
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
-import '../../core/widgets/wandering_eyes.dart';
 
 /// The five types the database accepts (web MISTAKE_TYPES).
 const List<String> mistakeTypes = <String>['Concept', 'Silly', 'Calculation', 'Time', 'Guess'];
@@ -34,7 +37,7 @@ Future<void> deleteMistakeWithConfirm(BuildContext context, WidgetRef ref, Mista
     await ref.read(dataControllerProvider.notifier).deleteMistake(mistake);
     if (context.mounted) showToast(context, 'Mistake entry deleted.');
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   }
 }
 
@@ -185,7 +188,7 @@ class _MistakesPageState extends ConsumerState<MistakesPage> {
               ),
             )
           else
-            for (final Mistake mistake in rows) _MistakeCard(mistake: mistake, data: data),
+            for (final Mistake mistake in rows) SearchTarget(id: mistake.id, child: _MistakeCard(mistake: mistake, data: data)),
           Row(
             children: <Widget>[
               Expanded(
@@ -295,7 +298,10 @@ class _MistakeCard extends ConsumerWidget {
                   const Pill('Notebook', dense: true),
                 const Spacer(),
                 if (mistake.retryStatus == 'pending')
-                  TextButton(
+                  SecondaryButton(
+                    compact: true,
+                    icon: mistake.retryLater ? Icons.bookmark_remove_outlined : Icons.replay,
+                    label: mistake.retryLater ? 'Keep in notes' : 'Retry later',
                     onPressed: () async {
                       final bool adding = !mistake.retryLater;
                       try {
@@ -307,10 +313,9 @@ class _MistakeCard extends ConsumerWidget {
                         }
                         await HapticFeedback.selectionClick();
                       } catch (error) {
-                        if (context.mounted) showToast(context, error.toString(), error: true);
+                        if (context.mounted) showToast(context, userMessage(error), error: true);
                       }
                     },
-                    child: Text(mistake.retryLater ? 'Keep in notes' : 'Retry later'),
                   ),
               ],
             ),
@@ -496,7 +501,7 @@ Future<void> openMistakeEditor(
             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.stracker.muted),
           ),
           const SizedBox(height: 12),
-          ElevatedButton(
+          SaveButton(
             onPressed: () async {
               final Chapter? chosen = data.chapter(chapterId);
               if (subject == null || chosen == null || chosen.subject != subject) {
@@ -535,13 +540,14 @@ Future<void> openMistakeEditor(
                   showToast(context, creating ? 'Saved to your mistake notebook.' : 'Mistake note updated.');
                 }
               } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
+                if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
-            child: Text(creating ? 'Add to notebook' : 'Save note'),
+            label: creating ? 'Add to notebook' : 'Save note',
           ),
           if (!creating)
-            TextButton(
+            DangerButton(
+              label: 'Delete',
               onPressed: () async {
                 final bool confirmed = await confirmAction(
                   context,
@@ -554,15 +560,16 @@ Future<void> openMistakeEditor(
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, 'Mistake deleted.');
                 } catch (error) {
-                  if (context.mounted) showToast(context, error.toString(), error: true);
+                  if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              child: Text('Delete', style: TextStyle(color: context.stracker.palette.red)),
             ),
         ],
       ),
     ),
+    onDisposed: () {
+      question.dispose();
+      solution.dispose();
+    },
   );
-  question.dispose();
-  solution.dispose();
 }

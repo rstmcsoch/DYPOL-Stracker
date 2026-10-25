@@ -4,14 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/notebook.dart';
+import '../../core/widgets/wandering_eyes.dart';
 import '../../data/ai_client.dart';
 import '../../data/models.dart';
 import '../shell/app_shell.dart';
 import 'ai_markdown.dart';
-import '../../core/widgets/wandering_eyes.dart';
 
 /// Stracker AI. Talks only to the deployed `/api/ai/*` functions with the user's own
 /// Supabase token; provider keys live server-side. Streams the same SSE events the website
@@ -127,7 +129,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error.toString();
+        _error = userMessage(error, fallback: 'The assistant could not answer right now. Please try again.');
       });
     }
   }
@@ -244,7 +246,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             ? 'The assistant could not answer. Check your connection and any AI provider configured in '
                 'the website’s settings.'
             : reply.text;
-        _error = error.toString();
+        _error = userMessage(error, fallback: 'The assistant could not answer right now. Please try again.');
       });
     } finally {
       if (mounted) {
@@ -269,7 +271,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         stopped ? 'Stopping. The answer will finish where it is.' : 'That task had already finished.',
       );
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     }
   }
 
@@ -518,7 +520,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                             await _loadConversations();
                           }
                         } catch (error) {
-                          if (mounted) showToast(context, error.toString(), error: true);
+                          if (mounted) showToast(context, userMessage(error), error: true);
                         }
                       },
                     ),
@@ -701,7 +703,7 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = userMessage(error, fallback: 'The assistant could not answer right now. Please try again.');
       });
     }
   }
@@ -713,7 +715,7 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
       // Refresh the list in the background; the action itself already finished.
       unawaited(_load());
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -793,31 +795,40 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
                     ),
                     const SizedBox(height: 6),
                     Wrap(
-                      spacing: 4,
+                      spacing: 6,
+                      runSpacing: 6,
                       children: <Widget>[
-                        TextButton(
+                        SecondaryButton(
+                          compact: true,
+                          icon: Icons.wifi_tethering,
+                          label: 'Test',
                           onPressed: () => _run(() async {
                             await widget.client.testConnection(provider.id);
                             if (mounted) showToast(context, 'Connection works.');
                           }),
-                          child: const Text('Test'),
                         ),
-                        TextButton(
+                        SecondaryButton(
+                          compact: true,
+                          icon: provider.enabled ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                          label: provider.enabled ? 'Disable' : 'Enable',
                           onPressed: provider.enabled
                               ? () => _run(() => widget.client.providerAction(provider.id, 'disable'))
                               : () => _run(() => widget.client.providerAction(provider.id, 'enable')),
-                          child: Text(provider.enabled ? 'Disable' : 'Enable'),
                         ),
-                        TextButton(
+                        SecondaryButton(
+                          compact: true,
+                          icon: Icons.star_outline,
+                          label: 'Prefer',
                           onPressed: () => _run(() => widget.client.providerAction(provider.id, 'default')),
-                          child: const Text('Prefer'),
                         ),
-                        TextButton(
+                        DangerButton(
+                          compact: true,
+                          label: 'Remove',
                           onPressed: () async {
                             final bool confirmed = await confirmAction(
                               context,
                               title: 'Remove ${provider.displayName}?',
-                              message: 'The saved key has been removed.',
+                              message: 'Its saved key is deleted and the assistant stops using it.',
                             );
                             if (!confirmed) return;
                             // Optimistic: drop the row now, restore it if the server refuses.
@@ -831,13 +842,9 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
                             } catch (error) {
                               if (!mounted) return;
                               setState(() => _rows = before);
-                              showToast(context, error.toString(), error: true);
+                              showToast(context, userMessage(error), error: true);
                             }
                           },
-                          child: Text(
-                            'Remove',
-                            style: TextStyle(color: colors.palette.red),
-                          ),
                         ),
                       ],
                     ),
@@ -1074,14 +1081,14 @@ class _AddProviderSheetState extends State<_AddProviderSheet> {
                           await widget.client.testConnection(saved.id);
                         } catch (error) {
                           if (mounted) {
-                            setState(() => _error = 'Saved, but the connection test failed: $error');
+                            setState(() => _error = 'Saved, but the connection test failed: ${userMessage(error, fallback: 'the provider did not answer.')}');
                             widget.onSaved();
                           }
                           return;
                         }
                         widget.onSaved();
                       } catch (error) {
-                        if (mounted) setState(() => _error = error.toString());
+                        if (mounted) setState(() => _error = userMessage(error));
                       } finally {
                         if (mounted) setState(() => _busy = false);
                       }

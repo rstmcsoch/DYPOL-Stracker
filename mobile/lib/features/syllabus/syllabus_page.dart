@@ -3,8 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/format.dart';
+import '../../core/iterables.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -14,8 +17,8 @@ import '../../data/models.dart';
 import '../../logic/analytics.dart';
 import '../../logic/progress.dart';
 import '../revision/revision_actions.dart';
+import '../search/search_focus.dart';
 import '../shell/app_shell.dart';
-import '../../core/iterables.dart';
 
 /// Syllabus notebook: every chapter with its status, importance, five preparation
 /// stages, practice accuracy and pipeline progress. Search, filter, sort and reorder
@@ -106,6 +109,7 @@ class _SyllabusPageState extends ConsumerState<SyllabusPage> {
       child: PageBody(
         refresh: () => ref.read(dataControllerProvider.notifier).load(silent: true),
         children: <Widget>[
+          const RevisionFollowUpBanner(),
           if (strip.isNotEmpty) ...<Widget>[
             WrapGrid(
               minItemWidth: 140,
@@ -260,10 +264,13 @@ class _SyllabusPageState extends ConsumerState<SyllabusPage> {
             )
           else
             for (final Chapter chapter in rows)
-              _ChapterCard(
-                chapter: chapter,
-                data: data,
-                practice: practice[chapter.id],
+              SearchTarget(
+                id: chapter.id,
+                child: _ChapterCard(
+                  chapter: chapter,
+                  data: data,
+                  practice: practice[chapter.id],
+                ),
               ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
@@ -475,7 +482,13 @@ Future<void> openChapterEditor(
   await showAppSheet<void>(
     context,
     title: creating ? 'Add a chapter' : 'Chapter notes',
-    builder: (BuildContext sheetContext) => StatefulBuilder(
+    // The sheet watches live data: stage chips, revision scheduling and Up/Down act on the
+    // rows as they are now, not as they were when the sheet opened (a stale snapshot sent a
+    // second stage toggle as a new row and hit the (chapter, stage) unique key).
+    builder: (BuildContext sheetContext) => Consumer(
+      builder: (BuildContext _, WidgetRef sheetRef, Widget? __) {
+        final AppData data = sheetRef.watch(dataControllerProvider).data;
+        return StatefulBuilder(
       builder: (BuildContext context, StateSetter setSheetState) {
         final Chapter? live = creating ? null : data.chapters.where((Chapter row) => row.id == chapter.id).firstOrNull;
         final Chapter base = live ??
@@ -629,7 +642,8 @@ Future<void> openChapterEditor(
                 ],
               ),
               const SizedBox(height: 6),
-              TextButton.icon(
+              DangerButton(
+                label: 'Delete chapter',
                 onPressed: () async {
                   final bool confirmed = await confirmAction(
                     context,
@@ -644,15 +658,14 @@ Future<void> openChapterEditor(
                     if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                     if (context.mounted) showToast(context, 'Chapter deleted.');
                   } catch (error) {
-                    if (context.mounted) showToast(context, error.toString(), error: true);
+                    if (context.mounted) showToast(context, userMessage(error), error: true);
                   }
                 },
-                icon: Icon(Icons.delete_outline, size: 17, color: context.stracker.palette.red),
-                label: Text('Delete chapter', style: TextStyle(color: context.stracker.palette.red)),
               ),
             ],
             const SizedBox(height: 8),
-            ElevatedButton(
+            SaveButton(
+              label: creating ? 'Add chapter' : 'Save notes',
               onPressed: () async {
                 final String trimmed = name.text.trim();
                 if (trimmed.isEmpty) {
@@ -683,36 +696,49 @@ Future<void> openChapterEditor(
                       : base.position,
                 );
                 try {
-                  await persistChapterStatus(ref, data, next, previous);
+                  final bool ladderSaved = await persistChapterStatus(ref, data, next, previous);
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                  if (context.mounted) showToast(context, 'Chapter saved to your syllabus.');
+                  if (context.mounted) {
+                    showToast(
+                      context,
+                      ladderSaved ? 'Chapter saved to your syllabus.' : ladderQueuedMessage(next.name),
+                      error: !ladderSaved,
+                    );
+                  }
                 } catch (error) {
-                  if (context.mounted) showToast(context, error.toString(), error: true);
+                  if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              child: Text(creating ? 'Add chapter' : 'Save notes'),
             ),
           ],
         );
       },
+        );
+      },
     ),
+    onDisposed: () {
+      name.dispose();
+      notes.dispose();
+      formulas.dispose();
+      weightage.dispose();
+    },
   );
-  name.dispose();
-  notes.dispose();
-  formulas.dispose();
-  weightage.dispose();
 }
 
 /// Website `persistChapterStatus`: saving a chapter as Done/Revised lays out the revision
 /// ladder from Settings (once, or again if it has none); moving it back out of complete
 /// removes the revisions still pending.
-Future<void> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Chapter? previous) async {
+Future<bool> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Chapter? previous) async {
   final DataController controller = ref.read(dataControllerProvider.notifier);
-  await controller.saveChapter(next);
+  // Live rows: the caller's snapshot can miss a revision scheduled moments ago, and a
+  // reused revision number breaks the (chapter, revision_number) unique key.
+  final AppData current = ref.read(dataControllerProvider).data;
   final bool wasComplete = previous?.status == 'Done' || previous?.status == 'Revised';
   final bool isComplete = next.status == 'Done' || next.status == 'Revised';
   final List<Revision> chapterRevisions =
-      data.revisions.where((Revision revision) => revision.chapterId == next.id).toList();
+      current.revisions.where((Revision revision) => revision.chapterId == next.id).toList();
+  List<Revision> add = const <Revision>[];
+  List<Revision> remove = const <Revision>[];
   if (isComplete && (!wasComplete || chapterRevisions.isEmpty)) {
     final int firstNumber = chapterRevisions.fold<int>(
           0,
@@ -720,25 +746,30 @@ Future<void> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Cha
         ) +
         1;
     final String now = isoNow();
-    final List<int> gaps = data.settings.revisionGaps;
-    await controller.saveRevisions(<Revision>[
+    final List<int> gaps = current.settings.revisionGaps;
+    add = <Revision>[
       for (int index = 0; index < gaps.length; index += 1)
         Revision(
           id: newId(),
-          userId: data.userId,
+          userId: current.userId,
           chapterId: next.id,
           revisionNumber: firstNumber + index,
           dueOn: addDays(next.completedOn ?? todayIso(), gaps[index] < 1 ? 1 : gaps[index]),
           createdAt: now,
           updatedAt: now,
         ),
-    ]);
+    ];
   } else if (wasComplete && !isComplete) {
-    for (final Revision revision in chapterRevisions.where((Revision r) => r.completedAt == null)) {
-      await controller.deleteRevision(revision);
-    }
+    remove = chapterRevisions.where((Revision r) => r.completedAt == null).toList();
   }
+  // The chapter is saved first; if only its revision dates fail they are retried and,
+  // failing that, queued with a visible Retry (no need to save the sheet again).
+  return controller.saveChapterAndLadder(next, add: add, remove: remove);
 }
+
+/// Toast for a chapter saved while its revision dates were queued.
+String ladderQueuedMessage(String name) =>
+    'Saved $name, but its revision dates are not saved yet. They will retry automatically, or tap Retry.';
 
 /// Website row status select: change status in place, with the same toasts.
 Future<void> changeChapterStatus(BuildContext context, WidgetRef ref, AppData data, Chapter chapter, String status) async {
@@ -749,9 +780,11 @@ Future<void> changeChapterStatus(BuildContext context, WidgetRef ref, AppData da
     completedOn: complete ? (chapter.completedOn ?? todayIso()) : null,
   );
   try {
-    await persistChapterStatus(ref, data, next, chapter);
+    final bool ladderSaved = await persistChapterStatus(ref, data, next, chapter);
     if (!context.mounted) return;
-    if (complete) {
+    if (!ladderSaved) {
+      showToast(context, ladderQueuedMessage(chapter.name), error: true);
+    } else if (complete) {
       showToast(context, '${chapter.name} marked complete. Your revision dates are in the diary.');
     } else if (chapter.isComplete) {
       showToast(context, '${chapter.name} is back in progress.');
@@ -760,7 +793,7 @@ Future<void> changeChapterStatus(BuildContext context, WidgetRef ref, AppData da
     }
     await HapticFeedback.selectionClick();
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   }
 }
 
@@ -777,7 +810,10 @@ Future<void> toggleChapterStage(
     showToast(context, '${stage.label} is already proven by your own records.');
     return;
   }
-  final ChapterStageRow? existing = data.chapterStages
+  final ChapterStageRow? existing = ref
+      .read(dataControllerProvider)
+      .data
+      .chapterStages
       .where((ChapterStageRow row) => row.chapterId == chapter.id && row.stage == stage.key)
       .firstOrNull;
   final bool nextDone = !(existing?.done ?? false);
@@ -797,7 +833,7 @@ Future<void> toggleChapterStage(
       showToast(context, '${stage.label} ${nextDone ? 'marked' : 'cleared'}.');
     }
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   }
 }
 
@@ -808,7 +844,8 @@ Future<void> moveChapter(
   Chapter chapter,
   int delta,
 ) async {
-  final List<Chapter> siblings = data.chaptersFor(chapter.subject);
+  // Live rows, so repeated Up/Down taps from an open sheet swap the current positions.
+  final List<Chapter> siblings = ref.read(dataControllerProvider).data.chaptersFor(chapter.subject);
   final int index = siblings.indexWhere((Chapter row) => row.id == chapter.id);
   final int target = index + delta;
   if (index < 0 || target < 0 || target >= siblings.length) return;
@@ -819,6 +856,6 @@ Future<void> moveChapter(
       other.copyWith(position: chapter.position),
     ]);
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   }
 }

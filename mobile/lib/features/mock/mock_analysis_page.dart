@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
@@ -387,7 +388,7 @@ class _LogRow extends ConsumerWidget {
                 await ref.read(dataControllerProvider.notifier).deleteErrorLog(log);
                 if (context.mounted) showToast(context, 'Classification removed.');
               } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
+                if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
             itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[
@@ -527,7 +528,7 @@ Future<void> openErrorLogEditor(
                             showToast(context, creating ? 'Classification added.' : 'Classification saved.');
                           }
                         } catch (error) {
-                          if (context.mounted) showToast(context, error.toString(), error: true);
+                          if (context.mounted) showToast(context, userMessage(error), error: true);
                           if (sheetContext.mounted) setSheetState(() => saving = false);
                         }
                       },
@@ -538,10 +539,12 @@ Future<void> openErrorLogEditor(
         ],
       ),
     ),
+    onDisposed: () {
+      marks.dispose();
+      questions.dispose();
+      note.dispose();
+    },
   );
-  marks.dispose();
-  questions.dispose();
-  note.dispose();
 }
 
 /// Website TimeDialog: one row per exam subject (minutes, attempted, unattempted), saved
@@ -674,7 +677,9 @@ Future<void> openTimeDataEditor(BuildContext context, WidgetRef ref, AppData dat
                           if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                           if (context.mounted) showToast(context, 'Time data saved.');
                         } catch (failure) {
-                          if (context.mounted) showToast(context, 'Could not save time data.', error: true);
+                          if (context.mounted) {
+                            showToast(context, userMessage(failure, fallback: 'Could not save time data.'), error: true);
+                          }
                           if (sheetContext.mounted) setSheetState(() => saving = false);
                         }
                       },
@@ -685,10 +690,12 @@ Future<void> openTimeDataEditor(BuildContext context, WidgetRef ref, AppData dat
         ],
       ),
     ),
+    onDisposed: () {
+      for (final List<TextEditingController> list in fields.values) {
+        for (final TextEditingController controller in list) {
+          controller.dispose();
+        }
+      }
+    },
   );
-  for (final List<TextEditingController> list in fields.values) {
-    for (final TextEditingController controller in list) {
-      controller.dispose();
-    }
-  }
 }

@@ -44,6 +44,7 @@ Future<T?> showAppSheet<T>(
   required String title,
   required WidgetBuilder builder,
   double maxHeightFactor = 0.92,
+  VoidCallback? onDisposed,
 }) {
   final StrackerColors colors = context.stracker;
   return showModalBottomSheet<T>(
@@ -53,52 +54,80 @@ Future<T?> showAppSheet<T>(
     backgroundColor: colors.palette.paper,
     builder: (BuildContext sheetContext) {
       final double viewport = MediaQuery.sizeOf(sheetContext).height;
-      return Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
-        child: Center(
-          child: ConstrainedBox(
-            // A sheet on a tablet should read like a card, not stretch to 1200 px.
-            constraints: BoxConstraints(
-              maxHeight: viewport * maxHeightFactor,
-              maxWidth: 620,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(title, style: Theme.of(sheetContext).textTheme.headlineSmall),
-                      ),
-                      IconButton(
-                        tooltip: 'Close',
-                        onPressed: () => Navigator.of(sheetContext).maybePop(),
-                        icon: const Icon(Icons.close, size: 20),
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(height: 1, color: colors.palette.line),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      14,
-                      16,
-                      16 + MediaQuery.paddingOf(sheetContext).bottom,
+      return _DisposeWith(
+        onDisposed: onDisposed,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: Center(
+            child: ConstrainedBox(
+              // A sheet on a tablet should read like a card, not stretch to 1200 px.
+              constraints: BoxConstraints(
+                maxHeight: viewport * maxHeightFactor,
+                maxWidth: 620,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(title, style: Theme.of(sheetContext).textTheme.headlineSmall),
+                        ),
+                        IconButton(
+                          tooltip: 'Close',
+                          onPressed: () => Navigator.of(sheetContext).maybePop(),
+                          icon: const Icon(Icons.close, size: 20),
+                        ),
+                      ],
                     ),
-                    child: builder(sheetContext),
                   ),
-                ),
-              ],
+                  Divider(height: 1, color: colors.palette.line),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        14,
+                        16,
+                        16 + MediaQuery.paddingOf(sheetContext).bottom,
+                      ),
+                      child: builder(sheetContext),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       );
     },
   );
+}
+
+/// Runs [onDisposed] when the sheet's content leaves the tree, i.e. after its closing
+/// animation. Editors dispose their text controllers here: disposing them as soon as the
+/// sheet's future completes left the still-animating fields using disposed controllers
+/// ("A TextEditingController was used after being disposed").
+class _DisposeWith extends StatefulWidget {
+  const _DisposeWith({required this.onDisposed, required this.child});
+
+  final VoidCallback? onDisposed;
+  final Widget child;
+
+  @override
+  State<_DisposeWith> createState() => _DisposeWithState();
+}
+
+class _DisposeWithState extends State<_DisposeWith> {
+  @override
+  void dispose() {
+    widget.onDisposed?.call();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Short message. Errors get the red surface and stay a little longer.

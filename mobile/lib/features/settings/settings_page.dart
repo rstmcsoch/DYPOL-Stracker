@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/validators.dart';
@@ -496,7 +497,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       await ref.read(dataControllerProvider.notifier).clearDeviceCache();
       await ref.read(authControllerProvider.notifier).signOut();
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     }
   }
 
@@ -557,8 +558,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       showToast(context, 'Settings saved.');
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
-      showToast(context, error.toString(), error: true);
+      setState(() => _error = userMessage(error));
+      showToast(context, userMessage(error), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }

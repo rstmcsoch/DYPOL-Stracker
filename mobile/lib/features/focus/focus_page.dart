@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/date.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -183,6 +184,56 @@ class _FocusPageState extends ConsumerState<FocusPage> {
                 ),
               ],
             ),
+          ),
+          ValueListenableBuilder<List<StudySession>>(
+            valueListenable: _focus.pending,
+            builder: (BuildContext context, List<StudySession> waiting, Widget? _) {
+              if (waiting.isEmpty) return const SizedBox.shrink();
+              final int pendingMinutes =
+                  waiting.fold<int>(0, (int sum, StudySession session) => sum + session.durationMinutes);
+              return Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: NotebookCard(
+                  key: const ValueKey<String>('focus-unsaved'),
+                  title: '${minutesLabel(pendingMinutes)} not saved yet',
+                  subtitle: '${waiting.length} finished block${waiting.length == 1 ? '' : 's'} could not reach '
+                      'Stracker. They are kept on this phone until you retry.',
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: SaveButton(
+                          label: 'Retry saving',
+                          onPressed: () async {
+                            final FocusSaveResult result = await _focus.retryPending();
+                            if (!context.mounted) return;
+                            if (result.error != null) {
+                              showToast(context, result.error!, error: true);
+                            } else {
+                              showToast(context, '${minutesLabel(result.minutes)} saved to your study time.');
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SecondaryButton(
+                          label: 'Discard',
+                          onPressed: () async {
+                            final bool confirmed = await confirmAction(
+                              context,
+                              title: 'Discard unsaved study time?',
+                              message: 'These blocks are removed from this phone and never recorded.',
+                              confirmLabel: 'Discard',
+                            );
+                            if (confirmed) _focus.discardPending();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 10),
           NotebookCard(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/validators.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -571,7 +572,8 @@ Future<void> openChangePasswordSheet(BuildContext context, WidgetRef ref) async 
             error: confirmError,
             required: true,
           ),
-          ElevatedButton(
+          SaveButton(
+            label: 'Update password',
             onPressed: () async {
               final String? newError = Validators.password(password.text);
               final String? repeatError = Validators.confirmPassword(confirm.text, password.text);
@@ -595,7 +597,6 @@ Future<void> openChangePasswordSheet(BuildContext context, WidgetRef ref) async 
               if (sheetContext.mounted) Navigator.of(sheetContext).pop();
               if (context.mounted) showToast(context, 'Password changed.');
             },
-            child: const Text('Update password'),
           ),
           const SizedBox(height: 6),
           Text(
@@ -605,9 +606,11 @@ Future<void> openChangePasswordSheet(BuildContext context, WidgetRef ref) async 
         ],
       ),
     ),
+    onDisposed: () {
+      password.dispose();
+      confirm.dispose();
+    },
   );
-  password.dispose();
-  confirm.dispose();
 }
 
 /// Shown only if a build ships without its connection details: no developer instructions,

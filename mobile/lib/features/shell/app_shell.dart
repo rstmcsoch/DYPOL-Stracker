@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -6,12 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
-import '../../core/layout.dart';
 import '../../core/format.dart';
+import '../../core/layout.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/dialogs.dart';
-import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
+import '../../core/widgets/wandering_eyes.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
@@ -20,8 +20,8 @@ import '../home/home_page.dart';
 import '../planner/planner_page.dart';
 import '../practice/practice_page.dart';
 import '../profile/profile_page.dart';
+import '../search/notebook_search.dart';
 import '../tests/tests_page.dart';
-import '../../core/widgets/wandering_eyes.dart';
 import 'routes.dart';
 
 /// The four primary destinations. Each page keeps its own scroll position because the
@@ -829,11 +829,7 @@ class _NotebookScaffoldState extends ConsumerState<NotebookScaffold> {
         HeaderIcon(
           label: 'Search notebook',
           icon: Icons.search,
-          onTap: () => showAppSheet<void>(
-            context,
-            title: 'Search notebook',
-            builder: (BuildContext sheetContext) => const GlobalSearchBody(),
-          ),
+          onTap: () => showNotebookSearch(context),
         ),
       ],
     );
@@ -1193,11 +1189,7 @@ class NotebookDrawer extends ConsumerWidget {
           title: Text('Search notebook', style: Theme.of(context).textTheme.titleSmall),
           onTap: () {
             final NavigatorState navigator = Navigator.of(context);
-            showAppSheet<void>(
-              context,
-              title: 'Search notebook',
-              builder: (BuildContext sheetContext) => const GlobalSearchBody(),
-            );
+            unawaited(showNotebookSearch(context));
             if (!permanent) navigator.pop();
           },
         );
@@ -1240,7 +1232,13 @@ class NotebookDrawer extends ConsumerWidget {
           Divider(height: 1, color: colors.palette.line),
           searchRow(),
           Expanded(
-            child: ListView(
+            // The list paints its selection and ink on its own clipped Material, so a
+            // highlighted row scrolled under the header never draws over the logo or the
+            // fixed search row (the header stays on the opaque sidebar surface).
+            child: Material(
+              type: MaterialType.transparency,
+              clipBehavior: Clip.hardEdge,
+              child: ListView(
               padding: const EdgeInsets.only(bottom: 12),
               children: <Widget>[
                 if (permanent && onTab != null) ...<Widget>[
@@ -1293,6 +1291,7 @@ class NotebookDrawer extends ConsumerWidget {
                 if (permanent) item('Settings', Icons.settings_outlined, Routes.settings),
               ],
             ),
+            ),
           ),
           // Sign out lives in Settings only (with a confirm step), not in the menu.
           Divider(height: 1, color: colors.palette.line),
@@ -1316,142 +1315,6 @@ class NotebookDrawer extends ConsumerWidget {
       backgroundColor: colors.palette.paper,
       width: MediaQuery.sizeOf(context).width < 400 ? 292 : 320,
       child: body,
-    );
-  }
-}
-
-/// Cross-notebook search: chapters, tests, mistakes and tasks in one place.
-class GlobalSearchBody extends ConsumerStatefulWidget {
-  const GlobalSearchBody({super.key});
-
-  @override
-  ConsumerState<GlobalSearchBody> createState() => _GlobalSearchBodyState();
-}
-
-class _GlobalSearchBodyState extends ConsumerState<GlobalSearchBody> {
-  final TextEditingController _query = TextEditingController();
-
-  @override
-  void dispose() {
-    _query.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final AppData data = ref.watch(dataControllerProvider).data;
-    final String needle = _query.text.trim().toLowerCase();
-    final List<Chapter> chapters = needle.isEmpty
-        ? const <Chapter>[]
-        : data.chapters
-            .where((Chapter chapter) => '${chapter.name} ${chapter.subject}'.toLowerCase().contains(needle))
-            .take(8)
-            .toList();
-    final List<TestRecord> tests = needle.isEmpty
-        ? const <TestRecord>[]
-        : data.tests
-            .where((TestRecord test) => '${test.title} ${test.subject ?? ''}'.toLowerCase().contains(needle))
-            .take(6)
-            .toList();
-    final List<Mistake> mistakes = needle.isEmpty
-        ? const <Mistake>[]
-        : data.mistakes
-            .where(
-                (Mistake mistake) => '${mistake.questionNote} ${mistake.solutionNote}'.toLowerCase().contains(needle))
-            .take(6)
-            .toList();
-    final List<DailyTask> tasks = needle.isEmpty
-        ? const <DailyTask>[]
-        : data.tasks.where((DailyTask task) => task.title.toLowerCase().contains(needle)).take(6).toList();
-    final bool empty = chapters.isEmpty && tests.isEmpty && mistakes.isEmpty && tasks.isEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        SearchBox(
-          controller: _query,
-          hint: 'Chapters, tests, mistakes, tasks',
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        if (needle.isEmpty)
-          const InfoBanner(
-            'Search across the whole notebook. Results open the section that owns them.',
-            icon: Icons.manage_search,
-          )
-        else if (empty)
-          const EmptyState(
-            title: 'Nothing found',
-            message: 'Try a chapter name, a test title or a phrase from a mistake note.',
-            icon: Icons.search_off,
-          )
-        else ...<Widget>[
-          if (chapters.isNotEmpty) ...<Widget>[
-            const SectionHeading('Chapters'),
-            for (final Chapter chapter in chapters)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(chapter.name),
-                subtitle: Text('${chapter.subject} · ${chapter.status}'),
-                trailing: const Icon(Icons.chevron_right, size: 18),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Routes.open(context, Routes.syllabus);
-                },
-              ),
-          ],
-          if (tests.isNotEmpty) ...<Widget>[
-            const SectionHeading('Tests'),
-            for (final TestRecord test in tests)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(test.title),
-                subtitle: Text('${test.testType} · ${test.testDate}'),
-                trailing: const Icon(Icons.chevron_right, size: 18),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Routes.open(context, Routes.tests);
-                },
-              ),
-          ],
-          if (mistakes.isNotEmpty) ...<Widget>[
-            const SectionHeading('Mistakes'),
-            for (final Mistake mistake in mistakes)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  mistake.questionNote,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text('${mistake.mistakeType} · ${data.chapterName(mistake.chapterId)}'),
-                trailing: const Icon(Icons.chevron_right, size: 18),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Routes.open(context, Routes.mistakes);
-                },
-              ),
-          ],
-          if (tasks.isNotEmpty) ...<Widget>[
-            const SectionHeading('Tasks'),
-            for (final DailyTask task in tasks)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(task.title),
-                subtitle: Text('${task.taskDate} · ${task.priority}'),
-                trailing: const Icon(Icons.chevron_right, size: 18),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Routes.open(context, Routes.planner);
-                },
-              ),
-          ],
-        ],
-      ],
     );
   }
 }

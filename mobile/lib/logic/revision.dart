@@ -34,15 +34,22 @@ Revision? nextRevision({
   );
 }
 
-/// The first revision for a chapter that is being marked Revised/Done.
+/// The first revision of a new ladder for a chapter. Numbers continue after the chapter's
+/// highest existing rung: (chapter_id, revision_number) is unique in the database, so a
+/// chapter that finished an earlier ladder must not reuse R1.
 Revision startRevisionChain(AppData data, String chapterId) {
   final List<int> gaps = data.settings.revisionGaps;
+  final int number = data.revisions
+          .where((Revision revision) => revision.chapterId == chapterId)
+          .fold<int>(0, (int max, Revision revision) => revision.revisionNumber > max ? revision.revisionNumber : max) +
+      1;
+  final int gap = gaps.isEmpty ? 1 : gaps[(number - 1) % gaps.length];
   return Revision(
     id: newId(),
     userId: data.userId,
     chapterId: chapterId,
-    revisionNumber: 1,
-    dueOn: addDays(todayIso(), gaps.isEmpty ? 1 : gaps.first),
+    revisionNumber: number,
+    dueOn: addDays(todayIso(), gap < 1 ? 1 : gap),
     createdAt: isoNow(),
     updatedAt: isoNow(),
   );
