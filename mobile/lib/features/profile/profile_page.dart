@@ -6,6 +6,7 @@ import '../../core/date.dart';
 import '../../core/errors.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -274,7 +275,8 @@ class ProfilePage extends ConsumerWidget {
             maxLength: 60,
             textCapitalization: TextCapitalization.words,
           ),
-          ElevatedButton(
+          SaveButton(
+            label: 'Save',
             onPressed: () async {
               if (name.text.trim().isEmpty) {
                 showToast(context, 'A name cannot be empty.', error: true);
@@ -286,14 +288,13 @@ class ProfilePage extends ConsumerWidget {
                 await ref.read(dataControllerProvider.notifier).saveProfile(profile);
                 await ref
                     .read(dataControllerProvider.notifier)
-                    .saveSettings(data.settings.copyWith(ownerName: name.text.trim()));
+                    .saveSettings(ref.read(dataControllerProvider).data.settings.copyWith(ownerName: name.text.trim()));
                 if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                 if (context.mounted) showToast(context, 'Name updated.');
               } catch (error) {
                 if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
-            child: const Text('Save'),
           ),
         ],
       ),
@@ -388,9 +389,14 @@ class _TrackRow extends ConsumerWidget {
               value: enabled,
               onChanged: (bool value) => setSheetState(() => enabled = value),
             ),
-            ElevatedButton(
+            SaveButton(
+              label: 'Save and use this track',
               onPressed: () async {
                 final double? targetValue = target.text.trim().isEmpty ? null : double.tryParse(target.text.trim());
+                if (target.text.trim().isNotEmpty && (targetValue == null || targetValue < 0)) {
+                  showToast(context, 'Enter the target score as a number, like 250.', error: true);
+                  return;
+                }
                 try {
                   final DataController controller = ref.read(dataControllerProvider.notifier);
                   await controller.saveExamTrack(
@@ -401,7 +407,7 @@ class _TrackRow extends ConsumerWidget {
                       enabled: enabled,
                     ),
                   );
-                  AppSettings settings = data.settings.copyWith(
+                  AppSettings settings = ref.read(dataControllerProvider).data.settings.copyWith(
                     activeTrack: track,
                     examMode: data.settings.examMode,
                   );
@@ -414,7 +420,6 @@ class _TrackRow extends ConsumerWidget {
                   if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              child: const Text('Save and use this track'),
             ),
           ],
         ),

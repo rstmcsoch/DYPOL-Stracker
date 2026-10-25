@@ -66,24 +66,27 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     );
     if (!confirmed) return;
     try {
-      final int start = data.tasksOn(_selected).length;
-      for (int i = 0; i < source.length; i += 1) {
-        final DailyTask task = source[i];
-        await ref.read(dataControllerProvider.notifier).saveTask(DailyTask(
-              id: newId(),
-              userId: data.userId,
-              title: task.title,
-              subject: task.subject,
-              chapterId: task.chapterId,
-              topic: task.topic,
-              estimatedMinutes: task.estimatedMinutes,
-              priority: task.priority,
-              taskDate: _selected,
-              position: start + i,
-              createdAt: isoNow(),
-              updatedAt: isoNow(),
-            ));
-      }
+      // Live count (not the snapshot from before the dialog), and one request for all the
+      // copies: either every task is copied or none is.
+      final int start = ref.read(dataControllerProvider).data.tasksOn(_selected).length;
+      final String now = isoNow();
+      await ref.read(dataControllerProvider.notifier).saveTasks(<DailyTask>[
+        for (int i = 0; i < source.length; i += 1)
+          DailyTask(
+            id: newId(),
+            userId: data.userId,
+            title: source[i].title,
+            subject: source[i].subject,
+            chapterId: source[i].chapterId,
+            topic: source[i].topic,
+            estimatedMinutes: source[i].estimatedMinutes,
+            priority: source[i].priority,
+            taskDate: _selected,
+            position: start + i,
+            createdAt: now,
+            updatedAt: now,
+          ),
+      ]);
       if (context.mounted) showToast(context, 'Copied ${source.length} tasks.');
     } catch (error) {
       if (context.mounted) showToast(context, userMessage(error, fallback: 'Could not copy tasks.'), error: true);
@@ -384,18 +387,21 @@ class _TaskRow extends ConsumerWidget {
   final AppData data;
 
   Future<void> _move(BuildContext context, WidgetRef ref, int direction) async {
-    final int to = index + direction;
-    if (to < 0 || to >= tasks.length) return;
+    // Live order: a quick second tap must move from where the first one left the task.
+    final List<DailyTask> live = ref.read(dataControllerProvider).data.tasksOn(task.taskDate);
+    final int from = live.indexWhere((DailyTask row) => row.id == task.id);
+    final int to = from + direction;
+    if (from < 0 || to < 0 || to >= live.length) return;
     await HapticFeedback.selectionClick();
-    final List<DailyTask> reordered = <DailyTask>[...tasks];
-    final DailyTask moved = reordered.removeAt(index);
+    final List<DailyTask> reordered = <DailyTask>[...live];
+    final DailyTask moved = reordered.removeAt(from);
     reordered.insert(to, moved);
     try {
-      for (int position = 0; position < reordered.length; position += 1) {
-        if (reordered[position].position != position) {
-          await ref.read(dataControllerProvider.notifier).saveTask(reordered[position].copyWith(position: position));
-        }
-      }
+      // One request: the new order is stored whole or not at all.
+      await ref.read(dataControllerProvider.notifier).saveTasks(<DailyTask>[
+        for (int position = 0; position < reordered.length; position += 1)
+          if (reordered[position].position != position) reordered[position].copyWith(position: position),
+      ]);
     } catch (error) {
       if (context.mounted) showToast(context, userMessage(error, fallback: 'Could not reorder tasks.'), error: true);
     }

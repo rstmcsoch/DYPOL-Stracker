@@ -20,43 +20,75 @@ Map<String, dynamic> buildBackupPayload(AppData data, {String? exportedAt}) {
 
 String encodeBackup(AppData data) => const JsonEncoder.withIndent('  ').convert(buildBackupPayload(data));
 
-/// Counts per table, used for the import preview. Unknown keys are ignored, exactly like
+/// Backup key -> table. The app writes table names; the website writes camelCase
+/// collection names (`revisions`, `tasks`, `practiceSessions`...). Both import here.
+const Map<String, String> backupTableAliases = <String, String>{
+  'chapters': 'chapters',
+  'chapter_revisions': 'chapter_revisions',
+  'revisions': 'chapter_revisions',
+  'tests': 'tests',
+  'test_subject_scores': 'test_subject_scores',
+  'testSubjectScores': 'test_subject_scores',
+  'test_chapter_links': 'test_chapter_links',
+  'testChapterLinks': 'test_chapter_links',
+  'mistakes': 'mistakes',
+  'daily_tasks': 'daily_tasks',
+  'tasks': 'daily_tasks',
+  'weekly_goals': 'weekly_goals',
+  'goals': 'weekly_goals',
+  'study_sessions': 'study_sessions',
+  'sessions': 'study_sessions',
+  'practice_sessions': 'practice_sessions',
+  'practiceSessions': 'practice_sessions',
+  'practice': 'practice_sessions',
+  'pyq_records': 'pyq_records',
+  'pyqRecords': 'pyq_records',
+  'pyqs': 'pyq_records',
+  'chapter_stages': 'chapter_stages',
+  'chapterStages': 'chapter_stages',
+  'stages': 'chapter_stages',
+  'backlog_items': 'backlog_items',
+  'backlogItems': 'backlog_items',
+  'backlog': 'backlog_items',
+  'study_cards': 'study_cards',
+  'studyCards': 'study_cards',
+  'cards': 'study_cards',
+  'test_error_logs': 'test_error_logs',
+  'testErrorLogs': 'test_error_logs',
+  'errorLogs': 'test_error_logs',
+  'test_time_entries': 'test_time_entries',
+  'testTimeEntries': 'test_time_entries',
+  'timeEntries': 'test_time_entries',
+  'user_exam_tracks': 'user_exam_tracks',
+  'examTracks': 'user_exam_tracks',
+};
+
+/// Rewrites any backup (app or website) to the app's own shape: table-name row lists plus
+/// `settings` / `profile` objects. A table-name key wins over its alias.
+Map<String, dynamic> normalizeBackup(Map<String, dynamic> payload) {
+  final Map<String, dynamic> out = <String, dynamic>{};
+  Object? single(Object? value) => value is List ? (value.isEmpty ? null : value.first) : value;
+  final Object? settings = payload['settings'] ?? single(payload['app_settings']);
+  if (settings is Map) out['settings'] = settings;
+  final Object? profile = payload['profile'] ?? single(payload['profiles']);
+  if (profile is Map) out['profile'] = profile;
+  for (final MapEntry<String, dynamic> entry in payload.entries) {
+    final String? table = backupTableAliases[entry.key];
+    if (table == null || entry.value is! List) continue;
+    if (entry.key != table && payload[table] is List) continue;
+    out[table] = entry.value;
+  }
+  return out;
+}
+
+/// Rows per table, used for the import preview. Unknown keys are ignored, exactly like
 /// the website's preview.
 Map<String, int> backupCounts(Map<String, dynamic> payload) {
-  const List<String> keys = <String>[
-    'chapters',
-    'revisions',
-    'tests',
-    'testSubjectScores',
-    'testChapterLinks',
-    'mistakes',
-    'tasks',
-    'goals',
-    'sessions',
-    'practice',
-    'pyqs',
-    'stages',
-    'backlog',
-    'cards',
-    'errorLogs',
-    'timeEntries',
-    'examTracks',
-    'chapter_revisions',
-    'test_subject_scores',
-    'daily_tasks',
-    'practice_sessions',
-    'pyq_records',
-    'chapter_stages',
-    'backlog_items',
-    'study_cards',
-    'test_error_logs',
-    'test_time_entries',
-    'user_exam_tracks',
-  ];
+  final Map<String, dynamic> normalized = normalizeBackup(payload);
   final Map<String, int> counts = <String, int>{};
-  for (final String key in keys) {
-    final Object? rows = payload[key];
-    if (rows is List && rows.isNotEmpty) counts[key] = rows.length;
+  for (final String table in backupTableAliases.values.toSet()) {
+    final Object? rows = normalized[table];
+    if (rows is List && rows.isNotEmpty) counts[table] = rows.length;
   }
   return counts;
 }

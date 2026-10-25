@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/errors.dart';
+import '../logic/backup.dart' show normalizeBackup;
 import '../logic/onboarding.dart' show shouldSeedJeeSyllabus;
 import 'app_data.dart';
 import 'app_data_codec.dart';
@@ -22,6 +24,7 @@ class DataState {
     this.error,
     this.offline = false,
     this.lastSyncedAt,
+    this.followUps = const <RevisionFollowUp>[],
   });
 
   final AppData data;
@@ -33,6 +36,11 @@ class DataState {
   final bool offline;
   final String? lastSyncedAt;
 
+  /// Revision-ladder changes whose chapter was saved but whose revision rows were not
+  /// (connection dropped between the two writes). Retried automatically after each
+  /// successful refresh, and from the visible Retry banner.
+  final List<RevisionFollowUp> followUps;
+
   DataState copyWith({
     AppData? data,
     bool? loading,
@@ -40,6 +48,7 @@ class DataState {
     Object? error = _none,
     bool? offline,
     Object? lastSyncedAt = _none,
+    List<RevisionFollowUp>? followUps,
   }) =>
       DataState(
         data: data ?? this.data,
@@ -48,7 +57,53 @@ class DataState {
         error: error == _none ? this.error : error as String?,
         offline: offline ?? this.offline,
         lastSyncedAt: lastSyncedAt == _none ? this.lastSyncedAt : lastSyncedAt as String?,
+        followUps: followUps ?? this.followUps,
       );
+}
+
+/// A chapter's revision-ladder change still to be written: rows to add, ids to remove.
+/// Re-applying it is safe: upserts by id and deletes by id.
+class RevisionFollowUp {
+  const RevisionFollowUp({
+    required this.chapterId,
+    required this.chapterName,
+    this.add = const <Revision>[],
+    this.removeIds = const <String>[],
+  });
+
+  final String chapterId;
+  final String chapterName;
+  final List<Revision> add;
+  final List<String> removeIds;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'chapter_id': chapterId,
+        'chapter_name': chapterName,
+        'add': add.map((Revision row) => row.toMap()).toList(),
+        'remove_ids': removeIds,
+      };
+
+  static RevisionFollowUp? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final Object? id = raw['chapter_id'];
+    if (id is! String || id.isEmpty) return null;
+    final Object? add = raw['add'];
+    final Object? remove = raw['remove_ids'];
+    return RevisionFollowUp(
+      chapterId: id,
+      chapterName: '${raw['chapter_name'] ?? ''}',
+      add: <Revision>[
+        if (add is List)
+          for (final Object? row in add)
+            if (row is Map) Revision.fromMap(Map<String, dynamic>.from(row)),
+      ],
+      removeIds: <String>[
+        if (remove is List)
+          for (final Object? item in remove)
+            if (item is String) item,
+      ],
+    );
+  }
 }
 
 const Object _none = Object();
@@ -69,6 +124,7 @@ class DataController extends StateNotifier<DataState> {
         _userId = userId,
         super(DataState(data: AppData.empty(userId), loading: true)) {
     _restoreSnapshot();
+    _restoreFollowUps();
   }
 
   final StrackerRepository _repository;
@@ -179,8 +235,11 @@ class DataController extends StateNotifier<DataState> {
         data: data,
         loading: false,
         lastSyncedAt: isoNow(),
+        followUps: state.followUps,
       );
       await _writeSnapshot(data);
+      // Back online: finish any revision dates that were left unsaved.
+      if (state.followUps.isNotEmpty && !_followUpsRunning) unawaited(retryFollowUps());
     } catch (error) {
       if (_isAuthFailure(error)) {
         // A revoked or expired sign-in makes every table answer 401. Showing that as a
@@ -449,6 +508,109 @@ class DataController extends StateNotifier<DataState> {
     );
   }
 
+  /// Pause before the one automatic retry of a ladder write (tests shorten it).
+  Duration ladderRetryDelay = const Duration(milliseconds: 800);
+  bool _followUpsRunning = false;
+
+  /// Saves [chapter], then its revision-ladder change ([add] rows, [remove] rows). The
+  /// chapter write fails as a whole (nothing else is written). If only the ladder write
+  /// fails it is retried once at once; if that fails too it is queued (on this device) and
+  /// retried after the next successful refresh or from the Retry banner, so the dates are
+  /// never silently lost and the sheet does not need saving again. Returns false when the
+  /// ladder was queued.
+  Future<bool> saveChapterAndLadder(
+    Chapter chapter, {
+    List<Revision> add = const <Revision>[],
+    List<Revision> remove = const <Revision>[],
+  }) async {
+    await saveChapter(chapter);
+    if (add.isEmpty && remove.isEmpty) return true;
+    final RevisionFollowUp job = RevisionFollowUp(
+      chapterId: chapter.id,
+      chapterName: chapter.name,
+      add: add,
+      removeIds: remove.map((Revision row) => row.id).toList(),
+    );
+    try {
+      await _applyLadder(job);
+      return true;
+    } catch (_) {
+      await Future<void>.delayed(ladderRetryDelay);
+      try {
+        await _applyLadder(job);
+        return true;
+      } catch (_) {
+        _setFollowUps(<RevisionFollowUp>[
+          ...state.followUps.where((RevisionFollowUp other) => other.chapterId != job.chapterId),
+          job,
+        ]);
+        return false;
+      }
+    }
+  }
+
+  Future<void> _applyLadder(RevisionFollowUp job) => _run(
+        () async {
+          await _repository.upsertRows('chapter_revisions', job.add.map((Revision row) => row.toMap()).toList());
+          await _repository.deleteIds('chapter_revisions', job.removeIds, _userId);
+        },
+        () async {
+          List<Revision> rows = state.data.revisions;
+          for (final Revision revision in job.add) {
+            rows = _put(rows, revision, (Revision row) => row.id);
+          }
+          rows = rows.where((Revision row) => !job.removeIds.contains(row.id)).toList();
+          _apply(state.data.copyWith(revisions: rows));
+        },
+      );
+
+  /// Writes every queued ladder change. Returns null when all are saved, else the message.
+  Future<String?> retryFollowUps() async {
+    if (_followUpsRunning) return null;
+    _followUpsRunning = true;
+    try {
+      for (final RevisionFollowUp job in List<RevisionFollowUp>.of(state.followUps)) {
+        // A chapter deleted since then has no ladder to fix.
+        if (state.data.chapter(job.chapterId) != null) {
+          try {
+            await _applyLadder(job);
+          } catch (error) {
+            return userMessage(error);
+          }
+        }
+        _setFollowUps(state.followUps.where((RevisionFollowUp other) => other != job).toList());
+      }
+      return null;
+    } finally {
+      _followUpsRunning = false;
+    }
+  }
+
+  /// Gives up on the queued ladder changes (the student can schedule revisions by hand).
+  void dismissFollowUps() => _setFollowUps(const <RevisionFollowUp>[]);
+
+  void _setFollowUps(List<RevisionFollowUp> jobs) {
+    state = state.copyWith(followUps: List<RevisionFollowUp>.unmodifiable(jobs));
+    unawaited(writeDeviceValue(
+      'revision-followups',
+      jobs.isEmpty ? null : jsonEncode(jobs.map((RevisionFollowUp job) => job.toJson()).toList()),
+    ));
+  }
+
+  void _restoreFollowUps() {
+    final String? raw = readDeviceValue('revision-followups');
+    if (raw == null) return;
+    try {
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      state = state.copyWith(
+        followUps: decoded.map(RevisionFollowUp.fromJson).whereType<RevisionFollowUp>().toList(),
+      );
+    } catch (_) {
+      // An unreadable queue is dropped; it only ever holds re-creatable revision dates.
+    }
+  }
+
   /* ------------------------------------------------------------------ */
   /* Tests                                                              */
   /* ------------------------------------------------------------------ */
@@ -713,6 +875,22 @@ class DataController extends StateNotifier<DataState> {
     );
   }
 
+  /// Saves several tasks in one request: all of them are stored, or none (copying a day,
+  /// reordering).
+  Future<void> saveTasks(List<DailyTask> tasks) async {
+    if (tasks.isEmpty) return;
+    await _run(
+      () => _repository.upsertRows('daily_tasks', tasks.map((DailyTask row) => row.toMap()).toList()),
+      () async {
+        List<DailyTask> rows = state.data.tasks;
+        for (final DailyTask task in tasks) {
+          rows = _put(rows, task, (DailyTask row) => row.id);
+        }
+        _apply(state.data.copyWith(tasks: rows));
+      },
+    );
+  }
+
   Future<void> deleteTask(DailyTask task) async {
     await _run(
       () => _repository.deleteRow('daily_tasks', task.id, _userId),
@@ -791,51 +969,154 @@ class DataController extends StateNotifier<DataState> {
 
   /// Merges a backup file into the account. Table names are whitelisted, owner columns are
   /// rewritten to the signed-in account, and rows are upserted by id — never deleting.
+  /// Merges a backup (from this app or the website) into the account. Rows go through the
+  /// app's models, so only real columns are written, and parents before children. A row
+  /// whose natural key (chapter subject + name, revision number, subject score...) already
+  /// exists under another id updates that row instead of failing the unique key, and
+  /// children follow the chapter id it maps to. Importing the same file again is safe.
   Future<int> importBackup(Map<String, dynamic> payload) async {
-    const List<String> allowed = <String>[
-      'app_settings',
-      'profiles',
-      'chapters',
-      'chapter_revisions',
-      'test_subject_scores',
-      'test_chapter_links',
-      'tests',
-      'mistakes',
-      'daily_tasks',
-      'weekly_goals',
-      'study_sessions',
-      'practice_sessions',
-      'pyq_records',
-      'chapter_stages',
-      'backlog_items',
-      'study_cards',
-      'test_error_logs',
-      'test_time_entries',
-      'user_exam_tracks',
-    ];
-    int written = 0;
-    for (final MapEntry<String, dynamic> entry in payload.entries) {
-      if (!allowed.contains(entry.key)) continue;
-      final Object? value = entry.value;
-      if (value is Map) {
-        final Map<String, dynamic> row = Map<String, dynamic>.from(value);
-        row['user_id'] = _userId;
-        if (entry.key == 'app_settings' || entry.key == 'profiles') row['id'] = _userId;
-        await _repository.upsertRow(entry.key, row);
-        written += 1;
-      } else if (value is List) {
-        final List<Map<String, dynamic>> rows = <Map<String, dynamic>>[];
-        for (final Object? item in value) {
-          if (item is! Map) continue;
-          final Map<String, dynamic> row = Map<String, dynamic>.from(item);
-          row['user_id'] = _userId;
-          rows.add(row);
-        }
-        if (rows.isNotEmpty) {
-          await _repository.upsertRows(entry.key, rows);
-          written += rows.length;
-        }
+    final Map<String, dynamic> normalized = normalizeBackup(payload);
+    final AppData? incoming = AppDataCodec.decode(jsonEncode(normalized), _userId);
+    if (incoming == null) throw const AppFailure('That backup could not be read. Export it again and retry.');
+    final AppData existing = state.data;
+
+    // Imported chapter id -> the id it lands on in this account.
+    final Map<String, String> chapterIds = <String, String>{};
+    final Map<String, String> chapterByName = <String, String>{
+      for (final Chapter row in existing.chapters) '${row.subject}\u0000${row.name}': row.id,
+    };
+    for (final Chapter row in incoming.chapters) {
+      final String? current = chapterByName['${row.subject}\u0000${row.name}'];
+      if (current != null && current != row.id) chapterIds[row.id] = current;
+    }
+
+    List<Map<String, dynamic>> prepare(
+      List<Map<String, dynamic>> rows,
+      List<Map<String, dynamic>> current, [
+      String Function(Map<String, dynamic> row)? naturalKey,
+    ]) {
+      final Map<String, String> currentIds = <String, String>{
+        if (naturalKey != null)
+          for (final Map<String, dynamic> row in current) naturalKey(row): '${row['id']}',
+      };
+      final Map<String, Map<String, dynamic>> byKey = <String, Map<String, dynamic>>{};
+      for (final Map<String, dynamic> source in rows) {
+        final Map<String, dynamic> row = Map<String, dynamic>.from(source)..['user_id'] = _userId;
+        final Object? chapterId = row['chapter_id'];
+        if (chapterId is String) row['chapter_id'] = chapterIds[chapterId] ?? chapterId;
+        final String? key = naturalKey?.call(row);
+        if (key != null && currentIds[key] != null) row['id'] = currentIds[key];
+        // One row per id and per natural key: a single upsert cannot hit the same row twice.
+        byKey[key ?? 'id:${row['id']}'] = row;
       }
+      final Map<String, Map<String, dynamic>> byId = <String, Map<String, dynamic>>{
+        for (final Map<String, dynamic> row in byKey.values) '${row['id']}': row,
+      };
+      return byId.values.toList();
+    }
+
+    List<Map<String, dynamic>> maps<T>(List<T> rows, Map<String, dynamic> Function(T) toMap) =>
+        rows.map(toMap).toList();
+
+    final List<(String, List<Map<String, dynamic>>)> plan = <(String, List<Map<String, dynamic>>)>[
+      (
+        'chapters',
+        prepare(
+          maps(incoming.chapters, (Chapter row) => row.toMap()),
+          maps(existing.chapters, (Chapter row) => row.toMap()),
+          (Map<String, dynamic> row) => '${row['subject']}\u0000${row['name']}',
+        ),
+      ),
+      (
+        'user_exam_tracks',
+        prepare(
+          maps(incoming.examTracks, (UserExamTrack row) => row.toMap()),
+          maps(existing.examTracks, (UserExamTrack row) => row.toMap()),
+          (Map<String, dynamic> row) => '${row['track']}',
+        ),
+      ),
+      (
+        'chapter_stages',
+        prepare(
+          maps(incoming.chapterStages, (ChapterStageRow row) => row.toMap()),
+          maps(existing.chapterStages, (ChapterStageRow row) => row.toMap()),
+          (Map<String, dynamic> row) => '${row['chapter_id']}\u0000${row['stage']}',
+        ),
+      ),
+      (
+        'chapter_revisions',
+        prepare(
+          maps(incoming.revisions, (Revision row) => row.toMap()),
+          maps(existing.revisions, (Revision row) => row.toMap()),
+          (Map<String, dynamic> row) => '${row['chapter_id']}\u0000${row['revision_number']}',
+        ),
+      ),
+      ('tests', prepare(maps(incoming.tests, (TestRecord row) => row.toMap()), const <Map<String, dynamic>>[])),
+      (
+        'test_subject_scores',
+        prepare(
+          maps(incoming.testSubjectScores, (TestSubjectScore row) => row.toMap()),
+          maps(existing.testSubjectScores, (TestSubjectScore row) => row.toMap()),
+          (Map<String, dynamic> row) => '${row['test_id']}\u0000${row['subject']}',
+        ),
+      ),
+      (
+        'test_chapter_links',
+        prepare(
+          maps(incoming.testChapterLinks, (TestChapterLink row) => row.toMap()),
+          maps(existing.testChapterLinks, (TestChapterLink row) => row.toMap()),
+          (Map<String, dynamic> row) => '${row['test_id']}\u0000${row['chapter_id']}',
+        ),
+      ),
+      (
+        'pyq_records',
+        prepare(
+          maps(incoming.pyqRecords, (PyqRecord row) => row.toMap()),
+          maps(existing.pyqRecords, (PyqRecord row) => row.toMap()),
+          (Map<String, dynamic> row) => '${row['chapter_id']}\u0000${row['exam']}\u0000${row['year']}',
+        ),
+      ),
+      ('test_error_logs', prepare(maps(incoming.errorLogs, (TestErrorLog row) => row.toMap()), const [])),
+      ('test_time_entries', prepare(maps(incoming.timeEntries, (TestTimeEntry row) => row.toMap()), const [])),
+      ('mistakes', prepare(maps(incoming.mistakes, (Mistake row) => row.toMap()), const [])),
+      ('daily_tasks', prepare(maps(incoming.tasks, (DailyTask row) => row.toMap()), const [])),
+      ('weekly_goals', prepare(maps(incoming.goals, (WeeklyGoal row) => row.toMap()), const [])),
+      ('study_sessions', prepare(maps(incoming.sessions, (StudySession row) => row.toMap()), const [])),
+      ('practice_sessions', prepare(maps(incoming.practiceSessions, (PracticeSession row) => row.toMap()), const [])),
+      ('backlog_items', prepare(maps(incoming.backlogItems, (BacklogItem row) => row.toMap()), const [])),
+      ('study_cards', prepare(maps(incoming.studyCards, (StudyCard row) => row.toMap()), const [])),
+    ];
+
+    int written = 0;
+    try {
+      if (normalized['settings'] is Map) {
+        final Map<String, dynamic> row = incoming.settings.copyWithUpdated().toMap()
+          ..['id'] = _userId
+          ..['user_id'] = _userId;
+        await _repository.upsertRow('app_settings', row);
+        written += 1;
+      }
+      final Profile? profile = incoming.profile;
+      if (normalized['profile'] is Map && profile != null) {
+        // The sign-in email stays the account's own; only the name comes from the file.
+        await _repository.upsertRow('profiles', <String, dynamic>{
+          'id': _userId,
+          'user_id': _userId,
+          'display_name': profile.displayName,
+          'email': existing.profile?.email ?? SupabaseAuth.email ?? profile.email,
+        });
+        written += 1;
+      }
+      for (final (String table, List<Map<String, dynamic>> rows) in plan) {
+        if (rows.isEmpty) continue;
+        await _repository.upsertRows(table, rows);
+        written += rows.length;
+      }
+    } catch (error) {
+      await load(silent: true);
+      throw AppFailure(
+        '${userMessage(error)} The import stopped after $written rows; importing the same file again is safe.',
+      );
     }
     await load();
     return written;

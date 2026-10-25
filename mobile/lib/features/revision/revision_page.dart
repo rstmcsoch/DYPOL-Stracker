@@ -104,6 +104,7 @@ class _RevisionPageState extends ConsumerState<RevisionPage> {
       child: PageBody(
         refresh: () => ref.read(dataControllerProvider.notifier).load(silent: true),
         children: <Widget>[
+          const RevisionFollowUpBanner(),
           NotebookCard(
             dense: true,
             child: Row(

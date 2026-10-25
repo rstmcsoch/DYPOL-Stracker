@@ -109,6 +109,7 @@ class _SyllabusPageState extends ConsumerState<SyllabusPage> {
       child: PageBody(
         refresh: () => ref.read(dataControllerProvider.notifier).load(silent: true),
         children: <Widget>[
+          const RevisionFollowUpBanner(),
           if (strip.isNotEmpty) ...<Widget>[
             WrapGrid(
               minItemWidth: 140,
@@ -695,9 +696,15 @@ Future<void> openChapterEditor(
                       : base.position,
                 );
                 try {
-                  await persistChapterStatus(ref, data, next, previous);
+                  final bool ladderSaved = await persistChapterStatus(ref, data, next, previous);
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                  if (context.mounted) showToast(context, 'Chapter saved to your syllabus.');
+                  if (context.mounted) {
+                    showToast(
+                      context,
+                      ladderSaved ? 'Chapter saved to your syllabus.' : ladderQueuedMessage(next.name),
+                      error: !ladderSaved,
+                    );
+                  }
                 } catch (error) {
                   if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
@@ -721,9 +728,8 @@ Future<void> openChapterEditor(
 /// Website `persistChapterStatus`: saving a chapter as Done/Revised lays out the revision
 /// ladder from Settings (once, or again if it has none); moving it back out of complete
 /// removes the revisions still pending.
-Future<void> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Chapter? previous) async {
+Future<bool> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Chapter? previous) async {
   final DataController controller = ref.read(dataControllerProvider.notifier);
-  await controller.saveChapter(next);
   // Live rows: the caller's snapshot can miss a revision scheduled moments ago, and a
   // reused revision number breaks the (chapter, revision_number) unique key.
   final AppData current = ref.read(dataControllerProvider).data;
@@ -731,6 +737,8 @@ Future<void> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Cha
   final bool isComplete = next.status == 'Done' || next.status == 'Revised';
   final List<Revision> chapterRevisions =
       current.revisions.where((Revision revision) => revision.chapterId == next.id).toList();
+  List<Revision> add = const <Revision>[];
+  List<Revision> remove = const <Revision>[];
   if (isComplete && (!wasComplete || chapterRevisions.isEmpty)) {
     final int firstNumber = chapterRevisions.fold<int>(
           0,
@@ -739,7 +747,7 @@ Future<void> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Cha
         1;
     final String now = isoNow();
     final List<int> gaps = current.settings.revisionGaps;
-    await controller.saveRevisions(<Revision>[
+    add = <Revision>[
       for (int index = 0; index < gaps.length; index += 1)
         Revision(
           id: newId(),
@@ -750,13 +758,18 @@ Future<void> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Cha
           createdAt: now,
           updatedAt: now,
         ),
-    ]);
+    ];
   } else if (wasComplete && !isComplete) {
-    for (final Revision revision in chapterRevisions.where((Revision r) => r.completedAt == null)) {
-      await controller.deleteRevision(revision);
-    }
+    remove = chapterRevisions.where((Revision r) => r.completedAt == null).toList();
   }
+  // The chapter is saved first; if only its revision dates fail they are retried and,
+  // failing that, queued with a visible Retry (no need to save the sheet again).
+  return controller.saveChapterAndLadder(next, add: add, remove: remove);
 }
+
+/// Toast for a chapter saved while its revision dates were queued.
+String ladderQueuedMessage(String name) =>
+    'Saved $name, but its revision dates are not saved yet. They will retry automatically, or tap Retry.';
 
 /// Website row status select: change status in place, with the same toasts.
 Future<void> changeChapterStatus(BuildContext context, WidgetRef ref, AppData data, Chapter chapter, String status) async {
@@ -767,9 +780,11 @@ Future<void> changeChapterStatus(BuildContext context, WidgetRef ref, AppData da
     completedOn: complete ? (chapter.completedOn ?? todayIso()) : null,
   );
   try {
-    await persistChapterStatus(ref, data, next, chapter);
+    final bool ladderSaved = await persistChapterStatus(ref, data, next, chapter);
     if (!context.mounted) return;
-    if (complete) {
+    if (!ladderSaved) {
+      showToast(context, ladderQueuedMessage(chapter.name), error: true);
+    } else if (complete) {
       showToast(context, '${chapter.name} marked complete. Your revision dates are in the diary.');
     } else if (chapter.isComplete) {
       showToast(context, '${chapter.name} is back in progress.');

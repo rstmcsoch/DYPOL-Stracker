@@ -189,9 +189,22 @@ class FakeBackend {
       for (final MapEntry<String, String> f in filters.entries)
         if (f.value.startsWith('eq.')) f.key: f.value.substring(3),
     };
+    // PostgREST `in.(a,b)` filters (values may be double-quoted).
+    final Map<String, Set<String>> within = <String, Set<String>>{
+      for (final MapEntry<String, String> f in filters.entries)
+        if (f.value.startsWith('in.(') && f.value.endsWith(')'))
+          f.key: f.value
+              .substring(4, f.value.length - 1)
+              .split(',')
+              .map((String v) => v.replaceAll('"', '').trim())
+              .toSet(),
+    };
+    bool matches(Map<String, dynamic> row) =>
+        equal.entries.every((MapEntry<String, String> f) => '${row[f.key]}' == f.value) &&
+        within.entries.every((MapEntry<String, Set<String>> f) => f.value.contains('${row[f.key]}'));
     tables[table] = <Map<String, dynamic>>[
       for (final Map<String, dynamic> row in tables[table] ?? const <Map<String, dynamic>>[])
-        if (!equal.entries.every((MapEntry<String, String> f) => '${row[f.key]}' == f.value)) row,
+        if (!matches(row)) row,
     ];
   }
 

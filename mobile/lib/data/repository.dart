@@ -110,6 +110,19 @@ class StrackerRepository {
     }
   }
 
+  /// Deletes the rows of [table] with these [ids] owned by [userId], in one request (all or
+  /// nothing). RLS still applies.
+  Future<void> deleteIds(String table, List<String> ids, String userId) async {
+    if (ids.isEmpty) return;
+    try {
+      await _client.from(table).delete().inFilter('id', ids).eq('user_id', userId);
+    } on PostgrestException catch (error) {
+      throw AppFailure(_friendly(error), code: error.code);
+    } catch (error) {
+      throw AppFailure(_friendly(error));
+    }
+  }
+
   /// Deletes every row of [table] owned by [userId] whose [column] equals [value], in one request
   /// (instead of downloading the table and deleting rows one by one). RLS still applies.
   Future<void> deleteWhere(String table, String column, String value, String userId) async {
