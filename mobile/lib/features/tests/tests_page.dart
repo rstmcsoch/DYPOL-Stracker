@@ -302,20 +302,22 @@ Future<void> openTestEditor(
             options: const <String>['Chapter Test', 'Subject Test', 'Full Mock', 'PYQ Practice'],
             onChanged: (String value) => setSheetState(() => type = value),
           ),
-          AppSelect<String?>(
-            label: 'Subject (optional)',
-            value: subject,
-            items: <String?>[null, ...data.subjects],
-            labelFor: (String? value) => value ?? 'Not set',
-            onChanged: (String? value) => setSheetState(() => subject = value),
-          ),
-          AppSelect<String?>(
-            label: 'Chapter (optional)',
-            value: chapterId,
-            items: <String?>[null, ...data.chapters.map((Chapter chapter) => chapter.id)],
-            labelFor: (String? value) => value == null ? 'Not linked' : data.chapterName(value),
-            onChanged: (String? value) => setSheetState(() => chapterId = value),
-          ),
+          if (type != 'Full Mock') ...<Widget>[
+            AppSelect<String?>(
+              label: 'Subject (optional)',
+              value: subject,
+              items: <String?>[null, ...data.subjects],
+              labelFor: (String? value) => value ?? 'Not set',
+              onChanged: (String? value) => setSheetState(() => subject = value),
+            ),
+            AppSelect<String?>(
+              label: 'Chapter (optional)',
+              value: chapterId,
+              items: <String?>[null, ...data.chapters.map((Chapter chapter) => chapter.id)],
+              labelFor: (String? value) => value == null ? 'Not linked' : data.chapterName(value),
+              onChanged: (String? value) => setSheetState(() => chapterId = value),
+            ),
+          ],
           Row(
             children: <Widget>[
               Expanded(
@@ -341,6 +343,10 @@ Future<void> openTestEditor(
           ),
           if (type == 'Full Mock') ...<Widget>[
             const SectionHeading('Subject scores', padding: EdgeInsets.only(bottom: 6)),
+            const InfoBanner(
+              'Full Mock records marks separately for each subject. Subject and chapter selection do not apply.',
+            ),
+            const SizedBox(height: 8),
             InfoBanner(
               data.subjects.length == 3
                   ? 'A complete Full Mock needs all three subject rows; they become one aggregate result.'
@@ -451,8 +457,8 @@ Future<void> openTestEditor(
                 title: title.text.trim(),
                 testDate: date,
                 testType: type,
-                subject: subject,
-                chapterId: chapterId,
+                subject: type == 'Full Mock' ? null : subject,
+                chapterId: type == 'Full Mock' ? null : chapterId,
                 marksObtained: marksValue,
                 totalMarks: totalValue,
                 correct: int.tryParse(correct.text.trim()),

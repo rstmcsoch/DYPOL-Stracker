@@ -123,6 +123,7 @@ class PracticeAggregate {
     this.attempted = 0,
     this.correct = 0,
     this.incorrect = 0,
+    this.skipped = 0,
     this.accuracy,
     this.recentAccuracy,
     this.timeMinutes = 0,
@@ -132,6 +133,9 @@ class PracticeAggregate {
   final int attempted;
   final int correct;
   final int incorrect;
+
+  /// Skipped questions; tracked separately and not part of accuracy.
+  final int skipped;
   final double? accuracy;
   final double? recentAccuracy;
   final int timeMinutes;
@@ -146,11 +150,13 @@ PracticeAggregate aggregatePractice(List<PracticeSession> sessions) {
   int attempted = 0;
   int correct = 0;
   int incorrect = 0;
+  int skipped = 0;
   int minutes = 0;
   for (final PracticeSession session in sorted) {
     attempted += session.attempted;
     correct += session.correct;
     incorrect += session.incorrect;
+    skipped += session.skipped;
     minutes += session.timeMinutes ?? 0;
   }
   final List<PracticeSession> recent = sorted.take(3).toList();
@@ -165,6 +171,7 @@ PracticeAggregate aggregatePractice(List<PracticeSession> sessions) {
     attempted: attempted,
     correct: correct,
     incorrect: incorrect,
+    skipped: skipped,
     accuracy: attempted > 0 ? correct / attempted * 100 : null,
     recentAccuracy: recentAttempted > 0 ? recentCorrect / recentAttempted * 100 : null,
     timeMinutes: minutes,

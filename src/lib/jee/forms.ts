@@ -14,11 +14,14 @@ const MAX_COUNT = 100_000
 
 export interface PracticeFormInput {
   chapterId: string; date: string; attempted: string; correct: string; incorrect: string
+  /** Optional; blank means 0. */
+  skipped?: string
   source: PracticeSource; minutes: string; notes: string
 }
 
 export interface PracticeValue {
   chapter_id: string; practice_date: string; attempted: number; correct: number; incorrect: number
+  skipped: number
   source: PracticeSource; time_minutes: number | null; notes: string
 }
 
@@ -45,6 +48,9 @@ export function validatePractice(input: PracticeFormInput, today: string): Valid
     if (correct > attempted) errors.correct = `Correct (${correct}) can’t be more than attempted (${attempted}).`
     else incorrect = attempted - correct
   }
+  // Skipped is recorded separately: it is never subtracted from attempted or counted as incorrect.
+  let skipped = 0
+  if ((input.skipped ?? '').trim() !== '') skipped = count(input.skipped ?? '', 'skipped', errors, { label: 'questions skipped' }) ?? 0
   let minutes: number | null = null
   if (input.minutes.trim() !== '') {
     const parsed = count(input.minutes, 'minutes', errors, { max: 1440, label: 'minutes spent' })
@@ -54,7 +60,7 @@ export function validatePractice(input: PracticeFormInput, today: string): Valid
   if (Object.keys(errors).length || attempted === null || correct === null || incorrect === null) return { ok: false, value: null, errors }
   return {
     ok: true, errors,
-    value: { chapter_id: input.chapterId, practice_date: input.date, attempted, correct, incorrect, source: input.source, time_minutes: minutes, notes: input.notes.trim() }
+    value: { chapter_id: input.chapterId, practice_date: input.date, attempted, correct, incorrect, skipped, source: input.source, time_minutes: minutes, notes: input.notes.trim() }
   }
 }
 
@@ -63,6 +69,20 @@ export interface BacklogFormInput {
 }
 export interface BacklogValue {
   title: string; type: BacklogType; subject: Subject | null; chapter_id: string | null; priority: Priority; due_on: string | null; notes: string
+}
+
+/** Picking a chapter sets the subject to that chapter's real subject; clearing it keeps the subject. */
+export function backlogChapterChange(form: Pick<BacklogFormInput, 'subject' | 'chapterId'>, chapterId: string, chapters: readonly { id: string; subject: Subject }[]): Pick<BacklogFormInput, 'subject' | 'chapterId'> {
+  if (!chapterId) return { subject: form.subject, chapterId: '' }
+  const chapter = chapters.find(item => item.id === chapterId)
+  return chapter ? { subject: chapter.subject, chapterId } : { subject: form.subject, chapterId: '' }
+}
+
+/** Changing the subject drops a linked chapter only when it belongs to another subject. */
+export function backlogSubjectChange(form: Pick<BacklogFormInput, 'subject' | 'chapterId'>, subject: Subject | '', chapters: readonly { id: string; subject: Subject }[]): Pick<BacklogFormInput, 'subject' | 'chapterId'> {
+  const chapter = form.chapterId ? chapters.find(item => item.id === form.chapterId) : undefined
+  const keep = chapter && (!subject || chapter.subject === subject)
+  return { subject, chapterId: keep ? form.chapterId : '' }
 }
 
 export function validateBacklog(input: BacklogFormInput): Validated<BacklogValue> {

@@ -69,6 +69,7 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                       tone: colors.palette.green,
                     ),
                     StatTile(value: '${overall.incorrect}', label: 'Incorrect', tone: colors.palette.red),
+                    StatTile(value: '${overall.skipped}', label: 'Skipped', hint: 'not attempted'),
                     StatTile(
                       value: percentLabel(overall.accuracy),
                       label: 'Accuracy',
@@ -211,7 +212,7 @@ class _PracticePageState extends ConsumerState<PracticePage> {
                             Text(
                               '${formatDate(session.practiceDate)} · ${session.source} · '
                               '${session.attempted} attempted · ${session.correct} correct · '
-                              '${session.incorrect} wrong'
+                              '${session.incorrect} wrong · ${session.skipped} skipped'
                               '${session.timeMinutes != null ? ' · ${minutesLabel(session.timeMinutes)}' : ''}',
                               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                     color: colors.muted,
@@ -265,6 +266,10 @@ Future<void> openPracticeEditor(
   syncIncorrect();
   attempted.addListener(syncIncorrect);
   correct.addListener(syncIncorrect);
+  final TextEditingController skipped = TextEditingController(
+    text: session != null ? session.skipped.toString() : '',
+  );
+  String? skippedError;
   final TextEditingController minutes = TextEditingController(
     text: session?.timeMinutes?.toString() ?? '',
   );
@@ -356,6 +361,14 @@ Future<void> openPracticeEditor(
               ),
             ],
           ),
+          AppField(
+            label: 'Skipped (optional)',
+            controller: skipped,
+            keyboardType: TextInputType.number,
+            inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+            helper: 'Not attempted. Recorded separately; never counted as incorrect.',
+            error: skippedError,
+          ),
           AppSelect<String>(
             label: 'Source',
             value: source,
@@ -381,11 +394,16 @@ Future<void> openPracticeEditor(
               );
               final int incorrectValue =
                   countError == null && correctValue >= 0 ? attemptedValue - correctValue : 0;
+              final String skippedText = skipped.text.trim();
+              final int? skippedValue = skippedText.isEmpty ? 0 : int.tryParse(skippedText);
               setSheetState(() {
+                skippedError = skippedValue == null || skippedValue < 0 || skippedValue > 100000
+                    ? 'Skipped must be a whole number from 0 to 1,00,000.'
+                    : null;
                 attemptedError = attemptedValue < 0 ? 'Enter the attempted count.' : null;
                 countsError = correctValue < 0 ? 'Enter the correct count.' : countError;
               });
-              if (attemptedError != null || countError != null) return;
+              if (attemptedError != null || countError != null || skippedError != null) return;
               final int minutesValue = int.tryParse(minutes.text.trim()) ?? 0;
               final PracticeSession next = PracticeSession(
                 id: session?.id ?? newId(),
@@ -395,6 +413,7 @@ Future<void> openPracticeEditor(
                 attempted: attemptedValue,
                 correct: correctValue,
                 incorrect: incorrectValue,
+                skipped: skippedValue ?? 0,
                 source: source,
                 timeMinutes: minutesValue > 0 ? minutesValue : null,
                 notes: notes.text,
@@ -437,6 +456,7 @@ Future<void> openPracticeEditor(
   attempted.dispose();
   correct.dispose();
   incorrect.dispose();
+  skipped.dispose();
   minutes.dispose();
   notes.dispose();
 }

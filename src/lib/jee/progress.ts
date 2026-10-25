@@ -62,6 +62,8 @@ export interface PracticeAggregate {
   attempted: number
   correct: number
   incorrect: number
+  /** Questions skipped; tracked separately and not part of accuracy. */
+  skipped: number
   /** correct ÷ attempted, as a percentage. Null when nothing has been attempted. */
   accuracy: number | null
   /** Accuracy over the most recent three practice blocks only. */
@@ -83,6 +85,7 @@ export function aggregatePractice(sessions: PracticeSession[]): PracticeAggregat
     attempted,
     correct,
     incorrect: sum(sorted, item => item.incorrect),
+    skipped: sum(sorted, item => item.skipped ?? 0),
     accuracy: attempted > 0 ? (correct / attempted) * 100 : null,
     recentAccuracy: recentAttempted > 0 ? (sum(recent, item => item.correct) / recentAttempted) * 100 : null,
     timeMinutes: sum(sorted, item => item.time_minutes ?? 0)

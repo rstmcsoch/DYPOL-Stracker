@@ -1,5 +1,5 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
-import { indiaDate } from '../date.js'
+import { indiaDate, plusDays } from '../date.js'
 import { pyqCompletion } from './progress.js'
 import type { AppData, BacklogItem, ReminderKind } from '../../types/index.js'
 
@@ -7,6 +7,23 @@ import type { AppData, BacklogItem, ReminderKind } from '../../types/index.js'
 export function isAwake(item: BacklogItem, today: string): boolean {
   if (item.status === 'active') return true
   return item.status === 'snoozed' && item.snoozed_until !== null && item.snoozed_until <= today
+}
+
+/**
+ * Home's backlog counts. Due now: awake today and due today or earlier. Due tomorrow: due
+ * exactly tomorrow and awake by tomorrow (active, or a snooze that ends by then). Completed
+ * items never count, and the two sets cannot overlap because their due dates differ.
+ */
+export function backlogDueCounts(items: readonly BacklogItem[], today: string): { dueNow: number; dueTomorrow: number } {
+  const tomorrow = plusDays(today, 1)
+  let dueNow = 0
+  let dueTomorrow = 0
+  for (const item of items) {
+    if (item.status === 'done' || item.due_on === null) continue
+    if (item.due_on <= today) { if (isAwake(item, today)) dueNow += 1 }
+    else if (item.due_on === tomorrow && isAwake(item, tomorrow)) dueTomorrow += 1
+  }
+  return { dueNow, dueTomorrow }
 }
 
 export interface ReminderItem { kind: ReminderKind; title: string; body: string }

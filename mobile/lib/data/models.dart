@@ -694,6 +694,7 @@ class PracticeSession {
     required this.attempted,
     required this.correct,
     required this.incorrect,
+    this.skipped = 0,
     this.source = 'Other',
     this.timeMinutes,
     this.notes = '',
@@ -708,6 +709,9 @@ class PracticeSession {
   final int attempted;
   final int correct;
   final int incorrect;
+
+  /// Questions skipped (not attempted). Separate from attempted/correct/incorrect; 0 for older rows.
+  final int skipped;
   final String source;
   final int? timeMinutes;
   final String notes;
@@ -724,6 +728,7 @@ class PracticeSession {
         attempted: _int(raw['attempted']),
         correct: _int(raw['correct']),
         incorrect: _int(raw['incorrect']),
+        skipped: _int(raw['skipped']) < 0 ? 0 : _int(raw['skipped']),
         source: _str(raw['source'], 'Other'),
         timeMinutes: _intOrNull(raw['time_minutes']),
         notes: _str(raw['notes']),
@@ -739,6 +744,7 @@ class PracticeSession {
         'attempted': attempted,
         'correct': correct,
         'incorrect': incorrect,
+        'skipped': skipped,
         'source': source,
         'time_minutes': timeMinutes,
         'notes': notes,

@@ -117,7 +117,7 @@ Map<String, String> backupCsvs(AppData data) {
       <Map<String, dynamic>>[for (final TestRecord row in data.tests) row.toMap()],
     ),
     'practice': table(
-      <String>['id', 'chapter_id', 'practice_date', 'attempted', 'correct', 'incorrect', 'time_minutes', 'source'],
+      <String>['id', 'chapter_id', 'practice_date', 'attempted', 'correct', 'incorrect', 'skipped', 'time_minutes', 'source'],
       <Map<String, dynamic>>[for (final PracticeSession row in data.practiceSessions) row.toMap()],
     ),
     'mistakes': table(

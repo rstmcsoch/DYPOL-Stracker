@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AlarmClock, Check, ChevronDown, ChevronUp, Edit3, Plus, Trash2, Undo2 } from 'lucide-react'
 import { Button, Dialog, EmptyState, Field, NotebookCard, OverflowMenu, PageHeader, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
@@ -8,7 +8,7 @@ import { useToast } from '../contexts/ToastContext'
 import { createId } from '../lib/id'
 import { indiaToday, plusDays, prettyDate } from '../lib/date'
 import { isAwake } from '../lib/jee/reminders'
-import { validateBacklog, type BacklogFormInput, type BacklogValue } from '../lib/jee/forms'
+import { backlogChapterChange, backlogSubjectChange, validateBacklog, type BacklogFormInput, type BacklogValue } from '../lib/jee/forms'
 import { BACKLOG_TYPES, type BacklogItem, type BacklogType, type Priority, type Subject, type AppData } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
 
@@ -48,12 +48,24 @@ export default function BacklogPage() {
   const overdueCount = dueNow.filter(item => item.due_on !== null && item.due_on < today).length
 
   const save = async (item: BacklogItem, patch: Partial<BacklogItem>) => {
-    try { await upsert('backlog_items', { ...item, ...patch, updated_at: new Date().toISOString() }) }
-    catch (error) { notify(error instanceof Error ? error.message : 'Could not update the backlog item.', 'error') }
+    try { await upsert('backlog_items', { ...item, ...patch, updated_at: new Date().toISOString() }); return true }
+    catch (error) { notify(error instanceof Error ? error.message : 'Could not update the backlog item.', 'error'); return false }
   }
-  const complete = (item: BacklogItem) => save(item, { status: 'done', completed_at: new Date().toISOString(), snoozed_until: null }).then(() => notify('Backlog item cleared. Nice.'))
+  const complete = (item: BacklogItem) => save(item, { status: 'done', completed_at: new Date().toISOString(), snoozed_until: null }).then(ok => { if (ok) notify('Backlog item cleared. Nice.') })
   const reopen = (item: BacklogItem) => save(item, { status: 'active', completed_at: null })
-  const snooze = (item: BacklogItem, days: number) => save(item, { status: 'snoozed', snoozed_until: plusDays(today, days) }).then(() => notify(`Snoozed until ${prettyDate(plusDays(today, days))}.`))
+  // One snooze write per item at a time: rapid repeat clicks are ignored until it settles.
+  const snoozingRef = useRef(new Set<string>())
+  const [snoozing, setSnoozing] = useState<ReadonlySet<string>>(new Set())
+  const snooze = async (item: BacklogItem, days: number) => {
+    if (snoozingRef.current.has(item.id)) return
+    snoozingRef.current.add(item.id); setSnoozing(new Set(snoozingRef.current))
+    try {
+      if (await save(item, { status: 'snoozed', snoozed_until: plusDays(today, days) })) notify(`Snoozed until ${prettyDate(plusDays(today, days))}.`)
+    } finally {
+      snoozingRef.current.delete(item.id); setSnoozing(new Set(snoozingRef.current))
+    }
+  }
+  const tomorrow = plusDays(today, 1)
   const removeItem = async (item: BacklogItem) => {
     try { await remove('backlog_items', item); notify('Removed. Undo is available briefly.') }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not remove the item.', 'error') }
@@ -79,6 +91,7 @@ export default function BacklogPage() {
         </div>
         {item.notes && <p className="jee-note">{item.notes}</p>}
       </div>
+      {!(item.status === 'snoozed' && item.snoozed_until === tomorrow) && <button type="button" className="jee-snooze-quick" onClick={() => void snooze(item, 1)} disabled={snoozing.has(item.id)} aria-label={`Snooze ${item.title} until tomorrow`} title="Snooze until tomorrow"><AlarmClock size={14} aria-hidden="true" /><span className="jee-snooze-text">Snooze until tomorrow</span></button>}
       <OverflowMenu label={`Actions for ${item.title}`} items={[
         { id: 'done', label: 'Mark done', icon: <Check size={15} />, onSelect: () => void complete(item) },
         { id: 'snooze1', label: 'Come back tomorrow', icon: <AlarmClock size={15} />, onSelect: () => void snooze(item, 1) },
@@ -184,9 +197,9 @@ function BacklogDialog({ data, existing, onClose, onSave }: {
   data: AppData; existing?: BacklogItem; onClose: () => void; onSave: (value: BacklogValue) => Promise<void>
 }) {
   const backlogSubjects = useExamSubjects(existing?.subject)
-  const chapter = existing?.chapter_id ? data.chapters.find(item => item.id === existing.chapter_id) : undefined
   const [form, setForm] = useState<BacklogFormInput>({
-    title: existing?.title ?? '', type: existing?.type ?? 'Lecture', subject: existing?.subject ?? chapter?.subject ?? '',
+    // Editing keeps the saved subject as-is (even null); nothing is reclassified unless the user changes it.
+    title: existing?.title ?? '', type: existing?.type ?? 'Lecture', subject: existing ? existing.subject ?? '' : '',
     chapterId: existing?.chapter_id ?? '', priority: existing?.priority ?? 'Medium', dueOn: existing?.due_on ?? '', notes: existing?.notes ?? ''
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -195,6 +208,16 @@ function BacklogDialog({ data, existing, onClose, onSave }: {
   const set = <K extends keyof BacklogFormInput>(key: K, value: BacklogFormInput[K]) => {
     setForm(current => ({ ...current, [key]: value }))
     setErrors(current => { const next = { ...current }; delete next[key]; return next })
+  }
+  // Subject and linked chapter stay consistent: a chapter brings its real subject, and a
+  // subject change only drops a chapter that belongs to a different subject.
+  const changeSubject = (subject: Subject | '') => {
+    setForm(current => ({ ...current, ...backlogSubjectChange(current, subject, data.chapters) }))
+    setErrors(current => { const next = { ...current }; delete next.subject; return next })
+  }
+  const changeChapter = (chapterId: string) => {
+    setForm(current => ({ ...current, ...backlogChapterChange(current, chapterId, data.chapters) }))
+    setErrors(current => { const next = { ...current }; delete next.chapterId; return next })
   }
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -214,10 +237,10 @@ function BacklogDialog({ data, existing, onClose, onSave }: {
         <Field label="Priority"><select value={form.priority} onChange={event => set('priority', event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field>
       </div>
       <div className="form-grid two">
-        <Field label="Subject"><select value={form.subject} onChange={event => { set('subject', event.target.value as Subject | ''); set('chapterId', '') }}><option value="">General</option>{backlogSubjects.map(item => <option key={item}>{item}</option>)}</select></Field>
+        <Field label="Subject"><select value={form.subject} onChange={event => changeSubject(event.target.value as Subject | '')}><option value="">Choose subject (optional)</option>{backlogSubjects.map(item => <option key={item}>{item}</option>)}</select></Field>
         <Field label="Due date (optional)" error={errors.dueOn}><input type="date" value={form.dueOn} onChange={event => set('dueOn', event.target.value)} /></Field>
       </div>
-      <ChapterSelect chapters={data.chapters} value={form.chapterId} onChange={value => set('chapterId', value)} subject={form.subject || 'all'} label="Linked chapter (optional)" allowNone noneLabel="No chapter" />
+      <ChapterSelect chapters={data.chapters} value={form.chapterId} onChange={changeChapter} subject={form.subject || 'all'} label="Linked chapter (optional)" allowNone noneLabel="No chapter" />
       <Field label="Notes (optional)" error={errors.notes}><textarea rows={2} maxLength={5000} value={form.notes} onChange={event => set('notes', event.target.value)} /></Field>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>{existing ? 'Save changes' : 'Add to backlog'} <Check size={16} /></Button></div>
     </form>
