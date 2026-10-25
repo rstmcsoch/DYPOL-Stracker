@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/errors.dart';
+import '../logic/onboarding.dart' show shouldSeedJeeSyllabus;
 import 'app_data.dart';
 import 'app_data_codec.dart';
 import 'models.dart';
@@ -139,18 +140,14 @@ class DataController extends StateNotifier<DataState> {
         _repository.fetchExamCatalog(),
       ]);
 
-      List<Map<String, dynamic>> rows(int index) =>
-          (results[index] as List<Map<String, dynamic>>);
+      List<Map<String, dynamic>> rows(int index) => (results[index] as List<Map<String, dynamic>>);
 
       final List<Map<String, dynamic>> settingsRows = rows(0);
       final List<Map<String, dynamic>> profileRows = rows(1);
-      final bool firstRun = settingsRows.isEmpty && rows(2).isEmpty;
-
       AppData data = AppData(
         userId: _userId,
-        settings: settingsRows.isEmpty
-            ? AppSettings.defaults(_userId)
-            : AppSettings.fromMap(settingsRows.first, _userId),
+        settings:
+            settingsRows.isEmpty ? AppSettings.defaults(_userId) : AppSettings.fromMap(settingsRows.first, _userId),
         profile: profileRows.isEmpty ? null : Profile.fromMap(profileRows.first),
         chapters: rows(2).map(Chapter.fromMap).toList(),
         revisions: rows(3).map(Revision.fromMap).toList(),
@@ -172,16 +169,11 @@ class DataController extends StateNotifier<DataState> {
         examCatalog: (results[19] as List<ExamCatalogEntry>),
       );
 
-      if (firstRun) {
-        data = await _bootstrap(data);
-      } else {
-        if (settingsRows.isEmpty) {
-          await _repository.upsertRow('app_settings', data.settings.toMap());
-        }
-        if (profileRows.isEmpty) {
-          data = data.copyWith(profile: await _ensureProfile(data));
-        }
-      }
+      data = await _ensureStarterRows(
+        data,
+        hasSettings: settingsRows.isNotEmpty,
+        hasProfile: profileRows.isNotEmpty,
+      );
 
       state = DataState(
         data: data,
@@ -215,20 +207,35 @@ class DataController extends StateNotifier<DataState> {
     return (code == '42501' || code == '401') && _repository.sessionLost;
   }
 
-  /// First sign-in: create the profile, settings, exam tracks and the JEE syllabus so the
-  /// account works on both the app and the website immediately. This mirrors the website's
-  /// first-run seeding and only ever runs when both settings and chapters are empty.
-  Future<AppData> _bootstrap(AppData data) async {
-    final Profile profile = await _ensureProfile(data);
-    final AppSettings settings = data.settings.copyWith(onboardingCompleted: true);
-    await _repository.upsertRow('app_settings', settings.toMap());
-    // Exactly like the website: only a JEE notebook is seeded with the JEE syllabus. Other
-    // exams start with an empty syllabus and the student adds chapters from their own
-    // subject list, because the shared syllabus text belongs to JEE alone.
-    final bool seedJee = isJeeExam(settings.examId);
+  /// Fills in whatever a new or older account is missing, in the website's order
+  /// (src/contexts/DataContext.tsx): profile, default settings, the JEE syllabus only once
+  /// JEE is really chosen (brand-new accounts wait for first-run setup, which seeds it), and
+  /// the exam tracks. Existing rows are never overwritten.
+  Future<AppData> _ensureStarterRows(AppData data, {required bool hasSettings, required bool hasProfile}) async {
+    AppData next = data;
+    if (!hasProfile) next = next.copyWith(profile: await _ensureProfile(next));
+    if (!hasSettings) {
+      final AppSettings settings = AppSettings.defaults(_userId, ownerName: next.profile?.displayName ?? '');
+      await _repository.upsertRow('app_settings', settings.toMap());
+      next = next.copyWith(settings: settings);
+    }
+    if (next.chapters.isEmpty && shouldSeedJeeSyllabus(next.settings)) {
+      final List<Chapter> chapters = _jeeSyllabus();
+      await _repository.upsertRows('chapters', chapters.map((Chapter chapter) => chapter.toMap()).toList());
+      next = next.copyWith(chapters: chapters);
+    }
+    if (next.examTracks.isEmpty) {
+      final List<UserExamTrack> tracks = seedExamTracks(_userId);
+      await _repository.upsertRows('user_exam_tracks', tracks.map((UserExamTrack track) => track.toMap()).toList());
+      next = next.copyWith(examTracks: tracks);
+    }
+    return next;
+  }
+
+  List<Chapter> _jeeSyllabus() {
     final List<Chapter> chapters = <Chapter>[];
     int position = 0;
-    for (final MapEntry<String, List<String>> entry in seedJee ? seededSyllabus.entries : const <MapEntry<String, List<String>>>[]) {
+    for (final MapEntry<String, List<String>> entry in seededSyllabus.entries) {
       for (final String name in entry.value) {
         chapters.add(Chapter(
           id: newId(),
@@ -242,25 +249,28 @@ class DataController extends StateNotifier<DataState> {
         position += 1;
       }
     }
-    if (chapters.isNotEmpty) {
-      await _repository.upsertRows(
-        'chapters',
-        chapters.map((Chapter chapter) => chapter.toMap()).toList(),
-      );
+    return chapters;
+  }
+
+  /// First-run setup (src/components/OnboardingDialog.tsx): a JEE notebook with no chapters
+  /// gets the JEE syllabus first, then the settings are saved with onboarding completed,
+  /// then the profile name if it changed.
+  Future<void> completeOnboarding({required AppSettings settings, required String displayName}) async {
+    if (isJeeExam(settings.examId) && state.data.chapters.isEmpty) {
+      await saveChapters(_jeeSyllabus());
     }
-    final List<UserExamTrack> tracks = seedExamTracks(_userId);
-    await _repository.upsertRows(
-      'user_exam_tracks',
-      tracks.map((UserExamTrack track) => track.toMap()).toList(),
-    );
-    return data.copyWith(profile: profile, settings: settings, chapters: chapters, examTracks: tracks);
+    await saveSettings(settings.copyWith(onboardingCompleted: true));
+    final Profile? profile = state.data.profile;
+    if (profile != null && profile.displayName != displayName) {
+      await saveProfile(profile.copyWith(displayName: displayName));
+    }
   }
 
   Future<Profile> _ensureProfile(AppData data) async {
     final String? email = SupabaseAuth.email;
     final String? displayName = SupabaseAuth.displayName;
-    final Profile existing = data.profile ??
-        Profile(id: _userId, userId: _userId, email: email ?? '', displayName: displayName ?? '');
+    final Profile existing =
+        data.profile ?? Profile(id: _userId, userId: _userId, email: email ?? '', displayName: displayName ?? '');
     final Profile profile = existing.copyWith(
       email: existing.email.isEmpty ? (email ?? '') : existing.email,
       displayName: existing.displayName.isEmpty ? (displayName ?? '') : existing.displayName,
@@ -284,8 +294,7 @@ class DataController extends StateNotifier<DataState> {
       await action();
       state = state.copyWith(saving: false, offline: false);
     } catch (error) {
-      final String message =
-          error is AppFailure ? error.message : 'That change could not be saved. Try again.';
+      final String message = error is AppFailure ? error.message : 'That change could not be saved. Try again.';
       if (identical(state.data, optimistic)) {
         _apply(before);
       } else {
@@ -302,8 +311,10 @@ class DataController extends StateNotifier<DataState> {
         row,
       ];
 
-  List<T> _drop<T>(List<T> rows, String id, String Function(T) idOf) =>
-      <T>[for (final T item in rows) if (idOf(item) != id) item];
+  List<T> _drop<T>(List<T> rows, String id, String Function(T) idOf) => <T>[
+        for (final T item in rows)
+          if (idOf(item) != id) item
+      ];
 
   void _apply(AppData next) {
     state = state.copyWith(data: next);
@@ -339,8 +350,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('user_exam_tracks', track.toMap()),
       () async => _apply(state.data.copyWith(
-            examTracks: _put(state.data.examTracks, track, (UserExamTrack row) => row.track),
-          )),
+        examTracks: _put(state.data.examTracks, track, (UserExamTrack row) => row.track),
+      )),
     );
   }
 
@@ -352,8 +363,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('chapters', chapter.toMap()),
       () async => _apply(state.data.copyWith(
-            chapters: _put(state.data.chapters, chapter, (Chapter row) => row.id),
-          )),
+        chapters: _put(state.data.chapters, chapter, (Chapter row) => row.id),
+      )),
     );
   }
 
@@ -393,22 +404,14 @@ class DataController extends StateNotifier<DataState> {
       () async {
         _apply(state.data.copyWith(
           chapters: _drop(state.data.chapters, chapter.id, (Chapter row) => row.id),
-          revisions: state.data.revisions
-              .where((Revision row) => row.chapterId != chapter.id)
-              .toList(),
-          chapterStages: state.data.chapterStages
-              .where((ChapterStageRow row) => row.chapterId != chapter.id)
-              .toList(),
-          practiceSessions: state.data.practiceSessions
-              .where((PracticeSession row) => row.chapterId != chapter.id)
-              .toList(),
-          pyqRecords:
-              state.data.pyqRecords.where((PyqRecord row) => row.chapterId != chapter.id).toList(),
-          studyCards:
-              state.data.studyCards.where((StudyCard row) => row.chapterId != chapter.id).toList(),
-          testChapterLinks: state.data.testChapterLinks
-              .where((TestChapterLink row) => row.chapterId != chapter.id)
-              .toList(),
+          revisions: state.data.revisions.where((Revision row) => row.chapterId != chapter.id).toList(),
+          chapterStages: state.data.chapterStages.where((ChapterStageRow row) => row.chapterId != chapter.id).toList(),
+          practiceSessions:
+              state.data.practiceSessions.where((PracticeSession row) => row.chapterId != chapter.id).toList(),
+          pyqRecords: state.data.pyqRecords.where((PyqRecord row) => row.chapterId != chapter.id).toList(),
+          studyCards: state.data.studyCards.where((StudyCard row) => row.chapterId != chapter.id).toList(),
+          testChapterLinks:
+              state.data.testChapterLinks.where((TestChapterLink row) => row.chapterId != chapter.id).toList(),
         ));
       },
     );
@@ -417,8 +420,7 @@ class DataController extends StateNotifier<DataState> {
   Future<void> saveRevisions(List<Revision> revisions) async {
     if (revisions.isEmpty) return;
     await _run(
-      () => _repository
-          .upsertRows('chapter_revisions', revisions.map((Revision row) => row.toMap()).toList()),
+      () => _repository.upsertRows('chapter_revisions', revisions.map((Revision row) => row.toMap()).toList()),
       () async {
         List<Revision> rows = state.data.revisions;
         for (final Revision revision in revisions) {
@@ -435,8 +437,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.deleteRow('chapter_revisions', revision.id, _userId),
       () async => _apply(state.data.copyWith(
-            revisions: _drop(state.data.revisions, revision.id, (Revision row) => row.id),
-          )),
+        revisions: _drop(state.data.revisions, revision.id, (Revision row) => row.id),
+      )),
     );
   }
 
@@ -480,9 +482,7 @@ class DataController extends StateNotifier<DataState> {
           tests: _put(state.data.tests, test, (TestRecord row) => row.id),
           testSubjectScores: scores,
           testChapterLinks: test.testType == 'Full Mock'
-              ? state.data.testChapterLinks
-                  .where((TestChapterLink row) => row.testId != test.id)
-                  .toList()
+              ? state.data.testChapterLinks.where((TestChapterLink row) => row.testId != test.id).toList()
               : state.data.testChapterLinks,
         ));
       },
@@ -504,18 +504,12 @@ class DataController extends StateNotifier<DataState> {
         await _repository.deleteRow('tests', test.id, _userId);
       },
       () async => _apply(state.data.copyWith(
-            tests: _drop(state.data.tests, test.id, (TestRecord row) => row.id),
-            testSubjectScores: state.data.testSubjectScores
-                .where((TestSubjectScore row) => row.testId != test.id)
-                .toList(),
-            testChapterLinks: state.data.testChapterLinks
-                .where((TestChapterLink row) => row.testId != test.id)
-                .toList(),
-            errorLogs:
-                state.data.errorLogs.where((TestErrorLog row) => row.testId != test.id).toList(),
-            timeEntries:
-                state.data.timeEntries.where((TestTimeEntry row) => row.testId != test.id).toList(),
-          )),
+        tests: _drop(state.data.tests, test.id, (TestRecord row) => row.id),
+        testSubjectScores: state.data.testSubjectScores.where((TestSubjectScore row) => row.testId != test.id).toList(),
+        testChapterLinks: state.data.testChapterLinks.where((TestChapterLink row) => row.testId != test.id).toList(),
+        errorLogs: state.data.errorLogs.where((TestErrorLog row) => row.testId != test.id).toList(),
+        timeEntries: state.data.timeEntries.where((TestTimeEntry row) => row.testId != test.id).toList(),
+      )),
     );
   }
 
@@ -523,8 +517,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('test_error_logs', log.toMap()),
       () async => _apply(state.data.copyWith(
-            errorLogs: _put(state.data.errorLogs, log, (TestErrorLog row) => row.id),
-          )),
+        errorLogs: _put(state.data.errorLogs, log, (TestErrorLog row) => row.id),
+      )),
     );
   }
 
@@ -532,8 +526,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.deleteRow('test_error_logs', log.id, _userId),
       () async => _apply(state.data.copyWith(
-            errorLogs: _drop(state.data.errorLogs, log.id, (TestErrorLog row) => row.id),
-          )),
+        errorLogs: _drop(state.data.errorLogs, log.id, (TestErrorLog row) => row.id),
+      )),
     );
   }
 
@@ -541,8 +535,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('test_time_entries', entry.toMap()),
       () async => _apply(state.data.copyWith(
-            timeEntries: _put(state.data.timeEntries, entry, (TestTimeEntry row) => row.id),
-          )),
+        timeEntries: _put(state.data.timeEntries, entry, (TestTimeEntry row) => row.id),
+      )),
     );
   }
 
@@ -550,8 +544,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.deleteRow('test_time_entries', entry.id, _userId),
       () async => _apply(state.data.copyWith(
-            timeEntries: _drop(state.data.timeEntries, entry.id, (TestTimeEntry row) => row.id),
-          )),
+        timeEntries: _drop(state.data.timeEntries, entry.id, (TestTimeEntry row) => row.id),
+      )),
     );
   }
 
@@ -563,12 +557,12 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('practice_sessions', session.toMap()),
       () async => _apply(state.data.copyWith(
-            practiceSessions: _put(
-              state.data.practiceSessions,
-              session,
-              (PracticeSession row) => row.id,
-            ),
-          )),
+        practiceSessions: _put(
+          state.data.practiceSessions,
+          session,
+          (PracticeSession row) => row.id,
+        ),
+      )),
     );
   }
 
@@ -576,12 +570,12 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.deleteRow('practice_sessions', session.id, _userId),
       () async => _apply(state.data.copyWith(
-            practiceSessions: _drop(
-              state.data.practiceSessions,
-              session.id,
-              (PracticeSession row) => row.id,
-            ),
-          )),
+        practiceSessions: _drop(
+          state.data.practiceSessions,
+          session.id,
+          (PracticeSession row) => row.id,
+        ),
+      )),
     );
   }
 
@@ -589,8 +583,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('pyq_records', record.toMap()),
       () async => _apply(state.data.copyWith(
-            pyqRecords: _put(state.data.pyqRecords, record, (PyqRecord row) => row.id),
-          )),
+        pyqRecords: _put(state.data.pyqRecords, record, (PyqRecord row) => row.id),
+      )),
     );
   }
 
@@ -615,12 +609,12 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('chapter_stages', stage.toMap()),
       () async => _apply(state.data.copyWith(
-            chapterStages: _put(
-              state.data.chapterStages,
-              stage,
-              (ChapterStageRow row) => '${row.chapterId}:${row.stage}',
-            ),
-          )),
+        chapterStages: _put(
+          state.data.chapterStages,
+          stage,
+          (ChapterStageRow row) => '${row.chapterId}:${row.stage}',
+        ),
+      )),
     );
   }
 
@@ -642,16 +636,15 @@ class DataController extends StateNotifier<DataState> {
         await _repository.upsertRow('mistakes', stored.toMap());
       },
       () async => _apply(state.data.copyWith(
-            mistakes: _put(state.data.mistakes, stored, (Mistake row) => row.id),
-          )),
+        mistakes: _put(state.data.mistakes, stored, (Mistake row) => row.id),
+      )),
     );
   }
 
   Future<String?> mistakeImageUrl(String path) => _repository.signedImageUrl(path);
 
   /// Raw bytes of a private mistake image, for the in-app thumbnail.
-  Future<Uint8List?> mistakeImageBytes(String path) =>
-      _repository.downloadMistakeImage(path);
+  Future<Uint8List?> mistakeImageBytes(String path) => _repository.downloadMistakeImage(path);
 
   Future<void> deleteMistake(Mistake mistake) async {
     await _run(
@@ -663,8 +656,8 @@ class DataController extends StateNotifier<DataState> {
         }
       },
       () async => _apply(state.data.copyWith(
-            mistakes: _drop(state.data.mistakes, mistake.id, (Mistake row) => row.id),
-          )),
+        mistakes: _drop(state.data.mistakes, mistake.id, (Mistake row) => row.id),
+      )),
     );
   }
 
@@ -672,8 +665,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('daily_tasks', task.toMap()),
       () async => _apply(state.data.copyWith(
-            tasks: _put(state.data.tasks, task, (DailyTask row) => row.id),
-          )),
+        tasks: _put(state.data.tasks, task, (DailyTask row) => row.id),
+      )),
     );
   }
 
@@ -681,8 +674,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.deleteRow('daily_tasks', task.id, _userId),
       () async => _apply(state.data.copyWith(
-            tasks: _drop(state.data.tasks, task.id, (DailyTask row) => row.id),
-          )),
+        tasks: _drop(state.data.tasks, task.id, (DailyTask row) => row.id),
+      )),
     );
   }
 
@@ -690,8 +683,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('weekly_goals', goal.toMap()),
       () async => _apply(state.data.copyWith(
-            goals: _put(state.data.goals, goal, (WeeklyGoal row) => row.id),
-          )),
+        goals: _put(state.data.goals, goal, (WeeklyGoal row) => row.id),
+      )),
     );
   }
 
@@ -699,8 +692,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.deleteRow('weekly_goals', goal.id, _userId),
       () async => _apply(state.data.copyWith(
-            goals: _drop(state.data.goals, goal.id, (WeeklyGoal row) => row.id),
-          )),
+        goals: _drop(state.data.goals, goal.id, (WeeklyGoal row) => row.id),
+      )),
     );
   }
 
@@ -708,8 +701,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('backlog_items', item.toMap()),
       () async => _apply(state.data.copyWith(
-            backlogItems: _put(state.data.backlogItems, item, (BacklogItem row) => row.id),
-          )),
+        backlogItems: _put(state.data.backlogItems, item, (BacklogItem row) => row.id),
+      )),
     );
   }
 
@@ -717,8 +710,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.deleteRow('backlog_items', item.id, _userId),
       () async => _apply(state.data.copyWith(
-            backlogItems: _drop(state.data.backlogItems, item.id, (BacklogItem row) => row.id),
-          )),
+        backlogItems: _drop(state.data.backlogItems, item.id, (BacklogItem row) => row.id),
+      )),
     );
   }
 
@@ -726,8 +719,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('study_cards', card.toMap()),
       () async => _apply(state.data.copyWith(
-            studyCards: _put(state.data.studyCards, card, (StudyCard row) => row.id),
-          )),
+        studyCards: _put(state.data.studyCards, card, (StudyCard row) => row.id),
+      )),
     );
   }
 
@@ -735,8 +728,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.deleteRow('study_cards', card.id, _userId),
       () async => _apply(state.data.copyWith(
-            studyCards: _drop(state.data.studyCards, card.id, (StudyCard row) => row.id),
-          )),
+        studyCards: _drop(state.data.studyCards, card.id, (StudyCard row) => row.id),
+      )),
     );
   }
 
@@ -744,8 +737,8 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () => _repository.upsertRow('study_sessions', session.toMap()),
       () async => _apply(state.data.copyWith(
-            sessions: _put(state.data.sessions, session, (StudySession row) => row.id),
-          )),
+        sessions: _put(state.data.sessions, session, (StudySession row) => row.id),
+      )),
     );
   }
 

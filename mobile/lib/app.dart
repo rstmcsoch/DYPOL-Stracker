@@ -12,8 +12,10 @@ import 'data/models.dart';
 import 'data/repository.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/auth/auth_screens.dart';
+import 'features/onboarding/onboarding_overlay.dart';
 import 'features/shell/app_shell.dart';
 import 'features/splash/splash_page.dart';
+import 'logic/onboarding.dart';
 import 'main.dart' show preferencesProvider;
 
 class StrackerApp extends ConsumerWidget {
@@ -47,8 +49,7 @@ class StrackerApp extends ConsumerWidget {
           ThemeMode.light => false,
           ThemeMode.system => MediaQuery.platformBrightnessOf(context) == Brightness.dark,
         };
-        final StrackerPalette bars =
-            (palette?[dark ? 'dark' : 'light']) ?? fallback[dark ? 'dark' : 'light']!;
+        final StrackerPalette bars = (palette?[dark ? 'dark' : 'light']) ?? fallback[dark ? 'dark' : 'light']!;
         // System text scaling is honoured but clamped: below 0.85 the notebook's labels
         // stop being legible, and above 1.6 the fixed-width tables break.
         return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -148,6 +149,7 @@ class _NotebookApp extends ConsumerStatefulWidget {
 
 class _NotebookAppState extends ConsumerState<_NotebookApp> {
   AppSettings? _applied;
+  bool _onboardingShown = false;
 
   @override
   Widget build(BuildContext context) {
@@ -167,6 +169,26 @@ class _NotebookAppState extends ConsumerState<_NotebookApp> {
     if (state.error != null && state.data.chapters.isEmpty && state.loading) {
       return const SplashPage();
     }
-    return const AppShell();
+    // First-run setup waits for this account's real settings (a successful cloud load),
+    // so a cached or default copy never flashes it, and once up it stays until saved.
+    final bool needed = needsOnboarding(settings);
+    if (!needed) _onboardingShown = false;
+    final bool showOnboarding = shouldShowOnboarding(
+      needed: needed,
+      loading: state.loading,
+      synced: state.lastSyncedAt != null,
+      alreadyShown: _onboardingShown,
+    );
+    if (showOnboarding) _onboardingShown = true;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        ExcludeSemantics(
+          excluding: showOnboarding,
+          child: IgnorePointer(ignoring: showOnboarding, child: const AppShell()),
+        ),
+        if (showOnboarding) const OnboardingOverlay(),
+      ],
+    );
   }
 }
