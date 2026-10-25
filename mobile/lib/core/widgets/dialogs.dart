@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'wandering_eyes.dart';
 
 /// Confirmation for destructive or hard-to-undo actions. Returns false on dismiss.
 Future<bool> confirmAction(
@@ -143,11 +144,7 @@ class BusyOverlay extends StatelessWidget {
           const Positioned(
             top: 8,
             right: 8,
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+            child: WanderingEyes(height: 16),
           ),
       ],
     );

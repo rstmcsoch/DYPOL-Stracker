@@ -35,11 +35,10 @@ Future<void> main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
-  // Standard Android chrome, with the bars painted rather than transparent. The colours
-  // themselves come from the active palette in app.dart (an AnnotatedRegion over the whole
-  // app), so nothing here is pinned to the light theme and the bars cannot disagree with
-  // the page underneath them.
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+  // Edge to edge, as Android 15 requires and as modern apps look: the system bars are
+  // transparent (their icon colours come from the active palette in app.dart) and pages
+  // draw underneath them, with the floating bars' fades keeping the content readable.
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   final SharedPreferences preferences = await SharedPreferences.getInstance();
 

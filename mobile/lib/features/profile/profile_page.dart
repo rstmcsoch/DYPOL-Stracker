@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/date.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/theme/theme_controller.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -17,11 +16,12 @@ import '../../logic/exam.dart';
 import '../../logic/home_summary.dart';
 import '../../logic/onboarding.dart';
 import '../../logic/progress.dart';
-import '../auth/auth_controller.dart';
 import '../auth/auth_screens.dart';
 import '../shell/app_shell.dart';
+import 'appearance_card.dart';
 import '../shell/routes.dart';
 import 'about_page.dart';
+import '../../core/widgets/wandering_eyes.dart';
 
 /// Profile tab: identity, exam tracks, a compact account summary, appearance, password and
 /// sign-out. Everything that writes goes to the same Supabase rows the website uses.
@@ -183,25 +183,13 @@ class ProfilePage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 10),
+          // Theme, palette and reading font: chosen only here (no toggle elsewhere).
+          const AppearanceCard(),
+          const SizedBox(height: 10),
           NotebookCard(
             title: 'Account',
             child: Column(
               children: <Widget>[
-                // The switch is here, in the open, not only as an icon in the header:
-                // three choices that write the same account setting the website uses.
-                const _AppearanceChoices(),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  leading: const Icon(Icons.palette_outlined, size: 19),
-                  title: const Text('Palette and reading font'),
-                  subtitle: Text(
-                    'Colour palette and the font this notebook is read in',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  trailing: const Icon(Icons.chevron_right, size: 18),
-                  onTap: () => Routes.open(context, Routes.settings),
-                ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -227,17 +215,6 @@ class ProfilePage extends ConsumerWidget {
                   ),
                   trailing: const Icon(Icons.chevron_right, size: 18),
                   onTap: () => Routes.open(context, Routes.backup),
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  leading: const Icon(Icons.logout, size: 19, color: Colors.red),
-                  title: Text('Sign out', style: TextStyle(color: colors.palette.red)),
-                  subtitle: Text(
-                    'Clears the offline copy on this device',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  onTap: () => _signOut(context, ref),
                 ),
               ],
             ),
@@ -321,53 +298,6 @@ class ProfilePage extends ConsumerWidget {
       ),
     );
     name.dispose();
-  }
-
-  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
-    final bool confirmed = await confirmAction(
-      context,
-      title: 'Sign out?',
-      message: 'The offline copy on this device is cleared. Your account data is untouched.',
-      confirmLabel: 'Sign out',
-    );
-    if (!confirmed) return;
-    try {
-      await ref.read(dataControllerProvider.notifier).clearDeviceCache();
-      await ref.read(authControllerProvider.notifier).signOut();
-    } catch (error) {
-      if (context.mounted) showToast(context, error.toString(), error: true);
-    }
-  }
-}
-
-/// Light / Night / Auto, applied at once and saved to the account so the website and every
-/// other device open with the same appearance.
-class _AppearanceChoices extends ConsumerWidget {
-  const _AppearanceChoices();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ThemeState appearance = ref.watch(themeControllerProvider);
-    return ChoiceRow<ThemeMode>(
-      label: 'Appearance',
-      value: appearance.mode,
-      options: const <ThemeMode>[ThemeMode.light, ThemeMode.dark, ThemeMode.system],
-      labelFor: (ThemeMode mode) => switch (mode) {
-        ThemeMode.light => 'Light',
-        ThemeMode.dark => 'Night',
-        ThemeMode.system => 'Auto',
-      },
-      onChanged: (ThemeMode mode) async {
-        await ref.read(themeControllerProvider.notifier).setMode(mode);
-        final AppData latest = ref.read(dataControllerProvider).data;
-        final String stored = ref.read(themeControllerProvider).modeValue;
-        try {
-          await ref.read(dataControllerProvider.notifier).saveSettings(latest.settings.copyWith(theme: stored));
-        } catch (_) {
-          // The screen has already switched; the account value is retried on the next save.
-        }
-      },
-    );
   }
 }
 
@@ -625,7 +555,7 @@ class _ExamSelectionCardState extends ConsumerState<ExamSelectionCard> {
             child: OutlinedButton.icon(
               onPressed: _saving ? null : () => _save(data.settings, exam, needsBoard),
               icon: _saving
-                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const WanderingEyes(height: 12)
                   : const Icon(Icons.check, size: 16),
               label: const Text('Save exam'),
             ),

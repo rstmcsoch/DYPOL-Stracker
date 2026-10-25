@@ -12,6 +12,7 @@ import 'data/models.dart';
 import 'data/repository.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/auth/auth_screens.dart';
+import 'features/focus/focus_controller.dart';
 import 'features/onboarding/onboarding_overlay.dart';
 import 'features/shell/app_shell.dart';
 import 'features/splash/splash_page.dart';
@@ -41,25 +42,27 @@ class StrackerApp extends ConsumerWidget {
         readingFont: appearance.readingFont,
       ),
       builder: (BuildContext context, Widget? child) {
-        // The status and navigation bars are painted from the active palette on every
-        // screen - splash, sign-in, sheets and pages alike. Without this, screens that have
-        // no AppBar leave the bars to the platform, which draws its own grey strip.
+        // The status and navigation bar icons follow the active palette on every screen -
+        // splash, sign-in, sheets and pages alike.
         final bool dark = switch (appearance.mode) {
           ThemeMode.dark => true,
           ThemeMode.light => false,
           ThemeMode.system => MediaQuery.platformBrightnessOf(context) == Brightness.dark,
         };
-        final StrackerPalette bars = (palette?[dark ? 'dark' : 'light']) ?? fallback[dark ? 'dark' : 'light']!;
         // System text scaling is honoured but clamped: below 0.85 the notebook's labels
         // stop being legible, and above 1.6 the fixed-width tables break.
         return AnnotatedRegion<SystemUiOverlayStyle>(
+          // Edge to edge: both system bars are transparent and the page (with the soft
+          // fades behind the floating bars) shows through, instead of fixed solid strips.
           value: SystemUiOverlayStyle(
-            statusBarColor: bars.bg,
+            statusBarColor: Colors.transparent,
             statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
             statusBarBrightness: dark ? Brightness.dark : Brightness.light,
-            systemNavigationBarColor: bars.bg,
+            systemNavigationBarColor: Colors.transparent,
             systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
-            systemNavigationBarDividerColor: bars.bg,
+            systemNavigationBarDividerColor: Colors.transparent,
+            systemNavigationBarContrastEnforced: false,
+            systemStatusBarContrastEnforced: false,
           ),
           child: MediaQuery.withClampedTextScaling(
             minScaleFactor: 0.85,
@@ -107,19 +110,13 @@ class _SignedInScopeState extends ConsumerState<SignedInScope> {
   @override
   void initState() {
     super.initState();
-    // Read the root scope's overrides before creating a nested container: a child
-    // container cannot see the parent's overrides.
     _preferences = ref.read(preferencesProvider);
     _data = DataController(
       repository: StrackerRepository(Supabase.instance.client),
       preferences: _preferences,
       userId: widget.session.user.id,
     );
-    _container = ProviderContainer(
-      overrides: <Override>[
-        dataControllerProvider.overrideWith((Ref ref) => _data),
-      ],
-    );
+    _container = signedInContainer(ProviderScope.containerOf(context, listen: false), _data);
     // Load after the first frame so the shell paints immediately with cached data.
     WidgetsBinding.instance.addPostFrameCallback((_) => _data.load());
   }
@@ -156,7 +153,7 @@ class _NotebookAppState extends ConsumerState<_NotebookApp> {
     final DataState state = ref.watch(dataControllerProvider);
 
     // The account's settings decide the palette, mode and reading font. Apply once per
-    // distinct settings value so this never loops with the save in ThemeToggleButton.
+    // distinct settings value so this never loops with the appearance save in Profile.
     final AppSettings settings = state.data.settings;
     if (!identical(settings, _applied) && state.lastSyncedAt != null) {
       _applied = settings;
@@ -192,3 +189,23 @@ class _NotebookAppState extends ConsumerState<_NotebookApp> {
     );
   }
 }
+
+/// The account-scoped container. It is a child of the root container, so everything the
+/// root overrides (preferences, the theme controller) resolves to the same instance here.
+///
+/// A standalone container (no parent) used to be created instead. Inside it the theme
+/// controller and preferences providers fell back to their throwing defaults, so any widget
+/// that watched the theme (Settings, the appearance choices) threw while building. A release
+/// build renders a build error as an empty box, which is the blank Settings page.
+///
+/// Riverpod resolves a provider that is not overridden here in the root container, so every
+/// provider that reads the account data must be overridden here too, or it would be created
+/// in the root where there is no account. Today that is only the focus timer (which is per
+/// account anyway, and is disposed with this container on sign-out).
+ProviderContainer signedInContainer(ProviderContainer root, DataController data) => ProviderContainer(
+      parent: root,
+      overrides: <Override>[
+        dataControllerProvider.overrideWith((Ref ref) => data),
+        focusControllerProvider.overrideWith((Ref ref) => FocusController(ref)),
+      ],
+    );

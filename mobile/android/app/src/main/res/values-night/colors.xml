@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="splash_background">#202522</color>
-    <color name="icon_background">#F1EAD9</color>
+    <!-- Dark-mode launcher tile: the notebook's night paper, so the icon follows the
+         device theme like the system apps; the logo itself stays the real logo. -->
+    <color name="icon_background">#202522</color>
 </resources>

@@ -9,6 +9,7 @@ import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/onboarding.dart';
+import '../../core/widgets/wandering_eyes.dart';
 
 /// First-run setup, the website's OnboardingDialog: it cannot be dismissed and covers the
 /// notebook until name, exam (with the year, session or board it needs) and light/dark are
@@ -283,8 +284,7 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay> {
                                 OutlinedButton.icon(
                                   onPressed: _retrying ? null : _retryCatalog,
                                   icon: _retrying
-                                      ? const SizedBox(
-                                          width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                                      ? const WanderingEyes(height: 12)
                                       : const Icon(Icons.refresh, size: 16),
                                   label: Text(_retrying ? 'Retrying…' : 'Retry'),
                                 ),
