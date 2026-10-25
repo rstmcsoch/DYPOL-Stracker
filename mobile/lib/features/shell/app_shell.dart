@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/layout.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_controller.dart';
@@ -36,21 +37,17 @@ class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
   bool _quickOpen = false;
 
+  /// Keeps the four tab pages (and their scroll positions and form state) alive when the
+  /// layout switches between the bottom bar and the sidebar on rotation or resize.
+  final GlobalKey _pagesKey = GlobalKey(debugLabel: 'shell-pages');
+
   /// The website's Ask Stracker launcher grows into a labelled pill while the student
   /// scrolls down and folds back to a circle on scroll up or at the top.
   bool _aiExpanded = false;
 
   bool _onScroll(UserScrollNotification note) {
-    if (note.metrics.axis != Axis.vertical) return false;
-    bool next = _aiExpanded;
-    if (note.metrics.pixels <= 24) {
-      next = false;
-    } else if (note.direction == ScrollDirection.reverse) {
-      next = true;
-    } else if (note.direction == ScrollDirection.forward) {
-      next = false;
-    }
-    if (next != _aiExpanded) setState(() => _aiExpanded = next);
+    final bool? next = aiLauncherExpanded(note, _aiExpanded);
+    if (next != null && next != _aiExpanded) setState(() => _aiExpanded = next);
     return false;
   }
 
@@ -79,8 +76,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     final StrackerColors colors = context.stracker;
-    // Tablets and landscape phones get a side rail; a thumb-reach bar stays on phones.
-    final bool wide = MediaQuery.sizeOf(context).width >= 720;
+    // Landscape tablets get the website's desktop sidebar; phones and portrait tablets keep
+    // the floating thumb-reach bar. Re-evaluated on every rotation / resize.
+    final bool wide = AppLayout.useSidebar(MediaQuery.sizeOf(context));
 
     const List<Widget> pages = <Widget>[
       HomePage(),
@@ -89,12 +87,18 @@ class _AppShellState extends ConsumerState<AppShell> {
       ProfilePage(),
     ];
 
-    final Widget content = NotificationListener<UserScrollNotification>(
-      onNotification: _onScroll,
-      child: FloatingClearance(
-        // Bottom room so the last card scrolls clear of the two floating buttons.
-        bottom: 140,
-        child: _FadeIndexedStack(index: _index, children: pages),
+    final Widget content = KeyedSubtree(
+      key: _pagesKey,
+      child: NotificationListener<UserScrollNotification>(
+        onNotification: _onScroll,
+        child: SidebarScope(
+          visible: wide,
+          child: FloatingClearance(
+            // Bottom room so the last card scrolls clear of the two floating buttons.
+            bottom: 140,
+            child: _FadeIndexedStack(index: _index, children: pages),
+          ),
+        ),
       ),
     );
 
@@ -118,23 +122,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                 // Stretch gives the pages a bounded height, which the crossfade needs.
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  SafeArea(
-                    right: false,
-                    child: NavigationRail(
-                      selectedIndex: _index,
-                      onDestinationSelected: _select,
-                      backgroundColor: colors.palette.paper,
-                      labelType: NavigationRailLabelType.all,
-                      indicatorColor: colors.palette.accentLight,
-                      destinations: <NavigationRailDestination>[
-                        for (int i = 0; i < _labels.length; i += 1)
-                          NavigationRailDestination(
-                            icon: Icon(_icons[i]),
-                            selectedIcon: Icon(_selectedIcons[i]),
-                            label: Text(_labels[i]),
-                          ),
-                      ],
-                    ),
+                  NotebookDrawer(
+                    key: const ValueKey<String>('sidebar'),
+                    permanent: true,
+                    tabIndex: _index,
+                    onTab: _select,
                   ),
                   VerticalDivider(width: 1, color: colors.palette.line),
                   Expanded(child: content),
@@ -150,7 +142,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           },
           onClose: () => setState(() => _quickOpen = false),
         ),
-        bottomNavigationBar: wide ? null : _BottomTabs(index: _index, onSelected: _select),
+        bottomNavigationBar:
+            wide ? null : _BottomTabs(key: const ValueKey<String>('bottom-tabs'), index: _index, onSelected: _select),
       ),
     );
   }
@@ -193,7 +186,7 @@ class _FadeIndexedStack extends StatelessWidget {
 /// The website's phone bar (responsive.css `.mobile-nav` under 700 px): a rounded paper
 /// card floating 10 px off the edges, four equal items, the active one tinted.
 class _BottomTabs extends StatelessWidget {
-  const _BottomTabs({required this.index, required this.onSelected});
+  const _BottomTabs({super.key, required this.index, required this.onSelected});
 
   final int index;
   final ValueChanged<int> onSelected;
@@ -309,6 +302,29 @@ class _BottomTabItem extends StatelessWidget {
   }
 }
 
+/// The website's launcher rule: a labelled pill while scrolling down, a circle on scroll up
+/// or near the top. Null for horizontal scrolling, which leaves it as it is.
+bool? aiLauncherExpanded(UserScrollNotification note, bool current) {
+  if (note.metrics.axis != Axis.vertical) return null;
+  if (note.metrics.pixels <= 24) return false;
+  if (note.direction == ScrollDirection.reverse) return true;
+  if (note.direction == ScrollDirection.forward) return false;
+  return current;
+}
+
+/// Tells the tab pages that the permanent sidebar is showing, so their headers drop the
+/// menu button (the sidebar already lists every section).
+class SidebarScope extends InheritedWidget {
+  const SidebarScope({super.key, required this.visible, required super.child});
+
+  final bool visible;
+
+  static bool of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<SidebarScope>()?.visible ?? false;
+
+  @override
+  bool updateShouldNotify(SidebarScope oldWidget) => oldWidget.visible != visible;
+}
+
 /// Extra bottom padding [PageBody] keeps so floating buttons never cover the last card.
 class FloatingClearance extends InheritedWidget {
   const FloatingClearance({super.key, required this.bottom, required super.child});
@@ -393,10 +409,7 @@ class _FloatingActions extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            menuItem(Icons.checklist, 'Plan a task', () async {
-              final AppData data = ref.read(dataControllerProvider).data;
-              await openTaskEditor(context, ref, data, null, todayIso());
-            }),
+            menuItem(Icons.checklist, 'Plan a task', () => openQuickTask(context, ref)),
             menuItem(Icons.edit_note, 'Add a test', () async {
               final AppData data = ref.read(dataControllerProvider).data;
               await openTestEditor(context, ref, data, null);
@@ -527,7 +540,7 @@ class _FloatingActions extends ConsumerWidget {
 
 /// Every page's chrome: branded app bar, sync pill, theme switch, drawer, menu and the
 /// global search. Pushed pages get a back arrow instead of the brand block.
-class NotebookScaffold extends ConsumerWidget {
+class NotebookScaffold extends ConsumerStatefulWidget {
   const NotebookScaffold({
     super.key,
     required this.title,
@@ -538,6 +551,7 @@ class NotebookScaffold extends ConsumerWidget {
     this.floatingActionButton,
     this.showBrand = false,
     this.bottom,
+    this.floatingActions = true,
   });
 
   final String title;
@@ -549,11 +563,70 @@ class NotebookScaffold extends ConsumerWidget {
   final bool showBrand;
   final Widget? bottom;
 
+  /// Whether a pushed page shows the website's global Ask Stracker and quick-action
+  /// buttons. Off only where they would be redundant (the AI chat itself).
+  final bool floatingActions;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NotebookScaffold> createState() => _NotebookScaffoldState();
+}
+
+class _NotebookScaffoldState extends ConsumerState<NotebookScaffold> {
+  bool _quickOpen = false;
+  bool _aiExpanded = false;
+
+  bool _onScroll(UserScrollNotification note) {
+    final bool? next = aiLauncherExpanded(note, _aiExpanded);
+    if (next != null && next != _aiExpanded) setState(() => _aiExpanded = next);
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String title = widget.title;
+    final String? subtitle = widget.subtitle;
+    final bool showBack = widget.showBack;
+    final bool showBrand = widget.showBrand;
+    final List<Widget> actions = widget.actions;
     final StrackerColors colors = context.stracker;
     final DataState data = ref.watch(dataControllerProvider);
-    return Scaffold(
+    // Tabs get the buttons from the shell (which provides the clearance); every page pushed
+    // over it hosts its own copy, like the website where they float over every route.
+    final bool host = widget.floatingActions && context.getInheritedWidgetOfExactType<FloatingClearance>() == null;
+    final Widget? pageFab = widget.floatingActionButton;
+    Widget body = widget.body;
+    Widget? floatingActionButton = pageFab;
+    if (host) {
+      body = NotificationListener<UserScrollNotification>(
+        onNotification: _onScroll,
+        child: FloatingClearance(
+          // The page's own add button sits under the two global buttons, so pages that
+          // have one keep extra room at the end of the list.
+          bottom: pageFab == null ? 140 : 206,
+          child: body,
+        ),
+      );
+      floatingActionButton = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: <Widget>[
+          _FloatingActions(
+            open: _quickOpen,
+            aiExpanded: _aiExpanded,
+            onToggle: () {
+              HapticFeedback.lightImpact();
+              setState(() => _quickOpen = !_quickOpen);
+            },
+            onClose: () {
+              if (_quickOpen) setState(() => _quickOpen = false);
+            },
+          ),
+          if (pageFab != null) ...<Widget>[const SizedBox(height: 12), pageFab],
+        ],
+      );
+    }
+    final Widget? bottom = widget.bottom;
+    final Widget scaffold = Scaffold(
       backgroundColor: colors.palette.bg,
       drawer: const NotebookDrawer(),
       floatingActionButton: floatingActionButton,
@@ -569,6 +642,7 @@ class NotebookScaffold extends ConsumerWidget {
             subtitle: subtitle,
             showBack: showBack,
             showBrand: showBrand,
+            showMenu: !showBack && !SidebarScope.of(context),
             examLabel: showBrand ? _examLabel(data) : null,
             actions: <Widget>[
               ...actions,
@@ -588,6 +662,15 @@ class NotebookScaffold extends ConsumerWidget {
           Expanded(child: SafeArea(top: false, child: body)),
         ],
       ),
+    );
+    if (!host) return scaffold;
+    return PopScope(
+      // Back closes an open quick-action menu before it leaves the page.
+      canPop: !_quickOpen,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (!didPop && _quickOpen) setState(() => _quickOpen = false);
+      },
+      child: scaffold,
     );
   }
 
@@ -637,12 +720,14 @@ class _NotebookHeader extends StatelessWidget {
     required this.showBack,
     required this.showBrand,
     required this.actions,
+    this.showMenu = true,
     this.examLabel,
   });
 
   final String title;
   final String? subtitle;
   final bool showBack;
+  final bool showMenu;
   final bool showBrand;
   final List<Widget> actions;
   final String? examLabel;
@@ -664,8 +749,10 @@ class _NotebookHeader extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           side: BorderSide(color: colors.palette.lineStrong),
         ),
-        child: SizedBox(
-          height: 52,
+        // A minimum, not a fixed height: large system font sizes grow the bar instead of
+        // clipping the title.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 52),
           child: Row(
             children: <Widget>[
               if (showBack)
@@ -689,7 +776,7 @@ class _NotebookHeader extends StatelessWidget {
                 ),
               ),
               ...actions,
-              if (!showBack)
+              if (showMenu)
                 Builder(
                   builder: (BuildContext context) => HeaderIcon(
                     label: 'Open navigation',
@@ -897,7 +984,13 @@ class ThemeToggleButton extends ConsumerWidget {
 }
 
 class NotebookDrawer extends ConsumerWidget {
-  const NotebookDrawer({super.key});
+  const NotebookDrawer({super.key, this.permanent = false, this.tabIndex, this.onTab});
+
+  /// Landscape tablets: the same list shown as the website's always-visible desktop
+  /// sidebar, with the four main tabs on top instead of a bottom bar.
+  final bool permanent;
+  final int? tabIndex;
+  final ValueChanged<int>? onTab;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -913,7 +1006,7 @@ class NotebookDrawer extends ConsumerWidget {
 
     void go(String key) {
       HapticFeedback.selectionClick();
-      Navigator.of(context).pop();
+      if (!permanent) Navigator.of(context).pop();
       Routes.open(context, key);
     }
 
@@ -967,7 +1060,7 @@ class NotebookDrawer extends ConsumerWidget {
               title: 'Search notebook',
               builder: (BuildContext sheetContext) => const GlobalSearchBody(),
             );
-            navigator.pop();
+            if (!permanent) navigator.pop();
           },
         );
 
@@ -1001,75 +1094,107 @@ class NotebookDrawer extends ConsumerWidget {
       );
     }
 
+    final Widget body = SafeArea(
+      right: !permanent,
+      child: Column(
+        children: <Widget>[
+          header(),
+          Divider(height: 1, color: colors.palette.line),
+          searchRow(),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 12),
+              children: <Widget>[
+                if (permanent && onTab != null) ...<Widget>[
+                  group('Overview'),
+                  for (final (int i, String label, IconData icon) in const <(int, String, IconData)>[
+                    (0, 'Home', Icons.home_outlined),
+                    (1, 'Tests', Icons.checklist),
+                    (2, 'Analytics', Icons.monitor_heart_outlined),
+                    (3, 'Profile', Icons.person_outline),
+                  ])
+                    ListTile(
+                      dense: true,
+                      selected: tabIndex == i,
+                      selectedTileColor: colors.palette.accentLight,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+                      leading: Icon(icon, size: 19, color: tabIndex == i ? colors.palette.accent : colors.inkSoft),
+                      title: Text(
+                        label,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: tabIndex == i ? colors.palette.textAccent : null,
+                            ),
+                      ),
+                      onTap: () => onTab!(i),
+                    ),
+                ],
+                // The website's phone drawer: its sidebar groups minus the bottom-bar
+                // destinations (Home, Tests, Analytics) and Settings, which live on the bar
+                // and in Profile. Stracker AI is the floating button above quick actions.
+                group('Study'),
+                item('Focus', Icons.timer_outlined, Routes.focus),
+                item('Backlog', Icons.layers_outlined, Routes.backlog, badge: backlog == 0 ? null : '$backlog'),
+                item('Practice', Icons.checklist_rtl_outlined, Routes.practice),
+                group('Syllabus'),
+                item('Syllabus', Icons.menu_book_outlined, Routes.syllabus),
+                item('Weak areas', Icons.warning_amber_outlined, Routes.weakAreas),
+                item('PYQs', Icons.local_library_outlined, Routes.pyqs),
+                group('Tests'),
+                item('Mock analysis', Icons.analytics_outlined, Routes.mockAnalysis),
+                item('Mistake notebook', Icons.book_outlined, Routes.mistakes),
+                item('Retry', Icons.replay, Routes.retry, badge: retries == 0 ? null : '$retries'),
+                group('Revision'),
+                item('Revisions', Icons.autorenew, Routes.revision, badge: revisions == 0 ? null : '$revisions'),
+                item('Formulas & flashcards', Icons.style_outlined, Routes.decks),
+                group('Planning'),
+                item('Study now', Icons.explore_outlined, Routes.studyNow, highlight: true),
+                item('Study plan', Icons.event_note_outlined, Routes.planner),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: colors.palette.line),
+          ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+            leading: Icon(Icons.logout, size: 19, color: colors.palette.red),
+            title: Text(
+              'Sign out',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(color: colors.palette.red),
+            ),
+            onTap: () async {
+              if (!permanent) Navigator.of(context).pop();
+              final bool confirmed = await confirmAction(
+                context,
+                title: 'Sign out?',
+                message: 'The offline copy on this device is cleared. Your account data is untouched.',
+                confirmLabel: 'Sign out',
+              );
+              if (!confirmed) return;
+              await ref.read(dataControllerProvider.notifier).clearDeviceCache();
+              await ref.read(authControllerProvider.notifier).signOut();
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
+            child: Text(
+              'v1.0.0 · DYPOL LABS',
+              style: TextStyle(fontFamily: 'Lexend', fontSize: 9.5, color: colors.muted),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (permanent) {
+      return Material(
+        color: colors.palette.paper,
+        child: SizedBox(width: AppLayout.sidebarWidth, child: body),
+      );
+    }
     return Drawer(
       backgroundColor: colors.palette.paper,
       width: MediaQuery.sizeOf(context).width < 400 ? 292 : 320,
-      child: SafeArea(
-        child: Column(
-          children: <Widget>[
-            header(),
-            Divider(height: 1, color: colors.palette.line),
-            searchRow(),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 12),
-                children: <Widget>[
-                  // The website's phone drawer: its sidebar groups minus the bottom-bar
-                  // destinations (Home, Tests, Analytics) and Settings, which live on the bar
-                  // and in Profile. Stracker AI is the floating button above quick actions.
-                  group('Study'),
-                  item('Focus', Icons.timer_outlined, Routes.focus),
-                  item('Backlog', Icons.layers_outlined, Routes.backlog, badge: backlog == 0 ? null : '$backlog'),
-                  item('Practice', Icons.checklist_rtl_outlined, Routes.practice),
-                  group('Syllabus'),
-                  item('Syllabus', Icons.menu_book_outlined, Routes.syllabus),
-                  item('Weak areas', Icons.warning_amber_outlined, Routes.weakAreas),
-                  item('PYQs', Icons.local_library_outlined, Routes.pyqs),
-                  group('Tests'),
-                  item('Mock analysis', Icons.analytics_outlined, Routes.mockAnalysis),
-                  item('Mistake notebook', Icons.book_outlined, Routes.mistakes),
-                  item('Retry', Icons.replay, Routes.retry, badge: retries == 0 ? null : '$retries'),
-                  group('Revision'),
-                  item('Revisions', Icons.autorenew, Routes.revision, badge: revisions == 0 ? null : '$revisions'),
-                  item('Formulas & flashcards', Icons.style_outlined, Routes.decks),
-                  group('Planning'),
-                  item('Study now', Icons.explore_outlined, Routes.studyNow, highlight: true),
-                  item('Study plan', Icons.event_note_outlined, Routes.planner),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: colors.palette.line),
-            ListTile(
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 18),
-              leading: Icon(Icons.logout, size: 19, color: colors.palette.red),
-              title: Text(
-                'Sign out',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: colors.palette.red),
-              ),
-              onTap: () async {
-                Navigator.of(context).pop();
-                final bool confirmed = await confirmAction(
-                  context,
-                  title: 'Sign out?',
-                  message: 'The offline copy on this device is cleared. Your account data is untouched.',
-                  confirmLabel: 'Sign out',
-                );
-                if (!confirmed) return;
-                await ref.read(dataControllerProvider.notifier).clearDeviceCache();
-                await ref.read(authControllerProvider.notifier).signOut();
-              },
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
-              child: Text(
-                'v1.0.0 · DYPOL LABS',
-                style: TextStyle(fontFamily: 'Lexend', fontSize: 9.5, color: colors.muted),
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: body,
     );
   }
 }
@@ -1236,9 +1361,11 @@ class PageBody extends StatelessWidget {
       padding: padding ?? EdgeInsets.fromLTRB(14, 12, 14, clearance + bottomInset),
       children: <Widget>[
         ContentWidth(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: children,
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: constraints.maxWidth >= AppLayout.twoColumnWidth ? arrangeCardRuns(children) : children,
+            ),
           ),
         ),
       ],
@@ -1246,6 +1373,40 @@ class PageBody extends StatelessWidget {
     if (refresh == null) return list;
     return RefreshIndicator(onRefresh: refresh!, child: list);
   }
+}
+
+/// On wide content (landscape tablets) consecutive cards sit in two columns like the
+/// desktop website, while headings, filters and banners keep the full width. Phones get
+/// the children unchanged.
+List<Widget> arrangeCardRuns(List<Widget> children) {
+  final List<Widget> out = <Widget>[];
+  final List<Widget> run = <Widget>[];
+  final List<Widget> gaps = <Widget>[];
+  void flush() {
+    if (run.length >= 2) {
+      out.add(CardColumns(children: List<Widget>.of(run)));
+    } else {
+      out.addAll(run);
+    }
+    out.addAll(gaps);
+    run.clear();
+    gaps.clear();
+  }
+
+  for (final Widget child in children) {
+    if (child is NotebookCard) {
+      // Spacers between two cards are replaced by the grid's own gaps.
+      gaps.clear();
+      run.add(child);
+    } else if (run.isNotEmpty && child is SizedBox && child.child == null) {
+      gaps.add(child);
+    } else {
+      flush();
+      out.add(child);
+    }
+  }
+  flush();
+  return out;
 }
 
 /// Pushed page wrapper: back arrow, title and the same body conventions.

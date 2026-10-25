@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -17,14 +17,25 @@ import '../../logic/analytics.dart';
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
 
-const List<String> mistakeTypes = <String>[
-  'Concept',
-  'Calculation',
-  'Silly',
-  'Time pressure',
-  'Unattempted',
-  'Guess',
-];
+/// The five types the database accepts (web MISTAKE_TYPES).
+const List<String> mistakeTypes = <String>['Concept', 'Silly', 'Calculation', 'Time', 'Guess'];
+
+String _short(String text) => text.length > 48 ? '${text.substring(0, 48)}…' : text;
+
+Future<void> deleteMistakeWithConfirm(BuildContext context, WidgetRef ref, Mistake mistake, {String? message}) async {
+  final bool confirmed = await confirmAction(
+    context,
+    title: 'Delete “${_short(mistake.questionNote)}”?',
+    message: message ?? 'The note and its attached image will be removed.',
+  );
+  if (!confirmed) return;
+  try {
+    await ref.read(dataControllerProvider.notifier).deleteMistake(mistake);
+    if (context.mounted) showToast(context, 'Mistake entry deleted.');
+  } catch (error) {
+    if (context.mounted) showToast(context, error.toString(), error: true);
+  }
+}
 
 class MistakesPage extends ConsumerStatefulWidget {
   const MistakesPage({super.key});
@@ -36,6 +47,7 @@ class MistakesPage extends ConsumerStatefulWidget {
 class _MistakesPageState extends ConsumerState<MistakesPage> {
   final TextEditingController _search = TextEditingController();
   String _type = 'All';
+  String? _subject;
   String _status = 'All';
 
   @override
@@ -51,19 +63,25 @@ class _MistakesPageState extends ConsumerState<MistakesPage> {
     final MistakeSummary summary = mistakeSummary(data);
     final String needle = _search.text.trim().toLowerCase();
     final List<Mistake> rows = data.mistakes.where((Mistake mistake) {
+      final Chapter? chapter = data.chapter(mistake.chapterId);
       final bool matchesType = _type == 'All' || mistake.mistakeType == _type;
-      final bool matchesStatus = _status == 'All' || mistake.retryStatus == _status;
+      final bool matchesSubject = _subject == null || chapter?.subject == _subject;
+      final bool matchesStatus = switch (_status) {
+        'Retry list' => mistake.retryLater && mistake.retryStatus == 'pending',
+        'Retried' => mistake.retryStatus == 'retried',
+        _ => true,
+      };
       final bool matchesQuery = needle.isEmpty ||
-          '${mistake.questionNote} ${mistake.solutionNote} ${data.chapterName(mistake.chapterId)}'
+          '${mistake.questionNote} ${mistake.solutionNote} ${mistake.mistakeType} ${chapter?.name ?? ''}'
               .toLowerCase()
               .contains(needle);
-      return matchesType && matchesStatus && matchesQuery;
+      return matchesType && matchesSubject && matchesStatus && matchesQuery;
     }).toList()
       ..sort((Mistake a, Mistake b) => b.createdAt.compareTo(a.createdAt));
 
     return SectionPage(
       title: 'Mistake notebook',
-      subtitle: '${summary.total} logged · ${summary.pendingRetries} waiting for a retry',
+      subtitle: '${summary.total} notes · ${summary.pendingRetries} ready to retry',
       actions: <Widget>[
         IconButton(
           tooltip: 'Retry queue',
@@ -76,13 +94,33 @@ class _MistakesPageState extends ConsumerState<MistakesPage> {
         backgroundColor: colors.palette.accentDark,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add, size: 19),
-        label: const Text('Add mistake'),
+        label: const Text('Add a mistake'),
       ),
       child: PageBody(
         refresh: () => ref.read(dataControllerProvider.notifier).load(silent: true),
         children: <Widget>[
-          SearchBox(controller: _search, hint: 'Search questions and solutions', onChanged: (_) => setState(() {})),
+          WrapGrid(
+            minItemWidth: 150,
+            children: <Widget>[
+              StatTile(value: '${data.mistakes.length}', label: 'notes in your notebook'),
+              StatTile(
+                value: '${summary.pendingRetries}',
+                label: 'ready to retry',
+                hint: 'Open the retry list',
+                onTap: () => Routes.open(context, Routes.retry),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SearchBox(controller: _search, hint: 'Search question notes…', onChanged: (_) => setState(() {})),
           const SizedBox(height: 8),
+          AppSelect<String?>(
+            label: 'Subject',
+            value: _subject,
+            items: <String?>[null, ...data.subjects],
+            labelFor: (String? value) => value ?? 'All subjects',
+            onChanged: (String? value) => setState(() => _subject = value),
+          ),
           Row(
             children: <Widget>[
               Expanded(
@@ -96,9 +134,10 @@ class _MistakesPageState extends ConsumerState<MistakesPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: AppSelect<String>(
-                  label: 'Retry status',
+                  label: 'Retry',
                   value: _status,
-                  items: const <String>['All', 'pending', 'retrying', 'resolved'],
+                  items: const <String>['All', 'Retry list', 'Retried'],
+                  labelFor: (String value) => value == 'All' ? 'All notes' : value,
                   onChanged: (String? value) => setState(() => _status = value ?? 'All'),
                 ),
               ),
@@ -126,18 +165,41 @@ class _MistakesPageState extends ConsumerState<MistakesPage> {
           if (rows.isEmpty)
             NotebookCard(
               child: EmptyState(
-                title: data.mistakes.isEmpty ? 'Nothing in the notebook' : 'No mistakes match',
-                message: 'A mistake notebook is only as good as its entries. Log what went wrong, '
-                    'why, and how you will recognise it next time.',
+                title: data.mistakes.isEmpty ? 'No mistakes logged yet.' : 'No notes match.',
                 icon: Icons.book_outlined,
-                action: ElevatedButton(
-                  onPressed: () => openMistakeEditor(context, ref, data, null),
-                  child: const Text('Add the first one'),
-                ),
+                action: data.mistakes.isEmpty
+                    ? ElevatedButton(
+                        onPressed: () => openMistakeEditor(context, ref, data, null),
+                        child: const Text('Add your first note'),
+                      )
+                    : OutlinedButton(
+                        onPressed: () => setState(() {
+                          _search.clear();
+                          _subject = null;
+                          _type = 'All';
+                          _status = 'All';
+                        }),
+                        child: const Text('Clear filters'),
+                      ),
               ),
             )
           else
             for (final Mistake mistake in rows) _MistakeCard(mistake: mistake, data: data),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  '${rows.length} note${rows.length == 1 ? '' : 's'} shown',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => Routes.open(context, Routes.retry),
+                icon: const Icon(Icons.north_east, size: 15),
+                label: const Text('Go to retry list'),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -154,6 +216,7 @@ class _MistakeCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final StrackerColors colors = context.stracker;
     final String? path = mistake.imagePath;
+    final TestRecord? linkedTest = data.tests.where((TestRecord t) => t.id == mistake.testId).firstOrNull;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: NotebookCard(
@@ -166,9 +229,7 @@ class _MistakeCard extends ConsumerWidget {
               children: <Widget>[
                 Pill(
                   mistake.mistakeType,
-                  tone: mistake.retryStatus == 'resolved'
-                      ? PillTone.good
-                      : (mistake.retryStatus == 'retrying' ? PillTone.warn : PillTone.bad),
+                  tone: PillTone.bad,
                   dense: true,
                 ),
                 const SizedBox(width: 6),
@@ -181,19 +242,40 @@ class _MistakeCard extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  formatDate(mistake.createdAt),
+                  formatDate(
+                      mistake.createdAt.substring(0, mistake.createdAt.length < 10 ? mistake.createdAt.length : 10)),
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+                ),
+                IconButton(
+                  tooltip: 'Delete mistake note',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  onPressed: () => deleteMistakeWithConfirm(context, ref, mistake),
                 ),
               ],
             ),
+            if (linkedTest != null)
+              Text(
+                'From ${linkedTest.title}',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.inkSoft),
+              ),
             const SizedBox(height: 6),
             Text(mistake.questionNote, style: Theme.of(context).textTheme.bodyMedium),
             if (mistake.solutionNote.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 5),
-                child: Text(
-                  mistake.solutionNote,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.inkSoft),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'WHAT I’LL REMEMBER',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted, letterSpacing: 1.1),
+                    ),
+                    Text(
+                      mistake.solutionNote,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.inkSoft),
+                    ),
+                  ],
                 ),
               ),
             if (path != null && path.isNotEmpty)
@@ -204,27 +286,30 @@ class _MistakeCard extends ConsumerWidget {
             const SizedBox(height: 4),
             Row(
               children: <Widget>[
-                if (mistake.retryLater)
-                  Pill('Retry later', tone: PillTone.warn, dense: true),
+                if (mistake.retryStatus == 'retried')
+                  const Pill('Retried', tone: PillTone.good, dense: true)
+                else if (mistake.retryLater)
+                  const Pill('Retry later', tone: PillTone.warn, dense: true)
+                else
+                  const Pill('Notebook', dense: true),
                 const Spacer(),
-                if (mistake.retryStatus != 'resolved')
+                if (mistake.retryStatus == 'pending')
                   TextButton(
                     onPressed: () async {
+                      final bool adding = !mistake.retryLater;
                       try {
-                        await ref.read(dataControllerProvider.notifier).saveMistake(
-                              mistake.copyWith(retryStatus: 'resolved'),
-                            );
-                        if (context.mounted) showToast(context, 'Marked resolved.');
+                        await ref
+                            .read(dataControllerProvider.notifier)
+                            .saveMistake(mistake.copyWith(retryLater: adding));
+                        if (context.mounted) {
+                          showToast(context, adding ? 'Added to your retry list.' : 'Removed from the retry list.');
+                        }
+                        await HapticFeedback.selectionClick();
                       } catch (error) {
                         if (context.mounted) showToast(context, error.toString(), error: true);
                       }
                     },
-                    child: const Text('Resolved'),
-                  )
-                else
-                  Text(
-                    'Resolved',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.palette.green),
+                    child: Text(mistake.retryLater ? 'Keep in notes' : 'Retry later'),
                   ),
               ],
             ),
@@ -256,8 +341,7 @@ class _MistakeImageState extends ConsumerState<_MistakeImage> {
   }
 
   Future<void> _load() async {
-    final Uint8List? bytes =
-        await ref.read(dataControllerProvider.notifier).mistakeImageBytes(widget.path);
+    final Uint8List? bytes = await ref.read(dataControllerProvider.notifier).mistakeImageBytes(widget.path);
     if (!mounted) return;
     setState(() {
       _bytes = bytes;
@@ -300,33 +384,28 @@ Future<void> openMistakeEditor(
   final bool creating = mistake == null;
   final TextEditingController question = TextEditingController(text: mistake?.questionNote ?? '');
   final TextEditingController solution = TextEditingController(text: mistake?.solutionNote ?? '');
-  String type = mistake?.mistakeType ?? mistakeTypes.first;
+  String type = mistakeTypes.contains(mistake?.mistakeType) ? mistake!.mistakeType : 'Concept';
+  String? subjectError;
+  String? chapterError;
   String? chapterId = mistake?.chapterId;
   String? subject = data.chapter(chapterId)?.subject;
-  final List<String> subjects = data.subjects
-      .where((String name) => data.chapters.any((Chapter chapter) => chapter.subject == name))
-      .toList();
+  final List<String> subjects =
+      data.subjects.where((String name) => data.chapters.any((Chapter chapter) => chapter.subject == name)).toList();
   String? testId = mistake?.testId;
-  bool retryLater = mistake?.retryLater ?? true;
-  String retryStatus = mistake?.retryStatus ?? 'pending';
+  bool retryLater = mistake?.retryLater ?? false;
   File? picked;
   String? error;
 
   await showAppSheet<void>(
     context,
-    title: creating ? 'Add a mistake' : 'Edit mistake',
+    title: creating ? 'Save a learning moment' : 'Edit mistake note',
     builder: (BuildContext sheetContext) => StatefulBuilder(
       builder: (BuildContext context, StateSetter setSheetState) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          AppSelect<String>(
-            label: 'Type',
-            value: type,
-            items: mistakeTypes,
-            onChanged: (String? value) => setSheetState(() => type = value ?? type),
-          ),
           AppSelect<String?>(
             label: 'Subject',
+            error: subjectError,
             value: subject,
             items: <String?>[null, ...subjects],
             labelFor: (String? value) => value ?? 'Choose a subject',
@@ -334,6 +413,8 @@ Future<void> openMistakeEditor(
               if (value == subject) return;
               subject = value;
               chapterId = null;
+              subjectError = null;
+              chapterError = null;
             }),
           ),
           AppSelect<String?>(
@@ -345,50 +426,57 @@ Future<void> openMistakeEditor(
               for (final Chapter chapter in data.chapters)
                 if (chapter.subject == subject) chapter.id,
             ],
-            labelFor: (String? id) => id == null
-                ? (subject == null ? 'Pick a subject first' : 'Choose a chapter')
-                : data.chapterName(id),
-            onChanged: (String? value) => setSheetState(() => chapterId = value),
+            labelFor: (String? id) =>
+                id == null ? (subject == null ? 'Pick a subject first' : 'Choose a chapter') : data.chapterName(id),
+            error: chapterError,
+            onChanged: (String? value) => setSheetState(() {
+              chapterId = value;
+              chapterError = null;
+            }),
+          ),
+          AppSelect<String>(
+            label: 'Mistake type',
+            value: type,
+            items: mistakeTypes,
+            onChanged: (String? value) => setSheetState(() => type = value ?? type),
           ),
           AppSelect<String?>(
-            label: 'From a test (optional)',
+            label: 'Related test',
             value: testId,
             items: <String?>[null, ...data.tests.map((TestRecord test) => test.id)],
             labelFor: (String? id) => id == null
-                ? 'Not linked'
-                : data.tests.firstWhere((TestRecord test) => test.id == id).title,
+                ? 'No linked test'
+                : () {
+                    final TestRecord test = data.tests.firstWhere((TestRecord test) => test.id == id);
+                    return '${test.title} · ${formatDate(test.testDate)}';
+                  }(),
             onChanged: (String? value) => setSheetState(() => testId = value),
           ),
           AppField(
-            label: 'What was the question?',
+            label: 'What was the question or mistake?',
             controller: question,
             maxLines: 4,
-            maxLength: 4000,
+            maxLength: 10000,
+            hint: 'Write enough to recognize the question next time…',
             required: true,
             error: error,
           ),
           AppField(
-            label: 'What went wrong, and the fix',
+            label: 'Solution / what I’ll remember',
             controller: solution,
-            maxLines: 4,
-            maxLength: 4000,
+            maxLines: 3,
+            maxLength: 10000,
+            hint: 'The key idea, missed condition, or check to use next time…',
           ),
           SwitchRow(
-            title: 'Add to the retry queue',
-            subtitle: 'Retries remember the mistake instead of re-reading it.',
+            title: 'Put this on my retry list',
+            subtitle: 'Bring it back for another attempt.',
             value: retryLater,
             onChanged: (bool value) => setSheetState(() => retryLater = value),
           ),
-          ChoiceRow<String>(
-            label: 'Retry status',
-            value: retryStatus,
-            options: const <String>['pending', 'retrying', 'resolved'],
-            onChanged: (String value) => setSheetState(() => retryStatus = value),
-          ),
           OutlinedButton.icon(
             onPressed: () async {
-              final XFile? file =
-                  await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+              final XFile? file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
               if (file == null) return;
               setSheetState(() {
                 picked = File(file.path);
@@ -409,13 +497,20 @@ Future<void> openMistakeEditor(
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: () async {
-              if (question.text.trim().isEmpty) {
-                setSheetState(() => error = 'Describe the question.');
-                return;
-              }
               final Chapter? chosen = data.chapter(chapterId);
               if (subject == null || chosen == null || chosen.subject != subject) {
-                setSheetState(() => error = 'Choose a subject, then one of its chapters.');
+                setSheetState(() {
+                  if (subject == null) subjectError = 'Choose a subject first.';
+                  chapterError = subject != null
+                      ? 'Choose a chapter from the selected subject.'
+                      : 'Choose a subject, then a chapter.';
+                });
+                showToast(context, 'Choose a subject and one of its chapters.', error: true);
+                return;
+              }
+              if (question.text.trim().isEmpty) {
+                setSheetState(() => error = 'Write the question or mistake.');
+                showToast(context, 'Please correct the highlighted mistake fields.', error: true);
                 return;
               }
               final Mistake next = Mistake(
@@ -424,25 +519,25 @@ Future<void> openMistakeEditor(
                 chapterId: chosen.id,
                 testId: testId,
                 mistakeType: type,
-                questionNote: question.text,
-                solutionNote: solution.text,
+                questionNote: question.text.trim(),
+                solutionNote: solution.text.trim(),
                 imagePath: mistake?.imagePath,
                 retryLater: retryLater,
-                retryStatus: retryStatus,
+                retryStatus: mistake?.retryStatus ?? 'pending',
                 createdAt: mistake?.createdAt ?? isoNow(),
                 updatedAt: isoNow(),
               );
               try {
-                await ref
-                    .read(dataControllerProvider.notifier)
-                    .saveMistake(next, image: picked);
+                await ref.read(dataControllerProvider.notifier).saveMistake(next, image: picked);
                 if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                if (context.mounted) showToast(context, creating ? 'Mistake logged.' : 'Mistake saved.');
+                if (context.mounted) {
+                  showToast(context, creating ? 'Saved to your mistake notebook.' : 'Mistake note updated.');
+                }
               } catch (error) {
                 if (context.mounted) showToast(context, error.toString(), error: true);
               }
             },
-            child: Text(creating ? 'Save mistake' : 'Save changes'),
+            child: Text(creating ? 'Add to notebook' : 'Save note'),
           ),
           if (!creating)
             TextButton(

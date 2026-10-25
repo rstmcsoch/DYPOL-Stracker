@@ -3,10 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/format.dart';
 import '../../core/iterables.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/validators.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -14,6 +14,8 @@ import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/analytics.dart';
+import '../../logic/marking.dart';
+import '../../logic/test_form.dart';
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
 
@@ -30,18 +32,52 @@ class TestsPage extends ConsumerStatefulWidget {
 class _TestsPageState extends ConsumerState<TestsPage> {
   String _type = 'All';
   String _subject = 'All';
+  String _sort = 'Newest first';
+  String? _from;
+  String? _to;
+  final TextEditingController _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final AppData data = ref.watch(dataControllerProvider).data;
     final StrackerColors colors = context.stracker;
     final MeanResult mean = meanTestPercentage(data.tests, data.testSubjectScores);
+    final String term = _search.text.trim().toLowerCase();
+    // Like the website: a Full Mock spans every subject, so it stays under every subject
+    // filter, and search also matches its "All subjects" label and the chapter name.
     final List<TestRecord> rows = data.tests.where((TestRecord test) {
-      final bool matchesType = _type == 'All' || test.testType == _type;
-      final bool matchesSubject = _subject == 'All' || test.subject == _subject;
-      return matchesType && matchesSubject;
+      final String shownSubject = test.testType == 'Full Mock' ? 'All subjects' : (test.subject ?? '');
+      final String chapterName = test.chapterId == null ? '' : (data.chapter(test.chapterId)?.name ?? '');
+      if (term.isNotEmpty &&
+          !'${test.title} ${test.testType} ${test.notes} $shownSubject $chapterName'.toLowerCase().contains(term)) {
+        return false;
+      }
+      if (_type != 'All' && test.testType != _type) return false;
+      if (_subject != 'All' && test.testType != 'Full Mock' && test.subject != _subject) return false;
+      if (_from != null && test.testDate.compareTo(_from!) < 0) return false;
+      if (_to != null && test.testDate.compareTo(_to!) > 0) return false;
+      return true;
     }).toList()
-      ..sort((TestRecord a, TestRecord b) => b.testDate.compareTo(a.testDate));
+      ..sort((TestRecord a, TestRecord b) {
+        switch (_sort) {
+          case 'Oldest first':
+            return a.testDate.compareTo(b.testDate);
+          case 'Title A–Z':
+            return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          case 'Highest score':
+            return (overallTestPercentage(b, data.testSubjectScores) ?? -1)
+                .compareTo(overallTestPercentage(a, data.testSubjectScores) ?? -1);
+          default:
+            return b.testDate.compareTo(a.testDate);
+        }
+      });
+    final bool filtered = term.isNotEmpty || _type != 'All' || _subject != 'All' || _from != null || _to != null;
 
     return NotebookScaffold(
       title: 'Tests',
@@ -101,6 +137,62 @@ class _TestsPageState extends ConsumerState<TestsPage> {
               ),
             ],
           ),
+          AppField(
+            label: 'Search tests',
+            controller: _search,
+            hint: 'Title, type, notes, subject or chapter',
+            prefix: Icons.search,
+            suffix: _search.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear search',
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () => setState(_search.clear),
+                  ),
+            onChanged: (_) => setState(() {}),
+          ),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: AppDateField(
+                  label: 'From',
+                  allowClear: true,
+                  value: _from,
+                  onChanged: (String? value) => setState(() => _from = value),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: AppDateField(
+                  label: 'To',
+                  allowClear: true,
+                  value: _to,
+                  onChanged: (String? value) => setState(() => _to = value),
+                ),
+              ),
+            ],
+          ),
+          AppSelect<String>(
+            label: 'Sort',
+            value: _sort,
+            items: const <String>['Newest first', 'Oldest first', 'Title A–Z', 'Highest score'],
+            onChanged: (String? value) => setState(() => _sort = value ?? _sort),
+          ),
+          if (filtered)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() {
+                  _search.clear();
+                  _type = 'All';
+                  _subject = 'All';
+                  _from = null;
+                  _to = null;
+                }),
+                icon: const Icon(Icons.filter_alt_off_outlined, size: 17),
+                label: Text('Clear filters · ${rows.length} of ${data.tests.length} shown'),
+              ),
+            ),
           OutlinedButton.icon(
             onPressed: () => openTestEditor(context, ref, data, null),
             icon: const Icon(Icons.add, size: 18),
@@ -160,7 +252,7 @@ class _TestCard extends ConsumerWidget {
                       const SizedBox(height: 2),
                       Text(
                         '${formatDate(test.testDate)} · ${test.testType}'
-                        '${test.subject != null ? ' · ${test.subject}' : ''}'
+                        '${test.testType == 'Full Mock' ? ' · All subjects' : test.subject != null ? ' · ${test.subject}' : ''}'
                         '${chapter != null ? ' · ${chapter.name}' : ''}',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
                       ),
@@ -205,7 +297,11 @@ class _TestCard extends ConsumerWidget {
                   ],
                 ),
               ),
-            if (test.correct != null || test.wrong != null || test.skipped != null || test.timeMinutes != null || test.notes.isNotEmpty)
+            if (test.correct != null ||
+                test.wrong != null ||
+                test.skipped != null ||
+                test.timeMinutes != null ||
+                test.notes.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
@@ -213,6 +309,8 @@ class _TestCard extends ConsumerWidget {
                     if (test.correct != null) '${test.correct} correct',
                     if (test.wrong != null) '${test.wrong} wrong',
                     if (test.skipped != null) '${test.skipped} skipped',
+                    if (test.totalQuestions != null) '${test.totalQuestions} questions',
+                    if (test.negativeMarks != null) '−${numberLabel(test.negativeMarks, digits: 2)} negative',
                     if (test.timeMinutes != null) minutesLabel(test.timeMinutes),
                     if (test.notes.isNotEmpty) test.notes,
                   ].join(' · '),
@@ -232,335 +330,455 @@ Future<void> openTestEditor(
   BuildContext context,
   WidgetRef ref,
   AppData data,
-  TestRecord? test,
-) async {
+  TestRecord? test, {
+  String? presetChapterId,
+}) async {
   final bool creating = test == null;
+  final String testId = test?.id ?? newId();
+  final MarkingScheme? scheme = markingSchemeFor(data);
+  final bool jee = isJeeExam(data.settings.examId);
+  final List<String> mockSubjects = examSubjectNames(data);
+  final List<String> formSubjects = examSubjectsWith(data, test?.subject);
+  final List<TestSubjectScore> oldScores = test == null
+      ? const <TestSubjectScore>[]
+      : data.testSubjectScores.where((TestSubjectScore s) => s.testId == test.id).toList();
+  final Chapter? preset = creating && presetChapterId != null ? data.chapter(presetChapterId) : null;
+  String jeePattern = inferJeePattern(test?.testType, oldScores);
+
+  String text(num? value) => value == null ? '' : numberLabel(value, digits: 2);
   final TextEditingController title = TextEditingController(text: test?.title ?? '');
-  final TextEditingController marks = TextEditingController(
-    text: test?.marksObtained == null ? '' : numberLabel(test!.marksObtained, digits: 1),
-  );
+  final TextEditingController marks = TextEditingController(text: text(test?.marksObtained));
   final TextEditingController total = TextEditingController(
-    text: test?.totalMarks == null ? '' : numberLabel(test!.totalMarks),
+    text: test != null ? text(test.totalMarks) : defaultTotalFor(scheme, 'Chapter Test', preset?.subject),
   );
   final TextEditingController correct = TextEditingController(text: test?.correct?.toString() ?? '');
   final TextEditingController wrong = TextEditingController(text: test?.wrong?.toString() ?? '');
   final TextEditingController skipped = TextEditingController(text: test?.skipped?.toString() ?? '');
-  final TextEditingController totalQuestions = TextEditingController(text: test?.totalQuestions?.toString() ?? '');
+  final TextEditingController questions = TextEditingController(text: test?.totalQuestions?.toString() ?? '');
+  final TextEditingController negative = TextEditingController(text: text(test?.negativeMarks));
+  final TextEditingController time = TextEditingController(text: test?.timeMinutes?.toString() ?? '');
   final TextEditingController notes = TextEditingController(text: test?.notes ?? '');
-  final TextEditingController timeMinutes =
-      TextEditingController(text: test?.timeMinutes?.toString() ?? '');
-  final Map<String, TextEditingController> subjectMarks = <String, TextEditingController>{
-    for (final String subject in data.subjects)
-      subject: TextEditingController(
-        text: numberLabel(
-          data.testSubjectScores
-              .where((TestSubjectScore row) => row.testId == test?.id && row.subject == subject)
-              .firstOrNull
-              ?.marksObtained,
-          empty: '',
-        ),
-      ),
-  };
-  final Map<String, TextEditingController> subjectTotals = <String, TextEditingController>{
-    for (final String subject in data.subjects)
-      subject: TextEditingController(
-        text: numberLabel(
-          data.testSubjectScores
-              .where((TestSubjectScore row) => row.testId == test?.id && row.subject == subject)
-              .firstOrNull
-              ?.totalMarks,
-          empty: '',
-        ),
-      ),
-  };
+
+  // Full Mock rows: label -> (marks, total) controllers, pre-filled from the marking scheme.
+  final Map<String, (TextEditingController, TextEditingController)> mock =
+      <String, (TextEditingController, TextEditingController)>{};
+  void resetMock(Map<String, String> defaults, {Map<String, String> keepMarks = const <String, String>{}}) {
+    final Map<String, (TextEditingController, TextEditingController)> previous =
+        Map<String, (TextEditingController, TextEditingController)>.of(mock);
+    mock.clear();
+    defaults.forEach((String row, String defTotal) {
+      mock[row] = (TextEditingController(text: keepMarks[row] ?? ''), TextEditingController(text: defTotal));
+    });
+    for (final (TextEditingController m, TextEditingController t) in previous.values) {
+      m.dispose();
+      t.dispose();
+    }
+  }
+
+  final List<String> baseSubjects = jeePattern == 'advanced-both'
+      ? mockSubjects
+      : <String>{...mockSubjects, ...oldScores.map((TestSubjectScore s) => s.subject)}.toList();
+  resetMock(fullMockDefaults(scheme, baseSubjects, jeePattern));
+  for (final TestSubjectScore score in oldScores) {
+    final (TextEditingController, TextEditingController) row =
+        mock[score.subject] ?? (TextEditingController(), TextEditingController());
+    row.$1.text = text(score.marksObtained);
+    row.$2.text = text(score.totalMarks);
+    mock[score.subject] = row;
+  }
+
   String type = test?.testType ?? 'Chapter Test';
-  String? subject = test?.subject;
-  String? chapterId = test?.chapterId;
+  String? subject = test?.subject ?? preset?.subject;
+  String? chapterId = test?.chapterId ?? preset?.id;
   String date = test?.testDate ?? todayIso();
-  String? scoreError;
+  Map<String, String> errors = <String, String>{};
+  bool saving = false;
 
   await showAppSheet<void>(
     context,
-    title: creating ? 'Log a test' : 'Edit test',
+    title: creating ? 'Log a test' : 'Edit test record',
     builder: (BuildContext sheetContext) => StatefulBuilder(
-      builder: (BuildContext context, StateSetter setSheetState) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          AppField(
-            label: 'Test title',
-            controller: title,
-            required: true,
-            maxLength: 160,
-            textCapitalization: TextCapitalization.sentences,
-          ),
-          AppDateField(label: 'Test date', value: date, onChanged: (String? value) {
-            if (value != null) setSheetState(() => date = value);
-          }),
-          ChoiceRow<String>(
-            label: 'Test type',
-            value: type,
-            options: const <String>['Chapter Test', 'Subject Test', 'Full Mock', 'PYQ Practice'],
-            onChanged: (String value) => setSheetState(() => type = value),
-          ),
-          if (type != 'Full Mock') ...<Widget>[
-            AppSelect<String?>(
-              label: 'Subject (optional)',
-              value: subject,
-              items: <String?>[null, ...data.subjects],
-              labelFor: (String? value) => value ?? 'Not set',
-              onChanged: (String? value) => setSheetState(() => subject = value),
+      builder: (BuildContext context, StateSetter setSheetState) {
+        final bool fullMock = type == 'Full Mock';
+        final TextTheme textTheme = Theme.of(context).textTheme;
+        final StrackerColors colors = context.stracker;
+        void clear(String key) {
+          if (errors.containsKey(key) || errors.containsKey('_form')) {
+            setSheetState(() => errors = <String, String>{...errors}
+              ..remove(key)
+              ..remove('_form'));
+          }
+        }
+
+        Widget number(String label, TextEditingController controller, String key,
+                {bool decimal = false, String? hint, String? helper}) =>
+            AppField(
+              label: label,
+              controller: controller,
+              hint: hint,
+              helper: helper,
+              error: errors[key],
+              keyboardType: TextInputType.numberWithOptions(decimal: decimal),
+              inputFormatters: <TextInputFormatter>[
+                decimal ? FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')) : FilteringTextInputFormatter.digitsOnly,
+              ],
+              onChanged: (_) => clear(key),
+            );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text('Record only what you know. Leave unknown values blank.',
+                  style: textTheme.bodySmall?.copyWith(color: colors.muted)),
             ),
-            AppSelect<String?>(
-              label: 'Chapter (optional)',
-              value: chapterId,
-              items: <String?>[null, ...data.chapters.map((Chapter chapter) => chapter.id)],
-              labelFor: (String? value) => value == null ? 'Not linked' : data.chapterName(value),
-              onChanged: (String? value) => setSheetState(() => chapterId = value),
+            if (errors['_form'] != null) ...<Widget>[ErrorNotice(errors['_form']!), const SizedBox(height: 8)],
+            AppField(
+              label: 'Test title',
+              controller: title,
+              required: true,
+              maxLength: 160,
+              hint: 'e.g. Electrostatics weekly test',
+              error: errors['title'],
+              helper: title.text.length >= 120
+                  ? '${title.text.length}/160 characters — long titles are trimmed with an ellipsis in lists'
+                  : null,
+              textCapitalization: TextCapitalization.sentences,
+              onChanged: (_) {
+                setSheetState(() {});
+                clear('title');
+              },
             ),
-          ],
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: AppField(
-                  label: 'Marks obtained',
-                  controller: marks,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  error: Validators.marksObtained(marks.text),
-                  helper: 'Half-point steps.',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppField(
-                  label: 'Total marks',
-                  controller: total,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-                  error: Validators.totalMarks(total.text),
-                ),
-              ),
-            ],
-          ),
-          if (type == 'Full Mock') ...<Widget>[
-            const SectionHeading('Subject scores', padding: EdgeInsets.only(bottom: 6)),
-            const InfoBanner(
-              'Full Mock records marks separately for each subject. Subject and chapter selection do not apply.',
+            AppDateField(
+              label: 'Date',
+              value: date,
+              onChanged: (String? value) {
+                if (value != null) setSheetState(() => date = value);
+              },
             ),
-            const SizedBox(height: 8),
-            InfoBanner(
-              data.subjects.length == 3
-                  ? 'A complete Full Mock needs all three subject rows; they become one aggregate result.'
-                  : 'Subject rows are saved as entered; the aggregate uses whatever distinct subjects you fill.',
-            ),
-            const SizedBox(height: 8),
-            for (final String subjectName in data.subjects)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      flex: 3,
-                      child: Text(subjectName, style: Theme.of(context).textTheme.bodySmall),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: TextField(
-                        controller: subjectMarks[subjectName],
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(labelText: 'Marks', isDense: true),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      flex: 2,
-                      child: TextField(
-                        controller: subjectTotals[subjectName],
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Total', isDense: true),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: AppField(
-                  label: 'Correct',
-                  controller: correct,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppField(
-                  label: 'Wrong',
-                  controller: wrong,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppField(
-                  label: 'Skipped',
-                  controller: skipped,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-                ),
-              ),
-            ],
-          ),
-          AppField(
-            label: 'Total questions (optional)',
-            controller: totalQuestions,
-            keyboardType: TextInputType.number,
-            inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-          ),
-          AppField(
-            label: 'Time taken (minutes)',
-            controller: timeMinutes,
-            keyboardType: TextInputType.number,
-            inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-          ),
-          AppField(label: 'Notes', controller: notes, maxLines: 3, maxLength: 10000),
-          if (scoreError != null) ...<Widget>[
-            ErrorNotice(scoreError!),
-            const SizedBox(height: 8),
-          ],
-          ElevatedButton(
-            onPressed: () async {
-              final double? marksValue =
-                  marks.text.trim().isEmpty ? null : double.tryParse(marks.text.trim());
-              final double? totalValue =
-                  total.text.trim().isEmpty ? null : double.tryParse(total.text.trim());
-              final String? pairError = Validators.scorePair(marksValue, totalValue) ??
-                  Validators.questionCounts(
-                    int.tryParse(correct.text.trim()),
-                    int.tryParse(wrong.text.trim()),
-                    int.tryParse(skipped.text.trim()),
-                    int.tryParse(totalQuestions.text.trim()),
-                  );
-              setSheetState(() => scoreError = pairError);
-              if (title.text.trim().isEmpty || pairError != null) {
-                if (title.text.trim().isEmpty) {
-                  setSheetState(() => scoreError = 'Test title is required.');
-                }
-                return;
-              }
-              final String testId = test?.id ?? newId();
-              final TestRecord next = TestRecord(
-                id: testId,
-                userId: data.userId,
-                title: title.text.trim(),
-                testDate: date,
-                testType: type,
-                subject: type == 'Full Mock' ? null : subject,
-                chapterId: type == 'Full Mock' ? null : chapterId,
-                marksObtained: marksValue,
-                totalMarks: totalValue,
-                correct: int.tryParse(correct.text.trim()),
-                wrong: int.tryParse(wrong.text.trim()),
-                skipped: int.tryParse(skipped.text.trim()),
-                totalQuestions: int.tryParse(totalQuestions.text.trim()),
-                negativeMarks: test?.negativeMarks,
-                timeMinutes: int.tryParse(timeMinutes.text.trim()),
-                notes: notes.text,
-                createdAt: test?.createdAt ?? isoNow(),
-                updatedAt: isoNow(),
-              );
-              final List<TestSubjectScore> scores = <TestSubjectScore>[];
-              if (type == 'Full Mock') {
-                for (final String subjectName in data.subjects) {
-                  final double? subjectMark = double.tryParse(subjectMarks[subjectName]!.text.trim());
-                  final double? subjectTotal = double.tryParse(subjectTotals[subjectName]!.text.trim());
-                  if (subjectMark == null && subjectTotal == null) continue;
-                  if (Validators.scorePair(subjectMark, subjectTotal) != null) {
-                    setSheetState(() => scoreError =
-                        'Check the $subjectName marks: a score needs a total and cannot exceed it.');
-                    return;
+            AppSelect<String>(
+              label: 'Test type',
+              value: type,
+              items: const <String>['Chapter Test', 'Subject Test', 'Full Mock', 'PYQ Practice'],
+              onChanged: (String? value) {
+                if (value == null) return;
+                setSheetState(() {
+                  type = value;
+                  errors = <String, String>{...errors}..remove('_form');
+                  if (value == 'Full Mock') {
+                    final Map<String, String> keep = <String, String>{
+                      for (final MapEntry<String, (TextEditingController, TextEditingController)> e in mock.entries)
+                        e.key: e.value.$1.text,
+                    };
+                    final Map<String, String> defaults = fullMockDefaults(scheme, mockSubjects, jeePattern);
+                    final Map<String, String> keepTotals = <String, String>{
+                      for (final MapEntry<String, (TextEditingController, TextEditingController)> e in mock.entries)
+                        if (e.value.$1.text.isNotEmpty || e.value.$2.text.isNotEmpty) e.key: e.value.$2.text,
+                    };
+                    resetMock(<String, String>{...defaults, ...keepTotals}, keepMarks: keep);
+                  } else if (creating) {
+                    total.text = defaultTotalFor(scheme, value, subject);
                   }
-                  final TestSubjectScore? existing = data.testSubjectScores
-                      .where((TestSubjectScore row) =>
-                          row.testId == testId && row.subject == subjectName)
-                      .firstOrNull;
-                  scores.add(TestSubjectScore(
-                    id: existing?.id ?? newId(),
-                    userId: data.userId,
-                    testId: testId,
-                    subject: subjectName,
-                    marksObtained: subjectMark,
-                    totalMarks: subjectTotal,
-                    createdAt: existing?.createdAt ?? isoNow(),
-                    updatedAt: isoNow(),
-                  ));
-                }
-              }
-              try {
-                await ref
-                    .read(dataControllerProvider.notifier)
-                    .saveTest(next, subjectScores: scores);
-                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                if (context.mounted) showToast(context, creating ? 'Test logged.' : 'Test updated.');
-              } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
-              }
-            },
-            child: Text(creating ? 'Log test' : 'Save changes'),
-          ),
-          if (!creating)
+                });
+              },
+            ),
+            if (!fullMock) ...<Widget>[
+              AppOptionSelect<String>(
+                label: 'Subject',
+                value: subject,
+                nullLabel: '— choose subject —',
+                options: <SelectOption<String>>[for (final String s in formSubjects) SelectOption<String>(s, s)],
+                onChanged: (String? value) => setSheetState(() {
+                  subject = value;
+                  chapterId = null;
+                  if (creating) total.text = defaultTotalFor(scheme, type, value);
+                }),
+              ),
+              if (preset != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: InfoBanner('Chapter preselected from Weak areas: ${preset.name} (${preset.subject})'),
+                ),
+              AppOptionSelect<String>(
+                label: 'Chapter (optional)',
+                value: chapterId,
+                nullLabel: '— choose chapter —',
+                error: errors['chapter_id'],
+                options: <SelectOption<String>>[
+                  for (final Chapter c in data.chapters.where((Chapter c) => subject == null || c.subject == subject))
+                    SelectOption<String>(c.id, c.name),
+                ],
+                onChanged: (String? value) {
+                  setSheetState(() => chapterId = value);
+                  clear('chapter_id');
+                },
+              ),
+            ],
+            if (jee && fullMock)
+              AppSelect<String>(
+                label: 'JEE paper pattern',
+                value: jeePattern,
+                items: jeeFullPatterns.keys.toList(),
+                labelFor: (String v) => jeeFullPatterns[v]!,
+                onChanged: (String? value) {
+                  if (value == null) return;
+                  setSheetState(() {
+                    final Map<String, String> keep = <String, String>{};
+                    final Map<String, String> defaults = fullMockDefaults(scheme, mockSubjects, value);
+                    for (final String row in defaults.keys) {
+                      final String? previous = mock[row]?.$1.text ??
+                          (value == 'advanced-both'
+                              ? mock[scoreSubjectBase(row)]?.$1.text
+                              : mock['$row — Paper 1']?.$1.text);
+                      if (previous != null) keep[row] = previous;
+                    }
+                    jeePattern = value;
+                    resetMock(defaults, keepMarks: keep);
+                  });
+                },
+              ),
+            if (scheme != null && fullMock)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  'Marking defaults: ${scheme.source}. Totals are pre-filled and can be edited.'
+                  '${scheme.notes != null ? ' ${scheme.notes}' : ''}',
+                  style: textTheme.bodySmall?.copyWith(color: colors.muted),
+                ),
+              ),
+            if (fullMock) ...<Widget>[
+              const SectionHeading('Subject scores', padding: EdgeInsets.only(bottom: 4)),
+              Text('(enter each result that you have)', style: textTheme.labelSmall?.copyWith(color: colors.muted)),
+              const SizedBox(height: 6),
+              const InfoBanner(fullMockScopeHint),
+              const SizedBox(height: 6),
+              Text(
+                'The overall result sums every subject. Each subject score is checked against its own total; '
+                'leave unknown scores blank.',
+                style: textTheme.bodySmall?.copyWith(color: colors.muted),
+              ),
+              const SizedBox(height: 8),
+              for (final MapEntry<String, (TextEditingController, TextEditingController)> row in mock.entries)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        flex: 3,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(row.key, style: textTheme.bodySmall),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: row.value.$1,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                          onChanged: (_) => clear('${row.key}.marks'),
+                          decoration: InputDecoration(
+                            hintText: 'Marks',
+                            isDense: true,
+                            errorText: errors['${row.key}.marks'],
+                            errorMaxLines: 3,
+                            semanticCounterText: '${row.key} marks',
+                          ),
+                        ),
+                      ),
+                      const Padding(padding: EdgeInsets.fromLTRB(4, 12, 4, 0), child: Text('/')),
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: row.value.$2,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+                          onChanged: (_) => clear('${row.key}.total'),
+                          decoration: InputDecoration(
+                            hintText: 'Total',
+                            isDense: true,
+                            errorText: errors['${row.key}.total'],
+                            errorMaxLines: 3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ] else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                      child: number('Marks obtained', marks, 'marks', decimal: true, hint: 'Leave blank if unknown')),
+                  const SizedBox(width: 8),
+                  Expanded(child: number('Total marks', total, 'total', hint: 'e.g. 120')),
+                ],
+              ),
+            number('Total questions (optional)', questions, 'questions',
+                hint: 'e.g. 50', helper: 'Correct + wrong + skipped must fit within this.'),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(child: number('Correct', correct, 'correct', hint: '—')),
+                const SizedBox(width: 8),
+                Expanded(child: number('Wrong', wrong, 'wrong', hint: '—')),
+                const SizedBox(width: 8),
+                Expanded(child: number('Skipped', skipped, 'skipped', hint: '—')),
+              ],
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Expanded(
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.of(sheetContext).pop();
-                      Routes.open(context, Routes.mockAnalysis);
-                    },
-                    child: const Text('Mock analysis'),
-                  ),
+                    child: number('Negative marks', negative, 'negative_marks', decimal: true, hint: 'No estimate')),
+                const SizedBox(width: 8),
+                Expanded(child: number('Time taken (minutes)', time, 'time_minutes', hint: 'Optional')),
+              ],
+            ),
+            AppField(
+              label: 'Notes',
+              controller: notes,
+              maxLines: 3,
+              maxLength: 10000,
+              hint: 'What felt easy? What deserves another look?',
+              error: errors['notes'],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                TextButton(
+                  onPressed: saving ? null : () => Navigator.of(sheetContext).pop(),
+                  child: const Text('Cancel'),
                 ),
-                Expanded(
-                  child: TextButton(
-                    onPressed: () async {
-                      final bool confirmed = await confirmAction(
-                        context,
-                        title: 'Delete this test?',
-                        message: 'Its subject scores, chapter links and mock notes are removed with it.',
-                      );
-                      if (!confirmed) return;
-                      try {
-                        await ref.read(dataControllerProvider.notifier).deleteTest(test);
-                        if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                        if (context.mounted) showToast(context, 'Test deleted.');
-                      } catch (error) {
-                        if (context.mounted) showToast(context, error.toString(), error: true);
-                      }
-                    },
-                    child: Text('Delete', style: TextStyle(color: context.stracker.palette.red)),
-                  ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final DataController controller = ref.read(dataControllerProvider.notifier);
+                          final AppData current = ref.read(dataControllerProvider).data;
+                          final TestSaveResult result = buildTestSave(
+                            input: TestFormInput(
+                              title: title.text,
+                              date: date,
+                              type: type,
+                              subject: subject,
+                              chapterId: chapterId,
+                              marks: marks.text,
+                              total: total.text,
+                              correct: correct.text,
+                              wrong: wrong.text,
+                              skipped: skipped.text,
+                              questions: questions.text,
+                              negative: negative.text,
+                              time: time.text,
+                              notes: notes.text,
+                              mockScores: <String, ({String marks, String total})>{
+                                for (final MapEntry<String, (TextEditingController, TextEditingController)> e
+                                    in mock.entries)
+                                  e.key: (marks: e.value.$1.text, total: e.value.$2.text),
+                              },
+                            ),
+                            testId: testId,
+                            userId: current.userId,
+                            chapters: current.chapters,
+                            existingScores:
+                                current.testSubjectScores.where((TestSubjectScore s) => s.testId == testId).toList(),
+                            existingLinks:
+                                current.testChapterLinks.where((TestChapterLink l) => l.testId == testId).toList(),
+                            existing: current.tests.where((TestRecord t) => t.id == testId).firstOrNull,
+                            now: isoNow(),
+                          );
+                          if (!result.ok) {
+                            setSheetState(() => errors = result.errors);
+                            showToast(context, 'Please correct the highlighted test fields.', error: true);
+                            await HapticFeedback.mediumImpact();
+                            return;
+                          }
+                          setSheetState(() => saving = true);
+                          try {
+                            await controller.saveTest(
+                              result.test!,
+                              subjectScores: type == 'Full Mock' ? result.scores : const <TestSubjectScore>[],
+                              chapterLink: result.link,
+                              replaceChapterLinks: true,
+                            );
+                            await HapticFeedback.lightImpact();
+                            if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                            if (context.mounted) {
+                              showToast(context,
+                                  creating ? 'Test saved. Your history starts here.' : 'Test details updated.');
+                            }
+                          } catch (error) {
+                            if (context.mounted) {
+                              showToast(context, error is AppFailure ? error.message : 'Could not save test. Retry.',
+                                  error: true);
+                            }
+                            setSheetState(() => saving = false);
+                          }
+                        },
+                  child: Text(saving ? 'Saving…' : (creating ? 'Save test' : 'Save changes')),
                 ),
               ],
             ),
-        ],
-      ),
+            if (!creating)
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        Routes.open(context, Routes.mockAnalysis);
+                      },
+                      child: const Text('Mock analysis'),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () async {
+                        final bool confirmed = await confirmAction(
+                          context,
+                          title: 'Delete this test?',
+                          message: 'Its subject scores, chapter links and mock notes are removed with it.',
+                        );
+                        if (!confirmed) return;
+                        try {
+                          await ref.read(dataControllerProvider.notifier).deleteTest(test);
+                          if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                          if (context.mounted) showToast(context, 'Test deleted.');
+                        } catch (error) {
+                          if (context.mounted) showToast(context, 'Could not delete test.', error: true);
+                        }
+                      },
+                      child: Text('Delete', style: TextStyle(color: context.stracker.palette.red)),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        );
+      },
     ),
   );
-  title.dispose();
-  marks.dispose();
-  total.dispose();
-  correct.dispose();
-  wrong.dispose();
-  skipped.dispose();
-  totalQuestions.dispose();
-  notes.dispose();
-  timeMinutes.dispose();
-  for (final TextEditingController controller in subjectMarks.values) {
-    controller.dispose();
+  for (final TextEditingController c in <TextEditingController>[
+    title,
+    marks,
+    total,
+    correct,
+    wrong,
+    skipped,
+    questions,
+    negative,
+    time,
+    notes,
+  ]) {
+    c.dispose();
   }
-  for (final TextEditingController controller in subjectTotals.values) {
-    controller.dispose();
+  for (final (TextEditingController m, TextEditingController t) in mock.values) {
+    m.dispose();
+    t.dispose();
   }
 }

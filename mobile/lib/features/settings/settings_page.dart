@@ -122,29 +122,46 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  ChoiceRow<ThemeMode>(
-                    label: 'Theme',
-                    value: appearance.mode,
-                    options: const <ThemeMode>[ThemeMode.light, ThemeMode.dark, ThemeMode.system],
-                    labelFor: (ThemeMode mode) => switch (mode) {
-                      ThemeMode.light => 'Light',
-                      ThemeMode.dark => 'Night',
-                      ThemeMode.system => 'Auto',
-                    },
-                    onChanged: (ThemeMode mode) async {
-                      await ref.read(themeControllerProvider.notifier).setMode(mode);
-                      _touch(_draft!.copyWith(theme: ref.read(themeControllerProvider).modeValue));
-                    },
+                  Text('Notebook theme', style: Theme.of(context).textTheme.labelMedium),
+                  const SizedBox(height: 6),
+                  WrapGrid(
+                    minItemWidth: 150,
+                    children: <Widget>[
+                      for (final (ThemeMode mode, String title, String desc) in const <(ThemeMode, String, String)>[
+                        (ThemeMode.light, 'Warm paper', 'Light notebook paper'),
+                        (ThemeMode.dark, 'Chalkboard', 'Dark, high-contrast study mode'),
+                        (ThemeMode.system, 'Auto', 'Follow your device setting'),
+                      ])
+                        _ThemeChoice(
+                          mode: mode,
+                          title: title,
+                          description: desc,
+                          selected: appearance.mode == mode,
+                          onTap: () async {
+                            await HapticFeedback.selectionClick();
+                            await ref.read(themeControllerProvider.notifier).setMode(mode);
+                            _touch(_draft!.copyWith(theme: ref.read(themeControllerProvider).modeValue));
+                          },
+                        ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, bottom: 8),
+                    child: Text(
+                      appearance.mode == ThemeMode.system
+                          ? 'Auto theme follows the device appearance.'
+                          : 'You’re seeing a live preview. It is kept on this phone and saved to your account with Save.',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.stracker.muted),
+                    ),
                   ),
                   const SizedBox(height: 4),
-                  Text('Palette', style: Theme.of(context).textTheme.labelMedium),
+                  Text('Color theme', style: Theme.of(context).textTheme.labelMedium),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
                     runSpacing: 6,
                     children: <Widget>[
-                      for (final ({String id, String label, String description}) option
-                          in strackerPaletteOptions)
+                      for (final ({String id, String label, String description}) option in strackerPaletteOptions)
                         Tooltip(
                           message: option.description,
                           child: ChoiceChip(
@@ -168,7 +185,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       'poppins' => 'Poppins',
                       'sora' => 'Sora',
                       'open-sans' => 'Open Sans',
-                      _ => 'Lexend',
+                      _ => 'Lexend (default)',
                     },
                     helper: 'Patrick Hand stays for headings — it is the Stracker identity.',
                     onChanged: (String? value) async {
@@ -197,11 +214,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         _touch(_draft!.copyWith(dailyStudyGoalMinutes: int.tryParse(value) ?? 0)),
                   ),
                   AppField(
-                    label: 'Revision gaps (days, comma separated)',
+                    label: 'Days between revisions',
+                    hint: '1, 7, 30',
                     controller: _gaps,
                     keyboardType: TextInputType.number,
                     error: Validators.revisionGaps(_gaps.text),
-                    helper: 'Default 1, 7, 30. Each completed revision schedules the next gap.',
+                    helper: 'Comma-separated positive days, sorted automatically. Existing revisions are not moved.',
                     onChanged: (String value) {
                       final List<int> parsed = <int>[
                         for (final String part in value.split(','))
@@ -212,6 +230,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       }
                     },
                   ),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: <Widget>[
+                      for (final (int index, int gap) in <int>[
+                        for (final String part in _gaps.text.split(','))
+                          if ((int.tryParse(part.trim()) ?? 0) > 0) int.parse(part.trim()),
+                      ].indexed)
+                        Pill('R${index + 1} · ${gap}d', dense: true),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
                   Row(
                     children: <Widget>[
                       Expanded(
@@ -252,11 +282,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       ),
                     ],
                   ),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: <Widget>[
+                      Pill('Weak < ${_weak.text.isEmpty ? '—' : _weak.text}%', tone: PillTone.bad, dense: true),
+                      Pill(
+                        'Okay ${_weak.text.isEmpty ? '—' : _weak.text}–${_strong.text.isEmpty ? '—' : _strong.text}%',
+                        tone: PillTone.warn,
+                        dense: true,
+                      ),
+                      Pill('Strong > ${_strong.text.isEmpty ? '—' : _strong.text}%', tone: PillTone.good, dense: true),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
                   Row(
                     children: <Widget>[
                       Expanded(
                         child: AppField(
-                          label: 'High weight',
+                          label: 'High importance ×',
                           controller: _high,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           onChanged: (String value) =>
@@ -266,7 +310,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: AppField(
-                          label: 'Medium weight',
+                          label: 'Medium importance ×',
                           controller: _medium,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           onChanged: (String value) =>
@@ -276,11 +320,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: AppField(
-                          label: 'Low weight',
+                          label: 'Low importance ×',
                           controller: _low,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          onChanged: (String value) =>
-                              _touch(_draft!.copyWith(weightLow: double.tryParse(value) ?? 1)),
+                          onChanged: (String value) => _touch(_draft!.copyWith(weightLow: double.tryParse(value) ?? 1)),
                         ),
                       ),
                     ],
@@ -289,7 +332,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     children: <Widget>[
                       Expanded(
                         child: AppField(
-                          label: 'PYQ years from',
+                          label: 'PYQ first year',
                           controller: _pyqFrom,
                           keyboardType: TextInputType.number,
                           onChanged: (String value) =>
@@ -299,15 +342,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: AppField(
-                          label: 'to',
+                          label: 'Last year',
                           controller: _pyqTo,
                           keyboardType: TextInputType.number,
                           error: Validators.years(
                             int.tryParse(_pyqFrom.text) ?? 0,
                             int.tryParse(_pyqTo.text) ?? 0,
                           ),
-                          onChanged: (String value) =>
-                              _touch(_draft!.copyWith(pyqToYear: int.tryParse(value) ?? 2026)),
+                          onChanged: (String value) => _touch(_draft!.copyWith(pyqToYear: int.tryParse(value) ?? 2026)),
                         ),
                       ),
                     ],
@@ -336,55 +378,47 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       for (final ExamCatalogEntry entry in data.examCatalog)
                         if (!entry.id.startsWith('hidden')) entry.id,
                     ],
-                    labelFor: (String? value) =>
-                        value == null ? 'JEE (default)' : examNameFor(data, value),
+                    labelFor: (String? value) => value == null ? 'JEE (default)' : examNameFor(data, value),
                     helper: data.examCatalog.isEmpty
                         ? 'The published exam catalog could not be loaded; JEE is used.'
                         : '${data.examCatalog.length} exams available.',
                     onChanged: (String? value) => _touch(_draft!.copyWith(examId: value)),
                   ),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: AppField(
-                          label: 'Exam year',
-                          controller: _pyqTo,
-                          enabled: false,
-                          helper: 'Set from the exam catalog next release',
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: AppField(
-                          label: 'Target score',
-                          controller: _target,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          onChanged: (String value) =>
-                              _touch(_draft!.copyWith(targetScore: double.tryParse(value) ?? 0)),
-                        ),
-                      ),
-                    ],
-                  ),
                   AppDateField(
-                    label: 'JEE Main date',
+                    label: isJeeExam(draft.examId) ? 'JEE Main date' : '${examNameFor(data, draft.examId)} date',
                     value: draft.mainExamDate,
                     allowClear: true,
                     onChanged: (String? value) => _touch(_draft!.copyWith(mainExamDate: value)),
                   ),
-                  AppDateField(
-                    label: 'JEE Advanced date',
-                    value: draft.advancedExamDate,
-                    allowClear: true,
-                    onChanged: (String? value) => _touch(_draft!.copyWith(advancedExamDate: value)),
+                  if (isJeeExam(draft.examId))
+                    AppDateField(
+                      label: 'JEE Advanced date',
+                      value: draft.advancedExamDate,
+                      allowClear: true,
+                      onChanged: (String? value) => _touch(_draft!.copyWith(advancedExamDate: value)),
+                    ),
+                  AppField(
+                    label: 'Target score',
+                    controller: _target,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    helper: isJeeExam(draft.examId)
+                        ? 'Compared to a mock with all three subject totals.'
+                        : 'Compared to a full mock with every subject total.',
+                    onChanged: (String value) => _touch(_draft!.copyWith(targetScore: double.tryParse(value) ?? 0)),
                   ),
+                  Text(
+                    'Leave dates blank until the official dates are confirmed.',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.stracker.muted),
+                  ),
+                  const SizedBox(height: 8),
                   ChoiceRow<String>(
-                    label: 'Exam mode',
+                    label: 'Exam Mode',
                     value: draft.examMode,
                     options: const <String>['auto', 'on', 'off'],
                     labelFor: (String value) => switch (value) {
                       'on' => 'Always on',
                       'off' => 'Off',
-                      _ => 'Auto (30 days before)',
+                      _ => 'Automatic (final 30 days)',
                     },
                     onChanged: (String value) => _touch(_draft!.copyWith(examMode: value)),
                   ),
@@ -467,9 +501,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     leading: const Icon(Icons.backup_outlined, size: 19),
                     title: const Text('Backup & export'),
                     subtitle: Text(
-                      draft.lastBackupAt == null
-                          ? 'No backup recorded'
-                          : 'Last ${formatDate(draft.lastBackupAt)}',
+                      draft.lastBackupAt == null ? 'No backup recorded' : 'Last ${formatDate(draft.lastBackupAt)}',
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
                     trailing: const Icon(Icons.chevron_right, size: 18),
@@ -563,5 +595,80 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+}
+
+/// Website theme card: a three-line paper swatch, title, description and a check when chosen.
+class _ThemeChoice extends StatelessWidget {
+  const _ThemeChoice({
+    required this.mode,
+    required this.title,
+    required this.description,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ThemeMode mode;
+  final String title;
+  final String description;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final (Color paper, Color line) = switch (mode) {
+      ThemeMode.dark => (const Color(0xFF1F2A26), const Color(0xFF3C4A44)),
+      ThemeMode.light => (const Color(0xFFFFFBF2), const Color(0xFFE4D9C4)),
+      ThemeMode.system => (colors.palette.paperSoft, colors.palette.line),
+    };
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: '$title. $description',
+      excludeSemantics: true,
+      child: Material(
+        color: colors.palette.paperSoft,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: selected ? colors.palette.accentDark : colors.palette.line, width: selected ? 2 : 1),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Container(
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: paper,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: line),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: <Widget>[
+                      for (int i = 0; i < 3; i++) Container(height: 1.5, color: line),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: <Widget>[
+                    Expanded(child: Text(title, style: Theme.of(context).textTheme.titleSmall)),
+                    if (selected) Icon(Icons.check_circle, size: 16, color: colors.palette.accentDark),
+                  ],
+                ),
+                Text(description, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -52,7 +52,9 @@ void main() {
         );
 
     expect(isBacklogAwake(item('active', null), today), isTrue);
-    expect(isBacklogAwake(item('active', '2026-02-01'), today), isFalse);
+    expect(isBacklogAwake(item('snoozed', '2026-02-01'), today), isFalse);
+    // Website isAwake: a snoozed item comes back on its date.
+    expect(isBacklogAwake(item('snoozed', today), today), isTrue);
     expect(isBacklogAwake(item('done', null), today), isFalse);
 
     final AppData data = AppData(

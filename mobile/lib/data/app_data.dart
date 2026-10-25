@@ -1,3 +1,4 @@
+import '../logic/onboarding.dart' show onboardingSubjects;
 import 'models.dart';
 
 /// Everything the notebook needs for one signed-in account, loaded from the same
@@ -104,15 +105,12 @@ class AppData {
     return rows;
   }
 
-  List<Revision> openRevisions() =>
-      revisions.where((Revision revision) => revision.completedAt == null).toList();
+  List<Revision> openRevisions() => revisions.where((Revision revision) => revision.completedAt == null).toList();
 
-  List<Mistake> get pendingRetries => mistakes
-      .where((Mistake mistake) => mistake.retryLater && mistake.retryStatus == 'pending')
-      .toList();
+  List<Mistake> get pendingRetries =>
+      mistakes.where((Mistake mistake) => mistake.retryLater && mistake.retryStatus == 'pending').toList();
 
-  List<StudyCard> cardsOf(String kind) =>
-      studyCards.where((StudyCard card) => card.kind == kind).toList();
+  List<StudyCard> cardsOf(String kind) => studyCards.where((StudyCard card) => card.kind == kind).toList();
 
   AppData copyWith({
     AppSettings? settings,
@@ -166,12 +164,24 @@ const Object _keep = Object();
 /// The exam's syllabus subjects. JEE (and every notebook created before the exam
 /// chooser existed) uses Physics/Chemistry/Maths; other exams use the published
 /// catalogue's subject list, exactly like src/lib/exams/subjects.ts.
+/// The exam's subjects (website examSubjects): catalog subjects, the class 11/12 stream,
+/// and board add-on subjects when the student chose them.
 List<String> examSubjectNames(AppData data) {
   final String examId = data.settings.examId ?? 'jee';
   for (final ExamCatalogEntry entry in data.examCatalog) {
-    if (entry.id == examId && entry.subjects.isNotEmpty) return entry.subjects;
+    if (entry.id == examId && entry.subjects.isNotEmpty) {
+      return onboardingSubjects(entry, session: data.settings.examSession, addon: data.settings.boardsAddon);
+    }
   }
   return const <String>['Physics', 'Chemistry', 'Maths'];
+}
+
+/// Form subjects: the exam's subjects plus a record's own subject when it is no longer in
+/// the list, so editing an old record never silently changes it (useExamSubjects(current)).
+List<String> examSubjectsWith(AppData data, String? current) {
+  final List<String> list = <String>[...examSubjectNames(data)];
+  if (current != null && current.isNotEmpty && !list.contains(current)) list.add(current);
+  return list;
 }
 
 ExamCatalogEntry? examEntry(AppData data, String? examId) {

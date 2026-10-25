@@ -446,44 +446,66 @@ class DataController extends StateNotifier<DataState> {
   /* Tests                                                              */
   /* ------------------------------------------------------------------ */
 
-  Future<void> saveTest(TestRecord test, {List<TestSubjectScore>? subjectScores}) async {
+  /// Saves a test and, like the website, replaces its child rows: subject scores not in
+  /// [subjectScores] are removed, and the single chapter link (when [chapterLink] is
+  /// provided, or always for Full Mock) replaces any older link.
+  Future<void> saveTest(
+    TestRecord test, {
+    List<TestSubjectScore>? subjectScores,
+    TestChapterLink? chapterLink,
+    bool replaceChapterLinks = false,
+  }) async {
+    final List<TestSubjectScore> oldScores =
+        state.data.testSubjectScores.where((TestSubjectScore row) => row.testId == test.id).toList();
+    final List<TestChapterLink> oldLinks =
+        state.data.testChapterLinks.where((TestChapterLink row) => row.testId == test.id).toList();
+    final bool fullMock = test.testType == 'Full Mock';
+    final bool relink = replaceChapterLinks || fullMock || chapterLink != null;
     await _run(
       () async {
         await _repository.upsertRow('tests', test.toMap());
-        // A Full Mock has no single chapter: drop any chapter link left from an earlier type.
-        if (test.testType == 'Full Mock') {
-          await _repository.deleteWhere('test_chapter_links', 'test_id', test.id, _userId);
-        }
         if (subjectScores != null) {
-          if (subjectScores.isEmpty) {
-            await _repository.deleteWhere('test_subject_scores', 'test_id', test.id, _userId);
-          } else {
+          if (subjectScores.isNotEmpty) {
             await _repository.upsertRows(
               'test_subject_scores',
               subjectScores.map((TestSubjectScore row) => row.toMap()).toList(),
             );
+          }
+          for (final TestSubjectScore old in oldScores) {
+            if (!subjectScores.any((TestSubjectScore next) => next.subject == old.subject)) {
+              await _repository.deleteRow('test_subject_scores', old.id, _userId);
+            }
+          }
+        }
+        if (relink) {
+          final TestChapterLink? link = fullMock ? null : chapterLink;
+          if (link != null) await _repository.upsertRow('test_chapter_links', link.toMap());
+          for (final TestChapterLink old in oldLinks) {
+            if (old.id != link?.id) await _repository.deleteRow('test_chapter_links', old.id, _userId);
           }
         }
       },
       () async {
         List<TestSubjectScore> scores = state.data.testSubjectScores;
         if (subjectScores != null) {
-          scores = subjectScores.isEmpty
-              ? scores.where((TestSubjectScore row) => row.testId != test.id).toList()
-              : <TestSubjectScore>[
-                  for (final TestSubjectScore row in scores)
-                    if (row.testId != test.id ||
-                        !subjectScores.any((TestSubjectScore next) => next.subject == row.subject))
-                      row,
-                  ...subjectScores,
-                ];
+          scores = <TestSubjectScore>[
+            for (final TestSubjectScore row in scores)
+              if (row.testId != test.id) row,
+            ...subjectScores,
+          ];
+        }
+        List<TestChapterLink> links = state.data.testChapterLinks;
+        if (relink) {
+          links = <TestChapterLink>[
+            for (final TestChapterLink row in links)
+              if (row.testId != test.id) row,
+            if (!fullMock && chapterLink != null) chapterLink,
+          ];
         }
         _apply(state.data.copyWith(
           tests: _put(state.data.tests, test, (TestRecord row) => row.id),
           testSubjectScores: scores,
-          testChapterLinks: test.testType == 'Full Mock'
-              ? state.data.testChapterLinks.where((TestChapterLink row) => row.testId != test.id).toList()
-              : state.data.testChapterLinks,
+          testChapterLinks: links,
         ));
       },
     );

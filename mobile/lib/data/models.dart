@@ -37,8 +37,7 @@ int? _intOrNull(Object? value) {
   return int.tryParse(value.toString());
 }
 
-bool _bool(Object? value, [bool fallback = false]) =>
-    value is bool ? value : fallback;
+bool _bool(Object? value, [bool fallback = false]) => value is bool ? value : fallback;
 
 List<String> _stringList(Object? value) {
   if (value is List) return value.map((item) => item.toString()).toList(growable: false);
@@ -204,7 +203,13 @@ class AppSettings {
       advancedExamDate: _strOrNull(raw['advanced_exam_date']),
       targetScore: _numOrNull(raw['target_score']) ?? fallback.targetScore,
       theme: _str(raw['theme'], 'light'),
-      interfaceFont: _str(raw['interface_font'], 'lexend'),
+      // The database stores Lexend as 'default' (web READING_FONTS); unknown values fall back to it.
+      interfaceFont: switch (_str(raw['interface_font'], 'default')) {
+        'poppins' => 'poppins',
+        'sora' => 'sora',
+        'open-sans' => 'open-sans',
+        _ => 'lexend',
+      },
       colorTheme: _str(raw['color_theme'], 'default'),
       weakThreshold: _numOrNull(raw['weak_threshold']) ?? 60,
       strongThreshold: _numOrNull(raw['strong_threshold']) ?? 80,
@@ -222,7 +227,8 @@ class AppSettings {
       examMode: _str(raw['exam_mode'], 'auto'),
       remindersEnabled: _bool(raw['reminders_enabled']),
       reminderTime: _str(raw['reminder_time'], '08:00'),
-      reminderTypes: _stringList(raw['reminder_types']).isEmpty ? fallback.reminderTypes : _stringList(raw['reminder_types']),
+      reminderTypes:
+          _stringList(raw['reminder_types']).isEmpty ? fallback.reminderTypes : _stringList(raw['reminder_types']),
       examId: _strOrNull(raw['exam_id']),
       examYear: _intOrNull(raw['exam_year']),
       examSession: _strOrNull(raw['exam_session']),
@@ -242,7 +248,7 @@ class AppSettings {
         'advanced_exam_date': advancedExamDate,
         'target_score': targetScore,
         'theme': theme,
-        'interface_font': interfaceFont,
+        'interface_font': interfaceFont == 'lexend' ? 'default' : interfaceFont,
         'color_theme': colorTheme,
         'weak_threshold': weakThreshold,
         'strong_threshold': strongThreshold,
@@ -541,6 +547,7 @@ class TestRecord {
   final int? correct;
   final int? wrong;
   final int? skipped;
+
   /// Optional question count; correct + wrong + skipped never exceed it.
   final int? totalQuestions;
   final double? negativeMarks;
@@ -1042,8 +1049,7 @@ class StudyCard {
         difficulty: difficulty == _sentinel ? this.difficulty : difficulty as String?,
         lastRating: lastRating == _sentinel ? this.lastRating : lastRating as String?,
         reviews: reviews ?? this.reviews,
-        lastReviewedAt:
-            lastReviewedAt == _sentinel ? this.lastReviewedAt : lastReviewedAt as String?,
+        lastReviewedAt: lastReviewedAt == _sentinel ? this.lastReviewedAt : lastReviewedAt as String?,
         nextReviewAt: nextReviewAt == _sentinel ? this.nextReviewAt : nextReviewAt as String?,
         createdAt: createdAt,
         updatedAt: updatedAt,
@@ -1233,8 +1239,7 @@ class Mistake {
         'retry_status': retryStatus,
       };
 
-  Mistake copyWith({String? retryStatus, String? solutionNote, bool? retryLater, String? imagePath}) =>
-      Mistake(
+  Mistake copyWith({String? retryStatus, String? solutionNote, bool? retryLater, String? imagePath}) => Mistake(
         id: id,
         userId: userId,
         chapterId: chapterId,
@@ -1505,7 +1510,8 @@ class UserExamTrack {
         'notes': notes,
       };
 
-  UserExamTrack copyWith({String? label, Object? examDate = _sentinel, bool? enabled, Object? targetScore = _sentinel}) =>
+  UserExamTrack copyWith(
+          {String? label, Object? examDate = _sentinel, bool? enabled, Object? targetScore = _sentinel}) =>
       UserExamTrack(
         id: id,
         userId: userId,
@@ -1533,11 +1539,15 @@ class ExamCatalogEntry {
     this.subjects = const <String>[],
     this.sessionLabel = '',
     this.sortOrder = 0,
+    this.markingScheme,
   });
 
   final String id;
   final String name;
   final String category;
+
+  /// Raw `exam_catalog.marking_scheme` JSON (validated by logic/marking.dart before use).
+  final Map<String, dynamic>? markingScheme;
   final List<int> years;
   final List<String> sessions;
   final List<String> boards;
@@ -1557,5 +1567,6 @@ class ExamCatalogEntry {
         subjects: _stringList(raw['subjects']),
         sessionLabel: _str(raw['session_label']),
         sortOrder: _int(raw['sort_order']),
+        markingScheme: raw['marking_scheme'] is Map ? Map<String, dynamic>.from(raw['marking_scheme'] as Map) : null,
       );
 }

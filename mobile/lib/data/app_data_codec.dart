@@ -48,6 +48,7 @@ class AppDataCodec {
               'subjects': entry.subjects,
               'session_label': entry.sessionLabel,
               'sort_order': entry.sortOrder,
+              if (entry.markingScheme != null) 'marking_scheme': entry.markingScheme,
             },
         ],
       };
@@ -93,32 +94,24 @@ class AppDataCodec {
         settings: map['settings'] is Map
             ? AppSettings.fromMap(Map<String, dynamic>.from(map['settings'] as Map), userId)
             : AppSettings.defaults(userId),
-        profile: map['profile'] is Map
-            ? Profile.fromMap(Map<String, dynamic>.from(map['profile'] as Map))
-            : null,
+        profile: map['profile'] is Map ? Profile.fromMap(Map<String, dynamic>.from(map['profile'] as Map)) : null,
         chapters: rows<Chapter>(<String>['chapters'], Chapter.fromMap),
         revisions: rows<Revision>(<String>['chapter_revisions', 'revisions'], Revision.fromMap),
         tests: rows<TestRecord>(<String>['tests'], TestRecord.fromMap),
-        testSubjectScores:
-            rows<TestSubjectScore>(<String>['test_subject_scores'], TestSubjectScore.fromMap),
-        testChapterLinks:
-            rows<TestChapterLink>(<String>['test_chapter_links'], TestChapterLink.fromMap),
+        testSubjectScores: rows<TestSubjectScore>(<String>['test_subject_scores'], TestSubjectScore.fromMap),
+        testChapterLinks: rows<TestChapterLink>(<String>['test_chapter_links'], TestChapterLink.fromMap),
         mistakes: rows<Mistake>(<String>['mistakes'], Mistake.fromMap),
         tasks: rows<DailyTask>(<String>['daily_tasks', 'tasks'], DailyTask.fromMap),
         goals: rows<WeeklyGoal>(<String>['weekly_goals', 'goals'], WeeklyGoal.fromMap),
         sessions: rows<StudySession>(<String>['study_sessions', 'sessions'], StudySession.fromMap),
-        practiceSessions:
-            rows<PracticeSession>(<String>['practice_sessions', 'practice'], PracticeSession.fromMap),
+        practiceSessions: rows<PracticeSession>(<String>['practice_sessions', 'practice'], PracticeSession.fromMap),
         pyqRecords: rows<PyqRecord>(<String>['pyq_records', 'pyqs'], PyqRecord.fromMap),
-        chapterStages:
-            rows<ChapterStageRow>(<String>['chapter_stages', 'stages'], ChapterStageRow.fromMap),
+        chapterStages: rows<ChapterStageRow>(<String>['chapter_stages', 'stages'], ChapterStageRow.fromMap),
         backlogItems: rows<BacklogItem>(<String>['backlog_items', 'backlog'], BacklogItem.fromMap),
         studyCards: rows<StudyCard>(<String>['study_cards', 'cards'], StudyCard.fromMap),
         errorLogs: rows<TestErrorLog>(<String>['test_error_logs', 'errorLogs'], TestErrorLog.fromMap),
-        timeEntries:
-            rows<TestTimeEntry>(<String>['test_time_entries', 'timeEntries'], TestTimeEntry.fromMap),
-        examTracks:
-            rows<UserExamTrack>(<String>['user_exam_tracks', 'examTracks'], UserExamTrack.fromMap),
+        timeEntries: rows<TestTimeEntry>(<String>['test_time_entries', 'timeEntries'], TestTimeEntry.fromMap),
+        examTracks: rows<UserExamTrack>(<String>['user_exam_tracks', 'examTracks'], UserExamTrack.fromMap),
         examCatalog: rows<ExamCatalogEntry>(<String>['exam_catalog'], ExamCatalogEntry.fromMap),
       );
     } catch (_) {

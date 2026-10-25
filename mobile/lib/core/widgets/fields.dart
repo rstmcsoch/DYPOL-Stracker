@@ -54,8 +54,7 @@ class AppField extends StatelessWidget {
     // turn "abcd@1234" into "Abcd@1234" and produce "Email or password is incorrect" for a
     // password that is perfectly correct. Obscured fields therefore never capitalise,
     // autocorrect or suggest.
-    final TextCapitalization effectiveCaps =
-        obscure ? TextCapitalization.none : textCapitalization;
+    final TextCapitalization effectiveCaps = obscure ? TextCapitalization.none : textCapitalization;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -63,12 +62,14 @@ class AppField extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(color: colors.palette.inkSoft),
+              // Long labels wrap in narrow columns instead of overflowing.
+              Flexible(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(color: colors.palette.inkSoft),
+                ),
               ),
-              if (required)
-                Text(' *', style: TextStyle(color: colors.palette.red, fontFamily: 'PatrickHand')),
+              if (required) Text(' *', style: TextStyle(color: colors.palette.red, fontFamily: 'PatrickHand')),
             ],
           ),
           const SizedBox(height: 5),
@@ -370,9 +371,7 @@ class ChoiceRow<T> extends StatelessWidget {
                   labelStyle: TextStyle(
                     fontFamily: 'Lexend',
                     fontSize: 12,
-                    color: option == value
-                        ? colors.palette.textAccent
-                        : colors.palette.inkSoft,
+                    color: option == value ? colors.palette.textAccent : colors.palette.inkSoft,
                   ),
                   backgroundColor: colors.palette.paperSoft,
                   selectedColor: colors.palette.accentLight,
@@ -428,4 +427,119 @@ class SearchBox extends StatelessWidget {
       ),
     );
   }
+}
+
+/// One option of an [AppOptionSelect]. Headers (value null, header true) render as
+/// non-selectable group labels, like the website's `<optgroup>`.
+class SelectOption<T> {
+  const SelectOption(this.value, this.label) : header = false;
+  const SelectOption.header(this.label)
+      : value = null,
+        header = true;
+
+  final T? value;
+  final String label;
+  final bool header;
+}
+
+/// Dropdown that can show a placeholder ("Choose…", "None", "General") for a null value
+/// and optional group headers, so pickers read exactly like the website's selects.
+class AppOptionSelect<T> extends StatelessWidget {
+  const AppOptionSelect({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    this.placeholder,
+    this.nullLabel,
+    this.error,
+    this.helper,
+    this.required = false,
+    this.enabled = true,
+  });
+
+  final String label;
+  final T? value;
+  final List<SelectOption<T>> options;
+  final ValueChanged<T?> onChanged;
+
+  /// Hint shown while nothing is chosen and null is not a choice.
+  final String? placeholder;
+
+  /// When set, null is a real choice shown with this label (e.g. "General", "None").
+  final String? nullLabel;
+  final String? error;
+  final String? helper;
+  final bool required;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final TextTheme text = Theme.of(context).textTheme;
+    final bool contains =
+        value == null ? nullLabel != null : options.any((SelectOption<T> o) => !o.header && o.value == value);
+    final List<DropdownMenuItem<_Choice<T>>> items = <DropdownMenuItem<_Choice<T>>>[
+      if (nullLabel != null)
+        DropdownMenuItem<_Choice<T>>(value: _Choice<T>(null), child: Text(nullLabel!, style: text.bodyMedium)),
+      for (int i = 0; i < options.length; i += 1)
+        options[i].header
+            ? DropdownMenuItem<_Choice<T>>(
+                enabled: false,
+                value: _Choice<T>.header(i),
+                child: Text(
+                  options[i].label.toUpperCase(),
+                  style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w700, color: colors.muted),
+                ),
+              )
+            : DropdownMenuItem<_Choice<T>>(
+                value: _Choice<T>(options[i].value),
+                child: Text(options[i].label, overflow: TextOverflow.ellipsis, style: text.bodyMedium),
+              ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(required ? '$label *' : label, style: text.labelMedium?.copyWith(color: colors.palette.inkSoft)),
+          const SizedBox(height: 5),
+          DropdownButtonFormField<_Choice<T>>(
+            key: ValueKey<Object?>('$label-${contains ? value : '_'}-${options.length}'),
+            initialValue: contains ? _Choice<T>(value) : null,
+            isExpanded: true,
+            hint: placeholder == null ? null : Text(placeholder!),
+            dropdownColor: colors.palette.paper,
+            borderRadius: BorderRadius.circular(12),
+            menuMaxHeight: 420,
+            items: items,
+            onChanged: enabled ? (_Choice<T>? choice) => onChanged(choice?.value) : null,
+            decoration: InputDecoration(
+              errorText: error,
+              helperText: helper,
+              helperMaxLines: 3,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Choice<T> {
+  const _Choice(this.value) : headerIndex = null;
+  const _Choice.header(int index)
+      : value = null,
+        headerIndex = index;
+
+  final T? value;
+  final int? headerIndex;
+
+  @override
+  bool operator ==(Object other) => other is _Choice<T> && other.value == value && other.headerIndex == headerIndex;
+
+  @override
+  int get hashCode => Object.hash(value, headerIndex);
 }
