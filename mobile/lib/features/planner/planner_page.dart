@@ -13,6 +13,8 @@ import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/home_summary.dart' show prettyDate;
 import '../../logic/planner.dart';
+import '../../logic/search.dart';
+import '../search/search_focus.dart';
 import '../shell/app_shell.dart';
 
 /// Planner, as src/pages/PlannerPage.tsx: a Monday-first week strip, the selected day's
@@ -28,6 +30,21 @@ class PlannerPage extends ConsumerStatefulWidget {
 class _PlannerPageState extends ConsumerState<PlannerPage> {
   String _weekStart = startOfWeek(todayIso());
   String _selected = todayIso();
+
+  @override
+  void initState() {
+    super.initState();
+    // Opened from a search result: show the week and day that hold the task.
+    final SearchFocus? focus = SearchFocusScope.of(context);
+    if (focus != null && focus.kind == SearchKind.task) {
+      final DailyTask? task =
+          ref.read(dataControllerProvider).data.tasks.where((DailyTask t) => t.id == focus.id).firstOrNull;
+      if (task != null) {
+        _selected = task.taskDate;
+        _weekStart = startOfWeek(task.taskDate);
+      }
+    }
+  }
 
   void _selectWeek(String start) => setState(() {
         _weekStart = start;
@@ -182,7 +199,11 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
                   )
                 else
                   for (int i = 0; i < tasks.length; i += 1)
-                    _TaskRow(task: tasks[i], index: i, tasks: tasks, data: data),
+                    SearchTarget(
+                      id: tasks[i].id,
+                      radius: 12,
+                      child: _TaskRow(task: tasks[i], index: i, tasks: tasks, data: data),
+                    ),
                 Divider(color: colors.palette.line),
                 Row(
                   children: <Widget>[

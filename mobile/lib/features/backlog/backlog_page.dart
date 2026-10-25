@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -10,6 +12,8 @@ import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/recommend.dart';
+import '../../logic/search.dart';
+import '../search/search_focus.dart';
 import '../shell/app_shell.dart';
 
 /// Backlog: topics that slipped, with priority, due dates and snoozing. Only awake
@@ -85,6 +89,20 @@ class _BacklogPageState extends ConsumerState<BacklogPage> {
   String? _priority;
   String _groupBy = 'Due date';
   bool _showDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Opened from a search result for a cleared item: expand the cleared list.
+    final SearchFocus? focus = SearchFocusScope.of(context);
+    if (focus != null && focus.kind == SearchKind.backlog) {
+      _showDone = ref
+          .read(dataControllerProvider)
+          .data
+          .backlogItems
+          .any((BacklogItem item) => item.id == focus.id && item.isDone);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -194,11 +212,13 @@ class _BacklogPageState extends ConsumerState<BacklogPage> {
                 group.title,
                 trailing: _note(context, '${group.items.length} item${group.items.length == 1 ? '' : 's'}'),
               ),
-              for (final BacklogItem item in group.items) _BacklogTile(item: item, data: data, today: today),
+              for (final BacklogItem item in group.items)
+                SearchTarget(id: item.id, child: _BacklogTile(item: item, data: data, today: today)),
             ],
             if (snoozed.isNotEmpty) ...<Widget>[
               SectionHeading('Snoozed', trailing: _note(context, 'Returns automatically on its date.')),
-              for (final BacklogItem item in snoozed) _BacklogTile(item: item, data: data, today: today),
+              for (final BacklogItem item in snoozed)
+                SearchTarget(id: item.id, child: _BacklogTile(item: item, data: data, today: today)),
             ],
             NotebookCard(
               dense: true,
@@ -212,7 +232,8 @@ class _BacklogPageState extends ConsumerState<BacklogPage> {
               child: const SizedBox.shrink(),
             ),
             if (_showDone)
-              for (final BacklogItem item in completed.take(60)) _BacklogTile(item: item, data: data, today: today),
+              for (final BacklogItem item in completed.take(60))
+                SearchTarget(id: item.id, child: _BacklogTile(item: item, data: data, today: today)),
           ],
           const SizedBox(height: 10),
           InfoBanner(
@@ -299,23 +320,28 @@ class _BacklogTile extends ConsumerWidget {
               ),
             const SizedBox(height: 4),
             Wrap(
+              spacing: 6,
+              runSpacing: 6,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
                 if (!item.isDone)
-                  TextButton(
+                  SecondaryButton(
+                    compact: true,
+                    icon: Icons.check,
+                    label: 'Clear',
                     onPressed: () => _save(
                       context,
                       ref,
                       item.copyWithStatus('done', completedAt: isoNow()),
                       toast: 'Backlog item cleared. Nice.',
                     ),
-                    child: const Text('Clear'),
                   ),
                 if (!item.isDone && item.snoozedUntil != addDays(today, 1))
-                  TextButton.icon(
+                  SecondaryButton(
+                    compact: true,
+                    icon: Icons.snooze,
+                    label: 'Snooze until tomorrow',
                     onPressed: () => _snooze(context, ref, item, addDays(today, 1)),
-                    icon: const Icon(Icons.snooze, size: 16),
-                    label: const Text('Snooze until tomorrow'),
                   ),
                 if (!item.isDone)
                   PopupMenuButton<int>(
@@ -339,7 +365,10 @@ class _BacklogTile extends ConsumerWidget {
                     ],
                   ),
                 if (item.status == 'snoozed' || item.isDone)
-                  TextButton(
+                  SecondaryButton(
+                    compact: true,
+                    icon: Icons.undo,
+                    label: 'Reopen',
                     onPressed: () => _save(
                       context,
                       ref,
@@ -359,7 +388,6 @@ class _BacklogTile extends ConsumerWidget {
                       ),
                       toast: 'Reopened.',
                     ),
-                    child: const Text('Reopen'),
                   ),
               ],
             ),
@@ -390,7 +418,7 @@ class _BacklogTile extends ConsumerWidget {
       await ref.read(dataControllerProvider.notifier).deleteBacklog(item);
       if (context.mounted) showToast(context, 'Removed.');
     } catch (error) {
-      if (context.mounted) showToast(context, error.toString(), error: true);
+      if (context.mounted) showToast(context, userMessage(error), error: true);
     }
   }
 
@@ -400,7 +428,7 @@ class _BacklogTile extends ConsumerWidget {
       await ref.read(dataControllerProvider.notifier).saveBacklog(next);
       if (context.mounted) showToast(context, toast);
     } catch (error) {
-      if (context.mounted) showToast(context, error.toString(), error: true);
+      if (context.mounted) showToast(context, userMessage(error), error: true);
     }
   }
 }
@@ -547,13 +575,14 @@ Future<void> openBacklogEditor(
                 if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                 if (context.mounted) showToast(context, creating ? 'Added to your backlog.' : 'Backlog item updated.');
               } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
+                if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
             child: Text(creating ? 'Add to backlog' : 'Save changes'),
           ),
           if (!creating)
-            TextButton(
+            DangerButton(
+              label: 'Delete',
               onPressed: () async {
                 final bool confirmed = await confirmAction(
                   context,
@@ -566,10 +595,10 @@ Future<void> openBacklogEditor(
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, 'Item deleted.');
                 } catch (error) {
-                  if (context.mounted) showToast(context, error.toString(), error: true);
+                  if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              child: Text('Delete', style: TextStyle(color: context.stracker.palette.red)),
+              
             ),
         ],
       ),

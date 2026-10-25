@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
+import '../../core/widgets/wandering_eyes.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
@@ -18,10 +20,9 @@ import '../../logic/onboarding.dart';
 import '../../logic/progress.dart';
 import '../auth/auth_screens.dart';
 import '../shell/app_shell.dart';
-import 'appearance_card.dart';
 import '../shell/routes.dart';
 import 'about_page.dart';
-import '../../core/widgets/wandering_eyes.dart';
+import 'appearance_card.dart';
 
 /// Profile tab: identity, exam tracks, a compact account summary, appearance, password and
 /// sign-out. Everything that writes goes to the same Supabase rows the website uses.
@@ -129,7 +130,7 @@ class ProfilePage extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
-              'Theme, reading font, appearance and AI settings live under the gear at the top of this page.',
+              'Theme, palette and reading font are in Appearance below. AI and account settings: the gear at the top.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
             ),
           ),
@@ -289,7 +290,7 @@ class ProfilePage extends ConsumerWidget {
                 if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                 if (context.mounted) showToast(context, 'Name updated.');
               } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
+                if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
             child: const Text('Save'),
@@ -408,7 +409,7 @@ class _TrackRow extends ConsumerWidget {
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, '$label saved and set as active.');
                 } catch (error) {
-                  if (context.mounted) showToast(context, error.toString(), error: true);
+                  if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
               child: const Text('Save and use this track'),
@@ -580,7 +581,7 @@ class _ExamSelectionCardState extends ConsumerState<ExamSelectionCard> {
       if (mounted) showToast(context, 'Exam saved.');
       await HapticFeedback.lightImpact();
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }

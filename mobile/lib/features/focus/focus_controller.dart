@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/errors.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/focus.dart';
@@ -128,7 +129,7 @@ class FocusController extends StateNotifier<FocusTimerState> with WidgetsBinding
     } catch (error) {
       // Allow a retry of the same block (same id, so still no duplicate).
       _logged.remove(id);
-      return FocusSaveResult(0, error: error.toString());
+      return FocusSaveResult(0, error: userMessage(error));
     }
   }
 

@@ -9,9 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/date.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/multi_charts.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
+import '../../core/widgets/multi_charts.dart';
 import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
@@ -130,7 +130,7 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
       await Share.shareXFiles(<XFile>[XFile(file.path, mimeType: 'text/csv')], subject: 'Stracker performance trend');
       if (mounted) showToast(context, 'Performance trend exported as CSV.');
     } catch (error) {
-      if (mounted) showToast(context, 'Could not export the trend: $error', error: true);
+      if (mounted) showToast(context, 'Could not export the trend. Please try again.', error: true);
     }
   }
 

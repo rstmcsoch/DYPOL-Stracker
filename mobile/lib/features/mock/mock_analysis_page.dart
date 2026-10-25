@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
@@ -387,7 +388,7 @@ class _LogRow extends ConsumerWidget {
                 await ref.read(dataControllerProvider.notifier).deleteErrorLog(log);
                 if (context.mounted) showToast(context, 'Classification removed.');
               } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
+                if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
             itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[
@@ -527,7 +528,7 @@ Future<void> openErrorLogEditor(
                             showToast(context, creating ? 'Classification added.' : 'Classification saved.');
                           }
                         } catch (error) {
-                          if (context.mounted) showToast(context, error.toString(), error: true);
+                          if (context.mounted) showToast(context, userMessage(error), error: true);
                           if (sheetContext.mounted) setSheetState(() => saving = false);
                         }
                       },

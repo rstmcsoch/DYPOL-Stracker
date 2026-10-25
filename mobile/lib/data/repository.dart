@@ -1,5 +1,5 @@
-import 'dart:typed_data';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -56,27 +56,21 @@ class StrackerRepository {
 
   Future<List<Map<String, dynamic>>> fetchRows(String table, String userId) async {
     try {
-      final List<Map<String, dynamic>> rows = await _client
-          .from(table)
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: true);
+      final List<Map<String, dynamic>> rows =
+          await _client.from(table).select().eq('user_id', userId).order('created_at', ascending: true);
       return rows;
     } on PostgrestException catch (error) {
-      throw AppFailure(_friendly(error), code: error.code);
+      throw AppFailure(_friendly(error, reading: true), code: error.code);
     } catch (error) {
-      throw AppFailure(_friendly(error));
+      throw AppFailure(_friendly(error, reading: true));
     }
   }
 
   /// Read-only catalog, published by the project owner. Students only see `hidden = false`.
   Future<List<ExamCatalogEntry>> fetchExamCatalog() async {
     try {
-      final List<Map<String, dynamic>> rows = await _client
-          .from('exam_catalog')
-          .select()
-          .eq('hidden', false)
-          .order('sort_order', ascending: true);
+      final List<Map<String, dynamic>> rows =
+          await _client.from('exam_catalog').select().eq('hidden', false).order('sort_order', ascending: true);
       return rows.map(ExamCatalogEntry.fromMap).toList();
     } catch (_) {
       // The catalog is an enhancement: if the table is unavailable the app falls back to
@@ -171,7 +165,7 @@ class StrackerRepository {
     }
   }
 
-  String _friendly(Object error) {
+  String _friendly(Object error, {bool reading = false}) {
     if (error is PostgrestException) {
       final String message = error.message.toLowerCase();
       if (message.contains('row-level security') || message.contains('permission')) {
@@ -189,12 +183,33 @@ class StrackerRepository {
       if (message.contains('network') || message.contains('socket')) {
         return 'Could not reach Stracker. Check your connection and try again.';
       }
-      return error.message;
+      if (message.contains('check constraint') || error.code == '23514') {
+        return 'Some values are outside the allowed range. Check them and try again.';
+      }
+      if (message.contains('null value') || error.code == '23502') {
+        return 'Something required is missing. Fill it in and try again.';
+      }
+      if (message.contains('too long') || error.code == '22001') {
+        return 'That text is too long. Shorten it and try again.';
+      }
+      if (message.contains('jwt') || error.code == 'PGRST301' || error.code == 'PGRST303') {
+        return 'Your session expired. Sign in again to continue syncing.';
+      }
+      // Raw database wording is never shown to the student.
+      return reading
+          ? 'Your notebook could not be loaded. Please try again.'
+          : 'That change could not be saved. Please try again.';
     }
     final String text = error.toString();
-    if (text.contains('SocketException') || text.contains('Failed host lookup')) {
+    if (text.contains('SocketException') ||
+        text.contains('Failed host lookup') ||
+        text.contains('ClientException') ||
+        text.contains('TimeoutException') ||
+        text.contains('HandshakeException')) {
       return 'Could not reach Stracker. Check your connection and try again.';
     }
-    return 'Something went wrong saving that change. Try again.';
+    return reading
+        ? 'Your notebook could not be loaded. Please try again.'
+        : 'Something went wrong saving that change. Try again.';
   }
 }

@@ -3,8 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/format.dart';
+import '../../core/iterables.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -14,8 +17,8 @@ import '../../data/models.dart';
 import '../../logic/analytics.dart';
 import '../../logic/progress.dart';
 import '../revision/revision_actions.dart';
+import '../search/search_focus.dart';
 import '../shell/app_shell.dart';
-import '../../core/iterables.dart';
 
 /// Syllabus notebook: every chapter with its status, importance, five preparation
 /// stages, practice accuracy and pipeline progress. Search, filter, sort and reorder
@@ -260,10 +263,13 @@ class _SyllabusPageState extends ConsumerState<SyllabusPage> {
             )
           else
             for (final Chapter chapter in rows)
-              _ChapterCard(
-                chapter: chapter,
-                data: data,
-                practice: practice[chapter.id],
+              SearchTarget(
+                id: chapter.id,
+                child: _ChapterCard(
+                  chapter: chapter,
+                  data: data,
+                  practice: practice[chapter.id],
+                ),
               ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
@@ -629,7 +635,8 @@ Future<void> openChapterEditor(
                 ],
               ),
               const SizedBox(height: 6),
-              TextButton.icon(
+              DangerButton(
+                label: 'Delete chapter',
                 onPressed: () async {
                   final bool confirmed = await confirmAction(
                     context,
@@ -644,11 +651,9 @@ Future<void> openChapterEditor(
                     if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                     if (context.mounted) showToast(context, 'Chapter deleted.');
                   } catch (error) {
-                    if (context.mounted) showToast(context, error.toString(), error: true);
+                    if (context.mounted) showToast(context, userMessage(error), error: true);
                   }
                 },
-                icon: Icon(Icons.delete_outline, size: 17, color: context.stracker.palette.red),
-                label: Text('Delete chapter', style: TextStyle(color: context.stracker.palette.red)),
               ),
             ],
             const SizedBox(height: 8),
@@ -687,7 +692,7 @@ Future<void> openChapterEditor(
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, 'Chapter saved to your syllabus.');
                 } catch (error) {
-                  if (context.mounted) showToast(context, error.toString(), error: true);
+                  if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
               child: Text(creating ? 'Add chapter' : 'Save notes'),
@@ -760,7 +765,7 @@ Future<void> changeChapterStatus(BuildContext context, WidgetRef ref, AppData da
     }
     await HapticFeedback.selectionClick();
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   }
 }
 
@@ -797,7 +802,7 @@ Future<void> toggleChapterStage(
       showToast(context, '${stage.label} ${nextDone ? 'marked' : 'cleared'}.');
     }
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   }
 }
 
@@ -819,6 +824,6 @@ Future<void> moveChapter(
       other.copyWith(position: chapter.position),
     ]);
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   }
 }

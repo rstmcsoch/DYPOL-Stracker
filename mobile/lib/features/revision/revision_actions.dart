@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../data/app_data.dart';
@@ -44,7 +45,7 @@ Future<void> completeRevision(
     }
     await HapticFeedback.lightImpact();
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   } finally {
     _completing.remove(revision.id);
   }
@@ -57,7 +58,7 @@ Future<void> snoozeRevision(BuildContext context, WidgetRef ref, Revision revisi
     if (context.mounted) showToast(context, 'Moved to tomorrow. It is still in your queue.');
     await HapticFeedback.selectionClick();
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   }
 }
 
@@ -80,7 +81,7 @@ Future<void> scheduleRevision(
       showToast(context, 'Revision scheduled for ${chapter.name}.');
     }
   } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+    if (context.mounted) showToast(context, userMessage(error), error: true);
   }
 }
 

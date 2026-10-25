@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/platform/file_picker.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
@@ -443,7 +444,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
           );
       if (mounted) showToast(context, 'Backup written to ${file.path}');
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -484,7 +485,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       );
       if (mounted) showToast(context, 'Report written to ${file.path}');
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -504,7 +505,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       );
       if (mounted) showToast(context, 'Test history exported as an Excel-ready CSV.');
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -529,7 +530,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       );
       if (mounted) showToast(context, '${files.length} CSV files written to ${dir.path}');
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -548,7 +549,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       }
       _previewImport(text: file.text, fileName: file.name);
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     }
   }
 
@@ -567,7 +568,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
         _payload = null;
         _preview = null;
       });
-      showToast(context, error.toString(), error: true);
+      showToast(context, userMessage(error), error: true);
     }
   }
 
@@ -587,7 +588,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
         showToast(context, '$written rows imported.');
       }
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -606,7 +607,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       await ref.read(dataControllerProvider.notifier).clearDeviceCache();
       if (mounted) showToast(context, 'Cache cleared.');
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     }
   }
 }

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// A user-facing failure. Messages here are safe to show: they never include tokens,
 /// SQL, provider keys or stack traces.
 class AppFailure implements Exception {
@@ -109,4 +111,31 @@ String friendlyDataError(Object error) {
     return 'Could not reach Stracker. Check your connection — your last change was not saved.';
   }
   return 'That change could not be saved. Please try again.';
+}
+
+/// The message to show for any caught error. [AppFailure]s carry a safe, written message;
+/// anything else (a programming error, a platform exception, a raw server message) is never
+/// shown as-is: the student gets a plain sentence and the details go to the debug log.
+String userMessage(Object error, {String fallback = 'Something went wrong, so that was not saved. Please try again.'}) {
+  if (error is AppFailure) return error.message;
+  final String raw = error.toString().toLowerCase();
+  if (raw.contains('socketexception') ||
+      raw.contains('failed host lookup') ||
+      raw.contains('clientexception') ||
+      raw.contains('connection') ||
+      raw.contains('timeout')) {
+    return 'Could not reach Stracker. Check your connection and try again.';
+  }
+  return fallback;
+}
+
+/// Records an unexpected error for debugging: only where it happened, the error type and
+/// a server error code (never note text, server messages or keys), and only outside
+/// release builds.
+void logFailure(String where, Object error, [StackTrace? stack]) {
+  if (kReleaseMode) return;
+  final String code = error is AppFailure && error.code != null ? ' (${error.code})' : '';
+  debugPrint('Stracker $where failed: ${error.runtimeType}$code');
+  // Expected failures (a refused write, no connection) need no stack; bugs do.
+  if (stack != null && error is! AppFailure) debugPrint(stack.toString());
 }

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/validators.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -426,13 +428,14 @@ Future<void> openPracticeEditor(
                 if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                 if (context.mounted) showToast(context, creating ? 'Practice logged.' : 'Practice updated.');
               } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
+                if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
             child: Text(creating ? 'Log practice' : 'Save changes'),
           ),
           if (!creating)
-            TextButton(
+            DangerButton(
+              label: 'Delete',
               onPressed: () async {
                 final bool confirmed = await confirmAction(
                   context,
@@ -445,10 +448,10 @@ Future<void> openPracticeEditor(
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, 'Practice block deleted.');
                 } catch (error) {
-                  if (context.mounted) showToast(context, error.toString(), error: true);
+                  if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              child: Text('Delete', style: TextStyle(color: context.stracker.palette.red)),
+              
             ),
         ],
       ),

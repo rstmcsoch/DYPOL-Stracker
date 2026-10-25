@@ -15,6 +15,7 @@ import '../profile/profile_page.dart';
 import '../pyq/pyq_page.dart';
 import '../retry/retry_page.dart';
 import '../revision/revision_page.dart';
+import '../search/search_focus.dart';
 import '../settings/settings_page.dart';
 import '../studynow/study_now_page.dart';
 import '../syllabus/syllabus_page.dart';
@@ -77,11 +78,17 @@ class Routes {
   /// Opens a section. Android's back returns to where the student came from. From the
   /// drawer or sidebar ([fromMenu]) the section replaces any open one instead of stacking,
   /// like following a link in the website's menu.
-  static Future<void> open(BuildContext context, String key, {bool fromMenu = false}) async {
+  ///
+  /// [focus] is the item a notebook search result points at; the section scrolls to it
+  /// and highlights it.
+  static Future<void> open(BuildContext context, String key, {bool fromMenu = false, SearchFocus? focus}) async {
     final Widget? page = pageFor(key);
     if (page == null) return;
     final NavigatorState navigator = contentNavigator?.currentState ?? Navigator.of(context);
     if (fromMenu) navigator.popUntil((Route<dynamic> route) => route.isFirst);
-    await navigator.push(MaterialPageRoute<void>(builder: (_) => page, settings: RouteSettings(name: key)));
+    await navigator.push(MaterialPageRoute<void>(
+      builder: (_) => focus == null ? page : SearchFocusScope(focus: focus, child: page),
+      settings: RouteSettings(name: key),
+    ));
   }
 }

@@ -1,0 +1,4020 @@
+{
+ "checks": {
+  "ai_action_audit": [
+   {
+    "def": "CHECK (((char_length(action) >= 1) AND (char_length(action) <= 120)))",
+    "name": "ai_action_audit_action_check"
+   },
+   {
+    "def": "CHECK (((model_id IS NULL) OR (char_length(model_id) <= 200)))",
+    "name": "ai_action_audit_model_id_check"
+   },
+   {
+    "def": "CHECK (((provider_id IS NULL) OR (provider_id = ANY (ARRAY['gemini'::text, 'openai'::text, 'anthropic'::text, 'deepseek'::text, 'qwen'::text, 'custom'::text, 'stracker'::text]))))",
+    "name": "ai_action_audit_provider_id_check"
+   },
+   {
+    "def": "CHECK (((char_length(tool_name) >= 1) AND (char_length(tool_name) <= 100)))",
+    "name": "ai_action_audit_tool_name_check"
+   }
+  ],
+  "ai_conversations": [
+   {
+    "def": "CHECK ((char_length(title) <= 160))",
+    "name": "ai_conversations_title_check"
+   }
+  ],
+  "ai_messages": [
+   {
+    "def": "CHECK ((char_length(content) <= 20000))",
+    "name": "ai_messages_content_check"
+   },
+   {
+    "def": "CHECK (((idempotency_key IS NULL) OR (char_length(idempotency_key) <= 100)))",
+    "name": "ai_messages_idempotency_key_check"
+   },
+   {
+    "def": "CHECK (((model_id IS NULL) OR (char_length(model_id) <= 200)))",
+    "name": "ai_messages_model_id_check"
+   },
+   {
+    "def": "CHECK (((provider_id IS NULL) OR (provider_id = ANY (ARRAY['gemini'::text, 'openai'::text, 'anthropic'::text, 'deepseek'::text, 'qwen'::text, 'custom'::text, 'stracker'::text]))))",
+    "name": "ai_messages_provider_id_check"
+   },
+   {
+    "def": "CHECK ((role = ANY (ARRAY['user'::text, 'assistant'::text])))",
+    "name": "ai_messages_role_check"
+   },
+   {
+    "def": "CHECK ((status = ANY (ARRAY['queued'::text, 'running'::text, 'completed'::text, 'failed'::text, 'cancelled'::text, 'waiting'::text])))",
+    "name": "ai_messages_status_check"
+   }
+  ],
+  "ai_model_preferences": [
+   {
+    "def": "CHECK ((id = 1))",
+    "name": "ai_model_preferences_id_check"
+   },
+   {
+    "def": "CHECK (((jsonb_typeof(preferences) = 'object'::text) AND (pg_column_size(preferences) <= 16384)))",
+    "name": "ai_model_preferences_preferences_check"
+   }
+  ],
+  "ai_pending_actions": [
+   {
+    "def": "CHECK ((status = ANY (ARRAY['pending'::text, 'executing'::text, 'completed'::text, 'cancelled'::text, 'failed'::text, 'expired'::text])))",
+    "name": "ai_pending_actions_status_check"
+   },
+   {
+    "def": "CHECK (((char_length(tool_call_key) >= 1) AND (char_length(tool_call_key) <= 120)))",
+    "name": "ai_pending_actions_tool_call_key_check"
+   },
+   {
+    "def": "CHECK (((char_length(tool_name) >= 1) AND (char_length(tool_name) <= 100)))",
+    "name": "ai_pending_actions_tool_name_check"
+   }
+  ],
+  "ai_provider_configs": [
+   {
+    "def": "CHECK ((connection_status = ANY (ARRAY['not_tested'::text, 'connected'::text, 'authentication_failed'::text, 'rate_limited'::text, 'insufficient_balance'::text, 'provider_unavailable'::text, 'model_unavailable'::text, 'configuration_incomplete'::text, 'unsupported'::text])))",
+    "name": "ai_provider_configs_connection_status_check"
+   },
+   {
+    "def": "CHECK (((char_length(display_name) >= 1) AND (char_length(display_name) <= 80)))",
+    "name": "ai_provider_configs_display_name_check"
+   },
+   {
+    "def": "CHECK (((failure_count >= 0) AND (failure_count <= 1000)))",
+    "name": "ai_provider_configs_failure_count_check"
+   },
+   {
+    "def": "CHECK ((char_length(key_hint) <= 4))",
+    "name": "ai_provider_configs_key_hint_check"
+   },
+   {
+    "def": "CHECK (((char_length(model_id) >= 1) AND (char_length(model_id) <= 200)))",
+    "name": "ai_provider_configs_model_id_check"
+   },
+   {
+    "def": "CHECK (((organization_id IS NULL) OR (char_length(organization_id) <= 160)))",
+    "name": "ai_provider_configs_organization_id_check"
+   },
+   {
+    "def": "CHECK ((protocol = ANY (ARRAY['google'::text, 'openai-compatible'::text, 'anthropic-compatible'::text])))",
+    "name": "ai_provider_configs_protocol_check"
+   },
+   {
+    "def": "CHECK ((provider_id = ANY (ARRAY['gemini'::text, 'openai'::text, 'anthropic'::text, 'deepseek'::text, 'qwen'::text, 'custom'::text])))",
+    "name": "ai_provider_configs_provider_id_check"
+   }
+  ],
+  "ai_rate_events": [
+   {
+    "def": "CHECK (((char_length(bucket) >= 1) AND (char_length(bucket) <= 40)))",
+    "name": "ai_rate_events_bucket_check"
+   }
+  ],
+  "ai_tasks": [
+   {
+    "def": "CHECK (((model_id IS NULL) OR (char_length(model_id) <= 200)))",
+    "name": "ai_tasks_model_id_check"
+   },
+   {
+    "def": "CHECK ((char_length(progress) <= 240))",
+    "name": "ai_tasks_progress_check"
+   },
+   {
+    "def": "CHECK (((provider_id IS NULL) OR (provider_id = ANY (ARRAY['gemini'::text, 'openai'::text, 'anthropic'::text, 'deepseek'::text, 'qwen'::text, 'custom'::text, 'stracker'::text]))))",
+    "name": "ai_tasks_provider_id_check"
+   },
+   {
+    "def": "CHECK (((char_length(request_id) >= 1) AND (char_length(request_id) <= 100)))",
+    "name": "ai_tasks_request_id_check"
+   },
+   {
+    "def": "CHECK ((status = ANY (ARRAY['queued'::text, 'running'::text, 'tool_call'::text, 'waiting'::text, 'completed'::text, 'failed'::text, 'cancelled'::text, 'fallback'::text, 'retrying'::text])))",
+    "name": "ai_tasks_status_check"
+   },
+   {
+    "def": "CHECK ((task_type = ANY (ARRAY['chat'::text, 'analytics'::text, 'action'::text, 'general'::text])))",
+    "name": "ai_tasks_task_type_check"
+   }
+  ],
+  "ai_user_preferences": [
+   {
+    "def": "CHECK ((preferred = ANY (ARRAY['stracker'::text, 'own'::text])))",
+    "name": "ai_user_preferences_preferred_check"
+   }
+  ],
+  "analytics_alert_events": [
+   {
+    "def": "CHECK ((char_length(message) <= 300))",
+    "name": "analytics_alert_events_message_check"
+   },
+   {
+    "def": "CHECK ((char_length(rule_id) <= 80))",
+    "name": "analytics_alert_events_rule_id_check"
+   },
+   {
+    "def": "CHECK ((status = ANY (ARRAY['open'::text, 'acknowledged'::text, 'muted'::text, 'resolved'::text])))",
+    "name": "analytics_alert_events_status_check"
+   }
+  ],
+  "analytics_error_groups": [
+   {
+    "def": "CHECK ((char_length(fingerprint) <= 64))",
+    "name": "analytics_error_groups_fingerprint_check"
+   },
+   {
+    "def": "CHECK ((char_length(message) <= 160))",
+    "name": "analytics_error_groups_message_check"
+   },
+   {
+    "def": "CHECK ((char_length(note) <= 1000))",
+    "name": "analytics_error_groups_note_check"
+   },
+   {
+    "def": "CHECK ((status = ANY (ARRAY['open'::text, 'resolved'::text, 'ignored'::text])))",
+    "name": "analytics_error_groups_status_check"
+   }
+  ],
+  "analytics_events": [
+   {
+    "def": "CHECK ((char_length(browser) <= 20))",
+    "name": "analytics_events_browser_check"
+   },
+   {
+    "def": "CHECK ((char_length(deployment_id) <= 80))",
+    "name": "analytics_events_deployment_id_check"
+   },
+   {
+    "def": "CHECK ((device = ANY (ARRAY['mobile'::text, 'tablet'::text, 'desktop'::text])))",
+    "name": "analytics_events_device_check"
+   },
+   {
+    "def": "CHECK ((env = ANY (ARRAY['production'::text, 'preview'::text, 'development'::text])))",
+    "name": "analytics_events_env_check"
+   },
+   {
+    "def": "CHECK (((char_length(name) >= 1) AND (char_length(name) <= 60)))",
+    "name": "analytics_events_name_check"
+   },
+   {
+    "def": "CHECK ((pg_column_size(props) <= 2048))",
+    "name": "analytics_events_props_check"
+   },
+   {
+    "def": "CHECK ((char_length(referrer_domain) <= 120))",
+    "name": "analytics_events_referrer_domain_check"
+   },
+   {
+    "def": "CHECK ((char_length(route) <= 120))",
+    "name": "analytics_events_route_check"
+   },
+   {
+    "def": "CHECK ((source = ANY (ARRAY['public'::text, 'app'::text, 'auth'::text, 'control'::text])))",
+    "name": "analytics_events_source_check"
+   },
+   {
+    "def": "CHECK (((user_ref IS NULL) OR (char_length(user_ref) = 32)))",
+    "name": "analytics_events_user_ref_check"
+   },
+   {
+    "def": "CHECK ((char_length(utm_campaign) <= 80))",
+    "name": "analytics_events_utm_campaign_check"
+   },
+   {
+    "def": "CHECK ((char_length(utm_medium) <= 80))",
+    "name": "analytics_events_utm_medium_check"
+   },
+   {
+    "def": "CHECK ((char_length(utm_source) <= 80))",
+    "name": "analytics_events_utm_source_check"
+   },
+   {
+    "def": "CHECK ((char_length(viewport) <= 20))",
+    "name": "analytics_events_viewport_check"
+   }
+  ],
+  "analytics_ingest_stats": [
+   {
+    "def": "CHECK ((char_length(detail) <= 60))",
+    "name": "analytics_ingest_stats_detail_check"
+   },
+   {
+    "def": "CHECK ((kind = ANY (ARRAY['unknown_event'::text, 'duplicate'::text, 'invalid_batch'::text, 'rate_limited'::text])))",
+    "name": "analytics_ingest_stats_kind_check"
+   }
+  ],
+  "analytics_owner_config": [
+   {
+    "def": "CHECK ((key ~ '^[a-z0-9_.:-]{1,80}$'::text))",
+    "name": "analytics_owner_config_key_check"
+   },
+   {
+    "def": "CHECK ((pg_column_size(value) <= 65536))",
+    "name": "analytics_owner_config_value_check"
+   }
+  ],
+  "app_settings": [
+   {
+    "def": "CHECK ((active_track = ANY (ARRAY['main1'::text, 'main2'::text, 'advanced'::text, 'boards'::text])))",
+    "name": "app_settings_active_track_check"
+   },
+   {
+    "def": "CHECK ((color_theme = ANY (ARRAY['default'::text, 'sunset-blaze'::text, 'forest-emerald'::text, 'sandalwood'::text, 'ocean-deep'::text, 'sakura-blossom'::text, 'dracula-midnight'::text, 'lavender-mist'::text, 'cyberpunk-neon'::text])))",
+    "name": "app_settings_color_theme_valid"
+   },
+   {
+    "def": "CHECK (((daily_study_goal_minutes >= 0) AND (daily_study_goal_minutes <= 1440))) NOT VALID",
+    "name": "app_settings_daily_goal_minutes_valid"
+   },
+   {
+    "def": "CHECK ((daily_study_goal_minutes >= 0))",
+    "name": "app_settings_daily_study_goal_minutes_check"
+   },
+   {
+    "def": "CHECK (((dropping_threshold >= (0)::numeric) AND (dropping_threshold <= (100)::numeric)))",
+    "name": "app_settings_dropping_threshold_check"
+   },
+   {
+    "def": "CHECK (((exam_board IS NULL) OR (char_length(exam_board) <= 40)))",
+    "name": "app_settings_exam_board_check"
+   },
+   {
+    "def": "CHECK (((exam_id IS NULL) OR (exam_id ~ '^[a-z0-9][a-z0-9-]{1,39}$'::text)))",
+    "name": "app_settings_exam_id_check"
+   },
+   {
+    "def": "CHECK ((exam_mode = ANY (ARRAY['auto'::text, 'on'::text, 'off'::text])))",
+    "name": "app_settings_exam_mode_check"
+   },
+   {
+    "def": "CHECK (((exam_session IS NULL) OR (char_length(exam_session) <= 40)))",
+    "name": "app_settings_exam_session_check"
+   },
+   {
+    "def": "CHECK (((exam_year IS NULL) OR ((exam_year >= 2020) AND (exam_year <= 2100))))",
+    "name": "app_settings_exam_year_check"
+   },
+   {
+    "def": "CHECK ((interface_font = ANY (ARRAY['default'::text, 'poppins'::text, 'sora'::text, 'open-sans'::text])))",
+    "name": "app_settings_interface_font_valid"
+   },
+   {
+    "def": "CHECK ((id = user_id))",
+    "name": "app_settings_own_id"
+   },
+   {
+    "def": "CHECK ((char_length(owner_name) <= 100))",
+    "name": "app_settings_owner_name_check"
+   },
+   {
+    "def": "CHECK (((pyq_from_year >= 1990) AND (pyq_from_year <= 2100)))",
+    "name": "app_settings_pyq_from_year_check"
+   },
+   {
+    "def": "CHECK (((pyq_to_year >= 1990) AND (pyq_to_year <= 2100)))",
+    "name": "app_settings_pyq_to_year_check"
+   },
+   {
+    "def": "CHECK ((reminder_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'::text))",
+    "name": "app_settings_reminder_time_check"
+   },
+   {
+    "def": "CHECK (((cardinality(revision_gaps) >= 1) AND (cardinality(revision_gaps) <= 12)))",
+    "name": "app_settings_revision_gaps_check"
+   },
+   {
+    "def": "CHECK ((((cardinality(revision_gaps) >= 1) AND (cardinality(revision_gaps) <= 12)) AND (array_ndims(revision_gaps) = 1) AND (array_lower(revision_gaps, 1) = 1) AND (array_position(revision_gaps, NULL::integer) IS NULL) AND (0 < ALL (revision_gaps)))) NOT VALID",
+    "name": "app_settings_revision_gaps_valid"
+   },
+   {
+    "def": "CHECK (((strong_threshold >= (0)::numeric) AND (strong_threshold <= (100)::numeric)))",
+    "name": "app_settings_strong_threshold_check"
+   },
+   {
+    "def": "CHECK ((target_score >= (0)::numeric))",
+    "name": "app_settings_target_score_check"
+   },
+   {
+    "def": "CHECK (((target_score >= (0)::numeric) AND (target_score <= 999999.99))) NOT VALID",
+    "name": "app_settings_target_score_supported_range"
+   },
+   {
+    "def": "CHECK ((theme = ANY (ARRAY['light'::text, 'dark'::text, 'auto'::text])))",
+    "name": "app_settings_theme_check"
+   },
+   {
+    "def": "CHECK (((weak_threshold >= (0)::numeric) AND (weak_threshold <= (100)::numeric)))",
+    "name": "app_settings_weak_threshold_check"
+   },
+   {
+    "def": "CHECK (((weight_high >= 0.1) AND (weight_high <= (10)::numeric)))",
+    "name": "app_settings_weight_high_check"
+   },
+   {
+    "def": "CHECK (((weight_low >= 0.1) AND (weight_low <= (10)::numeric)))",
+    "name": "app_settings_weight_low_check"
+   },
+   {
+    "def": "CHECK (((weight_medium >= 0.1) AND (weight_medium <= (10)::numeric)))",
+    "name": "app_settings_weight_medium_check"
+   },
+   {
+    "def": "CHECK ((weak_threshold < strong_threshold))",
+    "name": "settings_threshold_order"
+   }
+  ],
+  "backlog_items": [
+   {
+    "def": "CHECK ((char_length(notes) <= 5000))",
+    "name": "backlog_items_notes_check"
+   },
+   {
+    "def": "CHECK ((priority = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text])))",
+    "name": "backlog_items_priority_check"
+   },
+   {
+    "def": "CHECK ((status = ANY (ARRAY['active'::text, 'done'::text, 'snoozed'::text])))",
+    "name": "backlog_items_status_check"
+   },
+   {
+    "def": "CHECK (((subject IS NULL) OR ((char_length(btrim(subject)) >= 1) AND (char_length(btrim(subject)) <= 60))))",
+    "name": "backlog_items_subject_check"
+   },
+   {
+    "def": "CHECK (((char_length(title) >= 1) AND (char_length(title) <= 200)))",
+    "name": "backlog_items_title_check"
+   },
+   {
+    "def": "CHECK ((type = ANY (ARRAY['Lecture'::text, 'DPP'::text, 'Topic'::text])))",
+    "name": "backlog_items_type_check"
+   }
+  ],
+  "chapter_revisions": [
+   {
+    "def": "CHECK ((revision_number > 0))",
+    "name": "chapter_revisions_revision_number_check"
+   }
+  ],
+  "chapter_stages": [
+   {
+    "def": "CHECK ((stage = ANY (ARRAY['theory'::text, 'notes'::text, 'pyqs'::text, 'revised'::text, 'tested'::text])))",
+    "name": "chapter_stages_stage_check"
+   }
+  ],
+  "chapters": [
+   {
+    "def": "CHECK ((char_length(formula_notes) <= 20000))",
+    "name": "chapters_formula_notes_check"
+   },
+   {
+    "def": "CHECK ((importance = ANY (ARRAY['high'::text, 'medium'::text, 'low'::text])))",
+    "name": "chapters_importance_check"
+   },
+   {
+    "def": "CHECK (((char_length(name) >= 1) AND (char_length(name) <= 140)))",
+    "name": "chapters_name_check"
+   },
+   {
+    "def": "CHECK ((char_length(notes) <= 20000))",
+    "name": "chapters_notes_check"
+   },
+   {
+    "def": "CHECK ((\"position\" >= 0))",
+    "name": "chapters_position_check"
+   },
+   {
+    "def": "CHECK ((priority = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text])))",
+    "name": "chapters_priority_check"
+   },
+   {
+    "def": "CHECK ((status = ANY (ARRAY['Not Started'::text, 'Studying'::text, 'Done'::text, 'Revised'::text])))",
+    "name": "chapters_status_check"
+   },
+   {
+    "def": "CHECK (((char_length(btrim(subject)) >= 1) AND (char_length(btrim(subject)) <= 60)))",
+    "name": "chapters_subject_check"
+   },
+   {
+    "def": "CHECK (((weightage IS NULL) OR (char_length(weightage) <= 80)))",
+    "name": "chapters_weightage_check"
+   }
+  ],
+  "control_account_notes": [
+   {
+    "def": "CHECK (((char_length(body) >= 1) AND (char_length(body) <= 2000)))",
+    "name": "control_account_notes_body_check"
+   }
+  ],
+  "control_account_restrictions": [
+   {
+    "def": "CHECK ((char_length(reason) <= 500))",
+    "name": "control_account_restrictions_reason_check"
+   },
+   {
+    "def": "CHECK ((status = ANY (ARRAY['active'::text, 'suspended'::text])))",
+    "name": "control_account_restrictions_status_check"
+   }
+  ],
+  "control_admin_sessions": [
+   {
+    "def": "CHECK ((char_length(user_agent) <= 180))",
+    "name": "control_admin_sessions_user_agent_check"
+   }
+  ],
+  "control_announcements": [
+   {
+    "def": "CHECK ((audience = ANY (ARRAY['signed_in'::text, 'all_accounts'::text])))",
+    "name": "control_announcements_audience_check"
+   },
+   {
+    "def": "CHECK (((char_length(body) >= 1) AND (char_length(body) <= 4000)))",
+    "name": "control_announcements_body_check"
+   },
+   {
+    "def": "CHECK ((state = ANY (ARRAY['draft'::text, 'scheduled'::text, 'published'::text, 'withdrawn'::text, 'expired'::text])))",
+    "name": "control_announcements_state_check"
+   },
+   {
+    "def": "CHECK (((char_length(title) >= 1) AND (char_length(title) <= 140)))",
+    "name": "control_announcements_title_check"
+   }
+  ],
+  "control_audit_events": [
+   {
+    "def": "CHECK (((char_length(action) >= 1) AND (char_length(action) <= 80)))",
+    "name": "control_audit_events_action_check"
+   },
+   {
+    "def": "CHECK (((reason IS NULL) OR (char_length(reason) <= 500)))",
+    "name": "control_audit_events_reason_check"
+   },
+   {
+    "def": "CHECK ((result = ANY (ARRAY['success'::text, 'denied'::text, 'error'::text])))",
+    "name": "control_audit_events_result_check"
+   }
+  ],
+  "control_chapters": [
+   {
+    "def": "CHECK (((char_length(name) >= 1) AND (char_length(name) <= 140)))",
+    "name": "control_chapters_name_check"
+   }
+  ],
+  "control_exams": [
+   {
+    "def": "CHECK ((char_length(category) <= 80))",
+    "name": "control_exams_category_check"
+   },
+   {
+    "def": "CHECK ((char_length(description) <= 2000))",
+    "name": "control_exams_description_check"
+   },
+   {
+    "def": "CHECK (((char_length(name) >= 1) AND (char_length(name) <= 120)))",
+    "name": "control_exams_name_check"
+   },
+   {
+    "def": "CHECK (((shares_syllabus_with IS NULL) OR (shares_syllabus_with ~ '^[a-z0-9-]{2,40}$'::text)))",
+    "name": "control_exams_shares_syllabus_with_check"
+   },
+   {
+    "def": "CHECK ((slug ~ '^[a-z0-9-]{2,40}$'::text))",
+    "name": "control_exams_slug_check"
+   }
+  ],
+  "control_feature_flags": [
+   {
+    "def": "CHECK (((char_length(description) >= 1) AND (char_length(description) <= 500)))",
+    "name": "control_feature_flags_description_check"
+   },
+   {
+    "def": "CHECK ((key ~ '^[a-z][a-z0-9_]{1,63}$'::text))",
+    "name": "control_feature_flags_key_check"
+   },
+   {
+    "def": "CHECK ((char_length(owner_label) <= 80))",
+    "name": "control_feature_flags_owner_label_check"
+   },
+   {
+    "def": "CHECK ((scope = ANY (ARRAY['all'::text, 'production'::text, 'preview'::text])))",
+    "name": "control_feature_flags_scope_check"
+   }
+  ],
+  "control_platform_settings": [
+   {
+    "def": "CHECK ((default_period = ANY (ARRAY['today'::text, '7d'::text, '30d'::text, '90d'::text])))",
+    "name": "control_platform_settings_default_period_check"
+   },
+   {
+    "def": "CHECK ((id = 1))",
+    "name": "control_platform_settings_id_check"
+   },
+   {
+    "def": "CHECK ((idle_timeout_minutes = ANY (ARRAY[5, 10, 20, 30, 60])))",
+    "name": "control_platform_settings_idle_timeout_minutes_check"
+   },
+   {
+    "def": "CHECK ((page_size = ANY (ARRAY[10, 25, 50, 100])))",
+    "name": "control_platform_settings_page_size_check"
+   },
+   {
+    "def": "CHECK ((timezone = ANY (ARRAY['Asia/Kolkata'::text, 'UTC'::text])))",
+    "name": "control_platform_settings_timezone_check"
+   }
+  ],
+  "control_rate_events": [
+   {
+    "def": "CHECK (((char_length(actor_key) >= 1) AND (char_length(actor_key) <= 80)))",
+    "name": "control_rate_events_actor_key_check"
+   },
+   {
+    "def": "CHECK (((char_length(bucket) >= 1) AND (char_length(bucket) <= 40)))",
+    "name": "control_rate_events_bucket_check"
+   }
+  ],
+  "control_roles": [
+   {
+    "def": "CHECK ((grant_source = ANY (ARRAY['bootstrap'::text, 'owner'::text])))",
+    "name": "control_roles_grant_source_check"
+   },
+   {
+    "def": "CHECK ((char_length(reason) <= 500))",
+    "name": "control_roles_reason_check"
+   },
+   {
+    "def": "CHECK ((role = ANY (ARRAY['owner'::text, 'administrator'::text, 'support'::text, 'analyst'::text])))",
+    "name": "control_roles_role_check"
+   }
+  ],
+  "control_subjects": [
+   {
+    "def": "CHECK (((char_length(name) >= 1) AND (char_length(name) <= 80)))",
+    "name": "control_subjects_name_check"
+   }
+  ],
+  "control_workflow_options": [
+   {
+    "def": "CHECK ((char_length(description) <= 500))",
+    "name": "control_workflow_options_description_check"
+   },
+   {
+    "def": "CHECK ((group_key = ANY (ARRAY['chapter_stage'::text, 'practice_source'::text, 'test_type'::text, 'pyq_exam'::text, 'study_activity'::text])))",
+    "name": "control_workflow_options_group_key_check"
+   },
+   {
+    "def": "CHECK (((char_length(label) >= 1) AND (char_length(label) <= 80)))",
+    "name": "control_workflow_options_label_check"
+   },
+   {
+    "def": "CHECK (((char_length(option_key) >= 1) AND (char_length(option_key) <= 40)))",
+    "name": "control_workflow_options_option_key_check"
+   }
+  ],
+  "daily_tasks": [
+   {
+    "def": "CHECK (((estimated_minutes >= 0) AND (estimated_minutes <= 1440)))",
+    "name": "daily_tasks_estimated_minutes_check"
+   },
+   {
+    "def": "CHECK ((\"position\" >= 0))",
+    "name": "daily_tasks_position_check"
+   },
+   {
+    "def": "CHECK ((priority = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text])))",
+    "name": "daily_tasks_priority_check"
+   },
+   {
+    "def": "CHECK (((subject IS NULL) OR ((char_length(btrim(subject)) >= 1) AND (char_length(btrim(subject)) <= 60))))",
+    "name": "daily_tasks_subject_check"
+   },
+   {
+    "def": "CHECK (((char_length(title) >= 1) AND (char_length(title) <= 200)))",
+    "name": "daily_tasks_title_check"
+   },
+   {
+    "def": "CHECK (((topic IS NULL) OR (char_length(topic) <= 120)))",
+    "name": "daily_tasks_topic_check"
+   }
+  ],
+  "exam_catalog": [
+   {
+    "def": "CHECK ((cardinality(boards) <= 24))",
+    "name": "exam_catalog_boards_check"
+   },
+   {
+    "def": "CHECK (((char_length(category) >= 1) AND (char_length(category) <= 40)))",
+    "name": "exam_catalog_category_check"
+   },
+   {
+    "def": "CHECK ((id ~ '^[a-z0-9][a-z0-9-]{1,39}$'::text))",
+    "name": "exam_catalog_id_check"
+   },
+   {
+    "def": "CHECK (((marking_scheme IS NULL) OR (jsonb_typeof(marking_scheme) = 'object'::text)))",
+    "name": "exam_catalog_marking_scheme_object"
+   },
+   {
+    "def": "CHECK (((char_length(name) >= 1) AND (char_length(name) <= 80)))",
+    "name": "exam_catalog_name_check"
+   },
+   {
+    "def": "CHECK ((char_length(session_label) <= 30))",
+    "name": "exam_catalog_session_label_check"
+   },
+   {
+    "def": "CHECK ((cardinality(sessions) <= 24))",
+    "name": "exam_catalog_sessions_check"
+   },
+   {
+    "def": "CHECK ((cardinality(subjects) <= 30))",
+    "name": "exam_catalog_subjects_check"
+   },
+   {
+    "def": "CHECK (((cardinality(years) <= 12) AND (2020 <= ALL (years)) AND (2100 >= ALL (years))))",
+    "name": "exam_catalog_years_check"
+   }
+  ],
+  "mistakes": [
+   {
+    "def": "CHECK (((image_path IS NULL) OR (char_length(image_path) <= 500)))",
+    "name": "mistakes_image_path_check"
+   },
+   {
+    "def": "CHECK ((mistake_type = ANY (ARRAY['Concept'::text, 'Silly'::text, 'Calculation'::text, 'Time'::text, 'Guess'::text])))",
+    "name": "mistakes_mistake_type_check"
+   },
+   {
+    "def": "CHECK (((char_length(question_note) >= 1) AND (char_length(question_note) <= 10000)))",
+    "name": "mistakes_question_note_check"
+   },
+   {
+    "def": "CHECK ((retry_status = ANY (ARRAY['pending'::text, 'retried'::text])))",
+    "name": "mistakes_retry_status_check"
+   },
+   {
+    "def": "CHECK ((char_length(solution_note) <= 10000))",
+    "name": "mistakes_solution_note_check"
+   }
+  ],
+  "practice_sessions": [
+   {
+    "def": "CHECK (((correct + incorrect) <= attempted))",
+    "name": "practice_counts_consistent"
+   },
+   {
+    "def": "CHECK (((attempted >= 0) AND (attempted <= 100000)))",
+    "name": "practice_sessions_attempted_check"
+   },
+   {
+    "def": "CHECK (((correct >= 0) AND (correct <= 100000)))",
+    "name": "practice_sessions_correct_check"
+   },
+   {
+    "def": "CHECK (((incorrect >= 0) AND (incorrect <= 100000)))",
+    "name": "practice_sessions_incorrect_check"
+   },
+   {
+    "def": "CHECK ((char_length(notes) <= 5000))",
+    "name": "practice_sessions_notes_check"
+   },
+   {
+    "def": "CHECK (((skipped >= 0) AND (skipped <= 100000)))",
+    "name": "practice_sessions_skipped_check"
+   },
+   {
+    "def": "CHECK ((source = ANY (ARRAY['DPP'::text, 'Module'::text, 'Practice sheet'::text, 'Coaching material'::text, 'Other'::text])))",
+    "name": "practice_sessions_source_check"
+   },
+   {
+    "def": "CHECK (((time_minutes IS NULL) OR ((time_minutes >= 0) AND (time_minutes <= 1440))))",
+    "name": "practice_sessions_time_minutes_check"
+   }
+  ],
+  "profiles": [
+   {
+    "def": "CHECK ((char_length(display_name) <= 100))",
+    "name": "profiles_display_name_check"
+   },
+   {
+    "def": "CHECK ((char_length(email) <= 320))",
+    "name": "profiles_email_check"
+   },
+   {
+    "def": "CHECK ((id = user_id))",
+    "name": "profiles_own_id"
+   }
+  ],
+  "pyq_records": [
+   {
+    "def": "CHECK ((exam = ANY (ARRAY['Main'::text, 'Advanced'::text])))",
+    "name": "pyq_records_exam_check"
+   },
+   {
+    "def": "CHECK (((questions_done IS NULL) OR (questions_done >= 0)))",
+    "name": "pyq_records_questions_done_check"
+   },
+   {
+    "def": "CHECK (((questions_total IS NULL) OR (questions_total >= 0)))",
+    "name": "pyq_records_questions_total_check"
+   },
+   {
+    "def": "CHECK ((status = ANY (ARRAY['done'::text, 'pending'::text])))",
+    "name": "pyq_records_status_check"
+   },
+   {
+    "def": "CHECK (((year >= 1990) AND (year <= 2100)))",
+    "name": "pyq_records_year_check"
+   }
+  ],
+  "site_ai_providers": [
+   {
+    "def": "CHECK ((connection_status = ANY (ARRAY['not_tested'::text, 'connected'::text, 'authentication_failed'::text, 'rate_limited'::text, 'insufficient_balance'::text, 'provider_unavailable'::text, 'model_unavailable'::text, 'configuration_incomplete'::text, 'unsupported'::text])))",
+    "name": "site_ai_providers_connection_status_check"
+   },
+   {
+    "def": "CHECK (((char_length(display_name) >= 1) AND (char_length(display_name) <= 80)))",
+    "name": "site_ai_providers_display_name_check"
+   },
+   {
+    "def": "CHECK (((failure_count >= 0) AND (failure_count <= 1000)))",
+    "name": "site_ai_providers_failure_count_check"
+   },
+   {
+    "def": "CHECK ((char_length(key_hint) <= 4))",
+    "name": "site_ai_providers_key_hint_check"
+   },
+   {
+    "def": "CHECK (((char_length(model_id) >= 1) AND (char_length(model_id) <= 200)))",
+    "name": "site_ai_providers_model_id_check"
+   },
+   {
+    "def": "CHECK (((organization_id IS NULL) OR (char_length(organization_id) <= 160)))",
+    "name": "site_ai_providers_organization_id_check"
+   },
+   {
+    "def": "CHECK ((protocol = ANY (ARRAY['google'::text, 'openai-compatible'::text, 'anthropic-compatible'::text])))",
+    "name": "site_ai_providers_protocol_check"
+   },
+   {
+    "def": "CHECK ((provider_id = ANY (ARRAY['gemini'::text, 'openai'::text, 'anthropic'::text, 'deepseek'::text, 'qwen'::text, 'custom'::text])))",
+    "name": "site_ai_providers_provider_id_check"
+   }
+  ],
+  "site_ai_settings": [
+   {
+    "def": "CHECK ((id = 1))",
+    "name": "site_ai_settings_id_check"
+   },
+   {
+    "def": "CHECK (((per_user_daily >= 1) AND (per_user_daily <= 1000)))",
+    "name": "site_ai_settings_per_user_daily_check"
+   },
+   {
+    "def": "CHECK (((per_user_per_minute >= 1) AND (per_user_per_minute <= 60)))",
+    "name": "site_ai_settings_per_user_per_minute_check"
+   }
+  ],
+  "site_content_draft": [
+   {
+    "def": "CHECK ((jsonb_typeof(content) = 'object'::text))",
+    "name": "site_content_draft_object"
+   },
+   {
+    "def": "CHECK ((id = 1))",
+    "name": "site_content_draft_singleton"
+   },
+   {
+    "def": "CHECK ((octet_length((content)::text) <= 200000))",
+    "name": "site_content_draft_size"
+   }
+  ],
+  "site_content_published": [
+   {
+    "def": "CHECK ((jsonb_typeof(content) = 'object'::text))",
+    "name": "site_content_published_object"
+   },
+   {
+    "def": "CHECK ((id = 1))",
+    "name": "site_content_published_singleton"
+   },
+   {
+    "def": "CHECK ((octet_length((content)::text) <= 200000))",
+    "name": "site_content_published_size"
+   },
+   {
+    "def": "CHECK ((version >= 1))",
+    "name": "site_content_published_version"
+   }
+  ],
+  "site_content_versions": [
+   {
+    "def": "CHECK ((action = ANY (ARRAY['publish'::text, 'restore'::text])))",
+    "name": "site_content_versions_action"
+   },
+   {
+    "def": "CHECK (((note IS NULL) OR (char_length(note) <= 280)))",
+    "name": "site_content_versions_note"
+   },
+   {
+    "def": "CHECK ((jsonb_typeof(content) = 'object'::text))",
+    "name": "site_content_versions_object"
+   },
+   {
+    "def": "CHECK ((octet_length((content)::text) <= 200000))",
+    "name": "site_content_versions_size"
+   },
+   {
+    "def": "CHECK ((version >= 1))",
+    "name": "site_content_versions_version"
+   }
+  ],
+  "site_media": [
+   {
+    "def": "CHECK (((bytes > 0) AND (bytes <= 52428800)))",
+    "name": "site_media_bytes_check"
+   },
+   {
+    "def": "CHECK ((kind = ANY (ARRAY['image'::text, 'video'::text])))",
+    "name": "site_media_kind_check"
+   },
+   {
+    "def": "CHECK ((mime = ANY (ARRAY['video/mp4'::text, 'image/jpeg'::text, 'image/png'::text, 'image/webp'::text])))",
+    "name": "site_media_mime_check"
+   },
+   {
+    "def": "CHECK ((path ~ '^site/(image|video)/[0-9a-f-]{36}\\.(mp4|jpg|png|webp)$'::text))",
+    "name": "site_media_path_check"
+   }
+  ],
+  "study_cards": [
+   {
+    "def": "CHECK (((char_length(back) >= 1) AND (char_length(back) <= 10000)))",
+    "name": "study_cards_back_check"
+   },
+   {
+    "def": "CHECK (((difficulty IS NULL) OR (difficulty = ANY (ARRAY['easy'::text, 'known'::text, 'difficult'::text]))))",
+    "name": "study_cards_difficulty_check"
+   },
+   {
+    "def": "CHECK (((char_length(front) >= 1) AND (char_length(front) <= 5000)))",
+    "name": "study_cards_front_check"
+   },
+   {
+    "def": "CHECK ((char_length(hint) <= 2000))",
+    "name": "study_cards_hint_check"
+   },
+   {
+    "def": "CHECK ((kind = ANY (ARRAY['formula'::text, 'flashcard'::text])))",
+    "name": "study_cards_kind_check"
+   },
+   {
+    "def": "CHECK (((last_rating IS NULL) OR (last_rating = ANY (ARRAY['again'::text, 'hard'::text, 'good'::text, 'easy'::text]))))",
+    "name": "study_cards_last_rating_check"
+   },
+   {
+    "def": "CHECK ((\"position\" >= 0))",
+    "name": "study_cards_position_check"
+   },
+   {
+    "def": "CHECK ((reviews >= 0))",
+    "name": "study_cards_reviews_check"
+   }
+  ],
+  "study_sessions": [
+   {
+    "def": "CHECK ((activity = ANY (ARRAY['Lecture'::text, 'Practice'::text, 'Revision'::text, 'Mock/Test'::text, 'PYQ practice'::text])))",
+    "name": "study_sessions_activity_check"
+   },
+   {
+    "def": "CHECK ((completion_state = ANY (ARRAY['completed'::text, 'interrupted'::text])))",
+    "name": "study_sessions_completion_state_check"
+   },
+   {
+    "def": "CHECK (((duration_minutes >= 0) AND (duration_minutes <= 1440)))",
+    "name": "study_sessions_duration_minutes_check"
+   },
+   {
+    "def": "CHECK ((mode = ANY (ARRAY['Pomodoro'::text, 'Short Break'::text, 'Long Break'::text, 'Custom'::text])))",
+    "name": "study_sessions_mode_check"
+   },
+   {
+    "def": "CHECK (((subject IS NULL) OR ((char_length(btrim(subject)) >= 1) AND (char_length(btrim(subject)) <= 60))))",
+    "name": "study_sessions_subject_check"
+   }
+  ],
+  "test_chapter_links": [
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR ((marks_obtained <= 9999999.5) AND ((marks_obtained * (2)::numeric) = trunc((marks_obtained * (2)::numeric)))))) NOT VALID",
+    "name": "test_chapter_links_marks_half_point"
+   },
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR ((total_marks IS NOT NULL) AND (marks_obtained <= total_marks)))) NOT VALID",
+    "name": "test_chapter_links_marks_not_over_total"
+   },
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR (marks_obtained >= (0)::numeric)))",
+    "name": "test_chapter_links_marks_obtained_check"
+   },
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR (total_marks IS NOT NULL))) NOT VALID",
+    "name": "test_chapter_links_score_requires_total"
+   },
+   {
+    "def": "CHECK (((total_marks IS NULL) OR (total_marks > (0)::numeric)))",
+    "name": "test_chapter_links_total_marks_check"
+   },
+   {
+    "def": "CHECK (((total_marks IS NULL) OR ((total_marks = trunc(total_marks)) AND (total_marks <= (9999999)::numeric)))) NOT VALID",
+    "name": "test_chapter_links_total_marks_integer"
+   }
+  ],
+  "test_error_logs": [
+   {
+    "def": "CHECK ((category = ANY (ARRAY['Silly mistake'::text, 'Concept gap'::text, 'Calculation error'::text, 'Time pressure'::text, 'Misread question'::text, 'Guess / bad attempt'::text, 'Unattempted'::text])))",
+    "name": "test_error_logs_category_check"
+   },
+   {
+    "def": "CHECK (((marks_lost IS NULL) OR (marks_lost >= (0)::numeric)))",
+    "name": "test_error_logs_marks_lost_check"
+   },
+   {
+    "def": "CHECK ((char_length(note) <= 5000))",
+    "name": "test_error_logs_note_check"
+   },
+   {
+    "def": "CHECK (((questions IS NULL) OR (questions >= 0)))",
+    "name": "test_error_logs_questions_check"
+   },
+   {
+    "def": "CHECK (((subject IS NULL) OR ((char_length(btrim(subject)) >= 1) AND (char_length(btrim(subject)) <= 60))))",
+    "name": "test_error_logs_subject_check"
+   }
+  ],
+  "test_subject_scores": [
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR ((marks_obtained <= 9999999.5) AND ((marks_obtained * (2)::numeric) = trunc((marks_obtained * (2)::numeric)))))) NOT VALID",
+    "name": "test_subject_scores_marks_half_point"
+   },
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR ((total_marks IS NOT NULL) AND (marks_obtained <= total_marks)))) NOT VALID",
+    "name": "test_subject_scores_marks_not_over_total"
+   },
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR (marks_obtained >= (0)::numeric)))",
+    "name": "test_subject_scores_marks_obtained_check"
+   },
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR (total_marks IS NOT NULL))) NOT VALID",
+    "name": "test_subject_scores_score_requires_total"
+   },
+   {
+    "def": "CHECK (((char_length(btrim(subject)) >= 1) AND (char_length(btrim(subject)) <= 60)))",
+    "name": "test_subject_scores_subject_check"
+   },
+   {
+    "def": "CHECK (((total_marks IS NULL) OR (total_marks > (0)::numeric)))",
+    "name": "test_subject_scores_total_marks_check"
+   },
+   {
+    "def": "CHECK (((total_marks IS NULL) OR ((total_marks = trunc(total_marks)) AND (total_marks <= (9999999)::numeric)))) NOT VALID",
+    "name": "test_subject_scores_total_marks_integer"
+   }
+  ],
+  "test_time_entries": [
+   {
+    "def": "CHECK (((attempted IS NULL) OR (attempted >= 0)))",
+    "name": "test_time_entries_attempted_check"
+   },
+   {
+    "def": "CHECK ((char_length(label) <= 120))",
+    "name": "test_time_entries_label_check"
+   },
+   {
+    "def": "CHECK (((minutes IS NULL) OR ((minutes >= 0) AND (minutes <= 1440))))",
+    "name": "test_time_entries_minutes_check"
+   },
+   {
+    "def": "CHECK ((order_index >= 0))",
+    "name": "test_time_entries_order_index_check"
+   },
+   {
+    "def": "CHECK (((subject IS NULL) OR ((char_length(btrim(subject)) >= 1) AND (char_length(btrim(subject)) <= 60))))",
+    "name": "test_time_entries_subject_check"
+   },
+   {
+    "def": "CHECK (((unattempted IS NULL) OR (unattempted >= 0)))",
+    "name": "test_time_entries_unattempted_check"
+   }
+  ],
+  "tests": [
+   {
+    "def": "CHECK (((correct IS NULL) OR (correct >= 0)))",
+    "name": "tests_correct_check"
+   },
+   {
+    "def": "CHECK (((total_questions IS NULL) OR (((COALESCE(correct, 0) + COALESCE(wrong, 0)) + COALESCE(skipped, 0)) <= total_questions)))",
+    "name": "tests_counts_within_total_questions"
+   },
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR ((marks_obtained <= 9999999.5) AND ((marks_obtained * (2)::numeric) = trunc((marks_obtained * (2)::numeric)))))) NOT VALID",
+    "name": "tests_marks_half_point"
+   },
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR ((total_marks IS NOT NULL) AND (marks_obtained <= total_marks)))) NOT VALID",
+    "name": "tests_marks_not_over_total"
+   },
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR (marks_obtained >= (0)::numeric)))",
+    "name": "tests_marks_obtained_check"
+   },
+   {
+    "def": "CHECK (((negative_marks IS NULL) OR (negative_marks >= (0)::numeric)))",
+    "name": "tests_negative_marks_check"
+   },
+   {
+    "def": "CHECK (((negative_marks IS NULL) OR ((negative_marks <= 999999.75) AND ((negative_marks * (4)::numeric) = trunc((negative_marks * (4)::numeric)))))) NOT VALID",
+    "name": "tests_negative_marks_quarter_point"
+   },
+   {
+    "def": "CHECK ((char_length(notes) <= 10000))",
+    "name": "tests_notes_check"
+   },
+   {
+    "def": "CHECK (((marks_obtained IS NULL) OR (total_marks IS NOT NULL))) NOT VALID",
+    "name": "tests_score_requires_total"
+   },
+   {
+    "def": "CHECK (((skipped IS NULL) OR (skipped >= 0)))",
+    "name": "tests_skipped_check"
+   },
+   {
+    "def": "CHECK (((subject IS NULL) OR ((char_length(btrim(subject)) >= 1) AND (char_length(btrim(subject)) <= 60))))",
+    "name": "tests_subject_check"
+   },
+   {
+    "def": "CHECK ((test_type = ANY (ARRAY['Chapter Test'::text, 'Subject Test'::text, 'Full Mock'::text, 'PYQ Practice'::text])))",
+    "name": "tests_test_type_check"
+   },
+   {
+    "def": "CHECK (((time_minutes IS NULL) OR (time_minutes >= 0)))",
+    "name": "tests_time_minutes_check"
+   },
+   {
+    "def": "CHECK (((char_length(title) >= 1) AND (char_length(title) <= 160)))",
+    "name": "tests_title_check"
+   },
+   {
+    "def": "CHECK (((total_marks IS NULL) OR (total_marks > (0)::numeric)))",
+    "name": "tests_total_marks_check"
+   },
+   {
+    "def": "CHECK (((total_marks IS NULL) OR ((total_marks = trunc(total_marks)) AND (total_marks <= (9999999)::numeric)))) NOT VALID",
+    "name": "tests_total_marks_integer"
+   },
+   {
+    "def": "CHECK (((total_questions IS NULL) OR ((total_questions > 0) AND (total_questions <= 100000))))",
+    "name": "tests_total_questions_check"
+   },
+   {
+    "def": "CHECK (((wrong IS NULL) OR (wrong >= 0)))",
+    "name": "tests_wrong_check"
+   }
+  ],
+  "user_exam_tracks": [
+   {
+    "def": "CHECK ((char_length(label) <= 120))",
+    "name": "user_exam_tracks_label_check"
+   },
+   {
+    "def": "CHECK ((char_length(notes) <= 5000))",
+    "name": "user_exam_tracks_notes_check"
+   },
+   {
+    "def": "CHECK (((target_score IS NULL) OR (target_score >= (0)::numeric)))",
+    "name": "user_exam_tracks_target_score_check"
+   },
+   {
+    "def": "CHECK ((track = ANY (ARRAY['main1'::text, 'main2'::text, 'advanced'::text, 'boards'::text])))",
+    "name": "user_exam_tracks_track_check"
+   }
+  ],
+  "weekly_goals": [
+   {
+    "def": "CHECK (((goal_type = 'study_hours'::text) OR (progress_value = trunc(progress_value)))) NOT VALID",
+    "name": "weekly_goals_count_progress_integer"
+   },
+   {
+    "def": "CHECK ((goal_type = ANY (ARRAY['study_hours'::text, 'tests'::text, 'chapters'::text, 'revisions'::text, 'custom'::text])))",
+    "name": "weekly_goals_goal_type_check"
+   },
+   {
+    "def": "CHECK (((progress_value >= (0)::numeric) AND (progress_value <= 999999.99))) NOT VALID",
+    "name": "weekly_goals_progress_supported_range"
+   },
+   {
+    "def": "CHECK ((progress_value >= (0)::numeric))",
+    "name": "weekly_goals_progress_value_check"
+   },
+   {
+    "def": "CHECK ((target > (0)::numeric))",
+    "name": "weekly_goals_target_check"
+   },
+   {
+    "def": "CHECK ((((goal_type = 'study_hours'::text) AND ((target >= 0.5) AND (target <= (168)::numeric)) AND ((target * (2)::numeric) = trunc((target * (2)::numeric)))) OR ((goal_type <> 'study_hours'::text) AND ((target >= (1)::numeric) AND (target <= (999999)::numeric)) AND (target = trunc(target))))) NOT VALID",
+    "name": "weekly_goals_target_matches_type"
+   },
+   {
+    "def": "CHECK (((char_length(title) >= 1) AND (char_length(title) <= 120)))",
+    "name": "weekly_goals_title_check"
+   },
+   {
+    "def": "CHECK ((char_length(unit) <= 30))",
+    "name": "weekly_goals_unit_check"
+   }
+  ]
+ },
+ "columns": {
+  "ai_action_audit": {
+   "action": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "details": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "model_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "provider_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "success": {
+    "default": null,
+    "nullable": false,
+    "type": "boolean"
+   },
+   "task_id": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "tool_name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "ai_conversations": {
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "title": {
+    "default": "'New conversation'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "ai_messages": {
+   "content": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "conversation_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "idempotency_key": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "metadata": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "model_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "provider_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "role": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "status": {
+    "default": "'completed'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "ai_model_preferences": {
+   "id": {
+    "default": null,
+    "nullable": false,
+    "type": "integer"
+   },
+   "preferences": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "ai_pending_actions": {
+   "conversation_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "expires_at": {
+    "default": "(timezone('utc'::text, now()) + '00:15:00'::interval)",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "input": {
+    "default": null,
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "result": {
+    "default": null,
+    "nullable": true,
+    "type": "jsonb"
+   },
+   "status": {
+    "default": "'pending'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "summary": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "task_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "tool_call_key": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "tool_name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "ai_provider_configs": {
+   "base_url": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "capabilities": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "connection_status": {
+    "default": "'not_tested'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "cooldown_until": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "display_name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "enabled": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "encrypted_api_key": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "failure_count": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "is_default": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "key_hint": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "last_checked_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "model_id": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "organization_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "protocol": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "provider_config": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "provider_id": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "ai_rate_events": {
+   "bucket": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": null,
+    "nullable": false,
+    "type": "bigint"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "ai_tasks": {
+   "completed_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "conversation_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "metadata": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "model_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "progress": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "provider_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "request_id": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "started_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "status": {
+    "default": "'queued'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "task_type": {
+    "default": "'chat'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "ai_user_preferences": {
+   "preferred": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "analytics_alert_events": {
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "last_seen_at": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "message": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "rule_id": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "status": {
+    "default": "'open'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "threshold": {
+    "default": null,
+    "nullable": true,
+    "type": "double precision"
+   },
+   "triggered_at": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_at": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "value": {
+    "default": null,
+    "nullable": true,
+    "type": "double precision"
+   }
+  },
+  "analytics_daily_rollups": {
+   "day": {
+    "default": null,
+    "nullable": false,
+    "type": "date"
+   },
+   "events": {
+    "default": null,
+    "nullable": false,
+    "type": "bigint"
+   },
+   "is_test": {
+    "default": null,
+    "nullable": false,
+    "type": "boolean"
+   },
+   "name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "sessions": {
+    "default": null,
+    "nullable": false,
+    "type": "bigint"
+   },
+   "source": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "users": {
+    "default": null,
+    "nullable": false,
+    "type": "bigint"
+   }
+  },
+  "analytics_error_groups": {
+   "fingerprint": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "first_seen": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "kind": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "last_route": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "last_seen": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "message": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "note": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "occurrences": {
+    "default": "0",
+    "nullable": false,
+    "type": "bigint"
+   },
+   "status": {
+    "default": "'open'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "analytics_events": {
+   "browser": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "deployment_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "device": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "dropped_props": {
+    "default": "'{}'::text[]",
+    "nullable": false,
+    "type": "ARRAY"
+   },
+   "env": {
+    "default": "'production'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "is_test": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "missing_props": {
+    "default": "'{}'::text[]",
+    "nullable": false,
+    "type": "ARRAY"
+   },
+   "name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "props": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "received_at": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "referrer_domain": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "route": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "session_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "source": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "ts": {
+    "default": null,
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_ref": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "utm_campaign": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "utm_medium": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "utm_source": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "viewport": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   }
+  },
+  "analytics_ingest_stats": {
+   "count": {
+    "default": "0",
+    "nullable": false,
+    "type": "bigint"
+   },
+   "day": {
+    "default": null,
+    "nullable": false,
+    "type": "date"
+   },
+   "detail": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "kind": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   }
+  },
+  "analytics_owner_config": {
+   "key": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "value": {
+    "default": null,
+    "nullable": false,
+    "type": "jsonb"
+   }
+  },
+  "app_settings": {
+   "active_track": {
+    "default": "'main1'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "advanced_exam_date": {
+    "default": null,
+    "nullable": true,
+    "type": "date"
+   },
+   "boards_addon": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "color_theme": {
+    "default": "'default'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "daily_study_goal_minutes": {
+    "default": "360",
+    "nullable": false,
+    "type": "integer"
+   },
+   "dropping_threshold": {
+    "default": "10",
+    "nullable": false,
+    "type": "numeric"
+   },
+   "exam_board": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "exam_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "exam_mode": {
+    "default": "'auto'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "exam_session": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "exam_year": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "interface_font": {
+    "default": "'default'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "last_backup_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "main_exam_date": {
+    "default": null,
+    "nullable": true,
+    "type": "date"
+   },
+   "onboarding_completed": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "owner_name": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "pyq_from_year": {
+    "default": "2019",
+    "nullable": false,
+    "type": "integer"
+   },
+   "pyq_to_year": {
+    "default": "2026",
+    "nullable": false,
+    "type": "integer"
+   },
+   "reminder_time": {
+    "default": "'08:00'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "reminder_types": {
+    "default": "ARRAY['revision'::text, 'backlog'::text]",
+    "nullable": false,
+    "type": "ARRAY"
+   },
+   "reminders_enabled": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "revision_gaps": {
+    "default": "ARRAY[1, 7, 30]",
+    "nullable": false,
+    "type": "ARRAY"
+   },
+   "sound_enabled": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "strong_threshold": {
+    "default": "80",
+    "nullable": false,
+    "type": "numeric"
+   },
+   "target_score": {
+    "default": "240",
+    "nullable": false,
+    "type": "numeric"
+   },
+   "theme": {
+    "default": "'light'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "weak_threshold": {
+    "default": "60",
+    "nullable": false,
+    "type": "numeric"
+   },
+   "weight_high": {
+    "default": "2",
+    "nullable": false,
+    "type": "numeric"
+   },
+   "weight_low": {
+    "default": "0.5",
+    "nullable": false,
+    "type": "numeric"
+   },
+   "weight_medium": {
+    "default": "1",
+    "nullable": false,
+    "type": "numeric"
+   }
+  },
+  "backlog_items": {
+   "chapter_id": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "completed_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "due_on": {
+    "default": null,
+    "nullable": true,
+    "type": "date"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "notes": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "priority": {
+    "default": "'Medium'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "snoozed_until": {
+    "default": null,
+    "nullable": true,
+    "type": "date"
+   },
+   "status": {
+    "default": "'active'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "subject": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "title": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "type": {
+    "default": "'Topic'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "chapter_revisions": {
+   "chapter_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "completed_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "due_on": {
+    "default": null,
+    "nullable": false,
+    "type": "date"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "revision_number": {
+    "default": null,
+    "nullable": false,
+    "type": "integer"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "chapter_stages": {
+   "chapter_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "completed_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "done": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "stage": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "chapters": {
+   "completed_on": {
+    "default": null,
+    "nullable": true,
+    "type": "date"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "formula_notes": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "importance": {
+    "default": "'medium'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "notes": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "position": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "priority": {
+    "default": "'Medium'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "status": {
+    "default": "'Not Started'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "subject": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "weightage": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   }
+  },
+  "control_account_notes": {
+   "author_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "body": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "target_user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "control_account_restrictions": {
+   "reason": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "status": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "control_admin_preferences": {
+   "sidebar_collapsed": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "control_admin_sessions": {
+   "last_seen_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "revoked_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "session_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "started_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_agent": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "control_announcements": {
+   "audience": {
+    "default": "'signed_in'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "body": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "created_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "expire_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "publish_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "state": {
+    "default": "'draft'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "title": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "control_audit_events": {
+   "action": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "actor_id": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "actor_role": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "after_summary": {
+    "default": null,
+    "nullable": true,
+    "type": "jsonb"
+   },
+   "before_summary": {
+    "default": null,
+    "nullable": true,
+    "type": "jsonb"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "error_category": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "reason": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "request_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "result": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "target_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "target_type": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   }
+  },
+  "control_chapters": {
+   "archived": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "sort_order": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "subject_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "control_exams": {
+   "archived": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "category": {
+    "default": "'engineering'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "description": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "published": {
+    "default": "true",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "shares_syllabus_with": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "slug": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "sort_order": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "control_feature_flags": {
+   "description": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "enabled": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "key": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "owner_label": {
+    "default": "'DYPOL LABS'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "scope": {
+    "default": "'all'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "control_platform_settings": {
+   "default_period": {
+    "default": "'7d'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "id": {
+    "default": null,
+    "nullable": false,
+    "type": "integer"
+   },
+   "idle_timeout_minutes": {
+    "default": "20",
+    "nullable": false,
+    "type": "integer"
+   },
+   "page_size": {
+    "default": "25",
+    "nullable": false,
+    "type": "integer"
+   },
+   "timezone": {
+    "default": "'Asia/Kolkata'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "control_rate_events": {
+   "actor_key": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "bucket": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": null,
+    "nullable": false,
+    "type": "bigint"
+   }
+  },
+  "control_roles": {
+   "grant_source": {
+    "default": "'owner'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "granted_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "granted_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "reason": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "revoked_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "role": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "control_subjects": {
+   "archived": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "exam_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "sort_order": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   }
+  },
+  "control_workflow_options": {
+   "description": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "enabled": {
+    "default": "true",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "enforced_by_database": {
+    "default": "true",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "group_key": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "label": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "option_key": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "sort_order": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "daily_tasks": {
+   "chapter_id": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "estimated_minutes": {
+    "default": "30",
+    "nullable": false,
+    "type": "integer"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "is_completed": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "position": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "priority": {
+    "default": "'Medium'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "subject": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "task_date": {
+    "default": null,
+    "nullable": false,
+    "type": "date"
+   },
+   "title": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "topic": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "exam_catalog": {
+   "boards": {
+    "default": "'{}'::text[]",
+    "nullable": false,
+    "type": "ARRAY"
+   },
+   "boards_addon": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "category": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "hidden": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "id": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "marking_scheme": {
+    "default": null,
+    "nullable": true,
+    "type": "jsonb"
+   },
+   "name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "session_label": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "sessions": {
+    "default": "'{}'::text[]",
+    "nullable": false,
+    "type": "ARRAY"
+   },
+   "sort_order": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "subjects": {
+    "default": "'{}'::text[]",
+    "nullable": false,
+    "type": "ARRAY"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "years": {
+    "default": "'{}'::integer[]",
+    "nullable": false,
+    "type": "ARRAY"
+   }
+  },
+  "mistakes": {
+   "chapter_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "image_path": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "mistake_type": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "question_note": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "retry_later": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "retry_status": {
+    "default": "'pending'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "solution_note": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "test_id": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "practice_sessions": {
+   "attempted": {
+    "default": null,
+    "nullable": false,
+    "type": "integer"
+   },
+   "chapter_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "correct": {
+    "default": null,
+    "nullable": false,
+    "type": "integer"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "incorrect": {
+    "default": null,
+    "nullable": false,
+    "type": "integer"
+   },
+   "notes": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "practice_date": {
+    "default": null,
+    "nullable": false,
+    "type": "date"
+   },
+   "skipped": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "source": {
+    "default": "'Other'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "time_minutes": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "profiles": {
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "display_name": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "email": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "pyq_records": {
+   "chapter_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "completed_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "exam": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "meta": {
+    "default": null,
+    "nullable": true,
+    "type": "jsonb"
+   },
+   "questions_done": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "questions_total": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "status": {
+    "default": "'pending'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "year": {
+    "default": null,
+    "nullable": false,
+    "type": "integer"
+   }
+  },
+  "site_ai_providers": {
+   "base_url": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "capabilities": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "connection_status": {
+    "default": "'not_tested'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "cooldown_until": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "display_name": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "enabled": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "encrypted_api_key": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "failure_count": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "is_default": {
+    "default": "false",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "key_hint": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "last_checked_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "model_id": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "organization_id": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "protocol": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "provider_config": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "provider_id": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "site_ai_settings": {
+   "enabled": {
+    "default": "true",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "id": {
+    "default": "1",
+    "nullable": false,
+    "type": "smallint"
+   },
+   "per_user_daily": {
+    "default": "40",
+    "nullable": false,
+    "type": "integer"
+   },
+   "per_user_per_minute": {
+    "default": "4",
+    "nullable": false,
+    "type": "integer"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "site_content_draft": {
+   "content": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "id": {
+    "default": "1",
+    "nullable": false,
+    "type": "smallint"
+   },
+   "schema_version": {
+    "default": "1",
+    "nullable": false,
+    "type": "integer"
+   },
+   "updated_at": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "updated_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   }
+  },
+  "site_content_published": {
+   "content": {
+    "default": "'{}'::jsonb",
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "id": {
+    "default": "1",
+    "nullable": false,
+    "type": "smallint"
+   },
+   "published_at": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "published_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "schema_version": {
+    "default": "1",
+    "nullable": false,
+    "type": "integer"
+   },
+   "version": {
+    "default": null,
+    "nullable": false,
+    "type": "integer"
+   }
+  },
+  "site_content_versions": {
+   "action": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "content": {
+    "default": null,
+    "nullable": false,
+    "type": "jsonb"
+   },
+   "created_at": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "created_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "note": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "restored_from": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "schema_version": {
+    "default": "1",
+    "nullable": false,
+    "type": "integer"
+   },
+   "version": {
+    "default": null,
+    "nullable": false,
+    "type": "integer"
+   }
+  },
+  "site_media": {
+   "bytes": {
+    "default": null,
+    "nullable": false,
+    "type": "bigint"
+   },
+   "created_at": {
+    "default": "now()",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "created_by": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "kind": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "mime": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "path": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   }
+  },
+  "study_cards": {
+   "back": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "chapter_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "difficulty": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "front": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "hint": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "kind": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "last_rating": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "last_reviewed_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "next_review_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "position": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "reviews": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "study_sessions": {
+   "activity": {
+    "default": "'Practice'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "chapter_id": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "completion_state": {
+    "default": "'completed'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "duration_minutes": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "ended_at": {
+    "default": null,
+    "nullable": true,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "mode": {
+    "default": "'Pomodoro'::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "started_at": {
+    "default": null,
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "subject": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "test_chapter_links": {
+   "chapter_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "marks_obtained": {
+    "default": null,
+    "nullable": true,
+    "type": "numeric"
+   },
+   "test_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "total_marks": {
+    "default": null,
+    "nullable": true,
+    "type": "numeric"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "test_error_logs": {
+   "category": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "chapter_id": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "marks_lost": {
+    "default": null,
+    "nullable": true,
+    "type": "numeric"
+   },
+   "note": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "questions": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "subject": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "test_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "test_subject_scores": {
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "marks_obtained": {
+    "default": null,
+    "nullable": true,
+    "type": "numeric"
+   },
+   "subject": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "test_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "total_marks": {
+    "default": null,
+    "nullable": true,
+    "type": "numeric"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "test_time_entries": {
+   "attempted": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "label": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "minutes": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "order_index": {
+    "default": "0",
+    "nullable": false,
+    "type": "integer"
+   },
+   "subject": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "test_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "unattempted": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "tests": {
+   "chapter_id": {
+    "default": null,
+    "nullable": true,
+    "type": "uuid"
+   },
+   "correct": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "marks_obtained": {
+    "default": null,
+    "nullable": true,
+    "type": "numeric"
+   },
+   "negative_marks": {
+    "default": null,
+    "nullable": true,
+    "type": "numeric"
+   },
+   "notes": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "skipped": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "subject": {
+    "default": null,
+    "nullable": true,
+    "type": "text"
+   },
+   "test_date": {
+    "default": null,
+    "nullable": false,
+    "type": "date"
+   },
+   "test_type": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "time_minutes": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "title": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "total_marks": {
+    "default": null,
+    "nullable": true,
+    "type": "numeric"
+   },
+   "total_questions": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "wrong": {
+    "default": null,
+    "nullable": true,
+    "type": "integer"
+   }
+  },
+  "user_exam_tracks": {
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "enabled": {
+    "default": "true",
+    "nullable": false,
+    "type": "boolean"
+   },
+   "exam_date": {
+    "default": null,
+    "nullable": true,
+    "type": "date"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "label": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "notes": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "target_score": {
+    "default": null,
+    "nullable": true,
+    "type": "numeric"
+   },
+   "track": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   }
+  },
+  "weekly_goals": {
+   "created_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "goal_type": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "id": {
+    "default": "gen_random_uuid()",
+    "nullable": false,
+    "type": "uuid"
+   },
+   "progress_value": {
+    "default": "0",
+    "nullable": false,
+    "type": "numeric"
+   },
+   "target": {
+    "default": null,
+    "nullable": false,
+    "type": "numeric"
+   },
+   "title": {
+    "default": null,
+    "nullable": false,
+    "type": "text"
+   },
+   "unit": {
+    "default": "''::text",
+    "nullable": false,
+    "type": "text"
+   },
+   "updated_at": {
+    "default": "timezone('utc'::text, now())",
+    "nullable": false,
+    "type": "timestamp with time zone"
+   },
+   "user_id": {
+    "default": null,
+    "nullable": false,
+    "type": "uuid"
+   },
+   "week_start": {
+    "default": null,
+    "nullable": false,
+    "type": "date"
+   }
+  }
+ }
+}

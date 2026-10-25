@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/iterables.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -11,6 +15,8 @@ import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/cards.dart';
+import '../../logic/search.dart';
+import '../search/search_focus.dart';
 import '../shell/app_shell.dart';
 
 /// Formulas and flashcards. Each card moves along the Settings revision ladder
@@ -30,6 +36,21 @@ class _DecksPageState extends ConsumerState<DecksPage> {
   String? _subject;
   String? _chapterId;
   bool _revealed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Opened from a search result: open that card for reading and editing.
+    final SearchFocus? focus = SearchFocusScope.of(context);
+    if (focus == null || focus.kind != SearchKind.card) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !focus.claim(focus.id)) return;
+      final AppData data = ref.read(dataControllerProvider).data;
+      final StudyCard? card = data.studyCards.where((StudyCard c) => c.id == focus.id).firstOrNull;
+      if (card == null) return;
+      unawaited(openCardEditor(context, ref, data, card, card.kind));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -325,7 +346,7 @@ class _DecksPageState extends ConsumerState<DecksPage> {
       final String when = next.nextReviewAt!.substring(0, 10);
       showToast(context, when == todayIso() ? 'Back again later today.' : 'Next review on $when.');
     } catch (error) {
-      if (mounted && context.mounted) showToast(context, error.toString(), error: true);
+      if (mounted && context.mounted) showToast(context, userMessage(error), error: true);
     }
   }
 
@@ -372,7 +393,7 @@ class _DecksPageState extends ConsumerState<DecksPage> {
         showToast(context, '${fresh.length} formula card${fresh.length == 1 ? '' : 's'} created from your notes.');
       }
     } catch (error) {
-      if (context.mounted) showToast(context, error.toString(), error: true);
+      if (context.mounted) showToast(context, userMessage(error), error: true);
     }
   }
 }
@@ -496,13 +517,14 @@ Future<void> openCardEditor(
                 if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                 if (context.mounted) showToast(context, 'Card saved.');
               } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
+                if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
             child: Text(creating ? 'Add card' : 'Save card'),
           ),
           if (!creating)
-            TextButton(
+            DangerButton(
+              label: 'Delete',
               onPressed: () async {
                 final bool confirmed = await confirmAction(
                   context,
@@ -515,10 +537,10 @@ Future<void> openCardEditor(
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                   if (context.mounted) showToast(context, 'Card deleted.');
                 } catch (error) {
-                  if (context.mounted) showToast(context, error.toString(), error: true);
+                  if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              child: Text('Delete', style: TextStyle(color: context.stracker.palette.red)),
+              
             ),
         ],
       ),

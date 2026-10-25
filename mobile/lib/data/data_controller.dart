@@ -288,14 +288,16 @@ class DataController extends StateNotifier<DataState> {
   Future<void> _run(Future<void> Function() action, Future<void> Function() apply) async {
     final AppData before = state.data;
     state = state.copyWith(saving: true, error: null);
-    await apply();
-    final AppData optimistic = state.data;
+    AppData? optimistic;
     try {
+      await apply();
+      optimistic = state.data;
       await action();
       state = state.copyWith(saving: false, offline: false);
-    } catch (error) {
-      final String message = error is AppFailure ? error.message : 'That change could not be saved. Try again.';
-      if (identical(state.data, optimistic)) {
+    } catch (error, stack) {
+      logFailure('save', error, stack);
+      final String message = userMessage(error);
+      if (optimistic == null || identical(state.data, optimistic)) {
         _apply(before);
       } else {
         unawaited(load(silent: true));
@@ -645,20 +647,25 @@ class DataController extends StateNotifier<DataState> {
   /* ------------------------------------------------------------------ */
 
   Future<void> saveMistake(Mistake mistake, {File? image}) async {
-    late Mistake stored;
+    // The note shows at once (optimistic); a new image's storage path is only known after
+    // the upload, so the row is re-applied with it once the upload and write succeed.
+    // (This used to read a `late` local inside the optimistic step, before the upload had
+    // assigned it: every retry/mistake save failed with a LateInitializationError.)
     await _run(
       () async {
-        String? path = mistake.imagePath;
-        if (image != null) {
-          // Uploaded under <user uuid>/<mistake id>.webp, the same private bucket and
-          // content type the website uses, so both clients see the same object.
-          path = await _repository.uploadMistakeImage(_userId, image, mistake.id);
+        if (image == null) {
+          await _repository.upsertRow('mistakes', mistake.toMap());
+          return;
         }
-        stored = path == mistake.imagePath ? mistake : mistake.copyWith(imagePath: path);
+        // Uploaded under <user uuid>/<mistake id>.webp, the same private bucket and
+        // content type the website uses, so both clients see the same object.
+        final String path = await _repository.uploadMistakeImage(_userId, image, mistake.id);
+        final Mistake stored = mistake.copyWith(imagePath: path);
         await _repository.upsertRow('mistakes', stored.toMap());
+        _apply(state.data.copyWith(mistakes: _put(state.data.mistakes, stored, (Mistake row) => row.id)));
       },
       () async => _apply(state.data.copyWith(
-        mistakes: _put(state.data.mistakes, stored, (Mistake row) => row.id),
+        mistakes: _put(state.data.mistakes, mistake, (Mistake row) => row.id),
       )),
     );
   }

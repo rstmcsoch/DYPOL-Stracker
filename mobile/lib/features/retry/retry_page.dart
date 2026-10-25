@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
+import '../../core/errors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -238,13 +240,20 @@ class _RetryTileState extends ConsumerState<_RetryTile> {
             else
               Align(
                 alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: () => setState(() => _revealed = true),
-                  child: const Text('Reveal my note'),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 2),
+                  child: SecondaryButton(
+                    compact: true,
+                    icon: Icons.visibility_outlined,
+                    label: 'Reveal my note',
+                    onPressed: () => setState(() => _revealed = true),
+                  ),
                 ),
               ),
+            const SizedBox(height: 6),
             Wrap(
-              spacing: 6,
+              spacing: 8,
+              runSpacing: 6,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
                 FilledButton.icon(
@@ -255,12 +264,13 @@ class _RetryTileState extends ConsumerState<_RetryTile> {
                   icon: const Icon(Icons.check, size: 16),
                   label: const Text('Mark retried'),
                 ),
-                TextButton(
+                SecondaryButton(
+                  icon: Icons.bookmark_border,
+                  label: 'Keep for later',
                   onPressed: () => _update(
                     mistake.copyWith(retryLater: false, retryStatus: 'pending'),
                     'Moved back to the notebook. You can add it to retry again later.',
                   ),
-                  child: const Text('Keep for later'),
                 ),
                 IconButton(
                   tooltip: 'Delete question',
@@ -286,7 +296,7 @@ class _RetryTileState extends ConsumerState<_RetryTile> {
       if (mounted) showToast(context, message);
       await HapticFeedback.lightImpact();
     } catch (error) {
-      if (mounted) showToast(context, error.toString(), error: true);
+      if (mounted) showToast(context, userMessage(error), error: true);
     }
   }
 }
