@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import { ApiError, readJson, sendJson } from '../_lib/http.js'
 import { scoped, withProviderScope } from '../_lib/provider-scope.js'
+import { publicCompanyName } from '../_lib/model-company.js'
 import { decryptCredential } from '../_lib/secrets.js'
 import { discoverProviderModels } from '../_lib/models.js'
 import { normalizeProviderSetup, type ProviderConfigRow } from '../_lib/registry.js'
@@ -107,12 +108,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         if (token) approvals[model.id] = token
       }
       const byId = new Map(listed.models.map(model => [model.id, model]))
-      const models = verified.map(model => byId.get(model.id) ?? { id: model.id, name: model.id, capabilities: setup.capabilities ?? {} })
+      const models = verified.map(model => byId.get(model.id) ?? { id: model.id, name: model.id, capabilities: setup.capabilities ?? {}, company: publicCompanyName('custom', model.id) })
+      // Students see only the company + family label; the owner sees the exact model ID.
+      const bestName = verified.length ? (scope.kind === 'site' ? verified[0]!.id : models[0]?.company ?? publicCompanyName('custom', verified[0]!.id)) : ''
       sendJson(res, 200, {
         ...listed, models, rankedModelIds: verified.map(model => model.id), approvals,
         probe: { listed: candidates.length, tried, passed: verified.length },
         message: verified.length
-          ? `Found ${verified.length} working model${verified.length === 1 ? '' : 's'} (tested ${tried} of ${ranked.length} chat models). Best: ${verified[0]!.id}.`
+          ? `Found ${verified.length} working model${verified.length === 1 ? '' : 's'} (tested ${tried} of ${ranked.length} chat models). Best: ${bestName}.`
           : `No compatible model could be found: the ${tried} best-ranked chat models did not reply with this key. Check the key's model access, or enter a model ID manually.`
       })
       return

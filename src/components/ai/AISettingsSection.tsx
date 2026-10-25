@@ -64,6 +64,8 @@ interface AIProviderSettingsProps {
 export function AIProviderSettings({ manager,variant,local = false,hideListError = false,notices,headerAction,stracker = null,preference = 'stracker',onPreferStracker,preferring = false }:AIProviderSettingsProps) {
   const { providers,providersLoading,providersError,refreshProviders,saveProvider,testProvider,patchProvider,removeProvider,discoverModels } = manager
   const site = variant === 'site'
+  /** Owner sees exact model IDs; students only ever see the company + family label. */
+  const shownModel = (provider:AIProviderConfig) => site ? provider.model_id : provider.model_label || 'AI model'
   const { notify } = useToast()
   const [editing,setEditing] = useState<AIProviderConfig|null>(null)
   const [draft,setDraft] = useState<AIProviderDraft|null>(null)
@@ -121,7 +123,7 @@ export function AIProviderSettings({ manager,variant,local = false,hideListError
       })
       closeEditor()
       if (candidates.length > 1) await autoPick(saved,candidates)
-      else if (approvalToken && saved.provider_id === 'custom' && saved.connection_status === 'connected') notify(`${saved.display_name || providerLabel(saved.provider_id)} is connected and ready with “${saved.model_id}” (tested during Discover).`)
+      else if (approvalToken && saved.provider_id === 'custom' && saved.connection_status === 'connected') notify(`${saved.display_name || providerLabel(saved.provider_id)} is connected and ready with “${shownModel(saved)}” (tested during Discover).`)
       else await autoTest(saved)
     } catch (error) { notify(error instanceof Error ? error.message : 'Provider settings could not be saved.', 'error') }
     finally { setSaving(false) }
@@ -158,8 +160,8 @@ export function AIProviderSettings({ manager,variant,local = false,hideListError
         current = await saveProvider(modelDraft(saved,pick.modelId))
         await testProvider(saved.id)
       }
-      if (pick.modelId) notify(`${providerLabel(saved.provider_id)} is ready with “${pick.modelId}”. You can change the model any time.`)
-      else notify(`None of the recommended models worked for this key (${pick.tried.map(entry => entry.modelId).join(', ')}). Edit the provider and choose another model.`, 'error')
+      if (pick.modelId) notify(`${providerLabel(saved.provider_id)} is ready with “${site ? pick.modelId : shownModel(current)}”. You can change the model any time.`)
+      else notify(`None of the recommended models worked for this key${site ? ` (${pick.tried.map(entry => entry.modelId).join(', ')})` : ''}. Edit the provider and choose another model.`, 'error')
     } catch (error) { notify(error instanceof Error ? error.message : 'The model could not be chosen automatically. Edit the provider and choose one.', 'error') }
     finally { setWorkingId(null) }
   }
@@ -167,7 +169,7 @@ export function AIProviderSettings({ manager,variant,local = false,hideListError
   /** Every save is followed by a real connection test with the chosen model. */
   const autoTest = async (saved:AIProviderConfig) => {
     setWorkingId(saved.id)
-    notify(`${providerLabel(saved.provider_id)} saved. Testing “${saved.model_id}”…`, 'info')
+    notify(`${providerLabel(saved.provider_id)} saved. Testing “${shownModel(saved)}”…`, 'info')
     try {
       await testProvider(saved.id)
       notify(`${providerLabel(saved.provider_id)} is connected and ready.`)
@@ -176,8 +178,9 @@ export function AIProviderSettings({ manager,variant,local = false,hideListError
       let suggestion = ''
       try {
         const result = await discoverModels({ id:saved.id,providerId:saved.provider_id,modelId:saved.model_id,apiKey:'',baseUrl:saved.base_url,protocol:saved.protocol })
-        const ids = (result.models ?? []).map(model => model.id).filter(id => id !== saved.model_id).slice(0,4)
-        if (ids.length) suggestion = ` Available for your key: ${ids.join(', ')}.`
+        const ids = (result.models ?? []).filter(model => model.id !== saved.model_id).map(model => site ? model.id : model.company ?? 'AI model')
+        const names = [...new Set(ids)].slice(0,4)
+        if (names.length) suggestion = ` Available for your key: ${names.join(', ')}.`
       } catch { /* suggestions are optional */ }
       notify(`This model isn’t compatible or available for your key — try a different model. ${reason}${suggestion}`.trim(), 'error')
     } finally { setWorkingId(null) }
@@ -258,7 +261,7 @@ export function AIProviderSettings({ manager,variant,local = false,hideListError
           const canEnable = !provider.enabled && provider.connection_status === 'connected'
           return <div className="ai-provider-row" key={provider.id}>
             <AIProviderMark provider={provider.provider_id} />
-            <div className="ai-provider-copy"><div className="ai-provider-title">{site && <span className="ai-preferred-tag" title="Fallback order: tried in this order for every student">#{index + 1}</span>}<strong>{provider.display_name || providerLabel(provider.provider_id)}</strong><StatusBadge tone={statusTone(provider.connection_status)}>{AI_STATUS_COPY[provider.connection_status]}</StatusBadge>{!site && provider.is_default && preference === 'own' && <span className="ai-preferred-tag"><Star size={11} fill="currentColor" /> Preferred</span>}</div><div className="ai-provider-meta"><span>{provider.model_id}</span><span>{provider.masked_key}</span>{provider.enabled ? <span>Enabled</span> : <span>Disabled</span>}</div></div>
+            <div className="ai-provider-copy"><div className="ai-provider-title">{site && <span className="ai-preferred-tag" title="Fallback order: tried in this order for every student">#{index + 1}</span>}<strong>{provider.display_name || providerLabel(provider.provider_id)}</strong><StatusBadge tone={statusTone(provider.connection_status)}>{AI_STATUS_COPY[provider.connection_status]}</StatusBadge>{!site && provider.is_default && preference === 'own' && <span className="ai-preferred-tag"><Star size={11} fill="currentColor" /> Preferred</span>}</div><div className="ai-provider-meta"><span>{shownModel(provider)}</span><span>{provider.masked_key}</span>{provider.enabled ? <span>Enabled</span> : <span>Disabled</span>}</div></div>
             <div className="ai-provider-actions">
               <Button size="sm" variant="quiet" onClick={() => void runProviderAction(provider.id,'test')} disabled={busy}>{busy ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />} <span className="ai-action-label">Test</span></Button>
               {canEnable ? <Button size="sm" variant="secondary" onClick={() => void runProviderAction(provider.id,'enable')} disabled={busy}><Check size={14} /><span className="ai-action-label">Enable</span></Button> : provider.enabled ? <Button size="sm" variant="quiet" onClick={() => void runProviderAction(provider.id,'disable')} disabled={busy}><span className="ai-action-label">Disable</span></Button> : null}
@@ -281,8 +284,8 @@ export function AIProviderSettings({ manager,variant,local = false,hideListError
       </div>
       <div className="ai-editor-fields">
         <Field label="Display name" hint="Optional name used in the assistant and fallback notices."><input maxLength={80} value={draft.displayName ?? ''} onChange={event => patchDraft({displayName:event.target.value})} placeholder={selectedProvider.label} /></Field>
-        <div className="ai-model-field"><Field label="Model ID" required={!(autoModel && !editing && draft.providerId !== 'custom')} hint={autoModel && !editing && draft.providerId !== 'custom' ? 'Leave empty: Stracker tests the newest fast models for your key and picks the best one.' : draft.providerId === 'custom' ? 'Press Discover: Stracker finds and tests the best chat models for your key and fills in the best one.' : 'Use Discover when supported, or enter a model ID from your provider account.'}><input list="ai-model-list" value={draft.modelId} onChange={event => { patchDraft({modelId:event.target.value}); if (!editing) setAutoModel(!event.target.value.trim()) }} placeholder={autoModel && !editing && draft.providerId !== 'custom' ? 'Auto (best tested model)' : DEFAULT_MODEL[draft.providerId] || 'e.g. provider-model-name'} autoComplete="off" /><datalist id="ai-model-list">{models.map(model => <option key={model.id} value={model.id} label={model.name} />)}</datalist></Field><Button type="button" variant="secondary" size="sm" onClick={() => void discover()} disabled={discovering || saving}>{discovering ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />} Discover</Button></div>
-        {draft.providerId === 'custom' && models.length > 0 && Object.keys(approvals).length > 0 && <Field label="Tested models" hint="Best first. Each one replied to a real chat test with your key; you can still type another model ID above."><select value={approvals[draft.modelId] ? draft.modelId : ''} onChange={event => event.target.value && patchDraft({modelId:event.target.value})}>{!approvals[draft.modelId] && <option value="">Custom model ID (not tested)</option>}{models.map((model,index) => <option key={model.id} value={model.id}>{index === 0 ? `${model.id} (best)` : model.id}</option>)}</select></Field>}
+        <div className="ai-model-field"><Field label="Model ID" required={!(autoModel && !editing && draft.providerId !== 'custom')} hint={autoModel && !editing && draft.providerId !== 'custom' ? 'Leave empty: Stracker tests the newest fast models for your key and picks the best one.' : draft.providerId === 'custom' ? 'Press Discover: Stracker finds and tests the best chat models for your key and fills in the best one.' : 'Use Discover when supported, or enter a model ID from your provider account.'}><input list="ai-model-list" value={draft.modelId} onChange={event => { patchDraft({modelId:event.target.value}); if (!editing) setAutoModel(!event.target.value.trim()) }} placeholder={autoModel && !editing && draft.providerId !== 'custom' ? 'Auto (best tested model)' : DEFAULT_MODEL[draft.providerId] || 'e.g. provider-model-name'} autoComplete="off" /><datalist id="ai-model-list">{models.map(model => <option key={model.id} value={model.id} label={site ? (model.company ? `${model.name} · ${model.company}` : model.name) : model.company ?? 'AI model'} />)}</datalist></Field><Button type="button" variant="secondary" size="sm" onClick={() => void discover()} disabled={discovering || saving}>{discovering ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />} Discover</Button></div>
+        {draft.providerId === 'custom' && models.length > 0 && Object.keys(approvals).length > 0 && <Field label="Tested models" hint="Best first. Each one replied to a real chat test with your key; you can still type another model ID above."><select value={approvals[draft.modelId] ? draft.modelId : ''} onChange={event => event.target.value && patchDraft({modelId:event.target.value})}>{!approvals[draft.modelId] && <option value="">Custom model ID (not tested)</option>}{models.map((model,index) => { const name = site ? model.id : `${model.company ?? 'AI model'}${index ? ` · option ${index + 1}` : ''}`; return <option key={model.id} value={model.id}>{index === 0 ? `${name} (best)` : name}</option> })}</select></Field>}
         {draft.providerId === 'custom' && <Field label="API protocol" required hint="Custom APIs must implement the selected chat-completions or messages protocol."><select value={draft.protocol} onChange={event => patchDraft({protocol:event.target.value as AIProviderDraft['protocol']})}><option value="openai-compatible">OpenAI-compatible</option><option value="anthropic-compatible">Anthropic-compatible</option></select></Field>}
         {(draft.providerId === 'custom' || ['openai','deepseek'].includes(draft.providerId)) && <Field label="API base URL" required hint="HTTPS only. Private, local, and link-local network endpoints are blocked."><input type="url" autoComplete="url" value={draft.baseUrl ?? ''} onChange={event => patchDraft({baseUrl:event.target.value})} placeholder={selectedProvider.defaultBaseUrl ?? 'https://api.example.com/v1'} /></Field>}
         {draft.providerId === 'qwen' && <Field label="Qwen service region" hint="The endpoint follows your selected DashScope region."><select value={draft.region ?? 'international'} onChange={event => patchDraft({region:event.target.value as 'international'|'china'})}><option value="international">International</option><option value="china">China mainland</option></select></Field>}

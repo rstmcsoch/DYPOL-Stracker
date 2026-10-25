@@ -6,6 +6,7 @@ import { logAIEvent } from '../_lib/diagnostics.js'
 import { authenticateRequest } from '../_lib/supabase.js'
 import { redactPotentialSecrets } from '../_lib/secrets.js'
 import { runAssistant } from '../_lib/agent.js'
+import { publicStoredModelId } from '../_lib/model-company.js'
 import { CHAT_RATE, takeRateSlot } from '../_lib/rate-limit.js'
 
 const requestSchema = z.object({
@@ -66,7 +67,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         res.setHeader('Cache-Control','no-cache, no-transform')
         res.setHeader('X-Content-Type-Options','nosniff')
         event(res,'task',{ id:replay.id,conversationId:replay.conversation_id,status:'completed' })
-        event(res,'done',{ content:metadata?.response ?? '',providerId:replay.provider_id,modelId:replay.model_id,taskId:replay.id,fallbackFrom:metadata?.fallback_from ?? null })
+        event(res,'done',{ content:metadata?.response ?? '',providerId:replay.provider_id,modelId:publicStoredModelId(replay.provider_id,replay.model_id),taskId:replay.id,fallbackFrom:metadata?.fallback_from ?? null })
         res.end()
         return
       }
@@ -79,7 +80,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         event(res,'task',{ id:replay.id,conversationId:replay.conversation_id,status:'waiting' })
         if (pending) {
           const summary = pending.summary as { title?: string; fields?: Array<{label:string;value:string}> }
-          event(res,'confirmation',{ providerId:replay.provider_id,modelId:replay.model_id,action:{ actionId:pending.id,taskId:pending.task_id,toolName:pending.tool_name,title:summary.title,fields:summary.fields ?? [],expiresAt:pending.expires_at } })
+          event(res,'confirmation',{ providerId:replay.provider_id,modelId:publicStoredModelId(replay.provider_id,replay.model_id),action:{ actionId:pending.id,taskId:pending.task_id,toolName:pending.tool_name,title:summary.title,fields:summary.fields ?? [],expiresAt:pending.expires_at } })
         }
         res.end()
         return

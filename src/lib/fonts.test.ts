@@ -200,8 +200,9 @@ describe('role typography coverage', () => {
         const property = match[1] ?? 'font'
         const value = match[2]?.trim() ?? ''
         if (/max\(\s*\.(?:75|8125)rem/i.test(value) || /(?:ui-)?monospace/i.test(value)) continue
-        // One explicit, owner-requested exception: the Stracker AI composer footnote.
-        if (/compact-footnote/.test(value)) continue
+        // Explicit, owner-requested exceptions: the Stracker AI composer footnote, and the
+        // 20%-smaller "Add your own model" button and composer text (--owner-shrunk-*).
+        if (/compact-footnote|owner-shrunk-/.test(value)) continue
         const smallPixels = [...value.matchAll(/([0-9]+(?:\.[0-9]+)?)px/g)]
           .map(size => Number(size[1]))
           .filter(size => size < 12)

@@ -1,5 +1,6 @@
 import { lookup } from 'node:dns/promises'
 import type { LookupAddress } from 'node:dns'
+import { publicCompanyName } from './model-company.js'
 import { AI_PROVIDER_IDS, type AIProviderId, type AIProtocol, type AICapabilities, type AIModelOption } from '../../src/lib/ai/catalog.js'
 import { stripControlChars } from '../../src/lib/control-chars.js'
 import { ApiError } from './http.js'
@@ -261,6 +262,8 @@ export function modelOptionsFromApi(provider: AIProviderId, values: unknown[]): 
 
 export type SafeProviderConfig = Omit<ProviderConfigRow, 'encrypted_api_key' | 'key_hint' | 'provider_config' | 'failure_count'> & {
   masked_key: string
+  /** Company + family label (e.g. "Google Gemini"); the only model name shown to students. */
+  model_label: string
   region?: string
 }
 
@@ -270,7 +273,7 @@ export function safeProviderConfig(row: ProviderConfigRow): SafeProviderConfig {
   delete safe.key_hint
   delete safe.provider_config
   delete safe.failure_count
-  return { ...safe, masked_key: `••••••••••••${row.key_hint}`, region: row.provider_config?.region } as SafeProviderConfig
+  return { ...safe, masked_key: `••••••••••••${row.key_hint}`, model_label: publicCompanyName(row.provider_id, row.model_id, (row.capabilities as unknown as Record<string, unknown> | null)?.company, 'AI model'), region: row.provider_config?.region } as SafeProviderConfig
 }
 
 export function runtimeHealth(row: ProviderConfigRow): 'ready' | 'cooldown' | 'disabled' {

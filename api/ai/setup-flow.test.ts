@@ -102,7 +102,7 @@ describe('AI setup flow', () => {
     expect(tested.status).toBe(200)
     const list = await call(await providers(), 'GET')
     const row = (list.json.providers as Row[])[0]!
-    expect(row).toMatchObject({ enabled: true, is_default: true, connection_status: 'connected' })
+    expect(row).toMatchObject({ enabled: true, is_default: true, connection_status: 'connected', model_label: 'Google Gemini' })
     expect(JSON.stringify(list.json)).not.toContain('AIza-test-key-1234')
   })
 
@@ -257,9 +257,9 @@ describe('Stracker AI (Default)', () => {
     expect(list.status).toBe(200)
     const stracker = list.json.stracker as Row
     expect(Object.keys(stracker).sort()).toEqual(['dailyLimit', 'model', 'name', 'preferred', 'status', 'usedToday'])
-    expect(stracker).toMatchObject({ name: 'Stracker AI (Default)', model: 'openai/gpt-oss-20b', status: 'ready', preferred: true })
+    expect(stracker).toMatchObject({ name: 'Stracker AI (Default)', model: 'OpenAI ChatGPT', status: 'ready', preferred: true })
     const text = JSON.stringify(list.json)
-    for (const secret of [SITE_KEY, '9876', SITE_URL, 'hidden-vendor', 'Owner Gemini', 'encrypted', 'base_url', 'key_hint', 'baseUrl', 'apiKey', '0000000000aa']) expect(text).not.toContain(secret)
+    for (const secret of ['gpt-oss-20b', SITE_KEY, '9876', SITE_URL, 'hidden-vendor', 'Owner Gemini', 'encrypted', 'base_url', 'key_hint', 'baseUrl', 'apiKey', '0000000000aa']) expect(text).not.toContain(secret)
     expect(list.json.preference).toBe('stracker')
   })
 
@@ -267,7 +267,7 @@ describe('Stracker AI (Default)', () => {
     const { publicStrackerStatus, DEFAULT_SITE_AI_SETTINGS } = await import('../_lib/stracker-default.js')
     const row = await siteRow({ base_url: SITE_URL })
     const ready = publicStrackerStatus({ settings: DEFAULT_SITE_AI_SETTINGS, rows: [row as never], preference: 'own', usedToday: 3 })
-    expect(ready).toEqual({ name: 'Stracker AI (Default)', model: 'gemini-3.6-flash', status: 'ready', preferred: false, dailyLimit: DEFAULT_SITE_AI_SETTINGS.perUserDaily, usedToday: 3 })
+    expect(ready).toEqual({ name: 'Stracker AI (Default)', model: 'Google Gemini', status: 'ready', preferred: false, dailyLimit: DEFAULT_SITE_AI_SETTINGS.perUserDaily, usedToday: 3 })
     const off = publicStrackerStatus({ settings: { ...DEFAULT_SITE_AI_SETTINGS, enabled: false }, rows: [row as never], preference: 'stracker', usedToday: 0 })
     expect(off).toMatchObject({ status: 'unavailable', model: null })
     expect(JSON.stringify(off)).not.toContain(SITE_URL)
@@ -341,13 +341,15 @@ describe('Stracker AI (Default)', () => {
     const events: Array<[string, unknown]> = []
     const { runAssistant } = await import('../_lib/agent.js')
     const result = await runAssistant(runInput('hello', (event, data) => events.push([event, data])))
-    expect(result).toMatchObject({ status: 'completed', providerId: 'stracker', modelId: 'models/gemini-third', content: 'From number three' })
+    expect(result).toMatchObject({ status: 'completed', providerId: 'stracker', modelId: 'Google Gemini', content: 'From number three' })
     expect(calls).toBe(3)
     expect(urls[0]).toContain('gemini-3.6-flash')
     expect(urls[1]).toContain('gemini-second')
     expect(urls[2]).toContain('gemini-third')
     const emitted = JSON.stringify(events)
-    for (const secret of [SITE_KEY, SITE_URL, 'hidden-vendor', 'Owner One', 'Owner Two', 'Owner Three', '"gemini"', '"custom"']) expect(emitted).not.toContain(secret)
+    for (const secret of [SITE_KEY, SITE_URL, 'hidden-vendor', 'Owner One', 'Owner Two', 'Owner Three', '"gemini"', '"custom"', 'gemini-third', 'gemini-second', 'gemini-3.6-flash']) expect(emitted).not.toContain(secret)
+    const stored = JSON.stringify([db.ai_messages, db.ai_tasks])
+    for (const modelId of ['gemini-third', 'gemini-second', 'gemini-3.6-flash']) expect(stored).not.toContain(modelId)
   })
 
   it('after every admin model fails, the student’s own model answers', async () => {
@@ -358,8 +360,9 @@ describe('Stracker AI (Default)', () => {
       ? new Response(JSON.stringify({ error: { code: 500, message: 'internal', status: 'INTERNAL' } }), { status: 500, headers: { 'content-type': 'application/json' } })
       : new Response('data: {"candidates":[{"content":{"parts":[{"text":"Own model"}]}}]}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } }))
     const { runAssistant } = await import('../_lib/agent.js')
-    expect(await runAssistant(runInput('hello'))).toMatchObject({ status: 'completed', providerId: 'gemini', content: 'Own model' })
+    expect(await runAssistant(runInput('hello'))).toMatchObject({ status: 'completed', providerId: 'gemini', modelId: 'Google Gemini', content: 'Own model' })
     expect(calls).toBe(3)
+    expect(JSON.stringify([db.ai_messages, db.ai_tasks])).not.toContain('gemini-2.5-flash')
   })
 
   it('when every admin model fails and the student has none, the message points to the AI window and Settings without leaking details', async () => {
