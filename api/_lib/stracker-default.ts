@@ -33,8 +33,8 @@ export function publicProviderName(row: ProviderConfigRow): string {
 }
 
 /**
- * The only model detail students see for a Stracker AI (Default) row: the company behind it
- * (e.g. "Google", "NVIDIA"), or "Stracker AI" when unknown. Never the model ID or owner label.
+ * The only model detail students see for a Stracker AI (Default) row: company + family
+ * (e.g. "Google Gemini", "NVIDIA Nemotron"), or "Stracker AI" when unknown. Never the model ID or owner label.
  */
 export function publicSiteModelName(row: Pick<ProviderConfigRow, 'provider_id' | 'model_id' | 'capabilities'>): string {
   return publicCompanyName(row.provider_id, row.model_id, (row.capabilities as unknown as Record<string, unknown> | null | undefined)?.company)

@@ -28,7 +28,7 @@ export interface AIModelOption {
   name: string
   capabilities: AICapabilities
   contextWindow?: number
-  /** Company behind the model (e.g. Google, OpenAI, NVIDIA), detected by the server during Discover. */
+  /** Company + family label (e.g. "Google Gemini", "NVIDIA Nemotron"), detected by the server during Discover. */
   company?: string
 }
 
