@@ -38,6 +38,9 @@ appearance you pick in either place is stored once in `app_settings`.
 * **AI** — only through the deployed `/api/ai/*` Vercel functions with the user's own
   Supabase access token. Provider keys are posted once and never read back; no AI secret
   exists in the APK.
+* **Session** — the Supabase access/refresh tokens are kept in the Android Keystore
+  (`flutter_secure_storage`, EncryptedSharedPreferences); a session saved by an older build
+  in SharedPreferences is moved there once and the plaintext copy deleted.
 * **Offline** — the last successful load is cached in SharedPreferences
   (`stracker.cache.<user uuid>`, format version 2). A failed refresh keeps the cached
   notebook and marks the header pill *Offline* instead of blanking the screen.
@@ -174,6 +177,11 @@ flutter test
 flutter build apk --release --target-platform android-arm,android-arm64,android-x64
 ```
 
+For a release, `tool/build_release.sh` builds both artifacts the same way: the universal
+APK and the Android App Bundle (`.aab`), obfuscated with `--split-debug-info=build/symbols`,
+and copies them with SHA-256 files into `dist/` (ignored by git). Keep `build/symbols/` for
+each released version: `flutter symbolize` needs it to read an obfuscated crash trace.
+
 `flutter build apk` produces one APK containing every ABI the engine publishes
 (armeabi-v7a, arm64-v8a, x86_64); there is no `--split-per-abi` step and no ABI filter in
 `android/app/build.gradle`. The toolchain's own limitation for 32-bit x86 is documented in
@@ -183,6 +191,7 @@ Tests included (`test/`):
 
 | File | Covers |
 |---|---|
+| `secure_session_storage_test.dart` | session moved from SharedPreferences to the keystore once, plaintext copy deleted, sign-out clears it, unusable keystore keeps the student signed in |
 | `analytics_test.dart` | percentage validity, half marks, full-mock aggregation, mean |
 | `revision_test.dart` | revision buckets, ladder from the account gap list |
 | `recommend_test.dart` | empty notebook, overdue revision, backlog snooze, determinism |

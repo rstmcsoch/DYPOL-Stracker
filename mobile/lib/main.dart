@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config.dart';
+import 'core/secure_session_storage.dart';
 import 'core/theme/theme_controller.dart';
 
 /// SharedPreferences instance created before the widget tree, so appearance and the offline
@@ -48,9 +49,14 @@ Future<void> main() async {
     await Supabase.initialize(
       url: AppConfig.supabaseUrl,
       anonKey: AppConfig.supabaseAnonKey,
-      authOptions: const FlutterAuthClientOptions(
+      authOptions: FlutterAuthClientOptions(
         authFlowType: AuthFlowType.pkce,
         detectSessionInUri: true,
+        // Tokens live in the Android Keystore; a session from an older build is moved
+        // there once and the plaintext copy is deleted.
+        localStorage: SecureSessionStorage(
+          persistSessionKey: supabaseSessionKey(AppConfig.supabaseUrl),
+        ),
       ),
     );
   }

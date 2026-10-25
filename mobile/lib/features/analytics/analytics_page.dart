@@ -1,10 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/date.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/charts.dart';
+import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
@@ -19,6 +25,26 @@ import '../shell/routes.dart';
 /// thresholds, study time split by activity, consistency and the mistake summary.
 class AnalyticsPage extends ConsumerWidget {
   const AnalyticsPage({super.key});
+
+  /// The website's "Export trend CSV": same columns and file name, handed to the share
+  /// sheet so the student can save it to Files or send it on.
+  Future<void> _exportTrendCsv(BuildContext context, AppData data) async {
+    await HapticFeedback.lightImpact();
+    try {
+      final Directory base = await getApplicationDocumentsDirectory();
+      final Directory dir = Directory('${base.path}/stracker-exports');
+      if (!dir.existsSync()) dir.createSync(recursive: true);
+      final File file = File('${dir.path}/stracker-performance.csv');
+      await file.writeAsString(trendCsv(data));
+      await Share.shareXFiles(
+        <XFile>[XFile(file.path, mimeType: 'text/csv')],
+        subject: 'Stracker performance trend',
+      );
+      if (context.mounted) showToast(context, 'Performance trend exported as CSV.');
+    } catch (error) {
+      if (context.mounted) showToast(context, 'Could not export the trend: $error', error: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -59,6 +85,15 @@ class AnalyticsPage extends ConsumerWidget {
             'strong ≥ ${numberLabel(data.settings.strongThreshold)}%, dropping when the latest result falls '
             '${numberLabel(data.settings.droppingThreshold)} points or more.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => _exportTrendCsv(context, data),
+              icon: const Icon(Icons.bar_chart, size: 18),
+              label: const Text('Export trend CSV'),
+            ),
           ),
           const SizedBox(height: 12),
           NotebookCard(

@@ -572,6 +572,7 @@ class NotebookDrawer extends ConsumerWidget {
         .length;
 
     void go(String key) {
+      HapticFeedback.selectionClick();
       Navigator.of(context).pop();
       Routes.open(context, key);
     }
@@ -678,16 +679,15 @@ class NotebookDrawer extends ConsumerWidget {
                   // The same groups and wording as the website's sidebar, so a student who
                   // uses both finds the same thing in the same place.
                   group('Study'),
-                  item('What should I study now?', Icons.explore_outlined, Routes.studyNow, highlight: true),
-                  item('Focus timer', Icons.timer_outlined, Routes.focus),
+                  item('Focus', Icons.timer_outlined, Routes.focus),
                   item('Backlog', Icons.layers_outlined, Routes.backlog, badge: backlog == 0 ? null : '$backlog'),
-                  item('Practice / DPP', Icons.checklist_rtl_outlined, Routes.practice),
+                  item('Practice', Icons.checklist_rtl_outlined, Routes.practice),
                   group('Syllabus'),
                   item('Syllabus', Icons.menu_book_outlined, Routes.syllabus),
                   item('Weak areas', Icons.warning_amber_outlined, Routes.weakAreas),
                   item('PYQs', Icons.local_library_outlined, Routes.pyqs),
                   group('Tests'),
-                  item('Test journal', Icons.fact_check_outlined, Routes.tests),
+                  item('Tests', Icons.fact_check_outlined, Routes.tests),
                   item('Mock analysis', Icons.analytics_outlined, Routes.mockAnalysis),
                   item('Mistake notebook', Icons.book_outlined, Routes.mistakes),
                   item('Retry', Icons.replay, Routes.retry, badge: retries == 0 ? null : '$retries'),
@@ -696,6 +696,7 @@ class NotebookDrawer extends ConsumerWidget {
                   item('Revisions', Icons.autorenew, Routes.revision, badge: revisions == 0 ? null : '$revisions'),
                   item('Formulas & flashcards', Icons.style_outlined, Routes.decks),
                   group('Planning'),
+                  item('Study now', Icons.explore_outlined, Routes.studyNow, highlight: true),
                   item('Study plan', Icons.event_note_outlined, Routes.planner),
                   item('Stracker AI', Icons.auto_awesome_outlined, 'ai'),
                   item('Settings', Icons.settings_outlined, Routes.settings),
