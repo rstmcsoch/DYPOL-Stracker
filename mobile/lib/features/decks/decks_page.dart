@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,6 +37,10 @@ class _DecksPageState extends ConsumerState<DecksPage> {
   String? _subject;
   String? _chapterId;
   bool _revealed = false;
+  // A rating or formula import being saved: a second tap must not rate or import twice.
+  bool _busy = false;
+  static const int _restPage = 20;
+  int _restShown = _restPage;
 
   @override
   void initState() {
@@ -302,7 +307,7 @@ class _DecksPageState extends ConsumerState<DecksPage> {
                 subtitle: '${visible.length - 1} more in view',
                 child: Column(
                   children: <Widget>[
-                    for (final StudyCard card in visible.skip(1).take(20))
+                    for (final StudyCard card in visible.skip(1).take(_restShown))
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         dense: true,
@@ -318,6 +323,16 @@ class _DecksPageState extends ConsumerState<DecksPage> {
                         ),
                         trailing: Text(cardLadderLabel(card, gaps)),
                         onTap: () => openCardEditor(context, ref, data, card, card.kind),
+                      ),
+                    if (visible.length - 1 > _restShown)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: SecondaryButton(
+                          key: const ValueKey<String>('decks-show-more'),
+                          label: 'Show ${math.min(_restPage, visible.length - 1 - _restShown)} more '
+                              '(${visible.length - 1 - _restShown} left)',
+                          onPressed: () => setState(() => _restShown += _restPage),
+                        ),
                       ),
                   ],
                 ),
@@ -335,18 +350,24 @@ class _DecksPageState extends ConsumerState<DecksPage> {
     StudyCard card,
     String rating,
   ) async {
+    if (_busy) return;
     final StudyCard next = reviewCard(card, rating, gaps: data.settings.revisionGaps);
+    // Hide the answer before the save: the next card appears at once (optimistic update)
+    // and must not show its answer already revealed.
+    setState(() {
+      _busy = true;
+      _revealed = false;
+    });
     try {
       await ref.read(dataControllerProvider.notifier).saveCard(next);
       if (!mounted || !context.mounted) return;
-      setState(() {
-        _revealed = false;
-        _session[rating] = (_session[rating] ?? 0) + 1;
-      });
+      setState(() => _session[rating] = (_session[rating] ?? 0) + 1);
       final String when = next.nextReviewAt!.substring(0, 10);
       showToast(context, when == todayIso() ? 'Back again later today.' : 'Next review on $when.');
     } catch (error) {
       if (mounted && context.mounted) showToast(context, userMessage(error), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -367,6 +388,8 @@ class _DecksPageState extends ConsumerState<DecksPage> {
       showToast(context, 'Every formula line in this chapter is already a card.');
       return;
     }
+    if (_busy) return;
+    setState(() => _busy = true);
     final int base = existing.length;
     final String now = isoNow();
     try {
@@ -394,11 +417,19 @@ class _DecksPageState extends ConsumerState<DecksPage> {
       }
     } catch (error) {
       if (context.mounted) showToast(context, userMessage(error), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 }
 
-String _cap(String value, int max) => value.length <= max ? value : value.substring(0, max);
+/// Cuts to [max] UTF-16 units without splitting an emoji's surrogate pair (a lone half is
+/// invalid text that the server rejects).
+String _cap(String value, int max) {
+  if (value.length <= max) return value;
+  final int unit = value.codeUnitAt(max - 1);
+  return value.substring(0, unit >= 0xD800 && unit <= 0xDBFF ? max - 1 : max);
+}
 
 Future<void> openCardEditor(
   BuildContext context,
@@ -482,7 +513,8 @@ Future<void> openCardEditor(
             hint: cardKind == 'formula' ? 'C = ε₀A / d' : 'Charges redistribute so the field cancels inside.',
           ),
           AppField(label: 'Hint (optional)', controller: hint, maxLength: 2000),
-          ElevatedButton(
+          SaveButton(
+            label: creating ? 'Add card' : 'Save card',
             onPressed: () async {
               final Chapter? chosen = data.chapter(chapterId);
               if (chosen == null || chosen.subject != subject) {
@@ -520,7 +552,6 @@ Future<void> openCardEditor(
                 if (context.mounted) showToast(context, userMessage(error), error: true);
               }
             },
-            child: Text(creating ? 'Add card' : 'Save card'),
           ),
           if (!creating)
             DangerButton(

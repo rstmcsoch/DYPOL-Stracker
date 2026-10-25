@@ -481,7 +481,13 @@ Future<void> openChapterEditor(
   await showAppSheet<void>(
     context,
     title: creating ? 'Add a chapter' : 'Chapter notes',
-    builder: (BuildContext sheetContext) => StatefulBuilder(
+    // The sheet watches live data: stage chips, revision scheduling and Up/Down act on the
+    // rows as they are now, not as they were when the sheet opened (a stale snapshot sent a
+    // second stage toggle as a new row and hit the (chapter, stage) unique key).
+    builder: (BuildContext sheetContext) => Consumer(
+      builder: (BuildContext _, WidgetRef sheetRef, Widget? __) {
+        final AppData data = sheetRef.watch(dataControllerProvider).data;
+        return StatefulBuilder(
       builder: (BuildContext context, StateSetter setSheetState) {
         final Chapter? live = creating ? null : data.chapters.where((Chapter row) => row.id == chapter.id).firstOrNull;
         final Chapter base = live ??
@@ -657,7 +663,8 @@ Future<void> openChapterEditor(
               ),
             ],
             const SizedBox(height: 8),
-            ElevatedButton(
+            SaveButton(
+              label: creating ? 'Add chapter' : 'Save notes',
               onPressed: () async {
                 final String trimmed = name.text.trim();
                 if (trimmed.isEmpty) {
@@ -695,9 +702,10 @@ Future<void> openChapterEditor(
                   if (context.mounted) showToast(context, userMessage(error), error: true);
                 }
               },
-              child: Text(creating ? 'Add chapter' : 'Save notes'),
             ),
           ],
+        );
+      },
         );
       },
     ),
@@ -716,10 +724,13 @@ Future<void> openChapterEditor(
 Future<void> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Chapter? previous) async {
   final DataController controller = ref.read(dataControllerProvider.notifier);
   await controller.saveChapter(next);
+  // Live rows: the caller's snapshot can miss a revision scheduled moments ago, and a
+  // reused revision number breaks the (chapter, revision_number) unique key.
+  final AppData current = ref.read(dataControllerProvider).data;
   final bool wasComplete = previous?.status == 'Done' || previous?.status == 'Revised';
   final bool isComplete = next.status == 'Done' || next.status == 'Revised';
   final List<Revision> chapterRevisions =
-      data.revisions.where((Revision revision) => revision.chapterId == next.id).toList();
+      current.revisions.where((Revision revision) => revision.chapterId == next.id).toList();
   if (isComplete && (!wasComplete || chapterRevisions.isEmpty)) {
     final int firstNumber = chapterRevisions.fold<int>(
           0,
@@ -727,12 +738,12 @@ Future<void> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Cha
         ) +
         1;
     final String now = isoNow();
-    final List<int> gaps = data.settings.revisionGaps;
+    final List<int> gaps = current.settings.revisionGaps;
     await controller.saveRevisions(<Revision>[
       for (int index = 0; index < gaps.length; index += 1)
         Revision(
           id: newId(),
-          userId: data.userId,
+          userId: current.userId,
           chapterId: next.id,
           revisionNumber: firstNumber + index,
           dueOn: addDays(next.completedOn ?? todayIso(), gaps[index] < 1 ? 1 : gaps[index]),
@@ -784,7 +795,10 @@ Future<void> toggleChapterStage(
     showToast(context, '${stage.label} is already proven by your own records.');
     return;
   }
-  final ChapterStageRow? existing = data.chapterStages
+  final ChapterStageRow? existing = ref
+      .read(dataControllerProvider)
+      .data
+      .chapterStages
       .where((ChapterStageRow row) => row.chapterId == chapter.id && row.stage == stage.key)
       .firstOrNull;
   final bool nextDone = !(existing?.done ?? false);
@@ -815,7 +829,8 @@ Future<void> moveChapter(
   Chapter chapter,
   int delta,
 ) async {
-  final List<Chapter> siblings = data.chaptersFor(chapter.subject);
+  // Live rows, so repeated Up/Down taps from an open sheet swap the current positions.
+  final List<Chapter> siblings = ref.read(dataControllerProvider).data.chaptersFor(chapter.subject);
   final int index = siblings.indexWhere((Chapter row) => row.id == chapter.id);
   final int target = index + delta;
   if (index < 0 || target < 0 || target >= siblings.length) return;

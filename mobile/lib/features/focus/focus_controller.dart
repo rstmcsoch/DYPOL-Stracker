@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,6 +27,8 @@ class FocusController extends StateNotifier<FocusTimerState> with WidgetsBinding
   FocusController(this._ref) : super(const FocusTimerState()) {
     final DataController data = _ref.read(dataControllerProvider.notifier);
     state = FocusTimerState.fromJson(data.readDeviceValue('focus'));
+    pending.value = _readPending(data.readDeviceValue('focus-pending'));
+    _logged.addAll(pending.value.map((StudySession session) => session.id));
     WidgetsBinding.instance.addObserver(this);
     if (state.running) _startTicker();
     _checkCompletion();
@@ -35,12 +38,59 @@ class FocusController extends StateNotifier<FocusTimerState> with WidgetsBinding
   Timer? _ticker;
   final Set<String> _logged = <String>{};
 
+  /// Finished blocks whose save failed (no connection, server refused). They are kept on
+  /// this device, per account, until a retry saves them or the student discards them, so
+  /// studied time is never silently lost. Same ids on retry: never a duplicate.
+  final ValueNotifier<List<StudySession>> pending = ValueNotifier<List<StudySession>>(const <StudySession>[]);
+
+  static List<StudySession> _readPending(String? raw) {
+    if (raw == null || raw.isEmpty) return const <StudySession>[];
+    try {
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is! List) return const <StudySession>[];
+      return <StudySession>[
+        for (final Object? row in decoded)
+          if (row is Map) StudySession.fromMap(Map<String, dynamic>.from(row)),
+      ];
+    } catch (_) {
+      return const <StudySession>[];
+    }
+  }
+
+  void _setPending(List<StudySession> rows) {
+    pending.value = List<StudySession>.unmodifiable(rows);
+    unawaited(_ref.read(dataControllerProvider.notifier).writeDeviceValue(
+          'focus-pending',
+          rows.isEmpty ? null : jsonEncode(rows.map((StudySession row) => row.toMap()).toList()),
+        ));
+  }
+
+  /// Tries every unsaved block again. Returns the minutes saved, or the first error.
+  Future<FocusSaveResult> retryPending() async {
+    final DataController data = _ref.read(dataControllerProvider.notifier);
+    int minutes = 0;
+    for (final StudySession session in List<StudySession>.of(pending.value)) {
+      try {
+        await data.saveSession(session);
+        minutes += session.durationMinutes;
+        _setPending(pending.value.where((StudySession row) => row.id != session.id).toList());
+      } catch (error) {
+        return FocusSaveResult(minutes, error: userMessage(error));
+      }
+    }
+    return FocusSaveResult(minutes);
+  }
+
+  /// Drops the unsaved blocks on purpose.
+  void discardPending() => _setPending(const <StudySession>[]);
+
   /// Wall clock, replaceable in tests.
   DateTime Function() clock = DateTime.now;
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    pending.dispose();
     _ticker?.cancel();
     super.dispose();
   }
@@ -127,9 +177,10 @@ class FocusController extends StateNotifier<FocusTimerState> with WidgetsBinding
       await data.saveSession(session);
       return FocusSaveResult(session.durationMinutes);
     } catch (error) {
-      // Allow a retry of the same block (same id, so still no duplicate).
-      _logged.remove(id);
-      return FocusSaveResult(0, error: userMessage(error));
+      // The block is already cleared from the timer: keep it for a retry (same id, so
+      // still no duplicate) instead of losing the studied time.
+      _setPending(<StudySession>[...pending.value.where((StudySession row) => row.id != session.id), session]);
+      return FocusSaveResult(0, error: '${userMessage(error)} Your block is kept on this phone; retry from Focus.');
     }
   }
 

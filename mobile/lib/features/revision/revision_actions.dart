@@ -16,6 +16,9 @@ import '../../logic/revision.dart';
 /// Revisions being saved right now: a double tap cannot schedule the next rung twice.
 final Set<String> _completing = <String>{};
 
+/// Chapters whose first revision is being scheduled right now (double-tap guard).
+final Set<String> _scheduling = <String>{};
+
 Future<void> completeRevision(
   BuildContext context,
   WidgetRef ref,
@@ -69,19 +72,25 @@ Future<void> scheduleRevision(
   AppData data,
   Chapter chapter,
 ) async {
+  // Read the live data, not the caller's snapshot: an open sheet's snapshot misses a
+  // revision that was just scheduled from it.
+  final AppData live = ref.read(dataControllerProvider).data;
   final bool exists =
-      data.revisions.any((Revision revision) => revision.chapterId == chapter.id && revision.completedAt == null);
-  if (exists) {
+      live.revisions.any((Revision revision) => revision.chapterId == chapter.id && revision.completedAt == null);
+  if (exists || _scheduling.contains(chapter.id)) {
     if (context.mounted) showToast(context, 'That chapter already has a revision scheduled.');
     return;
   }
+  _scheduling.add(chapter.id);
   try {
-    await ref.read(dataControllerProvider.notifier).saveRevision(startRevisionChain(data, chapter.id));
+    await ref.read(dataControllerProvider.notifier).saveRevision(startRevisionChain(live, chapter.id));
     if (context.mounted) {
       showToast(context, 'Revision scheduled for ${chapter.name}.');
     }
   } catch (error) {
     if (context.mounted) showToast(context, userMessage(error), error: true);
+  } finally {
+    _scheduling.remove(chapter.id);
   }
 }
 

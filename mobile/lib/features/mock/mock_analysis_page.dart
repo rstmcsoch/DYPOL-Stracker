@@ -677,7 +677,9 @@ Future<void> openTimeDataEditor(BuildContext context, WidgetRef ref, AppData dat
                           if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                           if (context.mounted) showToast(context, 'Time data saved.');
                         } catch (failure) {
-                          if (context.mounted) showToast(context, 'Could not save time data.', error: true);
+                          if (context.mounted) {
+                            showToast(context, userMessage(failure, fallback: 'Could not save time data.'), error: true);
+                          }
                           if (sheetContext.mounted) setSheetState(() => saving = false);
                         }
                       },
