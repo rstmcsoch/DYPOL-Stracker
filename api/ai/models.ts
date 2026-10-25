@@ -8,6 +8,40 @@ import { normalizeProviderSetup, type ProviderConfigRow } from '../_lib/registry
 import { MODEL_DISCOVERY_RATE, takeRateSlot } from '../_lib/rate-limit.js'
 import { effectiveModelPreferences } from '../../src/lib/ai/model-preferences.js'
 import { rankModels } from '../../src/lib/ai/model-ranking.js'
+import { CUSTOM_PROBE_BATCH, CUSTOM_PROBE_MAX_TRIED, CUSTOM_PROBE_TIMEOUT_MS, CUSTOM_PROBE_WANTED, rankCustomModels } from '../../src/lib/ai/custom-model-ranking.js'
+import { CONNECTION_TEST_RATE } from '../_lib/rate-limit.js'
+import { providerCallFromConfig, testProviderConnection } from '../_lib/provider-adapters.js'
+import { issueModelApproval } from '../_lib/model-approval.js'
+import { logAIEvent } from '../_lib/diagnostics.js'
+import type { ProviderSetup } from '../_lib/registry.js'
+
+/**
+ * Custom endpoints: rank the listed IDs, then send a tiny real chat completion to the best
+ * candidates in parallel batches until five reply (or the capped candidate list runs out).
+ */
+async function probeCustomModels(setup: ProviderSetup, key: string, ranked: string[]): Promise<{ verified: { id: string; latencyMs: number }[]; tried: number }> {
+  const queue = ranked.slice(0, CUSTOM_PROBE_MAX_TRIED)
+  const verified: { id: string; latencyMs: number }[] = []
+  let tried = 0
+  while (verified.length < CUSTOM_PROBE_WANTED && tried < queue.length) {
+    const batch = queue.slice(tried, tried + CUSTOM_PROBE_BATCH)
+    tried += batch.length
+    const results = await Promise.all(batch.map(async id => {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), CUSTOM_PROBE_TIMEOUT_MS)
+      const started = Date.now()
+      try {
+        const row = { provider_id: 'custom', model_id: id, base_url: setup.baseUrl ?? null, protocol: setup.protocol ?? 'openai-compatible', organization_id: null, provider_config: {} } as unknown as ProviderConfigRow
+        await testProviderConnection(providerCallFromConfig(row, key, '', [], [], controller.signal, () => undefined, 256))
+        return { id, latencyMs: Date.now() - started }
+      } catch { return null }
+      finally { clearTimeout(timer) }
+    }))
+    for (const result of results) if (result) verified.push(result)
+  }
+  verified.sort((a, b) => ranked.indexOf(a.id) - ranked.indexOf(b.id))
+  return { verified: verified.slice(0, CUSTOM_PROBE_WANTED), tried }
+}
 
 const requestSchema = z.object({
   configId: z.uuid().optional(),
@@ -53,6 +87,34 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       key = setup.apiKey
     }
     const result = await discoverProviderModels(setup, key)
+    if (setup.providerId === 'custom' && result.candidates) {
+      const { candidates, ...listed } = result
+      const ranked = rankCustomModels(candidates)
+      if (!ranked.length) {
+        sendJson(res, 200, { ...listed, models: [], rankedModelIds: [], approvals: {}, probe: { listed: candidates.length, tried: 0, passed: 0 },
+          message: candidates.length ? `The endpoint listed ${candidates.length} models, but none are chat models Stracker can use. No compatible model could be found.` : 'The endpoint returned an empty model list. No compatible model could be found.' })
+        return
+      }
+      await takeRateSlot(adminClient, userId, CONNECTION_TEST_RATE)
+      const started = Date.now()
+      const { verified, tried } = await probeCustomModels(setup, key, ranked)
+      logAIEvent('info', 'custom_model_probe', { userId, provider: 'custom', listed: candidates.length, tried, passed: verified.length, durationMs: Date.now() - started })
+      const approvals: Record<string, string> = {}
+      for (const model of verified) {
+        const token = issueModelApproval({ userId, baseUrl: setup.baseUrl, protocol: setup.protocol, modelId: model.id, apiKey: key })
+        if (token) approvals[model.id] = token
+      }
+      const byId = new Map(listed.models.map(model => [model.id, model]))
+      const models = verified.map(model => byId.get(model.id) ?? { id: model.id, name: model.id, capabilities: setup.capabilities ?? {} })
+      sendJson(res, 200, {
+        ...listed, models, rankedModelIds: verified.map(model => model.id), approvals,
+        probe: { listed: candidates.length, tried, passed: verified.length },
+        message: verified.length
+          ? `Found ${verified.length} working model${verified.length === 1 ? '' : 's'} (tested ${tried} of ${ranked.length} chat models). Best: ${verified[0]!.id}.`
+          : `No compatible model could be found: the ${tried} best-ranked chat models did not reply with this key. Check the key's model access, or enter a model ID manually.`
+      })
+      return
+    }
     // Owner-ranked AI defaults (server-side only table; built-ins when unavailable).
     const { data: preferenceRow } = await adminClient.from('ai_model_preferences').select('preferences').eq('id', 1).maybeSingle()
     const modelPreferences = effectiveModelPreferences(preferenceRow?.preferences)
