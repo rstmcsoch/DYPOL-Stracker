@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
+import '../layout.dart';
 
 /// Paper card: the notebook's base surface. Optional ruled title and an action slot.
 class NotebookCard extends StatelessWidget {
@@ -614,7 +615,7 @@ class SkeletonList extends StatelessWidget {
 
 /// Constrains content width on tablets and keeps page padding consistent.
 class ContentWidth extends StatelessWidget {
-  const ContentWidth({super.key, required this.child, this.maxWidth = 760});
+  const ContentWidth({super.key, required this.child, this.maxWidth = AppLayout.contentMaxWidth});
 
   final Widget child;
   final double maxWidth;
@@ -660,8 +661,7 @@ class WrapGrid extends StatelessWidget {
           spacing: spacing,
           runSpacing: runSpacing,
           children: <Widget>[
-            for (final Widget child in children)
-              SizedBox(width: itemWidth, child: child),
+            for (final Widget child in children) SizedBox(width: itemWidth, child: child),
           ],
         );
       },

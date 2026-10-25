@@ -23,7 +23,8 @@ class AiChatPage extends ConsumerStatefulWidget {
 }
 
 class _ChatBubble {
-  _ChatBubble({required this.id, required this.text, required this.isUser, this.streaming = false, this.failed = false});
+  _ChatBubble(
+      {required this.id, required this.text, required this.isUser, this.streaming = false, this.failed = false});
 
   final String id;
   String text;
@@ -192,8 +193,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             reply.text = '';
             setState(() => _status = 'Retrying with another model…');
           case 'fallback':
-            setState(() => _status =
-                '${event.data['from'] ?? 'Model'} unavailable — trying ${event.data['to'] ?? 'a fallback'}.');
+            setState(() =>
+                _status = '${event.data['from'] ?? 'Model'} unavailable — trying ${event.data['to'] ?? 'a fallback'}.');
           case 'confirmation':
             final Map<String, dynamic>? action = event.action;
             setState(() {
@@ -264,9 +265,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       if (!mounted) return;
       showToast(
         context,
-        stopped
-            ? 'Stopping. The answer will finish where it is.'
-            : 'That task had already finished.',
+        stopped ? 'Stopping. The answer will finish where it is.' : 'That task had already finished.',
       );
     } catch (error) {
       if (mounted) showToast(context, error.toString(), error: true);
@@ -282,6 +281,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     return NotebookScaffold(
       title: 'Stracker AI',
       showBack: true,
+      floatingActions: false,
       actions: <Widget>[
         IconButton(
           tooltip: 'New chat',
@@ -339,55 +339,54 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                             maxWidth: MediaQuery.sizeOf(context).width * 0.82,
                           ),
                           child: Column(
-                            crossAxisAlignment:
-                                bubble.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                            crossAxisAlignment: bubble.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: <Widget>[
-                          Container(
-                            margin: EdgeInsets.only(bottom: showCopy ? 0 : 8),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: bubble.isUser ? colors.palette.accentLight : colors.palette.paper,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: bubble.failed ? colors.palette.red : colors.palette.line,
-                              ),
-                            ),
-                            child: bubble.streaming && bubble.text.isEmpty
-                                ? Row(
-                                    children: <Widget>[
-                                      SizedBox(
-                                        width: 13,
-                                        height: 13,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: colors.palette.accent,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        _status ?? 'Thinking…',
-                                        style: Theme.of(context).textTheme.labelSmall,
-                                      ),
-                                    ],
-                                  )
-                                : bubble.isUser
-                                    ? SelectableText(
-                                        bubble.text,
-                                        style: _chatTextStyle(context),
+                              Container(
+                                margin: EdgeInsets.only(bottom: showCopy ? 0 : 8),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: bubble.isUser ? colors.palette.accentLight : colors.palette.paper,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: bubble.failed ? colors.palette.red : colors.palette.line,
+                                  ),
+                                ),
+                                child: bubble.streaming && bubble.text.isEmpty
+                                    ? Row(
+                                        children: <Widget>[
+                                          SizedBox(
+                                            width: 13,
+                                            height: 13,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: colors.palette.accent,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            _status ?? 'Thinking…',
+                                            style: Theme.of(context).textTheme.labelSmall,
+                                          ),
+                                        ],
                                       )
-                                    : AiMarkdown(
-                                        text: bubble.text,
-                                        color: bubble.failed ? colors.palette.red : null,
-                                      ),
-                          ),
-                          if (showCopy)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: ChatCopyButton(
-                                text: bubble.text,
-                                label: bubble.isUser ? 'Copy your message' : 'Copy response',
+                                    : bubble.isUser
+                                        ? SelectableText(
+                                            bubble.text,
+                                            style: _chatTextStyle(context),
+                                          )
+                                        : AiMarkdown(
+                                            text: bubble.text,
+                                            color: bubble.failed ? colors.palette.red : null,
+                                          ),
                               ),
-                            ),
+                              if (showCopy)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: ChatCopyButton(
+                                    text: bubble.text,
+                                    label: bubble.isUser ? 'Copy your message' : 'Copy response',
+                                  ),
+                                ),
                             ],
                           ),
                         ),
@@ -547,8 +546,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 /// Compact line under the title: which model answers, a small "Add your own model" button,
 /// and the professional warning when Stracker AI (Default) is unavailable.
 /// Chat text is 90% of body size; the empty state uses smaller variants, matching the web chat.
-TextStyle? _scaled(TextStyle? style, double factor) =>
-    style?.copyWith(fontSize: (style.fontSize ?? 14) * factor);
+TextStyle? _scaled(TextStyle? style, double factor) => style?.copyWith(fontSize: (style.fontSize ?? 14) * factor);
 
 TextStyle? _chatTextStyle(BuildContext context) => _scaled(Theme.of(context).textTheme.bodyMedium, 0.9);
 
@@ -566,10 +564,12 @@ class _ModelStrip extends StatelessWidget {
     if (list == null) return const SizedBox.shrink();
     final StrackerAiStatus? stracker = list.stracker;
     final bool strackerReady = (stracker?.ready ?? false) && !strackerFailed;
-    final List<AiProvider> own = <AiProvider>[for (final AiProvider row in list.providers) if (row.isReady) row];
-    final AiProvider? ownPreferred = own.isEmpty
-        ? null
-        : own.firstWhere((AiProvider row) => row.isDefault, orElse: () => own.first);
+    final List<AiProvider> own = <AiProvider>[
+      for (final AiProvider row in list.providers)
+        if (row.isReady) row
+    ];
+    final AiProvider? ownPreferred =
+        own.isEmpty ? null : own.firstWhere((AiProvider row) => row.isDefault, orElse: () => own.first);
     final bool useStracker = strackerReady && (!list.prefersOwn || ownPreferred == null);
     final String? using = useStracker
         ? '${StrackerAiStatus.label}${stracker?.model == null ? '' : ' · ${stracker!.model}'}'
@@ -786,9 +786,7 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
                         const SizedBox(width: 4),
                         Pill(
                           provider.connectionStatus,
-                          tone: provider.connectionStatus == 'connected'
-                              ? PillTone.good
-                              : PillTone.warn,
+                          tone: provider.connectionStatus == 'connected' ? PillTone.good : PillTone.warn,
                           dense: true,
                         ),
                       ],
@@ -816,8 +814,7 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
                           child: Text(provider.enabled ? 'Disable' : 'Enable'),
                         ),
                         TextButton(
-                          onPressed: () =>
-                              _run(() => widget.client.providerAction(provider.id, 'default')),
+                          onPressed: () => _run(() => widget.client.providerAction(provider.id, 'default')),
                           child: const Text('Prefer'),
                         ),
                         TextButton(
@@ -1018,9 +1015,8 @@ class _AddProviderSheetState extends State<_AddProviderSheet> {
                 if (value == null) return;
                 setState(() {
                   _protocol = value;
-                  _provider.text = value == 'google'
-                      ? 'google'
-                      : (value == 'anthropic-compatible' ? 'anthropic' : 'openai');
+                  _provider.text =
+                      value == 'google' ? 'google' : (value == 'anthropic-compatible' ? 'anthropic' : 'openai');
                 });
               },
             ),
@@ -1083,8 +1079,7 @@ class _AddProviderSheetState extends State<_AddProviderSheet> {
                           await widget.client.testConnection(saved.id);
                         } catch (error) {
                           if (mounted) {
-                            setState(() => _error =
-                                'Saved, but the connection test failed: $error');
+                            setState(() => _error = 'Saved, but the connection test failed: $error');
                             widget.onSaved();
                           }
                           return;

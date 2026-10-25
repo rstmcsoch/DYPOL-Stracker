@@ -1,180 +1,276 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
+import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
+import '../mistakes/mistakes_page.dart' show deleteMistakeWithConfirm, mistakeTypes;
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
 
-/// Retry queue: mistakes that asked to be retried, worked through as pending →
-/// retrying → resolved. Re-attempting is what closes a mistake.
-class RetryPage extends ConsumerWidget {
+/// Retry list, as on the website: mistakes marked "retry later" that are still pending.
+/// "Mark retried" closes one (retry_status `retried`); "Keep for later" moves it back to
+/// the notebook. The database only knows `pending` and `retried`.
+class RetryPage extends ConsumerStatefulWidget {
   const RetryPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RetryPage> createState() => _RetryPageState();
+}
+
+class _RetryPageState extends ConsumerState<RetryPage> {
+  final TextEditingController _search = TextEditingController();
+  String? _subject;
+  String? _chapterId;
+  String? _type;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final AppData data = ref.watch(dataControllerProvider).data;
     final StrackerColors colors = context.stracker;
-    final List<Mistake> pending =
-        data.mistakes.where((Mistake m) => m.retryStatus == 'pending').toList()
-          ..sort((Mistake a, Mistake b) => a.createdAt.compareTo(b.createdAt));
-    final List<Mistake> retrying =
-        data.mistakes.where((Mistake m) => m.retryStatus == 'retrying').toList();
-    final List<Mistake> resolved =
-        data.mistakes.where((Mistake m) => m.retryStatus == 'resolved').toList()
-          ..sort((Mistake a, Mistake b) => b.updatedAt.compareTo(a.updatedAt));
+    final List<Mistake> ready = data.mistakes.where((Mistake m) => m.retryLater && m.retryStatus == 'pending').toList();
+    final String term = _search.text.trim().toLowerCase();
+    final List<Mistake> rows = ready.where((Mistake mistake) {
+      final Chapter? chapter = data.chapter(mistake.chapterId);
+      if (_subject != null && chapter?.subject != _subject) return false;
+      if (_chapterId != null && mistake.chapterId != _chapterId) return false;
+      if (_type != null && mistake.mistakeType != _type) return false;
+      if (term.isNotEmpty && !'${mistake.questionNote} ${chapter?.name ?? ''}'.toLowerCase().contains(term)) {
+        return false;
+      }
+      return true;
+    }).toList()
+      ..sort((Mistake a, Mistake b) => a.createdAt.compareTo(b.createdAt));
+    final List<Chapter> chapters = data.chapters
+        .where((Chapter c) => _subject == null || c.subject == _subject)
+        .toList()
+      ..sort((Chapter a, Chapter b) => a.name.compareTo(b.name));
 
     return SectionPage(
-      title: 'Retry',
-      subtitle: '${pending.length} pending · ${retrying.length} in progress · ${resolved.length} resolved',
+      title: 'Retry list',
+      subtitle: 'Try again before reading the solution. Retrieval beats recognition.',
+      actions: <Widget>[
+        IconButton(
+          tooltip: 'Mistake notebook',
+          icon: const Icon(Icons.menu_book_outlined, size: 21),
+          onPressed: () => Routes.open(context, Routes.mistakes),
+        ),
+      ],
       child: PageBody(
         refresh: () => ref.read(dataControllerProvider.notifier).load(silent: true),
         children: <Widget>[
-          InfoBanner(
-            'Retry means re-attempting the question before looking at the solution. Marking a mistake '
-            'resolved is your record — the notebook never assumes you got it right.',
-            icon: Icons.replay,
+          NotebookCard(
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.replay, color: colors.palette.accentDark),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'A SECOND LOOK',
+                        style:
+                            Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted, letterSpacing: 1.2),
+                      ),
+                      Text(
+                        '${ready.length} question${ready.length == 1 ? '' : 's'} waiting for you',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
-          if (pending.isEmpty && retrying.isEmpty)
-            NotebookCard(
-              child: EmptyState(
-                title: 'The queue is clear',
-                message: 'Mistakes marked “retry later” land here automatically. Log a mistake with the '
-                    'retry switch on and it appears.',
-                icon: Icons.done_all,
-                action: ElevatedButton(
-                  onPressed: () => Routes.open(context, Routes.mistakes),
-                  child: const Text('Open mistake notebook'),
+          SearchBox(controller: _search, hint: 'Search retry notes…', onChanged: (_) => setState(() {})),
+          const SizedBox(height: 8),
+          AppSelect<String?>(
+            label: 'Subject',
+            value: _subject,
+            items: <String?>[null, ...data.subjects],
+            labelFor: (String? value) => value ?? 'All subjects',
+            onChanged: (String? value) => setState(() {
+              _subject = value;
+              _chapterId = null;
+            }),
+          ),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: AppSelect<String?>(
+                  label: 'Chapter',
+                  value: chapters.any((Chapter c) => c.id == _chapterId) ? _chapterId : null,
+                  items: <String?>[null, ...chapters.map((Chapter c) => c.id)],
+                  labelFor: (String? id) => id == null ? 'All chapters' : data.chapterName(id),
+                  onChanged: (String? value) => setState(() => _chapterId = value),
                 ),
               ),
-            ),
-          if (retrying.isNotEmpty) ...<Widget>[
-            const SectionHeading('In progress'),
-            for (final Mistake mistake in retrying)
-              _RetryTile(mistake: mistake, data: data, accent: colors.palette.orange),
-          ],
-          if (pending.isNotEmpty) ...<Widget>[
-            const SectionHeading('Pending'),
-            for (final Mistake mistake in pending) _RetryTile(mistake: mistake, data: data),
-          ],
-          if (resolved.isNotEmpty) ...<Widget>[
-            const SectionHeading('Recently resolved'),
-            NotebookCard(
-              subtitle: 'Kept as evidence that the mistake was closed.',
-              child: Column(
-                children: <Widget>[
-                  for (final Mistake mistake in resolved.take(8))
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      leading: Icon(Icons.check_circle, size: 18, color: colors.palette.green),
-                      title: Text(
-                        mistake.questionNote,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      subtitle: Text(
-                        '${data.chapterName(mistake.chapterId)} · ${mistake.mistakeType}',
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                      trailing: TextButton(
-                        onPressed: () => setRetryStatus(context, ref, mistake, 'pending'),
-                        child: const Text('Reopen'),
-                      ),
-                    ),
-                ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: AppSelect<String?>(
+                  label: 'Type',
+                  value: _type,
+                  items: <String?>[null, ...mistakeTypes],
+                  labelFor: (String? value) => value ?? 'All types',
+                  onChanged: (String? value) => setState(() => _type = value),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+          if (rows.isEmpty)
+            NotebookCard(
+              child: EmptyState(
+                title: ready.isEmpty ? 'Nothing waiting to retry.' : 'Nothing in this view.',
+                message: ready.isEmpty ? 'Mark a mistake “Retry later” to add it here.' : null,
+                icon: Icons.check_circle_outline,
+                action: ready.isEmpty
+                    ? OutlinedButton(
+                        onPressed: () => Routes.open(context, Routes.mistakes),
+                        child: const Text('Open mistake notebook'),
+                      )
+                    : OutlinedButton(
+                        onPressed: () => setState(() {
+                          _search.clear();
+                          _subject = null;
+                          _chapterId = null;
+                          _type = null;
+                        }),
+                        child: const Text('Clear filters'),
+                      ),
+              ),
+            )
+          else
+            for (final Mistake mistake in rows) _RetryTile(mistake: mistake, data: data),
+          const SizedBox(height: 6),
+          Text(
+            'A question marked Retried stays in your mistake notebook for future review.',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+          ),
         ],
       ),
     );
   }
-
 }
 
-class _RetryTile extends ConsumerWidget {
-  const _RetryTile({required this.mistake, required this.data, this.accent});
+class _RetryTile extends ConsumerStatefulWidget {
+  const _RetryTile({required this.mistake, required this.data});
 
   final Mistake mistake;
   final AppData data;
-  final Color? accent;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final Chapter? chapter = data.chapter(mistake.chapterId);
+  ConsumerState<_RetryTile> createState() => _RetryTileState();
+}
+
+class _RetryTileState extends ConsumerState<_RetryTile> {
+  bool _revealed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final Mistake mistake = widget.mistake;
+    final Chapter? chapter = widget.data.chapter(mistake.chapterId);
+    final TestRecord? test = widget.data.tests.where((TestRecord t) => t.id == mistake.testId).firstOrNull;
+    final StrackerColors colors = context.stracker;
+    final TextStyle? meta = Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: NotebookCard(
         dense: true,
-        accent: accent,
+        accent: chapter == null ? null : colors.subjectColor(chapter.subject),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
               children: <Widget>[
-                Pill(mistake.mistakeType, tone: PillTone.warn, dense: true),
-                const SizedBox(width: 6),
                 Expanded(
-                  child: Text(
-                    chapter?.name ?? 'Chapter',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: context.stracker.muted,
+                  child: chapter == null
+                      ? const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Pill('Chapter removed', tone: PillTone.bad, dense: true),
+                        )
+                      : Text(
+                          '${chapter.subject} · ${chapter.name}',
+                          style: Theme.of(context).textTheme.labelMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
                 ),
-                Text(
-                  '${mistake.retryStatus}',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: context.stracker.palette.textAccent,
-                      ),
-                ),
+                Pill(mistake.mistakeType, tone: PillTone.warn, dense: true),
               ],
             ),
             const SizedBox(height: 6),
             Text(mistake.questionNote, style: Theme.of(context).textTheme.bodyMedium),
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                mistake.solutionNote.trim().isNotEmpty
-                    ? mistake.solutionNote
-                    : 'No note saved for this one yet. Edit it in Mistakes to add what you’ll remember.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: context.stracker.muted,
-                      fontStyle: mistake.solutionNote.trim().isEmpty ? FontStyle.italic : null,
-                    ),
-              ),
+            const SizedBox(height: 4),
+            Text(
+              <String>[
+                'Added ${formatDate(mistake.createdAt.length >= 10 ? mistake.createdAt.substring(0, 10) : mistake.createdAt)}',
+                if (test != null) 'Original test: ${test.title}',
+              ].join(' · '),
+              style: meta,
             ),
-            const SizedBox(height: 6),
-            Row(
-              children: <Widget>[
-                if (mistake.retryStatus == 'pending')
-                  FilledButton.tonal(
-                    onPressed: () => setRetryStatus(context, ref, mistake, 'retrying'),
-                    child: const Text('Start retry'),
-                  ),
-                const SizedBox(width: 6),
-                OutlinedButton(
-                  onPressed: () => setRetryStatus(context, ref, mistake, 'resolved'),
-                  child: const Text('Resolve'),
-                ),
-                const Spacer(),
-                if (mistake.imagePath != null)
-                  const Icon(Icons.image_outlined, size: 16),
-                Text(
-                  ' · ${formatDate(mistake.createdAt)}',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: context.stracker.muted,
+            if (_revealed)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  mistake.solutionNote.trim().isNotEmpty
+                      ? mistake.solutionNote
+                      : 'No note saved for this one yet. Edit it in Mistakes to add what you’ll remember.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.inkSoft,
+                        fontStyle: mistake.solutionNote.trim().isEmpty ? FontStyle.italic : null,
                       ),
+                ),
+              )
+            else
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => setState(() => _revealed = true),
+                  child: const Text('Reveal my note'),
+                ),
+              ),
+            Wrap(
+              spacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: () => _update(
+                    mistake.copyWith(retryLater: false, retryStatus: 'retried'),
+                    'Marked retried — that’s how a slip turns into recall.',
+                  ),
+                  icon: const Icon(Icons.check, size: 16),
+                  label: const Text('Mark retried'),
+                ),
+                TextButton(
+                  onPressed: () => _update(
+                    mistake.copyWith(retryLater: false, retryStatus: 'pending'),
+                    'Moved back to the notebook. You can add it to retry again later.',
+                  ),
+                  child: const Text('Keep for later'),
+                ),
+                IconButton(
+                  tooltip: 'Delete question',
+                  icon: const Icon(Icons.delete_outline, size: 19),
+                  onPressed: () => deleteMistakeWithConfirm(
+                    context,
+                    ref,
+                    mistake,
+                    message: 'This mistake note will be removed.',
+                  ),
                 ),
               ],
             ),
@@ -183,20 +279,14 @@ class _RetryTile extends ConsumerWidget {
       ),
     );
   }
-}
 
-
-/// One place that writes a retry status, used by the queue and the resolved list.
-Future<void> setRetryStatus(
-  BuildContext context,
-  WidgetRef ref,
-  Mistake mistake,
-  String status,
-) async {
-  try {
-    await ref.read(dataControllerProvider.notifier).saveMistake(mistake.copyWith(retryStatus: status));
-    if (context.mounted) showToast(context, 'Retry status: $status.');
-  } catch (error) {
-    if (context.mounted) showToast(context, error.toString(), error: true);
+  Future<void> _update(Mistake next, String message) async {
+    try {
+      await ref.read(dataControllerProvider.notifier).saveMistake(next);
+      if (mounted) showToast(context, message);
+      await HapticFeedback.lightImpact();
+    } catch (error) {
+      if (mounted) showToast(context, error.toString(), error: true);
+    }
   }
 }

@@ -46,8 +46,22 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay> {
     super.dispose();
   }
 
-  List<ExamCatalogEntry> _catalog(AppData data) =>
-      data.examCatalog.isEmpty ? const <ExamCatalogEntry>[fallbackJeeExam] : data.examCatalog;
+  bool _retrying = false;
+
+  /// The published exam list. When it could not be loaded the form shows an error with a
+  /// retry instead of silently offering only one exam.
+  List<ExamCatalogEntry> _catalog(AppData data) => data.examCatalog;
+
+  Future<void> _retryCatalog() async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+    await HapticFeedback.selectionClick();
+    try {
+      await ref.read(dataControllerProvider.notifier).load(silent: true);
+    } finally {
+      if (mounted) setState(() => _retrying = false);
+    }
+  }
 
   void _chooseExam(List<ExamCatalogEntry> catalog, String id) {
     final ExamCatalogEntry next = catalog.firstWhere((ExamCatalogEntry e) => e.id == id);
@@ -247,15 +261,46 @@ class _OnboardingOverlayState extends ConsumerState<OnboardingOverlay> {
                           textCapitalization: TextCapitalization.words,
                           autofillHints: const <String>[AutofillHints.name],
                         ),
-                        _select<String>(
-                          label: 'Exam',
-                          value: _examId,
-                          hint: 'Choose your exam',
-                          items: examItems,
-                          onChanged: (String? id) {
-                            if (id != null) _chooseExam(catalog, id);
-                          },
-                        ),
+                        if (catalog.isEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: colors.palette.redBg,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: colors.palette.red.withValues(alpha: 0.35)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  'Couldn’t load the exam list.',
+                                  style: text.titleSmall?.copyWith(color: colors.palette.red),
+                                ),
+                                const SizedBox(height: 4),
+                                Text('Check your connection, then retry to choose your exam.', style: text.bodySmall),
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  onPressed: _retrying ? null : _retryCatalog,
+                                  icon: _retrying
+                                      ? const SizedBox(
+                                          width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                                      : const Icon(Icons.refresh, size: 16),
+                                  label: Text(_retrying ? 'Retrying…' : 'Retry'),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          _select<String>(
+                            label: 'Exam',
+                            value: _examId,
+                            hint: 'Choose your exam',
+                            items: examItems,
+                            onChanged: (String? id) {
+                              if (id != null) _chooseExam(catalog, id);
+                            },
+                          ),
                         if (exam != null) ...<Widget>[
                           _select<int>(
                             key: ValueKey<String>('year-${exam.id}'),

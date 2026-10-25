@@ -5,18 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/date.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/validators.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
-import '../../logic/aggregation.dart';
+import '../../logic/home_summary.dart' show prettyDate;
+import '../../logic/planner.dart';
 import '../shell/app_shell.dart';
 
-/// Study plan: today's task list, the rest of the week, and weekly goals. Tasks and
-/// goals are the same rows the website's planner writes.
+/// Planner, as src/pages/PlannerPage.tsx: a Monday-first week strip, the selected day's
+/// tasks (complete, reorder, duplicate, edit, delete) and weekly goals whose progress comes
+/// from real activity. Tasks and goals are the same rows the website writes.
 class PlannerPage extends ConsumerStatefulWidget {
   const PlannerPage({super.key});
 
@@ -25,41 +26,71 @@ class PlannerPage extends ConsumerStatefulWidget {
 }
 
 class _PlannerPageState extends ConsumerState<PlannerPage> {
-  String _date = todayIso();
+  String _weekStart = startOfWeek(todayIso());
+  String _selected = todayIso();
+
+  void _selectWeek(String start) => setState(() {
+        _weekStart = start;
+        _selected = start;
+      });
+
+  Future<void> _copyPreviousDay(BuildContext context, AppData data) async {
+    final List<DailyTask> source = data.tasksOn(addDays(_selected, -1));
+    if (source.isEmpty) {
+      showToast(context, 'The previous day has no tasks to copy.');
+      return;
+    }
+    final bool confirmed = await confirmAction(
+      context,
+      title: 'Copy ${source.length} tasks?',
+      message: 'They are added to ${formatDate(_selected)} as new, unchecked tasks.',
+      confirmLabel: 'Copy',
+    );
+    if (!confirmed) return;
+    try {
+      final int start = data.tasksOn(_selected).length;
+      for (int i = 0; i < source.length; i += 1) {
+        final DailyTask task = source[i];
+        await ref.read(dataControllerProvider.notifier).saveTask(DailyTask(
+              id: newId(),
+              userId: data.userId,
+              title: task.title,
+              subject: task.subject,
+              chapterId: task.chapterId,
+              topic: task.topic,
+              estimatedMinutes: task.estimatedMinutes,
+              priority: task.priority,
+              taskDate: _selected,
+              position: start + i,
+              createdAt: isoNow(),
+              updatedAt: isoNow(),
+            ));
+      }
+      if (context.mounted) showToast(context, 'Copied ${source.length} tasks.');
+    } catch (error) {
+      if (context.mounted) showToast(context, 'Could not copy tasks.', error: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final AppData data = ref.watch(dataControllerProvider).data;
     final StrackerColors colors = context.stracker;
-    final List<DailyTask> tasks = data.tasksOn(_date)
-      ..sort((DailyTask a, DailyTask b) => a.position.compareTo(b.position));
-    final int planned = tasks.fold<int>(0, (int sum, DailyTask task) => sum + task.estimatedMinutes);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String today = todayIso();
+    final List<String> days = <String>[for (int i = 0; i < 7; i += 1) addDays(_weekStart, i)];
+    final List<DailyTask> tasks = data.tasksOn(_selected);
     final int done = tasks.where((DailyTask task) => task.isCompleted).length;
-    final String weekStart = startOfWeek(_date);
-    final List<WeeklyGoal> goals =
-        data.goals.where((WeeklyGoal goal) => goal.weekStart == weekStart).toList();
-    final StudyTotals totals = studyTotals(data);
+    final int doneMinutes =
+        tasks.where((DailyTask t) => t.isCompleted).fold<int>(0, (int sum, DailyTask t) => sum + t.estimatedMinutes);
+    final List<WeeklyGoal> goals = data.goals.where((WeeklyGoal goal) => goal.weekStart == _weekStart).toList();
+    final DateTime selectedDay = parseIsoOrToday(_selected);
 
     return SectionPage(
-      title: 'Study plan',
-      subtitle: '${tasks.length} tasks · ${minutesLabel(planned)} planned · $done done',
-      actions: <Widget>[
-        IconButton(
-          tooltip: 'Pick a day',
-          icon: const Icon(Icons.event, size: 20),
-          onPressed: () async {
-            final DateTime? picked = await showDatePicker(
-              context: context,
-              initialDate: parseIsoOrToday(_date),
-              firstDate: DateTime(2020),
-              lastDate: DateTime(2100),
-            );
-            if (picked != null) setState(() => _date = isoDate(picked));
-          },
-        ),
-      ],
+      title: 'Planner',
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => openTaskEditor(context, ref, data, null, _date),
+        heroTag: 'planner-add',
+        onPressed: () => openTaskEditor(context, ref, data, null, _selected),
         backgroundColor: colors.palette.accentDark,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add, size: 19),
@@ -68,271 +99,521 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       child: PageBody(
         refresh: () => ref.read(dataControllerProvider.notifier).load(silent: true),
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                onPressed: () => setState(() => _date = addDays(_date, -1)),
-              ),
-              Expanded(
-                child: InkWell(
-                  onTap: () => setState(() => _date = todayIso()),
-                  child: Column(
-                    children: <Widget>[
-                      Text(
-                        _date == todayIso() ? 'Today' : formatDate(_date),
-                        style: Theme.of(context).textTheme.titleLarge,
+          NotebookCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text('This week, on paper',
+                              style: text.titleMedium?.copyWith(fontFamily: 'PatrickHand', fontSize: 19)),
+                          Text(
+                            '${_dayMonth(_weekStart)} – ${_dayMonthYear(addDays(_weekStart, 6))}',
+                            style: text.labelSmall?.copyWith(color: colors.muted),
+                          ),
+                        ],
                       ),
-                      Text(
-                        '${planned == 0 ? 'nothing planned' : minutesLabel(planned)} · goal '
-                        '${minutesLabel(data.settings.dailyStudyGoalMinutes)}',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
-                      ),
-                    ],
-                  ),
+                    ),
+                    IconButton(
+                      tooltip: 'Previous week',
+                      icon: const Icon(Icons.arrow_back, size: 18),
+                      onPressed: () => _selectWeek(addDays(_weekStart, -7)),
+                    ),
+                    TextButton(
+                      onPressed: () => _selectWeek(startOfWeek(today)),
+                      child: const Text('This week'),
+                    ),
+                    IconButton(
+                      tooltip: 'Next week',
+                      icon: const Icon(Icons.arrow_forward, size: 18),
+                      onPressed: () => _selectWeek(addDays(_weekStart, 7)),
+                    ),
+                  ],
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                onPressed: () => setState(() => _date = addDays(_date, 1)),
-              ),
-            ],
-          ),
-          LinearBar(
-            value: planned == 0 ? 0 : (planned / data.settings.dailyStudyGoalMinutes).clamp(0, 1).toDouble(),
-            height: 7,
+                const SizedBox(height: 8),
+                Row(
+                  children: <Widget>[
+                    for (final String day in days)
+                      Expanded(
+                          child: _DayButton(
+                              day: day,
+                              selected: day == _selected,
+                              today: day == today,
+                              data: data,
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                setState(() => _selected = day);
+                              })),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            _selected == today ? 'TODAY' : weekdayLong[selectedDay.weekday - 1].toUpperCase(),
+                            style: text.labelSmall?.copyWith(color: colors.muted, letterSpacing: 1.2),
+                          ),
+                          Text('${selectedDay.day} ${_monthLong(selectedDay.month)}', style: text.headlineSmall),
+                        ],
+                      ),
+                    ),
+                    Text('$done / ${tasks.length} complete', style: text.labelSmall?.copyWith(color: colors.muted)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (tasks.isEmpty)
+                  EmptyState(
+                    title: 'Nothing planned for this day.',
+                    icon: Icons.calendar_today_outlined,
+                    action: OutlinedButton.icon(
+                      onPressed: () => openTaskEditor(context, ref, data, null, _selected),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Plan a task'),
+                    ),
+                  )
+                else
+                  for (int i = 0; i < tasks.length; i += 1)
+                    _TaskRow(task: tasks[i], index: i, tasks: tasks, data: data),
+                Divider(color: colors.palette.line),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text('Use the arrows to reorder. Edit a task to move dates.',
+                          style: text.labelSmall?.copyWith(color: colors.muted)),
+                    ),
+                    Text('${fmtDuration(doneMinutes)} complete', style: text.labelSmall?.copyWith(color: colors.muted)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                OutlinedButton.icon(
+                  onPressed: () => _copyPreviousDay(context, data),
+                  icon: const Icon(Icons.content_copy, size: 17),
+                  label: const Text('Copy the previous day’s plan here'),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
-          if (tasks.isEmpty)
-            NotebookCard(
-              child: EmptyState(
-                title: 'Nothing planned for this day',
-                message: 'Plan in minutes you can actually keep: a chapter, a revision and a practice '
-                    'block is a full day.',
-                icon: Icons.event_note_outlined,
-                action: ElevatedButton(
-                  onPressed: () => openTaskEditor(context, ref, data, null, _date),
-                  child: const Text('Plan a task'),
-                ),
-              ),
-            )
-          else
-            for (final DailyTask task in tasks) _TaskTile(task: task, data: data),
-          const SizedBox(height: 10),
           NotebookCard(
-            title: 'Week of ${formatDate(weekStart)}',
-            trailing: TextButton(
-              onPressed: () => openGoalEditor(context, ref, data, null, weekStart),
-              child: const Text('Add goal'),
-            ),
-            subtitle: '${minutesLabel(totals.weekMinutes)} studied this week',
-            child: goals.isEmpty
-                ? Text(
-                    'No weekly goals yet. A goal is a number you can hit — chapters, questions, tests or '
-                    'minutes.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text('WEEKLY GOALS',
+                              style: text.labelSmall
+                                  ?.copyWith(color: colors.muted, fontWeight: FontWeight.w700, letterSpacing: 1.1)),
+                          Text('Little promises', style: text.headlineSmall),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Add weekly goal',
+                      icon: const Icon(Icons.add, size: 19),
+                      onPressed: () => openGoalEditor(context, ref, data, _weekStart),
+                    ),
+                  ],
+                ),
+                if (goals.isEmpty)
+                  EmptyState(
+                    title: 'No goals set for this week.',
+                    message: 'Choose a target that feels useful, not punishing.',
+                    icon: Icons.flag_outlined,
+                    action: OutlinedButton.icon(
+                      onPressed: () => openGoalEditor(context, ref, data, _weekStart),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Add a goal'),
+                    ),
                   )
-                : Column(
-                    children: <Widget>[
-                      for (final WeeklyGoal goal in goals)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Row(
-                                children: <Widget>[
-                                  Expanded(
-                                    child: Text(goal.title, style: Theme.of(context).textTheme.titleSmall),
-                                  ),
-                                  Text(
-                                    '${numberLabel(goal.progressValue, digits: 1)} / '
-                                    '${numberLabel(goal.target, digits: 0)} ${goal.unit}',
-                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                          color: colors.muted,
-                                        ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline, size: 17),
-                                    tooltip: 'Delete goal',
-                                    onPressed: () async {
-                                      final bool confirmed = await confirmAction(
-                                        context,
-                                        title: 'Delete this goal?',
-                                        message: 'Progress recorded against it goes too.',
-                                      );
-                                      if (!confirmed) return;
-                                      try {
-                                        await ref
-                                            .read(dataControllerProvider.notifier)
-                                            .deleteGoal(goal);
-                                        if (context.mounted) showToast(context, 'Goal deleted.');
-                                      } catch (error) {
-                                        if (context.mounted) {
-                                          showToast(context, error.toString(), error: true);
-                                        }
-                                      }
-                                    },
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              LinearBar(value: goal.progress, height: 6),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: <Widget>[
-                                  TextButton(
-                                    onPressed: () => openGoalEditor(context, ref, data, goal, weekStart),
-                                    child: const Text('Update'),
-                                  ),
-                                  Text(
-                                    goal.goalType,
-                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                          color: colors.muted,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
+                else
+                  for (final WeeklyGoal goal in goals) _GoalRow(goal: goal, data: data),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: () => _copyYesterday(context, ref, data),
-            icon: const Icon(Icons.content_copy, size: 17),
-            label: const Text('Copy yesterday’s plan to this day'),
+          const SizedBox(height: 12),
+          NotebookCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('A NOTE TO SELF', style: text.labelSmall?.copyWith(color: colors.muted, letterSpacing: 1.2)),
+                const SizedBox(height: 4),
+                Text('Plans are drafts. Move the task, keep the intention.', style: text.bodyMedium),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('keep going ♡',
+                      style: TextStyle(fontFamily: 'PatrickHand', fontSize: 16, color: colors.palette.accent)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
-
-  Future<void> _copyYesterday(BuildContext context, WidgetRef ref, AppData data) async {
-    final List<DailyTask> source = data.tasksOn(addDays(_date, -1));
-    if (source.isEmpty) {
-      showToast(context, 'Yesterday has no tasks to copy.');
-      return;
-    }
-    final bool confirmed = await confirmAction(
-      context,
-      title: 'Copy ${source.length} tasks?',
-      message: 'They are added to ${formatDate(_date)} as new, unchecked tasks.',
-      confirmLabel: 'Copy',
-    );
-    if (!confirmed) return;
-    try {
-      final int start = data.tasksOn(_date).length;
-      for (int i = 0; i < source.length; i += 1) {
-        final DailyTask task = source[i];
-        await ref.read(dataControllerProvider.notifier).saveTask(
-              DailyTask(
-                id: newId(),
-                userId: data.userId,
-                title: task.title,
-                subject: task.subject,
-                chapterId: task.chapterId,
-                topic: task.topic,
-                estimatedMinutes: task.estimatedMinutes,
-                priority: task.priority,
-                taskDate: _date,
-                position: start + i,
-                createdAt: isoNow(),
-                updatedAt: isoNow(),
-              ),
-            );
-      }
-      if (context.mounted) showToast(context, '${source.length} tasks copied.');
-    } catch (error) {
-      if (context.mounted) showToast(context, error.toString(), error: true);
-    }
-  }
 }
 
-class _TaskTile extends ConsumerWidget {
-  const _TaskTile({required this.task, required this.data});
+const List<String> _monthsLong = <String>[
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 
-  final DailyTask task;
+String _monthLong(int month) => _monthsLong[month - 1];
+
+String _dayMonth(String iso) {
+  final DateTime d = parseIsoOrToday(iso);
+  return '${d.day} ${_monthLong(d.month).substring(0, 3) == 'Sep' ? 'Sept' : _monthLong(d.month).substring(0, 3)}';
+}
+
+String _dayMonthYear(String iso) => '${_dayMonth(iso)} ${parseIsoOrToday(iso).year}';
+
+class _DayButton extends StatelessWidget {
+  const _DayButton(
+      {required this.day, required this.selected, required this.today, required this.data, required this.onTap});
+
+  final String day;
+  final bool selected;
+  final bool today;
   final AppData data;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final StrackerColors colors = context.stracker;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: NotebookCard(
-        dense: true,
-        padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
-        child: Row(
-          children: <Widget>[
-            Checkbox(
-              value: task.isCompleted,
-              onChanged: (bool? value) async {
-                try {
-                  await ref
-                      .read(dataControllerProvider.notifier)
-                      .saveTask(task.copyWith(isCompleted: value ?? false));
-                } catch (error) {
-                  if (context.mounted) showToast(context, error.toString(), error: true);
-                }
-              },
-            ),
-            Expanded(
-              child: InkWell(
-                onTap: () => openTaskEditor(context, ref, data, task, task.taskDate),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        task.title,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+    final DateTime date = parseIsoOrToday(day);
+    final List<DailyTask> dayTasks = data.tasksOn(day);
+    final bool complete = dayTasks.isNotEmpty && dayTasks.every((DailyTask t) => t.isCompleted);
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Material(
+          color: selected ? colors.palette.accentLight : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(color: today ? colors.palette.accent : colors.palette.line),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 58),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(weekdayShort[date.weekday - 1], style: TextStyle(fontSize: 11, color: colors.muted)),
+                  Text('${date.day}',
+                      style: TextStyle(
+                          fontFamily: 'PatrickHand',
+                          fontSize: 19,
+                          color: selected ? colors.palette.textAccent : colors.palette.ink)),
+                  SizedBox(
+                    height: 6,
+                    child: dayTasks.isEmpty
+                        ? null
+                        : Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: complete ? colors.palette.green : colors.palette.orange,
                             ),
-                      ),
-                      Text(
-                        <String>[
-                          if (task.subject != null) task.subject!,
-                          minutesLabel(task.estimatedMinutes),
-                          '${task.priority} priority',
-                          if (task.chapterId != null) data.chapterName(task.chapterId),
-                          if ((task.topic ?? '').isNotEmpty) task.topic!,
-                        ].join(' · '),
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
-                      ),
-                    ],
+                          ),
                   ),
-                ),
+                ],
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 17),
-              tooltip: 'Delete task',
-              onPressed: () async {
-                final bool confirmed = await confirmAction(
-                  context,
-                  title: 'Delete this task?',
-                  message: 'It disappears from the website’s planner too.',
-                );
-                if (!confirmed) return;
-                try {
-                  await ref.read(dataControllerProvider.notifier).deleteTask(task);
-                  if (context.mounted) showToast(context, 'Task deleted.');
-                } catch (error) {
-                  if (context.mounted) showToast(context, error.toString(), error: true);
-                }
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
+class _TaskRow extends ConsumerWidget {
+  const _TaskRow({required this.task, required this.index, required this.tasks, required this.data});
+
+  final DailyTask task;
+  final int index;
+  final List<DailyTask> tasks;
+  final AppData data;
+
+  Future<void> _move(BuildContext context, WidgetRef ref, int direction) async {
+    final int to = index + direction;
+    if (to < 0 || to >= tasks.length) return;
+    await HapticFeedback.selectionClick();
+    final List<DailyTask> reordered = <DailyTask>[...tasks];
+    final DailyTask moved = reordered.removeAt(index);
+    reordered.insert(to, moved);
+    try {
+      for (int position = 0; position < reordered.length; position += 1) {
+        if (reordered[position].position != position) {
+          await ref.read(dataControllerProvider.notifier).saveTask(reordered[position].copyWith(position: position));
+        }
+      }
+    } catch (error) {
+      if (context.mounted) showToast(context, 'Could not reorder tasks.', error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final StrackerColors colors = context.stracker;
+    final TextTheme text = Theme.of(context).textTheme;
+    final String? chapter = task.chapterId == null ? null : data.chapterName(task.chapterId);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Checkbox(
+            value: task.isCompleted,
+            semanticLabel: task.isCompleted ? 'Mark ${task.title} incomplete' : 'Complete ${task.title}',
+            onChanged: (bool? value) async {
+              await HapticFeedback.lightImpact();
+              try {
+                await ref.read(dataControllerProvider.notifier).saveTask(task.copyWith(isCompleted: value ?? false));
+              } catch (error) {
+                if (context.mounted) showToast(context, 'Could not update task.', error: true);
+              }
+            },
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    task.title,
+                    style: text.bodyMedium?.copyWith(
+                      decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                      color: task.isCompleted ? colors.muted : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    <String>[
+                      if (task.subject != null) task.subject!,
+                      if (chapter != null && chapter.isNotEmpty) chapter,
+                      if ((task.topic ?? '').isNotEmpty) task.topic!,
+                      fmtDuration(task.estimatedMinutes),
+                      task.priority,
+                    ].join(' · '),
+                    style: text.labelSmall?.copyWith(color: colors.muted),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Task actions',
+            icon: const Icon(Icons.more_vert, size: 19),
+            onSelected: (String action) async {
+              switch (action) {
+                case 'up':
+                  await _move(context, ref, -1);
+                case 'down':
+                  await _move(context, ref, 1);
+                case 'duplicate':
+                  try {
+                    await ref.read(dataControllerProvider.notifier).saveTask(DailyTask(
+                          id: newId(),
+                          userId: data.userId,
+                          title: '${task.title} (copy)'.length > 200
+                              ? '${task.title} (copy)'.substring(0, 200)
+                              : '${task.title} (copy)',
+                          subject: task.subject,
+                          chapterId: task.chapterId,
+                          topic: task.topic,
+                          estimatedMinutes: task.estimatedMinutes,
+                          priority: task.priority,
+                          taskDate: task.taskDate,
+                          position: tasks.length,
+                          createdAt: isoNow(),
+                          updatedAt: isoNow(),
+                        ));
+                    if (context.mounted) showToast(context, 'Task duplicated.');
+                  } catch (error) {
+                    if (context.mounted) showToast(context, 'Could not duplicate task.', error: true);
+                  }
+                case 'edit':
+                  await openTaskEditor(context, ref, data, task, task.taskDate);
+                case 'delete':
+                  final bool confirmed = await confirmAction(
+                    context,
+                    title: 'Delete “${task.title}”?',
+                    message: 'This task will be removed from your plan.',
+                  );
+                  if (!confirmed) return;
+                  try {
+                    await ref.read(dataControllerProvider.notifier).deleteTask(task);
+                    if (context.mounted) showToast(context, 'Task deleted.');
+                  } catch (error) {
+                    if (context.mounted) showToast(context, 'Could not delete task.', error: true);
+                  }
+              }
+            },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(value: 'up', enabled: index > 0, child: const Text('Move up')),
+              PopupMenuItem<String>(value: 'down', enabled: index < tasks.length - 1, child: const Text('Move down')),
+              const PopupMenuItem<String>(value: 'duplicate', child: Text('Duplicate')),
+              const PopupMenuItem<String>(value: 'edit', child: Text('Edit or reschedule')),
+              const PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GoalRow extends ConsumerStatefulWidget {
+  const _GoalRow({required this.goal, required this.data});
+
+  final WeeklyGoal goal;
+  final AppData data;
+
+  @override
+  ConsumerState<_GoalRow> createState() => _GoalRowState();
+}
+
+class _GoalRowState extends ConsumerState<_GoalRow> {
+  bool _busy = false;
+
+  Future<void> _step(int delta) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    await HapticFeedback.selectionClick();
+    final WeeklyGoal goal = widget.goal;
+    final double next = (goal.progressValue + delta).clamp(0, 999999).toDouble();
+    try {
+      await ref.read(dataControllerProvider.notifier).saveGoal(WeeklyGoal(
+            id: goal.id,
+            userId: goal.userId,
+            goalType: goal.goalType,
+            title: goal.title,
+            target: goal.target,
+            progressValue: next,
+            weekStart: goal.weekStart,
+            unit: goal.unit,
+            createdAt: goal.createdAt,
+            updatedAt: isoNow(),
+          ));
+      if (mounted) showToast(context, 'Weekly goal saved.');
+    } catch (error) {
+      if (mounted) showToast(context, 'Could not save goal.', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final TextTheme text = Theme.of(context).textTheme;
+    final WeeklyGoal goal = widget.goal;
+    final double current = goalProgress(goal, widget.data);
+    final double pct = goal.target > 0 ? (current / goal.target * 100).clamp(0, 100).toDouble() : 0;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(child: Text(goal.title, style: text.titleSmall)),
+              IconButton(
+                tooltip: 'Delete ${goal.title} goal',
+                icon: const Icon(Icons.delete_outline, size: 17),
+                onPressed: () async {
+                  try {
+                    await ref.read(dataControllerProvider.notifier).deleteGoal(goal);
+                    if (context.mounted) showToast(context, 'Goal deleted.');
+                  } catch (error) {
+                    if (context.mounted) showToast(context, 'Could not delete goal.', error: true);
+                  }
+                },
+              ),
+            ],
+          ),
+          Row(
+            children: <Widget>[
+              Expanded(child: Text('${numberLabel(current, digits: 1)} ${goal.unit}', style: text.bodyMedium)),
+              Text('of ${numberLabel(goal.target, digits: 1)} ${goal.unit}',
+                  style: text.labelSmall?.copyWith(color: colors.muted)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          LinearBar(value: pct / 100, height: 6),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text('${pct.round()}% of target', style: text.labelSmall?.copyWith(color: colors.muted)),
+              ),
+              if (goal.goalType == 'custom') ...<Widget>[
+                IconButton(
+                  tooltip: 'Decrease ${goal.title} progress',
+                  onPressed: _busy ? null : () => _step(-1),
+                  icon: const Icon(Icons.remove, size: 17),
+                ),
+                IconButton(
+                  tooltip: 'Increase ${goal.title} progress',
+                  onPressed: _busy ? null : () => _step(1),
+                  icon: const Icon(Icons.add, size: 17),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Chapter picker options like the website: only the chosen subject's chapters, or every
+/// chapter grouped under its subject when no subject is chosen.
+List<SelectOption<String>> chapterOptions(AppData data, List<String> subjects, String? subject) {
+  if (subject != null) {
+    return <SelectOption<String>>[
+      for (final Chapter c in data.chapters.where((Chapter c) => c.subject == subject))
+        SelectOption<String>(c.id, c.name),
+    ];
+  }
+  return <SelectOption<String>>[
+    for (final String group in subjects)
+      if (data.chapters.any((Chapter c) => c.subject == group)) ...<SelectOption<String>>[
+        SelectOption<String>.header(group),
+        for (final Chapter c in data.chapters.where((Chapter c) => c.subject == group))
+          SelectOption<String>(c.id, c.name),
+      ],
+  ];
+}
+
+/// The website's TaskDialog: "Plan a study task" / "Edit your task".
 Future<void> openTaskEditor(
   BuildContext context,
   WidgetRef ref,
@@ -342,67 +623,235 @@ Future<void> openTaskEditor(
 ) async {
   final bool creating = task == null;
   final TextEditingController title = TextEditingController(text: task?.title ?? '');
-  final TextEditingController minutes =
-      TextEditingController(text: task?.estimatedMinutes.toString() ?? '30');
+  final TextEditingController minutes = TextEditingController(text: '${task?.estimatedMinutes ?? 30}');
+  final TextEditingController topic = TextEditingController(text: task?.topic ?? '');
+  final String id = task?.id ?? newId();
   String priority = task?.priority ?? 'Medium';
   String? subject = task?.subject;
   String? chapterId = task?.chapterId;
-  final TextEditingController topic = TextEditingController(text: task?.topic ?? '');
   String taskDate = task?.taskDate ?? date;
-  String? titleError;
-  String? minutesError;
+  Map<String, String> errors = <String, String>{};
+  bool saving = false;
+  final List<String> subjects = examSubjectsWith(data, task?.subject);
 
   await showAppSheet<void>(
     context,
-    title: creating ? 'Plan a task' : 'Edit task',
+    title: creating ? 'Plan a study task' : 'Edit your task',
+    builder: (BuildContext sheetContext) => StatefulBuilder(
+      builder: (BuildContext context, StateSetter setSheetState) {
+        void clear(String key) {
+          if (errors.containsKey(key)) setSheetState(() => errors = <String, String>{...errors}..remove(key));
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            AppField(
+              label: 'Task',
+              controller: title,
+              required: true,
+              maxLength: 200,
+              error: errors['title'],
+              hint: 'e.g. Practice 15 integration problems',
+              onChanged: (_) => clear('title'),
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: AppDateField(
+                    label: 'Date',
+                    value: taskDate,
+                    onChanged: (String? value) {
+                      if (value != null) setSheetState(() => taskDate = value);
+                      clear('task_date');
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: AppField(
+                    label: 'Estimated minutes',
+                    controller: minutes,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+                    error: errors['estimated_minutes'],
+                    onChanged: (_) => clear('estimated_minutes'),
+                  ),
+                ),
+              ],
+            ),
+            AppOptionSelect<String>(
+              label: 'Subject',
+              value: subject,
+              nullLabel: 'General',
+              options: <SelectOption<String>>[for (final String s in subjects) SelectOption<String>(s, s)],
+              onChanged: (String? value) => setSheetState(() {
+                subject = value;
+                chapterId = null;
+              }),
+            ),
+            AppOptionSelect<String>(
+              label: 'Chapter',
+              value: chapterId,
+              nullLabel: 'None',
+              error: errors['chapter_id'],
+              options: chapterOptions(data, subjects, subject),
+              onChanged: (String? value) {
+                setSheetState(() => chapterId = value);
+                clear('chapter_id');
+              },
+            ),
+            AppSelect<String>(
+              label: 'Priority',
+              value: priority,
+              items: const <String>['High', 'Medium', 'Low'],
+              onChanged: (String? value) => setSheetState(() => priority = value ?? priority),
+            ),
+            AppField(
+              label: 'Topic / subtopic',
+              controller: topic,
+              maxLength: 120,
+              hint: 'Optional',
+              helper: topicHint(topic.text.length),
+              error: errors['topic'],
+              onChanged: (_) {
+                setSheetState(() {});
+                clear('topic');
+              },
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                TextButton(
+                  onPressed: saving ? null : () => Navigator.of(sheetContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final Map<String, String> next = taskProblems(
+                            title: title.text,
+                            topic: topic.text,
+                            minutes: minutes.text,
+                            date: taskDate,
+                            subject: subject,
+                            chapterId: chapterId,
+                            chapters: data.chapters,
+                          );
+                          if (next.isNotEmpty) {
+                            setSheetState(() => errors = next);
+                            showToast(context, 'Please correct the highlighted task fields.', error: true);
+                            await HapticFeedback.mediumImpact();
+                            return;
+                          }
+                          setSheetState(() => saving = true);
+                          final DailyTask saved = DailyTask(
+                            id: id,
+                            userId: data.userId,
+                            title: title.text.trim(),
+                            subject: subject,
+                            chapterId: chapterId,
+                            topic: topic.text.trim().isEmpty ? null : topic.text.trim(),
+                            estimatedMinutes: int.parse(minutes.text.trim()),
+                            priority: priority,
+                            isCompleted: task?.isCompleted ?? false,
+                            taskDate: taskDate,
+                            position: task?.position ?? data.tasksOn(taskDate).length,
+                            createdAt: task?.createdAt ?? isoNow(),
+                            updatedAt: isoNow(),
+                          );
+                          try {
+                            await ref.read(dataControllerProvider.notifier).saveTask(saved);
+                            await HapticFeedback.lightImpact();
+                            if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                            if (context.mounted) {
+                              showToast(context, creating ? 'Task added to your plan.' : 'Task updated.');
+                            }
+                          } catch (error) {
+                            if (context.mounted) showToast(context, 'Could not save task.', error: true);
+                            setSheetState(() => saving = false);
+                          }
+                        },
+                  child: Text(saving ? 'Saving…' : (creating ? 'Add task' : 'Save task')),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    ),
+  );
+  title.dispose();
+  minutes.dispose();
+  topic.dispose();
+}
+
+/// The website's QuickTaskDialog from the quick-action menu: "Add a task" for today.
+Future<void> openQuickTask(BuildContext context, WidgetRef ref) async {
+  final AppData data = ref.read(dataControllerProvider).data;
+  final TextEditingController title = TextEditingController();
+  final TextEditingController minutes = TextEditingController(text: '30');
+  final String id = newId();
+  String? subject;
+  String? chapterId;
+  String priority = 'Medium';
+  Map<String, String> errors = <String, String>{};
+  bool saving = false;
+  final List<String> subjects = examSubjectNames(data);
+
+  await showAppSheet<void>(
+    context,
+    title: 'Add a task',
     builder: (BuildContext sheetContext) => StatefulBuilder(
       builder: (BuildContext context, StateSetter setSheetState) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           AppField(
-            label: 'Task',
+            label: 'What do you want to do?',
             controller: title,
             required: true,
-            maxLength: 160,
-            error: titleError,
-            hint: 'e.g. Rotational motion — 20 PYQs',
-          ),
-          AppDateField(
-            label: 'Day',
-            value: taskDate,
-            onChanged: (String? value) {
-              if (value != null) setSheetState(() => taskDate = value);
+            maxLength: 200,
+            hint: 'e.g. Revise Kirchhoff\'s laws',
+            error: errors['title'],
+            onChanged: (_) {
+              if (errors.containsKey('title')) {
+                setSheetState(() => errors = <String, String>{...errors}..remove('title'));
+              }
             },
           ),
-          AppSelect<String?>(
-            label: 'Subject (optional)',
+          AppOptionSelect<String>(
+            label: 'Subject',
             value: subject,
-            items: <String?>[null, ...data.subjects],
-            labelFor: (String? value) => value ?? 'No subject',
-            onChanged: (String? value) => setSheetState(() => subject = value),
+            nullLabel: 'General',
+            options: <SelectOption<String>>[for (final String s in subjects) SelectOption<String>(s, s)],
+            onChanged: (String? value) => setSheetState(() {
+              subject = value;
+              chapterId = null;
+            }),
           ),
-          AppSelect<String?>(
-            label: 'Chapter (optional)',
+          AppOptionSelect<String>(
+            label: 'Chapter',
             value: chapterId,
-            items: <String?>[null, ...data.chapters.map((Chapter chapter) => chapter.id)],
-            labelFor: (String? value) => value == null ? 'No chapter' : data.chapterName(value),
+            nullLabel: 'Choose chapter',
+            options: <SelectOption<String>>[
+              for (final Chapter c in data.chapters.where((Chapter c) => subject == null || c.subject == subject))
+                SelectOption<String>(c.id, c.name),
+            ],
             onChanged: (String? value) => setSheetState(() => chapterId = value),
           ),
-          AppField(
-            label: 'Topic / subtopic (optional)',
-            controller: topic,
-            maxLength: 120,
-            hint: 'e.g. Gauss’s law',
-          ),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Expanded(
                 child: AppField(
-                  label: 'Minutes',
+                  label: 'Estimated time (min)',
                   controller: minutes,
                   keyboardType: TextInputType.number,
                   inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-                  error: minutesError,
+                  error: errors['estimated_minutes'],
                 ),
               ),
               const SizedBox(width: 8),
@@ -416,38 +865,63 @@ Future<void> openTaskEditor(
               ),
             ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              final String? minutesProblem = Validators.minutes(minutes.text, max: 1440, label: 'Minutes');
-              setSheetState(() {
-                titleError = title.text.trim().isEmpty ? 'Give the task a name.' : null;
-                minutesError = minutesProblem;
-              });
-              if (titleError != null || minutesProblem != null) return;
-              final DailyTask next = DailyTask(
-                id: task?.id ?? newId(),
-                userId: data.userId,
-                title: title.text.trim(),
-                subject: subject,
-                chapterId: chapterId,
-                topic: topic.text.trim().isEmpty ? null : topic.text.trim(),
-                estimatedMinutes: int.tryParse(minutes.text.trim()) ?? 30,
-                priority: priority,
-                isCompleted: task?.isCompleted ?? false,
-                taskDate: taskDate,
-                position: task?.position ?? data.tasksOn(taskDate).length,
-                createdAt: task?.createdAt ?? isoNow(),
-                updatedAt: isoNow(),
-              );
-              try {
-                await ref.read(dataControllerProvider.notifier).saveTask(next);
-                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                if (context.mounted) showToast(context, creating ? 'Task added.' : 'Task saved.');
-              } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
-              }
-            },
-            child: Text(creating ? 'Add task' : 'Save'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: <Widget>[
+              TextButton(onPressed: () => Navigator.of(sheetContext).pop(), child: const Text('Cancel')),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        final String today = todayIso();
+                        final Map<String, String> next = taskProblems(
+                          title: title.text,
+                          topic: '',
+                          minutes: minutes.text,
+                          date: today,
+                          subject: subject,
+                          chapterId: chapterId,
+                          chapters: data.chapters,
+                        );
+                        final String? chapterProblem = next.remove('chapter_id');
+                        if (next.isNotEmpty) {
+                          setSheetState(() => errors = next);
+                          showToast(context, 'Please correct the highlighted task fields.', error: true);
+                          await HapticFeedback.mediumImpact();
+                          return;
+                        }
+                        if (chapterProblem != null) {
+                          showToast(context, chapterProblem, error: true);
+                          return;
+                        }
+                        setSheetState(() => saving = true);
+                        try {
+                          await ref.read(dataControllerProvider.notifier).saveTask(DailyTask(
+                                id: id,
+                                userId: data.userId,
+                                title: title.text.trim(),
+                                subject: subject,
+                                chapterId: chapterId,
+                                estimatedMinutes: int.parse(minutes.text.trim()),
+                                priority: priority,
+                                taskDate: today,
+                                position: data.tasksOn(today).length,
+                                createdAt: isoNow(),
+                                updatedAt: isoNow(),
+                              ));
+                          await HapticFeedback.lightImpact();
+                          if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                          if (context.mounted) showToast(context, 'Task added to today.');
+                        } catch (error) {
+                          if (context.mounted) showToast(context, 'Could not save task. Retry.', error: true);
+                          setSheetState(() => saving = false);
+                        }
+                      },
+                icon: const Icon(Icons.check, size: 16),
+                label: Text(saving ? 'Saving…' : 'Add to today'),
+              ),
+            ],
           ),
         ],
       ),
@@ -455,95 +929,121 @@ Future<void> openTaskEditor(
   );
   title.dispose();
   minutes.dispose();
-  topic.dispose();
 }
 
-Future<void> openGoalEditor(
-  BuildContext context,
-  WidgetRef ref,
-  AppData data,
-  WeeklyGoal? goal,
-  String weekStart,
-) async {
-  final bool creating = goal == null;
-  final TextEditingController title = TextEditingController(text: goal?.title ?? '');
-  final TextEditingController target =
-      TextEditingController(text: goal == null ? '' : numberLabel(goal.target, digits: 0));
-  final TextEditingController progress = TextEditingController(
-    text: goal == null ? '0' : numberLabel(goal.progressValue, digits: 1),
-  );
-  final TextEditingController unit = TextEditingController(text: goal?.unit ?? 'chapters');
-  String goalType = goal?.goalType ?? 'chapters';
+/// The website's GoalDialog: "Set a weekly goal" for the shown week.
+Future<void> openGoalEditor(BuildContext context, WidgetRef ref, AppData data, String weekStart) async {
+  String type = 'study_hours';
+  final TextEditingController title = TextEditingController(text: 'Study hours');
+  final TextEditingController target = TextEditingController(text: '10');
+  final TextEditingController unit = TextEditingController(text: 'hours');
+  final String id = newId();
+  Map<String, String> errors = <String, String>{};
+  bool saving = false;
 
   await showAppSheet<void>(
     context,
-    title: creating ? 'Weekly goal' : 'Update goal',
+    title: 'Set a weekly goal',
     builder: (BuildContext sheetContext) => StatefulBuilder(
-      builder: (BuildContext context, StateSetter setSheetState) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          AppField(label: 'Goal', controller: title, required: true, maxLength: 160),
-          AppSelect<String>(
-            label: 'Type',
-            value: goalType,
-            items: const <String>['chapters', 'questions', 'tests', 'minutes', 'custom'],
-            onChanged: (String? value) => setSheetState(() => goalType = value ?? goalType),
-          ),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: AppField(
-                  label: 'Target',
-                  controller: target,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      builder: (BuildContext context, StateSetter setSheetState) {
+        final bool hours = type == 'study_hours';
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text('For the week of ${prettyDate(weekStart)}.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.stracker.muted)),
+            ),
+            AppSelect<String>(
+              label: 'Goal type',
+              value: type,
+              items: <String>[for (final GoalTypeOption o in goalTypes) o.type],
+              labelFor: (String v) => goalTypes.firstWhere((GoalTypeOption o) => o.type == v).title,
+              onChanged: (String? value) {
+                if (value == null) return;
+                final GoalTypeOption option = goalTypes.firstWhere((GoalTypeOption o) => o.type == value);
+                setSheetState(() {
+                  type = value;
+                  title.text = option.title;
+                  unit.text = option.unit;
+                  errors = <String, String>{};
+                });
+              },
+            ),
+            AppField(label: 'Name', controller: title, maxLength: 120, error: errors['title']),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: AppField(
+                    label: 'Target',
+                    controller: target,
+                    keyboardType: TextInputType.numberWithOptions(decimal: hours),
+                    hint: hours ? '0.5 – 168' : '1 – 999999',
+                    error: errors['target'],
+                  ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(child: AppField(label: 'Unit', controller: unit, maxLength: 30)),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Study hours, tests, chapters and revisions update from your real activity. Custom goals can be '
+                'ticked up manually.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.stracker.muted),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppField(
-                  label: 'Progress',
-                  controller: progress,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                TextButton(onPressed: () => Navigator.of(sheetContext).pop(), child: const Text('Cancel')),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final Map<String, String> next =
+                              goalProblems(type: type, title: title.text, target: target.text);
+                          if (next.isNotEmpty) {
+                            setSheetState(() => errors = next);
+                            showToast(context, 'Please correct the highlighted goal fields.', error: true);
+                            await HapticFeedback.mediumImpact();
+                            return;
+                          }
+                          setSheetState(() => saving = true);
+                          try {
+                            await ref.read(dataControllerProvider.notifier).saveGoal(WeeklyGoal(
+                                  id: id,
+                                  userId: data.userId,
+                                  goalType: type,
+                                  title: title.text.trim(),
+                                  target: double.parse(target.text.trim()),
+                                  weekStart: weekStart,
+                                  unit: unit.text,
+                                  createdAt: isoNow(),
+                                  updatedAt: isoNow(),
+                                ));
+                            await HapticFeedback.lightImpact();
+                            if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                            if (context.mounted) showToast(context, 'Weekly goal saved.');
+                          } catch (error) {
+                            if (context.mounted) showToast(context, 'Could not save goal.', error: true);
+                            setSheetState(() => saving = false);
+                          }
+                        },
+                  child: Text(saving ? 'Saving…' : 'Save weekly goal'),
                 ),
-              ),
-            ],
-          ),
-          AppField(label: 'Unit', controller: unit, maxLength: 20),
-          ElevatedButton(
-            onPressed: () async {
-              final double targetValue = double.tryParse(target.text.trim()) ?? 0;
-              if (title.text.trim().isEmpty || targetValue <= 0) {
-                showToast(context, 'A goal needs a name and a positive target.', error: true);
-                return;
-              }
-              final WeeklyGoal next = WeeklyGoal(
-                id: goal?.id ?? newId(),
-                userId: data.userId,
-                goalType: goalType,
-                title: title.text.trim(),
-                target: targetValue,
-                progressValue: double.tryParse(progress.text.trim()) ?? 0,
-                weekStart: goal?.weekStart ?? weekStart,
-                unit: unit.text.trim(),
-                createdAt: goal?.createdAt ?? isoNow(),
-                updatedAt: isoNow(),
-              );
-              try {
-                await ref.read(dataControllerProvider.notifier).saveGoal(next);
-                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                if (context.mounted) showToast(context, creating ? 'Goal added.' : 'Goal updated.');
-              } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
-              }
-            },
-            child: Text(creating ? 'Add goal' : 'Save'),
-          ),
-        ],
-      ),
+              ],
+            ),
+          ],
+        );
+      },
     ),
   );
   title.dispose();
   target.dispose();
-  progress.dispose();
   unit.dispose();
 }

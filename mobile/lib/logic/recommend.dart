@@ -128,8 +128,7 @@ StudyNowResult recommendStudyNow(AppData data, String today) {
       revisionInfo[revision.chapterId] = current;
     }
   }
-  for (final MapEntry<String, ({int overdueDays, bool dueToday, int count})> entry
-      in revisionInfo.entries) {
+  for (final MapEntry<String, ({int overdueDays, bool dueToday, int count})> entry in revisionInfo.entries) {
     if (entry.value.count == 0) continue;
     final Chapter chapter = chapterById[entry.key]!;
     final List<String> reasons = <String>[];
@@ -316,8 +315,8 @@ StudyNowResult recommendStudyNow(AppData data, String today) {
   if (drafts.isEmpty) {
     for (final Chapter chapter in data.chapters) {
       if (chapter.isComplete) continue;
-      final bool hasEvidence = practice.containsKey(chapter.id) ||
-          data.tests.any((TestRecord test) => test.chapterId == chapter.id);
+      final bool hasEvidence =
+          practice.containsKey(chapter.id) || data.tests.any((TestRecord test) => test.chapterId == chapter.id);
       if (hasEvidence) continue;
       drafts.add(_Draft(
         id: 'start:${chapter.id}',
@@ -383,17 +382,17 @@ StudyNowResult recommendStudyNow(AppData data, String today) {
 
   return StudyNowResult(
     primary: scored.isEmpty ? null : scored.first,
-    alternatives: scored.length > 1 ? scored.sublist(1, scored.length > 5 ? 5 : scored.length) : const <Recommendation>[],
+    alternatives:
+        scored.length > 1 ? scored.sublist(1, scored.length > 5 ? 5 : scored.length) : const <Recommendation>[],
     examMode: examMode,
     examLabel: examMode ? examModeLabel(data, today) : null,
     emptyReason: emptyReason,
   );
 }
 
-/// Backlog items are "awake" unless snoozed into the future.
+/// Website `isAwake`: active items are awake; a snoozed item wakes on its date.
 bool isBacklogAwake(BacklogItem item, String today) {
-  if (item.status != 'active') return false;
+  if (item.status == 'active') return true;
   final String? snoozed = item.snoozedUntil;
-  if (snoozed == null || snoozed.isEmpty) return true;
-  return snoozed.compareTo(today) <= 0;
+  return item.status == 'snoozed' && snoozed != null && snoozed.isNotEmpty && snoozed.compareTo(today) <= 0;
 }
