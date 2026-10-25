@@ -40,6 +40,20 @@ function activeProviderLabel(providerId:string|undefined|null,providers:Array<{p
  * Which AI answers next: Stracker AI (Default) unless the student prefers (and has) their own
  * working model. When the default is unavailable, their own models take over automatically.
  */
+/** The student already added a model of their own (error prompts then say "check your model", not "add"). */
+export function hasOwnModel(providers: ReadonlyArray<unknown>): boolean {
+  return providers.length > 0
+}
+
+/**
+ * Whether the conversation is currently served by the student's own model: the model answering
+ * right now, else the one that sent the last reply, else the model that will answer next.
+ */
+export function chatServedByOwnModel(input: { liveProviderId?: string | null; lastReplyProviderId?: string | null; activeProviderId?: string | null }): boolean {
+  const current = input.liveProviderId || input.lastReplyProviderId || input.activeProviderId || null
+  return Boolean(current) && current !== 'stracker'
+}
+
 function useActiveAI() {
   const { providers,stracker,preference } = useAI()
   return useMemo(() => {
@@ -50,7 +64,7 @@ function useActiveAI() {
     const active = useStracker
       ? { providerId:'stracker',name:STRACKER_AI_NAME,model:stracker?.model ?? null }
       : ownPreferred ? { providerId:ownPreferred.provider_id,name:ownPreferred.display_name || providerLabel(ownPreferred.provider_id),model:ownPreferred.model_label || null } : null
-    return { configured:Boolean(active),active,strackerUnavailable:stracker?.status === 'unavailable',hasOwn:own.length > 0 }
+    return { configured:Boolean(active),active,strackerUnavailable:stracker?.status === 'unavailable',hasOwn:own.length > 0,ownAdded:hasOwnModel(providers) }
   },[providers,stracker,preference])
 }
 
@@ -85,6 +99,7 @@ function ActionConfirmationCard({ action,messageId }: { action:AIActionConfirmat
 
 function AssistantMessage({ message }: { message:AIMessage }) {
   const { providers,retryLast } = useAI()
+  const ownAdded = hasOwnModel(providers)
   const navigate = useNavigate()
   const resultRoute = typeof message.result?.route === 'string' && isSafeAppPath(message.result.route) ? message.result.route : null
   const providerId = message.providerId ?? null
@@ -98,7 +113,7 @@ function AssistantMessage({ message }: { message:AIMessage }) {
       {message.confirmation && <ActionConfirmationCard action={message.confirmation} messageId={message.id} />}
       {message.fallbackFrom && message.status === 'completed' && <div className="ai-fallback-note"><ArrowUpRight size={13} /><span>Switched from {fallbackName} to {providerName}; this answer came from the displayed model.</span></div>}
       {message.result && message.status === 'completed' && <div className="ai-result-proof"><span><Check size={14} /> Saved and verified in Stracker</span>{resultRoute && <button onClick={() => navigate(resultRoute)}>View in Stracker <ArrowUpRight size={13} /></button>}</div>}
-      {message.status === 'failed' && <div className="ai-retry-row"><span><CircleAlert size={14} /> {message.error ?? 'The request did not complete.'}</span>{message.errorCode?.startsWith('stracker_ai') && <Button size="sm" variant="secondary" onClick={() => navigate(ADD_OWN_MODEL_PATH)}><Plus size={14} /> Add your own model</Button>}{message.errorCode === 'stracker_ai_unavailable' && <Button size="sm" variant="quiet" onClick={() => navigate(AI_SETTINGS_PATH)}><SettingsIcon size={14} /> AI settings</Button>}{message.retryable !== false && <Button size="sm" variant="secondary" onClick={() => void retryLast()}><RotateCcw size={14} /> Retry</Button>}</div>}
+      {message.status === 'failed' && <div className="ai-retry-row"><span><CircleAlert size={14} /> {message.error ?? 'The request did not complete.'}</span>{message.errorCode?.startsWith('stracker_ai') && !ownAdded && <Button size="sm" variant="secondary" onClick={() => navigate(ADD_OWN_MODEL_PATH)}><Plus size={14} /> Add your own model</Button>}{(message.errorCode === 'stracker_ai_unavailable' || (ownAdded && message.errorCode?.startsWith('stracker_ai'))) && <Button size="sm" variant="quiet" onClick={() => navigate(AI_SETTINGS_PATH)}><SettingsIcon size={14} /> {ownAdded ? 'Check your model' : 'AI settings'}</Button>}{message.retryable !== false && <Button size="sm" variant="secondary" onClick={() => void retryLast()}><RotateCcw size={14} /> Retry</Button>}</div>}
       {message.status === 'cancelled' && <div className="ai-cancelled-note"><Square size={12} /> Request stopped. No Stracker change was made.</div>}
       {message.content.trim() && message.status !== 'running' && <div className="ai-message-actions"><CopyButton text={message.content} label="Copy response" /></div>}
       {(providerId || message.status === 'completed') && <div className="ai-message-meta">{providerId && <><AIProviderMark provider={providerId} small /><span>{providerName}</span>{message.modelId && <span className="ai-model-name">{message.modelId}</span>}</>}{message.createdAt && <time dateTime={message.createdAt}>{new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit'}).format(new Date(message.createdAt))}</time>}</div>}
@@ -117,7 +132,7 @@ function ConversationMessages({ compact=false }: { compact?:boolean }) {
   const { user } = useAuth()
   const bottomRef = useRef<HTMLDivElement>(null)
   const [autoScroll,setAutoScroll] = useState(true)
-  const { configured,active,strackerUnavailable,hasOwn } = useActiveAI()
+  const { configured,active,strackerUnavailable,hasOwn,ownAdded } = useActiveAI()
   const showWelcome = messages.length === 0
   useEffect(() => { if (autoScroll) bottomRef.current?.scrollIntoView({behavior:'smooth',block:'end'}) },[messages,activeTask?.progress,autoScroll])
   const prompt = (text:string) => { void sendMessage(text,location.pathname) }
@@ -131,7 +146,7 @@ function ConversationMessages({ compact=false }: { compact?:boolean }) {
         <span className="eyebrow">A STUDY PARTNER, ON YOUR TERMS</span>
         <h2>{user?.displayName ? `Hi, ${user.displayName.split(' ')[0]}.` : 'Let’s make your next step clearer.'}</h2>
         <p>Ask about your saved tests, chapters, revisions, mistakes, or study plan. I’ll use your Stracker data—not invented estimates.</p>
-        {!configured ? (strackerUnavailable ? <StrackerUnavailableNotice onAddOwn={() => navigate(ADD_OWN_MODEL_PATH)} /> : providersLoading ? null : <div className="ai-connect-nudge"><KeyRoundIcon /><span><strong>Stracker AI is getting ready.</strong><small>You can also add your own AI model in Settings.</small></span><Link to={ADD_OWN_MODEL_PATH} className="button button-secondary button-sm">Add your own model</Link></div>) : <>
+        {!configured ? (strackerUnavailable ? (ownAdded ? <StrackerUnavailableNotice ownModel onCheckOwn={() => navigate(AI_SETTINGS_PATH)} /> : <StrackerUnavailableNotice onAddOwn={() => navigate(ADD_OWN_MODEL_PATH)} />) : providersLoading ? null : <div className="ai-connect-nudge"><KeyRoundIcon /><span><strong>Stracker AI is getting ready.</strong><small>{ownAdded ? 'Check or test your own AI model in Settings.' : 'You can also add your own AI model in Settings.'}</small></span>{ownAdded ? <Link to={AI_SETTINGS_PATH} className="button button-secondary button-sm">AI settings</Link> : <Link to={ADD_OWN_MODEL_PATH} className="button button-secondary button-sm">Add your own model</Link>}</div>) : <>
           <div className="ai-provider-ready"><AIProviderMark provider={active?.providerId ?? 'custom'} small /><span>Using <strong>{active?.name}</strong>{active?.model ? ` · ${active.model}` : ''}</span></div>
           {strackerUnavailable && hasOwn && <div className="ai-provider-ready"><CircleAlert size={14} /><span>Stracker AI is temporarily unavailable, so your own model is answering.</span></div>}
         </>}
@@ -148,7 +163,7 @@ function KeyRoundIcon() { return <span className="ai-connect-icon"><ShieldCheck 
 
 function ChatComposer({ compact=false }: { compact?:boolean }) {
   const { isBusy,activeTask,lastRequest,sendMessage,stopTask,retryLast } = useAI()
-  const { configured,active } = useActiveAI()
+  const { configured,active,ownAdded } = useActiveAI()
   const location = useLocation()
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [value,setValue] = useState('')
@@ -172,7 +187,7 @@ function ChatComposer({ compact=false }: { compact?:boolean }) {
   }
   return <div className={`ai-composer-wrap ${compact ? 'ai-composer-compact' : ''}`}>
     <form className="ai-composer" onSubmit={send}>
-      <textarea ref={inputRef} rows={1} maxLength={4000} value={value} onChange={event => { setValue(event.target.value); fit() }} onKeyDown={keyDown} placeholder={configured ? 'Ask about your study progress…' : 'Add your own AI model to keep going'} aria-label="Message Stracker AI" disabled={!configured || isBusy} />
+      <textarea ref={inputRef} rows={1} maxLength={4000} value={value} onChange={event => { setValue(event.target.value); fit() }} onKeyDown={keyDown} placeholder={configured ? 'Ask about your study progress…' : ownAdded ? 'Check your AI model in Settings to keep going' : 'Add your own AI model to keep going'} aria-label="Message Stracker AI" disabled={!configured || isBusy} />
       <div className="ai-composer-footer"><span>Enter to send · Shift + Enter for a new line</span><div><span className="ai-message-limit">{value.length}/4000</span><button type="submit" className={`ai-send-button ${isBusy && activeTask?.cancellable !== false ? 'ai-stop-button' : ''}`} disabled={isBusy ? activeTask?.cancellable === false : !value.trim() && !lastRequest} aria-label={isBusy ? activeTask?.cancellable === false ? 'Confirmed change is being saved' : 'Stop the current AI task' : value.trim() ? 'Send message' : 'Retry last request'} title={isBusy ? activeTask?.cancellable === false ? 'Saving the confirmed change' : 'Stop this task' : 'Send message'}>{isBusy ? activeTask?.cancellable === false ? <LoaderCircle size={15} className="spin" /> : <Square size={15} fill="currentColor" /> : value.trim() ? <Send size={16} /> : lastRequest ? <RotateCcw size={15} /> : <Send size={16} />}</button></div></div>
     </form>
     <div className="ai-composer-disclaimer"><ShieldCheck size={12} /> {active?.providerId === 'stracker' ? 'Stracker AI is included with your account.' : 'Your provider handles AI processing and billing.'} Review before changes are saved.</div>
@@ -206,8 +221,11 @@ export function AIExperience() {
   const closeAnimated = () => (largeOpen ? largeExit : floatingExit).exit(closePanel)
   const minimizeAnimated = () => (largeOpen ? largeExit : floatingExit).exit(minimizePanel)
   const collapseAnimated = () => largeExit.exit(collapseLarge)
-  const { backendStatus } = useAI()
+  const { backendStatus,messages,activeTask } = useAI()
   const { configured,active } = useActiveAI()
+  // Hide "Add your own model" only while the chat is actually served by the student's own model.
+  const lastReplyProvider = [...messages].reverse().find(message => message.role === 'assistant' && message.providerId)?.providerId ?? null
+  const servedByOwn = chatServedByOwnModel({ liveProviderId:isBusy ? activeTask?.providerId ?? null : null, lastReplyProviderId:lastReplyProvider, activeProviderId:active?.providerId ?? null })
   const [clearConfirmOpen,setClearConfirmOpen] = useState(false)
   const [historyOpen,setHistoryOpen] = useState(false)
   const [smallScreen,setSmallScreen] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width:520px)').matches)
@@ -253,7 +271,7 @@ export function AIExperience() {
     {backendStatus === 'misconfigured' && <div className="ai-service-notice" role="alert"><CircleAlert size={15} /><span><strong>The Stracker AI backend is not configured for this deployment.</strong> The administrator must finish the server setup before AI can run.</span></div>}
     {backendStatus === 'unreachable' && <div className="ai-service-notice" role="alert"><CircleAlert size={15} /><span><strong>The Stracker AI backend is unavailable.</strong> The deployed app has no <code>/api/ai/*</code> functions.</span></div>}
     {largeOpen ? <div className={`ai-workspace-body ${historyOpen ? 'history-open' : ''}`}><button className="ai-history-backdrop" aria-label="Close recent conversations" onClick={() => setHistoryOpen(false)} tabIndex={historyOpen ? 0 : -1} /><HistorySidebar hidden={smallScreen && !historyOpen} onSelect={() => { setHistoryOpen(false); if (smallScreen) historyToggleRef.current?.focus() }} /><div className="ai-workspace-chat"><div className="ai-workspace-toolbar"><div><span className="eyebrow">YOUR PRIVATE STUDY WORKSPACE</span><strong>{conversationTitle}</strong></div><div><Button variant="quiet" size="sm" onClick={() => setClearConfirmOpen(true)} disabled={!conversationId || isBusy}><Trash2 size={14} /> Clear chat</Button><Button variant="quiet" size="sm" onClick={() => navigate('/settings#ai-provider-settings')}><KeyRoundIcon /> Providers</Button></div></div><ConversationMessages /><ChatComposer /></div></div>
-      : <><div className="ai-compact-titlebar"><span>{conversationId ? conversationTitle : 'Ask about your studies'}</span><span className="ai-compact-titlebar-actions"><button type="button" className="ai-add-own-model" onClick={() => navigate(ADD_OWN_MODEL_PATH)} title="Add your own AI model"><Plus size={10} /> Add your own model</button>{configured && <span className="ai-ready-dot">Ready</span>}</span></div><ConversationMessages compact /><ChatComposer compact /></>}
+      : <><div className="ai-compact-titlebar"><span>{conversationId ? conversationTitle : 'Ask about your studies'}</span><span className="ai-compact-titlebar-actions">{!servedByOwn && <button type="button" className="ai-add-own-model" onClick={() => navigate(ADD_OWN_MODEL_PATH)} title="Add your own AI model"><Plus size={10} /> Add your own model</button>}{configured && <span className="ai-ready-dot">Ready</span>}</span></div><ConversationMessages compact /><ChatComposer compact /></>}
   </>
   return <>
     {!panelOpen && !largeOpen && <div className={`ai-launcher-wrap ${minimized ? 'ai-launcher-minimized' : ''} ${minimized || launcherExpanded ? 'ai-launcher-expanded' : ''}`}>

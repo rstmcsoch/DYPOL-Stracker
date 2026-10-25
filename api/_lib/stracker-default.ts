@@ -12,6 +12,10 @@ export const STRACKER_PROVIDER_ID = 'stracker'
 export const STRACKER_UNAVAILABLE = 'Stracker AI’s default models are not responding right now. Add your own AI model in the Stracker AI window (Add your own model) or in Settings → AI Assistant to keep going.'
 export const STRACKER_DAILY_LIMIT = 'You have reached today’s Stracker AI limit. Add your own AI model to keep going, or try again tomorrow.'
 export const STRACKER_MINUTE_LIMIT = 'Stracker AI is handling several of your requests. Wait a minute and try again, or add your own AI model.'
+/** Same situations for a student who already has their own model: point them to it, not to "add". */
+export const STRACKER_UNAVAILABLE_OWN = 'Stracker AI’s default models are not responding right now, and your own AI model could not answer either. Check or test your model in Settings → AI Assistant.'
+export const STRACKER_DAILY_LIMIT_OWN = 'You have reached today’s Stracker AI limit, and your own AI model is not ready. Check or test your model in Settings → AI Assistant, or try again after 12:00 AM.'
+export const STRACKER_MINUTE_LIMIT_OWN = 'Stracker AI is handling several of your requests, and your own AI model is not ready. Wait a minute, or check your model in Settings → AI Assistant.'
 
 export interface SiteAISettings { enabled: boolean; perUserPerMinute: number; perUserDaily: number }
 export const DEFAULT_SITE_AI_SETTINGS: SiteAISettings = { enabled: true, perUserPerMinute: 4, perUserDaily: 40 }
@@ -119,24 +123,33 @@ export function publicStrackerStatus(input: { settings: SiteAISettings; rows: Pr
 export const STRACKER_MINUTE_BUCKET = 'stracker_minute'
 export const STRACKER_DAY_BUCKET = 'stracker_day'
 
-export async function strackerUsedToday(admin: SupabaseClient, userId: string): Promise<number> {
-  const since = new Date(Date.now() - 86_400_000).toISOString()
-  const { count } = await admin.from('ai_rate_events').select('user_id', { count: 'exact', head: true }).eq('user_id', userId).eq('bucket', STRACKER_DAY_BUCKET).gt('created_at', since)
+const IST_OFFSET_MS = 330 * 60_000
+const DAY_MS = 86_400_000
+
+/** Start of the current IST (Asia/Kolkata, UTC+5:30, no DST) calendar day: 12:00 AM IST. */
+export function istDayStart(now: number = Date.now()): Date {
+  return new Date(Math.floor((now + IST_OFFSET_MS) / DAY_MS) * DAY_MS - IST_OFFSET_MS)
+}
+
+/** Requests the student sent to Stracker AI (Default) since 12:00 AM IST today. */
+export async function strackerUsedToday(admin: SupabaseClient, userId: string, now: number = Date.now()): Promise<number> {
+  const since = istDayStart(now).toISOString()
+  const { count } = await admin.from('ai_rate_events').select('user_id', { count: 'exact', head: true }).eq('user_id', userId).eq('bucket', STRACKER_DAY_BUCKET).gte('created_at', since)
   return count ?? 0
 }
 
-/** Takes one default-provider request slot: per-minute first, then the rolling 24-hour cap. */
+/**
+ * Takes one default-provider request slot per student input: per-minute first, then the daily
+ * cap, which resets at 12:00 AM IST (atomic, server-side `ai_take_daily_slot`). The slot is
+ * taken before the model is called, so an input still counts if the model errors.
+ */
 export async function takeStrackerSlot(admin: SupabaseClient, userId: string, settings: SiteAISettings): Promise<'ok' | 'minute' | 'day' | 'unavailable'> {
-  const take = async (bucket: string, limit: number, windowSeconds: number) => {
-    const { data, error } = await admin.rpc('ai_take_rate_slot', { owner: userId, bucket, per_user_limit: limit, window_seconds: windowSeconds })
-    return error ? null : data === true
-  }
-  const minute = await take(STRACKER_MINUTE_BUCKET, settings.perUserPerMinute, 60)
-  if (minute === null) return 'unavailable'
-  if (!minute) return 'minute'
-  const day = await take(STRACKER_DAY_BUCKET, settings.perUserDaily, 86_400)
-  if (day === null) return 'unavailable'
-  return day ? 'ok' : 'day'
+  const { data: minute, error: minuteError } = await admin.rpc('ai_take_rate_slot', { owner: userId, bucket: STRACKER_MINUTE_BUCKET, per_user_limit: settings.perUserPerMinute, window_seconds: 60 })
+  if (minuteError) return 'unavailable'
+  if (minute !== true) return 'minute'
+  const { data: day, error: dayError } = await admin.rpc('ai_take_daily_slot', { owner: userId, bucket: STRACKER_DAY_BUCKET, per_user_limit: settings.perUserDaily })
+  if (dayError) return 'unavailable'
+  return day === true ? 'ok' : 'day'
 }
 
 /**

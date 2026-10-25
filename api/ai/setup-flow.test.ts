@@ -9,6 +9,8 @@ type Row = Record<string, unknown>
 const db: Record<string, Row[]> = {}
 const USER = '00000000-0000-4000-8000-000000000001'
 let rpcAllowed = true
+let dailyAllowed = true
+const rpcCalls: Array<{ name: string; args: Row }> = []
 
 function builder(table: string) {
   const filters: Array<(row: Row) => boolean> = []
@@ -48,7 +50,7 @@ function builder(table: string) {
   }
   return api
 }
-const adminClient = { from: (table: string) => builder(table), rpc: async () => ({ data: rpcAllowed, error: null }) }
+const adminClient = { from: (table: string) => builder(table), rpc: async (name: string, args: Row) => { rpcCalls.push({ name, args }); return { data: rpcAllowed && (name !== 'ai_take_daily_slot' || dailyAllowed), error: null } } }
 
 vi.mock('../_lib/supabase.js', () => ({
   authenticateRequest: async (req: { headers: Record<string, string> }) => {
@@ -78,6 +80,8 @@ let providerReply: () => Response
 beforeEach(() => {
   for (const key of Object.keys(db)) delete db[key]
   rpcAllowed = true
+  rpcCalls.length = 0
+  dailyAllowed = true
   process.env.AI_CREDENTIALS_ENCRYPTION_KEY = 'a'.repeat(64)
   providerReply = () => new Response('data: {"candidates":[{"content":{"parts":[{"text":"connected"}]}}]}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } })
   vi.stubGlobal('fetch', vi.fn(async () => providerReply()))
@@ -343,6 +347,8 @@ describe('Stracker AI (Default)', () => {
     const result = await runAssistant(runInput('hello', (event, data) => events.push([event, data])))
     expect(result).toMatchObject({ status: 'completed', providerId: 'stracker', modelId: 'Google Gemini', content: 'From number three' })
     expect(calls).toBe(3)
+    // One input = exactly one daily slot, however many admin models were tried.
+    expect(rpcCalls.filter(call => call.name === 'ai_take_daily_slot')).toHaveLength(1)
     expect(urls[0]).toContain('gemini-3.6-flash')
     expect(urls[1]).toContain('gemini-second')
     expect(urls[2]).toContain('gemini-third')
@@ -362,6 +368,8 @@ describe('Stracker AI (Default)', () => {
     const { runAssistant } = await import('../_lib/agent.js')
     expect(await runAssistant(runInput('hello'))).toMatchObject({ status: 'completed', providerId: 'gemini', modelId: 'Google Gemini', content: 'Own model' })
     expect(calls).toBe(3)
+    // Routed to the defaults first, so the input counts once, even though the own model answered.
+    expect(rpcCalls.filter(call => call.name === 'ai_take_daily_slot')).toHaveLength(1)
     expect(JSON.stringify([db.ai_messages, db.ai_tasks])).not.toContain('gemini-2.5-flash')
   })
 
@@ -373,6 +381,63 @@ describe('Stracker AI (Default)', () => {
     expect(error).toMatchObject({ code: 'stracker_ai_unavailable', message: STRACKER_UNAVAILABLE_TEXT })
     expect(JSON.stringify(error)).not.toContain(SITE_KEY)
     expect(JSON.stringify(error)).not.toContain('hidden-vendor')
+  })
+
+  it('the daily limit is one account-level counter: same bucket and owner limit for every admin model and after reordering', async () => {
+    db.site_ai_settings = [{ id: 1, enabled: true, per_user_per_minute: 10, per_user_daily: 40 }]
+    const first = await siteRow({ priority: 1 }); const second = await siteRow({ priority: 2, is_default: false, model_id: 'models/gemini-second' })
+    db.site_ai_providers = [first, second]
+    let calls = 0
+    providerReply = () => (++calls % 2 === 1
+      ? new Response(JSON.stringify({ error: { code: 503, message: 'overloaded', status: 'UNAVAILABLE' } }), { status: 503, headers: { 'content-type': 'application/json' } })
+      : new Response('data: {"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } }))
+    const { runAssistant } = await import('../_lib/agent.js')
+    await runAssistant(runInput('hello'))
+    db.site_ai_providers = [{ ...second, priority: 1, cooldown_until: null, failure_count: 0, connection_status: 'connected' }, { ...first, priority: 2, cooldown_until: null, failure_count: 0, connection_status: 'connected' }]
+    await runAssistant(runInput('hello again'))
+    const daily = rpcCalls.filter(call => call.name === 'ai_take_daily_slot').map(call => call.args)
+    expect(daily).toEqual([{ owner: USER, bucket: 'stracker_day', per_user_limit: 40 }, { owner: USER, bucket: 'stracker_day', per_user_limit: 40 }])
+  })
+
+  it('own model answers never count and are never blocked by the default limit', async () => {
+    db.site_ai_providers = [await siteRow({ priority: 1 })]
+    db.ai_provider_configs = [await ownRow()]
+    db.ai_user_preferences = [{ user_id: USER, preferred: 'own' }]
+    providerReply = () => new Response('data: {"candidates":[{"content":{"parts":[{"text":"Own"}]}}]}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    const { runAssistant } = await import('../_lib/agent.js')
+    expect(await runAssistant(runInput('hello'))).toMatchObject({ status: 'completed', providerId: 'gemini' })
+    expect(rpcCalls.filter(call => call.name === 'ai_take_daily_slot')).toHaveLength(0)
+  })
+
+  it('when today’s default limit is used up, chat goes straight on with the student’s own model', async () => {
+    db.site_ai_providers = [await siteRow({ priority: 1 })]
+    db.ai_provider_configs = [await ownRow()]
+    dailyAllowed = false
+    providerReply = () => new Response('data: {"candidates":[{"content":{"parts":[{"text":"Own model"}]}}]}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    const { runAssistant } = await import('../_lib/agent.js')
+    expect(await runAssistant(runInput('hello'))).toMatchObject({ status: 'completed', providerId: 'gemini', content: 'Own model' })
+  })
+
+  it('with no own model, an exhausted limit says try again after midnight; with a broken own model it says check Settings', async () => {
+    db.site_ai_providers = [await siteRow({ priority: 1 })]
+    dailyAllowed = false
+    const { runAssistant } = await import('../_lib/agent.js')
+    await expect(runAssistant(runInput('hello'))).rejects.toMatchObject({ code: 'stracker_ai_daily_limit', message: expect.stringContaining('Add your own AI model') })
+    db.ai_provider_configs = [{ ...(await ownRow()), connection_status: 'authentication_failed' }]
+    const failure = await runAssistant(runInput('hello')).then(() => ({ code: '', message: '' }), error => error as { code: string; message: string })
+    expect(failure.message).not.toContain('Add your own')
+  })
+
+  it('an input still counts once when every default model errors, and a retry is a new input', async () => {
+    db.site_ai_providers = [await siteRow({ priority: 1 }), await siteRow({ priority: 2, is_default: false, model_id: 'models/gemini-second' })]
+    providerReply = () => new Response(JSON.stringify({ error: { code: 500, message: 'internal', status: 'INTERNAL' } }), { status: 500, headers: { 'content-type': 'application/json' } })
+    const { runAssistant } = await import('../_lib/agent.js')
+    await expect(runAssistant(runInput('hello'))).rejects.toMatchObject({ code: 'stracker_ai_unavailable' })
+    const daily = () => rpcCalls.filter(call => call.name === 'ai_take_daily_slot')
+    expect(daily()).toHaveLength(1)
+    expect(daily()[0]!.args).toMatchObject({ owner: USER, bucket: 'stracker_day', per_user_limit: 40 })
+    await expect(runAssistant(runInput('hello'))).rejects.toMatchObject({ code: 'stracker_ai_unavailable' })
+    expect(daily()).toHaveLength(2)
   })
 
   it('owner reorder rewrites priorities 1..n and the chain follows the new order', async () => {

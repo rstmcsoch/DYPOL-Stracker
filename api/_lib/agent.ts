@@ -7,7 +7,7 @@ import { AIError, connectionStatusFor, cooldownSecondsFor, type AIErrorCode } fr
 import { logAIEvent } from './diagnostics.js'
 import { SITE_PROVIDER_TABLE } from './provider-scope.js'
 import {
-  STRACKER_DAILY_LIMIT, STRACKER_MINUTE_LIMIT, STRACKER_UNAVAILABLE, derivePreference, isSiteRow, publicModelId, publicProviderId, publicProviderName,
+  STRACKER_DAILY_LIMIT, STRACKER_DAILY_LIMIT_OWN, STRACKER_MINUTE_LIMIT, STRACKER_MINUTE_LIMIT_OWN, STRACKER_UNAVAILABLE, STRACKER_UNAVAILABLE_OWN, derivePreference, isSiteRow, publicModelId, publicProviderId, publicProviderName,
   readSiteProviders, readSiteSettings, readStoredPreference, takeStrackerSlot, type AIPreference, type SiteAISettings
 } from './stracker-default.js'
 import { MODEL_TOOLS, prepareToolCall, toolProgress, type ActionPreview } from './tools.js'
@@ -93,14 +93,14 @@ function mid(config: ProviderConfigRow): string {
   return publicModelId(config)
 }
 
-export function strackerUnavailable(): ApiError {
-  return new ApiError(503,'stracker_ai_unavailable',STRACKER_UNAVAILABLE)
+export function strackerUnavailable(hasOwn = false): ApiError {
+  return new ApiError(503,'stracker_ai_unavailable',hasOwn ? STRACKER_UNAVAILABLE_OWN : STRACKER_UNAVAILABLE)
 }
 
-function strackerLimitError(result: 'minute' | 'day' | 'unavailable'): ApiError {
-  if (result === 'day') return new ApiError(429,'stracker_ai_daily_limit',STRACKER_DAILY_LIMIT)
-  if (result === 'minute') return new ApiError(429,'stracker_ai_limit',STRACKER_MINUTE_LIMIT)
-  return strackerUnavailable()
+function strackerLimitError(result: 'minute' | 'day' | 'unavailable', hasOwn = false): ApiError {
+  if (result === 'day') return new ApiError(429,'stracker_ai_daily_limit',hasOwn ? STRACKER_DAILY_LIMIT_OWN : STRACKER_DAILY_LIMIT)
+  if (result === 'minute') return new ApiError(429,'stracker_ai_limit',hasOwn ? STRACKER_MINUTE_LIMIT_OWN : STRACKER_MINUTE_LIMIT)
+  return strackerUnavailable(hasOwn)
 }
 
 function taskType(message: string): 'action' | 'analytics' | 'general' {
@@ -288,18 +288,18 @@ async function withProviderTimeout<T>(parent: AbortSignal, run: (signal: AbortSi
 }
 
 export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult> {
-  const state = { site: false }
+  const state = { site: false, hasOwn: false }
   try {
     return await runAssistantCore(input, state)
   } catch (error) {
     // A Stracker AI (Default) failure never exposes the vendor, endpoint or provider wording.
     // Running out of time while walking the owner's model chain reads the same: add your own model.
-    if (state.site && (error instanceof AIError || (error instanceof ApiError && error.code === 'task_timeout'))) throw strackerUnavailable()
+    if (state.site && (error instanceof AIError || (error instanceof ApiError && error.code === 'task_timeout'))) throw strackerUnavailable(state.hasOwn)
     throw error
   }
 }
 
-async function runAssistantCore(input: AgentRunInput, state: { site: boolean }): Promise<AgentRunResult> {
+async function runAssistantCore(input: AgentRunInput, state: { site: boolean; hasOwn: boolean }): Promise<AgentRunResult> {
   const start = Date.now()
   const intentTools = requiresTools(input.message)
   const requiresReasoning = COMPLEX_INTENT.test(input.message)
@@ -309,6 +309,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
     studentExamLine(input.adminClient,input.userId)
   ])
   const preference = derivePreference(stracker.storedPreference, ownCandidates)
+  state.hasOwn = ownCandidates.length > 0
   const allCandidates = [...stracker.rows, ...ownCandidates]
   if (allCandidates.length === 0) {
     await explainNoEnabledProvider(input.adminClient,input.userId)
@@ -321,6 +322,12 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
   const candidates = sort(capabilityCandidates)
   if (!candidates.length) {
     const onlyDefault = ownCandidates.length === 0
+    // The input was meant for Stracker AI (Default): it counts toward today's limit even
+    // though no default model can answer right now (every input counts as 1, errors included).
+    if (onlyDefault && stracker.rows.length) {
+      const slot = await takeStrackerSlot(input.adminClient,input.userId,stracker.settings)
+      if (slot === 'day' || slot === 'minute') throw strackerLimitError(slot)
+    }
     if (intentTools && usable.length && !allCandidates.some(row => deriveCapabilities(row).supportsTools)) {
       throw new ApiError(422,'tools_unavailable', onlyDefault
         ? 'Stracker AI cannot read your saved Stracker data right now. Ask a general question, or add your own AI model to keep going.'
@@ -352,7 +359,8 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
   let finalText = ''
   let lastProvider: ProviderConfigRow | null = null
   const used = new Set<string>()
-  // One Stracker AI (Default) request slot per chat message, taken only when the default answers.
+  // One Stracker AI (Default) daily slot per student input, taken before the first default
+  // model is called (so errors still count) and never again for fallbacks within the same input.
   let strackerSlot = false
   let strackerBlocked = false
 
@@ -366,7 +374,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
       if (slot !== 'ok') {
         strackerBlocked = true
         const next = availableCandidates.find(row => !used.has(row.id) && !isSiteRow(row))
-        if (!next) throw strackerLimitError(slot)
+        if (!next) throw strackerLimitError(slot,state.hasOwn)
         fallbackFrom ??= selected
         chosen = next
         input.emit('fallback',{ from:providerName(selected),to:providerName(next),reason:slot === 'day' ? 'Today’s Stracker AI limit was reached.' : 'Stracker AI is busy right now.' })
