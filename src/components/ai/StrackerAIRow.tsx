@@ -4,13 +4,15 @@ import type { StrackerAIStatus } from './useProviderManager'
 
 export const STRACKER_AI_NAME = 'Stracker AI (Default)'
 export const STRACKER_UNAVAILABLE_COPY = 'Stracker AI is temporarily unavailable. You can add your own AI model to keep going.'
+export const STRACKER_UNAVAILABLE_OWN_COPY = 'Stracker AI is temporarily unavailable and your own AI model is not ready. Check or test it in Settings → AI Assistant.'
 
 /** Professional notice with a direct "Add your own model" action, used in Settings and the AI window. */
-export function StrackerUnavailableNotice({ onAddOwn, compact = false }: { onAddOwn?:()=>void; compact?:boolean }) {
+export function StrackerUnavailableNotice({ onAddOwn, onCheckOwn, ownModel = false, compact = false }: { onAddOwn?:()=>void; onCheckOwn?:()=>void; ownModel?:boolean; compact?:boolean }) {
   return <div className={`ai-service-notice ai-stracker-notice${compact ? ' compact' : ''}`} role="status">
     <AlertTriangle size={compact ? 15 : 17} />
-    <span>{STRACKER_UNAVAILABLE_COPY}</span>
-    {onAddOwn && <Button type="button" size="sm" variant="secondary" onClick={onAddOwn}><Plus size={14} /> Add your own model</Button>}
+    <span>{ownModel ? STRACKER_UNAVAILABLE_OWN_COPY : STRACKER_UNAVAILABLE_COPY}</span>
+    {ownModel ? onCheckOwn && <Button type="button" size="sm" variant="secondary" onClick={onCheckOwn}>Check your model</Button>
+      : onAddOwn && <Button type="button" size="sm" variant="secondary" onClick={onAddOwn}><Plus size={14} /> Add your own model</Button>}
   </div>
 }
 
