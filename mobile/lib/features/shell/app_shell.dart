@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,6 +17,8 @@ import '../../logic/exam.dart';
 import '../analytics/analytics_page.dart';
 import '../auth/auth_controller.dart';
 import '../home/home_page.dart';
+import '../planner/planner_page.dart';
+import '../practice/practice_page.dart';
 import '../profile/profile_page.dart';
 import '../tests/tests_page.dart';
 import 'routes.dart';
@@ -31,22 +34,42 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
+  bool _quickOpen = false;
+
+  /// The website's Ask Stracker launcher grows into a labelled pill while the student
+  /// scrolls down and folds back to a circle on scroll up or at the top.
+  bool _aiExpanded = false;
+
+  bool _onScroll(UserScrollNotification note) {
+    if (note.metrics.axis != Axis.vertical) return false;
+    bool next = _aiExpanded;
+    if (note.metrics.pixels <= 24) {
+      next = false;
+    } else if (note.direction == ScrollDirection.reverse) {
+      next = true;
+    } else if (note.direction == ScrollDirection.forward) {
+      next = false;
+    }
+    if (next != _aiExpanded) setState(() => _aiExpanded = next);
+    return false;
+  }
 
   static const List<String> _labels = <String>['Home', 'Tests', 'Analytics', 'Profile'];
   static const List<IconData> _icons = <IconData>[
     Icons.home_outlined,
-    Icons.list_alt_outlined,
-    Icons.insights_outlined,
+    Icons.checklist,
+    Icons.monitor_heart_outlined,
     Icons.person_outline,
   ];
   static const List<IconData> _selectedIcons = <IconData>[
     Icons.home,
-    Icons.list_alt,
-    Icons.insights,
+    Icons.checklist,
+    Icons.monitor_heart,
     Icons.person,
   ];
 
   void _select(int index) {
+    if (_quickOpen) setState(() => _quickOpen = false);
     if (_index == index) return;
     // A short, light tap: the same feedback Android gives its own tab bars.
     HapticFeedback.selectionClick();
@@ -66,15 +89,26 @@ class _AppShellState extends ConsumerState<AppShell> {
       ProfilePage(),
     ];
 
-    final Widget content = _FadeIndexedStack(index: _index, children: pages);
+    final Widget content = NotificationListener<UserScrollNotification>(
+      onNotification: _onScroll,
+      child: FloatingClearance(
+        // Bottom room so the last card scrolls clear of the two floating buttons.
+        bottom: 140,
+        child: _FadeIndexedStack(index: _index, children: pages),
+      ),
+    );
 
     return PopScope(
       // Back from a secondary tab returns to Home; back on Home leaves the app, which is
       // the expected Android behaviour. An open drawer is closed first by its own history
       // entry, and a pushed section is popped by the Navigator before this runs.
-      canPop: _index == 0,
+      canPop: _index == 0 && !_quickOpen,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (didPop) return;
+        if (_quickOpen) {
+          setState(() => _quickOpen = false);
+          return;
+        }
         setState(() => _index = 0);
       },
       child: Scaffold(
@@ -107,9 +141,16 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ],
               )
             : content,
-        bottomNavigationBar: wide
-            ? null
-            : _BottomTabs(index: _index, onSelected: _select),
+        floatingActionButton: _FloatingActions(
+          open: _quickOpen,
+          aiExpanded: _aiExpanded,
+          onToggle: () {
+            HapticFeedback.lightImpact();
+            setState(() => _quickOpen = !_quickOpen);
+          },
+          onClose: () => setState(() => _quickOpen = false),
+        ),
+        bottomNavigationBar: wide ? null : _BottomTabs(index: _index, onSelected: _select),
       ),
     );
   }
@@ -149,6 +190,8 @@ class _FadeIndexedStack extends StatelessWidget {
   }
 }
 
+/// The website's phone bar (responsive.css `.mobile-nav` under 700 px): a rounded paper
+/// card floating 10 px off the edges, four equal items, the active one tinted.
 class _BottomTabs extends StatelessWidget {
   const _BottomTabs({required this.index, required this.onSelected});
 
@@ -158,27 +201,326 @@ class _BottomTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final StrackerColors colors = context.stracker;
-    return Container(
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Material(
+          color: colors.palette.paper,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: BorderSide(color: colors.palette.lineStrong),
+          ),
+          shadowColor: Colors.transparent,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              // --shadow-float
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: dark ? const Color(0x73000000) : const Color(0x2929332D),
+                  blurRadius: 42,
+                  offset: const Offset(0, 18),
+                ),
+                BoxShadow(
+                  color: dark ? const Color(0x33000000) : const Color(0x1429332D),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Row(
+                children: <Widget>[
+                  for (int i = 0; i < _AppShellState._labels.length; i += 1)
+                    Expanded(
+                      child: _BottomTabItem(
+                        label: _AppShellState._labels[i],
+                        icon: i == index ? _AppShellState._selectedIcons[i] : _AppShellState._icons[i],
+                        selected: i == index,
+                        onTap: () => onSelected(i),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomTabItem extends StatelessWidget {
+  const _BottomTabItem({required this.label, required this.icon, required this.selected, required this.onTap});
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final Color fg = selected ? colors.palette.accent : colors.muted;
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color: selected ? colors.palette.accentLight : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 54),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(icon, size: 22, color: fg),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: fg,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Extra bottom padding [PageBody] keeps so floating buttons never cover the last card.
+class FloatingClearance extends InheritedWidget {
+  const FloatingClearance({super.key, required this.bottom, required super.child});
+
+  final double bottom;
+
+  static double? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<FloatingClearance>()?.bottom;
+
+  @override
+  bool updateShouldNotify(FloatingClearance oldWidget) => oldWidget.bottom != bottom;
+}
+
+/// The website's two floating buttons, stacked at the bottom right: "Ask Stracker" (a
+/// paper circle that grows into a labelled pill while scrolling down) above the
+/// quick-action lightning button, whose menu opens upward with the same four actions.
+class _FloatingActions extends ConsumerWidget {
+  const _FloatingActions({
+    required this.open,
+    required this.aiExpanded,
+    required this.onToggle,
+    required this.onClose,
+  });
+
+  final bool open;
+  final bool aiExpanded;
+  final VoidCallback onToggle;
+  final VoidCallback onClose;
+
+  static const double _size = 48;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final StrackerColors colors = context.stracker;
+    final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final Duration motion = reduceMotion ? Duration.zero : const Duration(milliseconds: 200);
+
+    Future<void> run(Future<void> Function() action) async {
+      onClose();
+      await HapticFeedback.selectionClick();
+      await action();
+    }
+
+    Widget menuItem(IconData icon, String label, Future<void> Function() action, {IconData? trailing}) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => run(action),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, size: 18, color: colors.inkSoft),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(label, style: TextStyle(fontSize: 14, color: colors.palette.inkSoft)),
+                ),
+                if (trailing != null) Icon(trailing, size: 15, color: colors.muted),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final Widget menu = Container(
+      width: 204,
+      padding: const EdgeInsets.all(7),
       decoration: BoxDecoration(
         color: colors.palette.paper,
-        border: Border(top: BorderSide(color: colors.palette.line)),
+        border: Border.all(color: colors.palette.lineStrong),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(color: Color(0x2929332D), blurRadius: 42, offset: Offset(0, 18)),
+          BoxShadow(color: Color(0x1429332D), blurRadius: 10, offset: Offset(0, 3)),
+        ],
       ),
-      child: SafeArea(
-        top: false,
-        child: NavigationBar(
-          selectedIndex: index,
-          onDestinationSelected: onSelected,
-          backgroundColor: colors.palette.paper,
-          destinations: <NavigationDestination>[
-            for (int i = 0; i < _AppShellState._labels.length; i += 1)
-              NavigationDestination(
-                icon: Icon(_AppShellState._icons[i]),
-                selectedIcon: Icon(_AppShellState._selectedIcons[i]),
-                label: _AppShellState._labels[i],
-              ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            menuItem(Icons.checklist, 'Plan a task', () async {
+              final AppData data = ref.read(dataControllerProvider).data;
+              await openTaskEditor(context, ref, data, null, todayIso());
+            }),
+            menuItem(Icons.edit_note, 'Add a test', () async {
+              final AppData data = ref.read(dataControllerProvider).data;
+              await openTestEditor(context, ref, data, null);
+            }),
+            menuItem(Icons.assignment_outlined, 'Log practice', () async {
+              final AppData data = ref.read(dataControllerProvider).data;
+              await openPracticeEditor(context, ref, data, null);
+            }),
+            menuItem(Icons.center_focus_strong_outlined, 'Focus session', () => Routes.open(context, Routes.focus),
+                trailing: Icons.timer_outlined),
           ],
         ),
       ),
+    );
+
+    final Widget ai = Semantics(
+      button: true,
+      label: 'Ask Stracker',
+      excludeSemantics: true,
+      child: Material(
+        color: colors.palette.paper,
+        shape: StadiumBorder(side: BorderSide(color: colors.palette.lineStrong)),
+        elevation: 4,
+        shadowColor: const Color(0x662D3C54),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: () async {
+            onClose();
+            await HapticFeedback.selectionClick();
+            if (context.mounted) await Routes.open(context, 'ai');
+          },
+          child: AnimatedContainer(
+            duration: motion,
+            curve: Curves.easeOut,
+            height: _size,
+            constraints: const BoxConstraints(minWidth: _size),
+            padding: EdgeInsets.only(left: aiExpanded ? 16 : 14, right: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                AnimatedSize(
+                  duration: motion,
+                  curve: Curves.easeOut,
+                  child: aiExpanded
+                      ? Padding(
+                          padding: const EdgeInsets.only(right: 7),
+                          child: Text(
+                            'Ask Stracker',
+                            style: TextStyle(
+                              fontFamily: 'PatrickHand',
+                              fontSize: 15,
+                              color: colors.palette.accentDark,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                Icon(Icons.auto_awesome_outlined, size: 20, color: colors.palette.accent),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final Widget quick = Semantics(
+      button: true,
+      label: open ? 'Close quick actions' : 'Open quick actions',
+      expanded: open,
+      excludeSemantics: true,
+      child: AnimatedRotation(
+        // The website tilts the closed button 2° like a sticky note and squares it when open.
+        turns: open ? 0 : 2 / 360,
+        duration: motion,
+        child: Material(
+          color: colors.palette.accent,
+          elevation: 6,
+          shadowColor: const Color(0x8C324A74),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+            side: BorderSide(color: colors.palette.accentDark),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(15),
+            onTap: onToggle,
+            child: SizedBox.square(
+              dimension: _size,
+              child: AnimatedSwitcher(
+                duration: motion,
+                transitionBuilder: (Widget child, Animation<double> animation) =>
+                    ScaleTransition(scale: animation, child: child),
+                child: Icon(
+                  open ? Icons.close : Icons.bolt,
+                  key: ValueKey<bool>(open),
+                  size: open ? 23 : 22,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: <Widget>[
+        AnimatedSwitcher(
+          duration: motion,
+          switchInCurve: Curves.easeOut,
+          transitionBuilder: (Widget child, Animation<double> animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(alignment: Alignment.bottomRight, scale: animation, child: child),
+          ),
+          // The menu takes the launcher's place while open, like the website where it sits
+          // over the Ask Stracker button.
+          child: open
+              ? KeyedSubtree(key: const ValueKey<String>('menu'), child: menu)
+              : KeyedSubtree(key: const ValueKey<String>('ai'), child: ai),
+        ),
+        const SizedBox(height: 12),
+        quick,
+      ],
     );
   }
 }
@@ -566,9 +908,7 @@ class NotebookDrawer extends ConsumerWidget {
     final int retries = data.pendingRetries.length;
     final int backlog = data.backlogItems
         .where((BacklogItem item) =>
-            !item.isDone &&
-            item.status == 'active' &&
-            (item.dueOn == null || item.dueOn!.compareTo(today) <= 0))
+            !item.isDone && item.status == 'active' && (item.dueOn == null || item.dueOn!.compareTo(today) <= 0))
         .length;
 
     void go(String key) {
@@ -656,9 +996,7 @@ class NotebookDrawer extends ConsumerWidget {
                 color: highlight ? colors.palette.textAccent : null,
               ),
         ),
-        trailing: badge == null
-            ? null
-            : Pill(badge, tone: PillTone.warn, dense: true),
+        trailing: badge == null ? null : Pill(badge, tone: PillTone.warn, dense: true),
         onTap: () => go(key),
       );
     }
@@ -676,8 +1014,9 @@ class NotebookDrawer extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 12),
                 children: <Widget>[
-                  // The same groups and wording as the website's sidebar, so a student who
-                  // uses both finds the same thing in the same place.
+                  // The website's phone drawer: its sidebar groups minus the bottom-bar
+                  // destinations (Home, Tests, Analytics) and Settings, which live on the bar
+                  // and in Profile. Stracker AI is the floating button above quick actions.
                   group('Study'),
                   item('Focus', Icons.timer_outlined, Routes.focus),
                   item('Backlog', Icons.layers_outlined, Routes.backlog, badge: backlog == 0 ? null : '$backlog'),
@@ -687,20 +1026,15 @@ class NotebookDrawer extends ConsumerWidget {
                   item('Weak areas', Icons.warning_amber_outlined, Routes.weakAreas),
                   item('PYQs', Icons.local_library_outlined, Routes.pyqs),
                   group('Tests'),
-                  item('Tests', Icons.fact_check_outlined, Routes.tests),
                   item('Mock analysis', Icons.analytics_outlined, Routes.mockAnalysis),
                   item('Mistake notebook', Icons.book_outlined, Routes.mistakes),
                   item('Retry', Icons.replay, Routes.retry, badge: retries == 0 ? null : '$retries'),
-                  item('Analytics', Icons.insights_outlined, Routes.analytics),
                   group('Revision'),
                   item('Revisions', Icons.autorenew, Routes.revision, badge: revisions == 0 ? null : '$revisions'),
                   item('Formulas & flashcards', Icons.style_outlined, Routes.decks),
                   group('Planning'),
                   item('Study now', Icons.explore_outlined, Routes.studyNow, highlight: true),
                   item('Study plan', Icons.event_note_outlined, Routes.planner),
-                  item('Stracker AI', Icons.auto_awesome_outlined, 'ai'),
-                  item('Settings', Icons.settings_outlined, Routes.settings),
-                  item('Backup & export', Icons.backup_outlined, Routes.backup),
                 ],
               ),
             ),
@@ -764,30 +1098,25 @@ class _GlobalSearchBodyState extends ConsumerState<GlobalSearchBody> {
     final List<Chapter> chapters = needle.isEmpty
         ? const <Chapter>[]
         : data.chapters
-            .where((Chapter chapter) =>
-                '${chapter.name} ${chapter.subject}'.toLowerCase().contains(needle))
+            .where((Chapter chapter) => '${chapter.name} ${chapter.subject}'.toLowerCase().contains(needle))
             .take(8)
             .toList();
     final List<TestRecord> tests = needle.isEmpty
         ? const <TestRecord>[]
         : data.tests
-            .where((TestRecord test) =>
-                '${test.title} ${test.subject ?? ''}'.toLowerCase().contains(needle))
+            .where((TestRecord test) => '${test.title} ${test.subject ?? ''}'.toLowerCase().contains(needle))
             .take(6)
             .toList();
     final List<Mistake> mistakes = needle.isEmpty
         ? const <Mistake>[]
         : data.mistakes
-            .where((Mistake mistake) =>
-                '${mistake.questionNote} ${mistake.solutionNote}'.toLowerCase().contains(needle))
+            .where(
+                (Mistake mistake) => '${mistake.questionNote} ${mistake.solutionNote}'.toLowerCase().contains(needle))
             .take(6)
             .toList();
     final List<DailyTask> tasks = needle.isEmpty
         ? const <DailyTask>[]
-        : data.tasks
-            .where((DailyTask task) => task.title.toLowerCase().contains(needle))
-            .take(6)
-            .toList();
+        : data.tasks.where((DailyTask task) => task.title.toLowerCase().contains(needle)).take(6).toList();
     final bool empty = chapters.isEmpty && tests.isEmpty && mistakes.isEmpty && tasks.isEmpty;
 
     return Column(
@@ -901,9 +1230,10 @@ class PageBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.paddingOf(context).bottom;
+    final double clearance = FloatingClearance.maybeOf(context) ?? 88;
     final Widget list = ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: padding ?? EdgeInsets.fromLTRB(14, 12, 14, 88 + bottomInset),
+      padding: padding ?? EdgeInsets.fromLTRB(14, 12, 14, clearance + bottomInset),
       children: <Widget>[
         ContentWidth(
           child: Column(
@@ -944,48 +1274,6 @@ class SectionPage extends StatelessWidget {
       actions: actions,
       floatingActionButton: floatingActionButton,
       body: child,
-    );
-  }
-}
-
-/// Floating quick actions: the four entries a student needs most often.
-class QuickActionButton extends ConsumerWidget {
-  const QuickActionButton({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final StrackerColors colors = context.stracker;
-    return FloatingActionButton(
-      backgroundColor: colors.palette.accentDark,
-      foregroundColor: Colors.white,
-      tooltip: 'Quick actions',
-      onPressed: () => showAppSheet<void>(
-        context,
-        title: 'Quick actions',
-        builder: (BuildContext sheetContext) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            for (final (String label, IconData icon, String key) action in <(String, IconData, String)>[
-              ('Log a test', Icons.fact_check_outlined, Routes.tests),
-              ('Log practice', Icons.checklist_rtl_outlined, Routes.practice),
-              ('Add a mistake', Icons.book_outlined, Routes.mistakes),
-              ('Plan a task', Icons.event_note_outlined, Routes.planner),
-              ('Start focus', Icons.timer_outlined, Routes.focus),
-              ('Stracker AI', Icons.auto_awesome_outlined, 'ai'),
-            ])
-              ListTile(
-                leading: Icon(action.$2, size: 20),
-                title: Text(action.$1),
-                trailing: const Icon(Icons.chevron_right, size: 18),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  Routes.open(context, action.$3);
-                },
-              ),
-          ],
-        ),
-      ),
-      child: const Icon(Icons.add, size: 26),
     );
   }
 }

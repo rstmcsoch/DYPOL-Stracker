@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
@@ -10,7 +11,7 @@ import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/aggregation.dart';
-import '../../logic/exam.dart';
+import '../../logic/home_summary.dart';
 import '../../logic/progress.dart';
 import '../../logic/recommend.dart';
 import '../../logic/revision.dart';
@@ -38,13 +39,10 @@ class HomePage extends ConsumerWidget {
     final List<DailyTask> tasks = data.tasksOn(today);
     final int doneTasks = tasks.where((DailyTask task) => task.isCompleted).length;
     final Map<String, int> stages = stageCounts(data);
-    final String name = data.profile?.displayName.isNotEmpty == true
-        ? data.profile!.displayName
-        : (data.settings.ownerName.isEmpty ? 'there' : data.settings.ownerName);
-    final String examTitle = chosenExamTitle(data);
-    final String track = effectiveTrack(data.settings);
-    final String? examDate = trackDate(data, track);
-    final bool examMode = currentExamMode(data, today);
+    final DateTime now = DateTime.now();
+    final StreakSummary streak = computeStreaks(data, today);
+    final BigDay bigDay = computeBigDay(data, today);
+    final ExamModeState examMode = examModeState(data, today);
 
     return NotebookScaffold(
       title: 'Stracker',
@@ -56,41 +54,44 @@ class HomePage extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: InfoBanner(
-                state.error ??
-                    'Showing your last synced notebook. Connect to the internet to refresh.',
+                state.error ?? 'Showing your last synced notebook. Connect to the internet to refresh.',
                 tone: PillTone.warn,
                 icon: Icons.cloud_off_outlined,
               ),
             ),
+          _HomeHeader(eyebrow: homeDateEyebrow(now), title: homeGreeting(data, now)),
+          const SizedBox(height: 10),
           const FocusIndicator(),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              // The website keeps both cards side by side on phones (1.14fr / 0.8fr); on
+              // very narrow screens they stack instead of squeezing the numbers.
+              if (constraints.maxWidth < 330) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    Text(
-                      'Hi, $name',
-                      style: Theme.of(context).textTheme.headlineLarge,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${trackLabels(data)[track] ?? examTitle} · ${countdownLabel(examDate)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: context.stracker.muted,
-                          ),
-                    ),
+                    _BigDayCard(bigDay: bigDay),
+                    const SizedBox(height: 8),
+                    _RhythmCard(streak: streak),
+                  ],
+                );
+              }
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Expanded(flex: 114, child: _BigDayCard(bigDay: bigDay)),
+                    const SizedBox(width: 7),
+                    Expanded(flex: 80, child: _RhythmCard(streak: streak)),
                   ],
                 ),
-              ),
-              Pill(
-                examMode ? 'Exam mode' : '${totals.streak} day streak',
-                tone: examMode ? PillTone.bad : PillTone.accent,
-                icon: examMode ? Icons.bolt : Icons.local_fire_department_outlined,
-              ),
-            ],
+              );
+            },
           ),
+          if (examMode.active) ...<Widget>[
+            const SizedBox(height: 12),
+            _ExamModeBanner(state: examMode),
+          ],
           const SizedBox(height: 12),
           NotebookCard(
             title: 'Syllabus completion',
@@ -208,11 +209,6 @@ class HomePage extends ConsumerWidget {
                       hint: revisions.overdue.isEmpty ? 'on schedule' : '${revisions.overdue.length} overdue',
                       tone: revisions.overdue.isEmpty ? null : context.stracker.palette.red,
                       onTap: () => Routes.open(context, Routes.revision),
-                    ),
-                    StatTile(
-                      value: '${totals.streak}',
-                      label: 'Day streak',
-                      hint: '15+ min or a logged record',
                     ),
                   ],
                 ),
@@ -386,8 +382,7 @@ class _StudyNowCard extends StatelessWidget {
                   children: <Widget>[
                     Pill(primary.kind.replaceAll('-', ' '), tone: PillTone.accent, dense: true),
                     const SizedBox(width: 6),
-                    if (primary.subject != null)
-                      Pill(primary.subject!, tone: PillTone.neutral, dense: true),
+                    if (primary.subject != null) Pill(primary.subject!, tone: PillTone.neutral, dense: true),
                   ],
                 ),
                 const SizedBox(height: 7),
@@ -468,6 +463,430 @@ class _LinkRow extends StatelessWidget {
       subtitle: Text(hint, style: Theme.of(context).textTheme.labelSmall),
       trailing: const Icon(Icons.chevron_right, size: 18),
       onTap: onTap,
+    );
+  }
+}
+
+/// Website `PageHeader` on Home: the IST date eyebrow, the greeting and the ✦ doodle.
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader({required this.eyebrow, required this.title});
+
+  final String eyebrow;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    return Semantics(
+      header: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            eyebrow,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colors.muted,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.35,
+                  fontSize: 13,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text.rich(
+            TextSpan(
+              children: <InlineSpan>[
+                TextSpan(text: title),
+                TextSpan(text: '  ✦', style: TextStyle(color: colors.palette.orange, fontSize: 20)),
+              ],
+            ),
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 29, height: 1.08),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The website's warm notebook surfaces (`--surface-warm*`, mixed from `--tint-warm`).
+class _Warm {
+  _Warm(StrackerColors colors)
+      : surface = Color.lerp(colors.palette.paper, _tint, .13)!,
+        border = Color.lerp(colors.palette.line, _tint, .34)!,
+        line = Color.lerp(colors.palette.lineStrong, _tint, .30)!,
+        ink = Color.lerp(colors.palette.ink, _tint, .46)!,
+        strong = Color.lerp(colors.palette.ink, _tint, .58)!,
+        muted = Color.lerp(colors.palette.inkSoft, _tint, .34)!;
+
+  static const Color _tint = Color(0xFFC49A46);
+  final Color surface;
+  final Color border;
+  final Color line;
+  final Color ink;
+  final Color strong;
+  final Color muted;
+
+  BoxDecoration card() => BoxDecoration(
+        color: surface,
+        border: Border.all(color: border),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(12),
+          topRight: Radius.circular(14),
+          bottomRight: Radius.circular(12),
+          bottomLeft: Radius.circular(13),
+        ),
+      );
+}
+
+class _BigDayCard extends StatelessWidget {
+  const _BigDayCard({required this.bigDay});
+
+  final BigDay bigDay;
+
+  Future<void> _openSettings(BuildContext context) async {
+    await HapticFeedback.selectionClick();
+    if (context.mounted) await Routes.open(context, Routes.settings);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final _Warm warm = _Warm(colors);
+    final TextTheme text = Theme.of(context).textTheme;
+    final BigDayExam? primary = bigDay.primary;
+    final BigDayExam? secondary = bigDay.secondary;
+
+    Widget mini({required bool orange, required String label, required Widget value}) => Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: orange ? colors.palette.maths : colors.palette.physics,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelSmall?.copyWith(color: colors.muted, fontSize: 12.5)),
+              ),
+              const SizedBox(width: 5),
+              value,
+            ],
+          ),
+        );
+
+    return Semantics(
+      container: true,
+      label: 'The big day',
+      child: Container(
+        decoration: warm.card(),
+        padding: const EdgeInsets.fromLTRB(12, 12, 11, 10),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: <Widget>[
+                    Text('THE BIG DAY',
+                        style: text.labelSmall?.copyWith(
+                            color: warm.muted, fontWeight: FontWeight.w700, letterSpacing: 1.2, fontSize: 12.5)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: colors.palette.paper.withValues(alpha: .55),
+                        border: Border.all(color: warm.line),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(Icons.rocket_launch_outlined, size: 12, color: warm.ink),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(bigDay.badge,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.labelSmall?.copyWith(color: warm.ink, fontSize: 12.5)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (primary == null)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(bigDay.unsetLabel, style: text.labelSmall?.copyWith(color: colors.muted, fontSize: 13)),
+                      Text.rich(
+                        TextSpan(
+                          children: <InlineSpan>[
+                            const TextSpan(text: 'Set your date\n'),
+                            TextSpan(text: 'when you’re ready.', style: TextStyle(color: colors.muted)),
+                          ],
+                        ),
+                        style: text.headlineSmall?.copyWith(fontSize: 22, height: 1.02),
+                      ),
+                      const SizedBox(height: 3),
+                      Text('We’ll keep the countdown honest.',
+                          style: text.labelSmall?.copyWith(color: colors.muted, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      OutlinedButton(
+                        onPressed: () => _openSettings(context),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 34),
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Text('Add exam date'),
+                            SizedBox(width: 4),
+                            Icon(Icons.arrow_forward, size: 15)
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: <Widget>[
+                      Text.rich(
+                        TextSpan(
+                          children: <InlineSpan>[
+                            TextSpan(text: '${primary.days! < 0 ? 0 : primary.days}'),
+                            TextSpan(text: ' days', style: text.labelMedium?.copyWith(fontSize: 13, color: colors.ink)),
+                          ],
+                        ),
+                        style: text.headlineLarge?.copyWith(
+                          fontSize: 44,
+                          height: 1,
+                          letterSpacing: -1.5,
+                          fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.only(left: 8),
+                          decoration: BoxDecoration(border: Border(left: BorderSide(color: warm.line))),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text('until', style: text.labelSmall?.copyWith(color: colors.inkSoft, fontSize: 12.5)),
+                              Text(primary.label,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: text.titleMedium
+                                      ?.copyWith(fontFamily: 'PatrickHand', fontSize: 16, height: 1.05)),
+                              Text(prettyDate(primary.date),
+                                  style: text.labelSmall?.copyWith(color: colors.muted, fontSize: 12.5)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.only(top: 6),
+              decoration: BoxDecoration(border: Border(top: BorderSide(color: warm.line))),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  if (secondary != null)
+                    mini(
+                      orange: secondary.dotOrange,
+                      label: secondary.label,
+                      value: secondary.days == null
+                          ? InkWell(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => _openSettings(context),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                child: Text('Add date',
+                                    style: text.labelSmall?.copyWith(color: colors.accent, fontSize: 12.5)),
+                              ),
+                            )
+                          : Text('${secondary.days! < 0 ? 0 : secondary.days} days',
+                              style: text.labelSmall
+                                  ?.copyWith(color: colors.inkSoft, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                    ),
+                  mini(
+                    orange: true,
+                    label: 'Chapters covered',
+                    value: Text('${bigDay.completedChapters}/${bigDay.totalChapters}',
+                        style: text.labelSmall
+                            ?.copyWith(color: colors.inkSoft, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RhythmCard extends StatelessWidget {
+  const _RhythmCard({required this.streak});
+
+  final StreakSummary streak;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final _Warm warm = _Warm(colors);
+    final TextTheme text = Theme.of(context).textTheme;
+    final TextStyle? small = text.labelSmall?.copyWith(color: warm.muted, fontSize: 12.5);
+    final TextStyle? strong = text.titleSmall?.copyWith(
+      fontFamily: 'PatrickHand',
+      fontSize: 15,
+      color: warm.strong,
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
+    return Semantics(
+      container: true,
+      label: 'Your rhythm',
+      child: Container(
+        decoration: warm.card(),
+        padding: const EdgeInsets.fromLTRB(10, 12, 9, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: colors.palette.orangeBg,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.local_fire_department_outlined, size: 16, color: colors.palette.orange),
+                ),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text('YOUR RHYTHM ✦',
+                      style: text.labelSmall?.copyWith(
+                          color: colors.muted, fontWeight: FontWeight.w700, letterSpacing: .7, fontSize: 12)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text.rich(
+              TextSpan(
+                children: <InlineSpan>[
+                  TextSpan(text: '${streak.current}'),
+                  TextSpan(text: ' day${streak.current == 1 ? '' : 's'}', style: const TextStyle(fontSize: 18)),
+                ],
+              ),
+              style: text.headlineLarge?.copyWith(
+                fontSize: 42,
+                height: 1,
+                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text('current study streak', style: small?.copyWith(fontWeight: FontWeight.w500)),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.only(top: 8),
+              decoration: BoxDecoration(border: Border(top: BorderSide(color: warm.line))),
+              child: Wrap(
+                spacing: 7,
+                runSpacing: 2,
+                children: <Widget>[
+                  Text.rich(
+                      TextSpan(children: <InlineSpan>[
+                        TextSpan(text: '${streak.longest}', style: strong),
+                        const TextSpan(text: ' longest'),
+                      ]),
+                      style: small),
+                  Text.rich(
+                      TextSpan(children: <InlineSpan>[
+                        TextSpan(text: '${streak.weeklyConsistency}/7', style: strong),
+                        const TextSpan(text: ' active this week'),
+                      ]),
+                      style: small),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              streak.qualifyingToday
+                  ? 'Today counts.'
+                  : 'A day counts after 15+ min of study, a practice log, a completed revision, or a test.',
+              style: text.labelSmall?.copyWith(color: colors.muted, fontSize: 12, height: 1.3),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExamModeBanner extends StatelessWidget {
+  const _ExamModeBanner({required this.state});
+
+  final ExamModeState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final TextTheme text = Theme.of(context).textTheme;
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: colors.palette.orangeBg,
+          border: Border.all(color: colors.palette.orange),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 58,
+              height: 58,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: colors.palette.paper, shape: BoxShape.circle),
+              child: Text(state.daysLeft == null ? '' : '${state.daysLeft}',
+                  style: text.headlineMedium?.copyWith(color: colors.palette.orange, fontSize: 22)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Exam Mode · ${state.label}',
+                      style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: colors.ink)),
+                  const SizedBox(height: 2),
+                  Text('${state.reason} Revision, PYQs, mocks and weak-area fixes come first.',
+                      style: text.bodySmall?.copyWith(color: colors.inkSoft, fontSize: 13)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
