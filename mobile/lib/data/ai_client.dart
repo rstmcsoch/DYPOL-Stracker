@@ -55,6 +55,49 @@ class AiProvider {
   bool get isReady => enabled && connectionStatus == 'connected';
 }
 
+/// Stracker AI (Default): the only facts the server shares are the brand, the model name
+/// and availability. There is no key, address or vendor to show.
+class StrackerAiStatus {
+  const StrackerAiStatus({
+    required this.name,
+    required this.model,
+    required this.ready,
+    required this.dailyLimit,
+    required this.usedToday,
+  });
+
+  static const String label = 'Stracker AI (Default)';
+  static const String unavailableMessage =
+      'Stracker AI is temporarily unavailable. You can add your own AI model to keep going.';
+
+  final String name;
+  final String? model;
+  final bool ready;
+  final int dailyLimit;
+  final int usedToday;
+
+  factory StrackerAiStatus.fromJson(Map<String, dynamic> raw) => StrackerAiStatus(
+        name: _text(raw['name'], 'Stracker AI'),
+        model: raw['model'] == null ? null : _text(raw['model']),
+        ready: raw['status'] == 'ready',
+        dailyLimit: raw['dailyLimit'] is num ? (raw['dailyLimit'] as num).toInt() : 0,
+        usedToday: raw['usedToday'] is num ? (raw['usedToday'] as num).toInt() : 0,
+      );
+}
+
+/// The student's AI models: Stracker AI (Default) first, then their own, plus which one
+/// they prefer (`stracker` or `own`).
+class AiProviderList {
+  const AiProviderList({required this.providers, required this.preference, this.stracker});
+
+  final List<AiProvider> providers;
+  final String preference;
+  final StrackerAiStatus? stracker;
+
+  bool get prefersOwn => preference == 'own';
+  bool get hasReadyOwn => providers.any((AiProvider provider) => provider.isReady);
+}
+
 class AiConversation {
   const AiConversation({
     required this.id,
@@ -208,14 +251,32 @@ class AiClient {
     return AiHealth.fromJson(await _decode(response));
   }
 
-  Future<List<AiProvider>> providers() async {
+  Future<List<AiProvider>> providers() async => (await providerList()).providers;
+
+  /// Own providers plus Stracker AI (Default) status and the preferred choice.
+  Future<AiProviderList> providerList() async {
     final http.Response response =
         await _client.get(_uri('/api/ai/providers'), headers: _headers());
     final Map<String, dynamic> body = await _decode(response);
-    return <AiProvider>[
-      for (final dynamic row in (body['providers'] as List<dynamic>? ?? <dynamic>[]))
-        if (row is Map) AiProvider.fromJson(Map<String, dynamic>.from(row)),
-    ];
+    final Object? stracker = body['stracker'];
+    return AiProviderList(
+      providers: <AiProvider>[
+        for (final dynamic row in (body['providers'] as List<dynamic>? ?? <dynamic>[]))
+          if (row is Map) AiProvider.fromJson(Map<String, dynamic>.from(row)),
+      ],
+      preference: body['preference'] == 'own' ? 'own' : 'stracker',
+      stracker: stracker is Map ? StrackerAiStatus.fromJson(Map<String, dynamic>.from(stracker)) : null,
+    );
+  }
+
+  /// Makes Stracker AI (Default) the preferred model again.
+  Future<void> preferStracker() async {
+    final http.Response response = await _client.patch(
+      _uri('/api/ai/providers'),
+      headers: _headers(),
+      body: jsonEncode(<String, dynamic>{'action': 'prefer_stracker'}),
+    );
+    await _decode(response);
   }
 
   Future<AiProvider> saveProvider({

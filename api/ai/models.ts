@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import { ApiError, readJson, sendJson } from '../_lib/http.js'
-import { withAuthenticatedRequest } from '../_lib/handler.js'
+import { scoped, withProviderScope } from '../_lib/provider-scope.js'
 import { decryptCredential } from '../_lib/secrets.js'
 import { discoverProviderModels } from '../_lib/models.js'
 import { normalizeProviderSetup, type ProviderConfigRow } from '../_lib/registry.js'
@@ -57,7 +57,9 @@ const requestSchema = z.object({
 }).strict()
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await withAuthenticatedRequest(req, res, ['POST'], async ({ userId, adminClient }) => {
+  // `?scope=site`: the owner discovers models for Stracker AI (Default), gated by the Control Center.
+  await withProviderScope(req, res, ['POST'], async scope => {
+    const { admin: adminClient, actorId: userId, table } = scope
     const parsed = requestSchema.safeParse(await readJson(req))
     if (!parsed.success) throw new ApiError(400, 'invalid_model_request', 'Choose a provider and enter its current connection details.')
     await takeRateSlot(adminClient, userId, MODEL_DISCOVERY_RATE)
@@ -65,7 +67,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     let setup
     let key: string
     if (input.configId) {
-      const { data, error } = await adminClient.from('ai_provider_configs').select('*').eq('user_id', userId).eq('id', input.configId).maybeSingle()
+      const { data, error } = await scoped(scope, adminClient.from(table).select('*')).eq('id', input.configId).maybeSingle()
       if (error) throw new ApiError(503, 'provider_config_unavailable', 'Saved provider details could not be loaded. Try again.')
       if (!data) throw new ApiError(404, 'provider_not_found', 'That provider configuration is no longer available.')
       const row = data as ProviderConfigRow

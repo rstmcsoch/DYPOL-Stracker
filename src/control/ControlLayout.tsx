@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { ChevronsLeft, ChevronDown, Menu, Search, LogOut, ShieldCheck, LayoutDashboard, Users, KeyRound, ShieldAlert, ScrollText, Activity, Info, Palette, GraduationCap, BarChart3 } from 'lucide-react'
+import { ChevronsLeft, ChevronDown, Menu, Search, LogOut, ShieldCheck, LayoutDashboard, Users, KeyRound, ShieldAlert, ScrollText, Activity, Info, Palette, GraduationCap, BarChart3, Sparkles } from 'lucide-react'
 import { useControlSession } from './ControlSession'
 import { CommandLauncher } from './CommandLauncher'
 import { NAV_GROUPS, activeNavItem, breadcrumbsFor, CONSOLE_BASE, documentTitleFor, secondsUntilIdle, formatCountdown, type NavIcon } from './policy'
@@ -20,7 +20,8 @@ const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
   about: Info,
   appearance: Palette,
   exams: GraduationCap,
-  analytics: BarChart3
+  analytics: BarChart3,
+  ai: Sparkles
 }
 
 /** Keeps the browser tab title in step with client-side navigation. */

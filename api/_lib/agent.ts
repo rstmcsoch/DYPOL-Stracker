@@ -5,6 +5,11 @@ import { completeWithProvider, providerCallFromConfig, safeProviderError, type A
 import { ApiError } from './http.js'
 import { AIError, connectionStatusFor, cooldownSecondsFor, type AIErrorCode } from './ai-errors.js'
 import { logAIEvent } from './diagnostics.js'
+import { SITE_PROVIDER_TABLE } from './provider-scope.js'
+import {
+  STRACKER_DAILY_LIMIT, STRACKER_MINUTE_LIMIT, STRACKER_UNAVAILABLE, derivePreference, isSiteRow, publicProviderId, publicProviderName,
+  readSiteProviders, readSiteSettings, readStoredPreference, takeStrackerSlot, type AIPreference, type SiteAISettings
+} from './stracker-default.js'
 import { MODEL_TOOLS, prepareToolCall, toolProgress, type ActionPreview } from './tools.js'
 
 export interface AgentEventSink {
@@ -70,8 +75,24 @@ function fallbackReason(code: AIErrorCode): string {
   }
 }
 
+/** Name shown to the student: Stracker AI (Default) rows never reveal the vendor behind them. */
 function providerName(config: ProviderConfigRow): string {
-  return config.display_name || config.provider_id
+  return publicProviderName(config)
+}
+
+/** Provider ID shown to the student and stored on their messages/tasks ("stracker" for the default). */
+function pid(config: ProviderConfigRow): string {
+  return publicProviderId(config)
+}
+
+export function strackerUnavailable(): ApiError {
+  return new ApiError(503,'stracker_ai_unavailable',STRACKER_UNAVAILABLE)
+}
+
+function strackerLimitError(result: 'minute' | 'day' | 'unavailable'): ApiError {
+  if (result === 'day') return new ApiError(429,'stracker_ai_daily_limit',STRACKER_DAILY_LIMIT)
+  if (result === 'minute') return new ApiError(429,'stracker_ai_limit',STRACKER_MINUTE_LIMIT)
+  return strackerUnavailable()
 }
 
 function taskType(message: string): 'action' | 'analytics' | 'general' {
@@ -103,9 +124,11 @@ export function requiresTools(message: string): boolean {
   return STRACKER_INTENT.test(message) || /\b(my|mine|me)\b/i.test(message)
 }
 
-function candidateScore(row: ProviderConfigRow, requiresReasoning: boolean): number {
+export function candidateScore(row: ProviderConfigRow, requiresReasoning: boolean, preference: AIPreference = 'own'): number {
   const caps = inferCapabilities(row.provider_id,row.model_id,row.protocol,row.capabilities)
-  return (row.is_default ? 100 : 0) + (requiresReasoning && caps.supportsReasoning ? 10 : 0) + (caps.supportsTools ? 2 : 0)
+  // The student's chosen group (Stracker AI or their own providers) always goes first; the other is fallback.
+  const inPreferredGroup = isSiteRow(row) === (preference === 'stracker')
+  return (inPreferredGroup ? 1000 : 0) + (row.is_default ? 100 : 0) + (requiresReasoning && caps.supportsReasoning ? 10 : 0) + (caps.supportsTools ? 2 : 0)
 }
 
 /**
@@ -143,7 +166,19 @@ async function getCandidates(admin: SupabaseClient, userId: string): Promise<Pro
   return (data ?? []) as ProviderConfigRow[]
 }
 
+interface StrackerContext { settings: SiteAISettings; rows: ProviderConfigRow[]; storedPreference: string | null }
+
+/** Stracker AI (Default) rows the student may use right now (none when the owner switched it off). */
+async function getStrackerContext(admin: SupabaseClient, userId: string): Promise<StrackerContext> {
+  const [settings, storedPreference] = await Promise.all([readSiteSettings(admin), readStoredPreference(admin, userId)])
+  const rows = settings.enabled ? await readSiteProviders(admin) : []
+  return { settings, rows, storedPreference }
+}
+
 const DISABLING_CODES: ReadonlySet<AIErrorCode> = new Set(['INVALID_CREDENTIAL', 'MODEL_NOT_FOUND', 'INSUFFICIENT_BALANCE', 'REQUEST_INVALID', 'UNSUPPORTED_CAPABILITY'])
+/** Shared default: only account-level problems take it out of rotation for everyone. */
+const SITE_DISABLING_CODES: ReadonlySet<AIErrorCode> = new Set(['INVALID_CREDENTIAL', 'MODEL_NOT_FOUND', 'INSUFFICIENT_BALANCE'])
+const STATUS_CHANGING_CODES: ReadonlySet<AIErrorCode> = new Set(['RATE_LIMITED', 'PROVIDER_UNAVAILABLE', 'TIMEOUT', 'NETWORK_ERROR', 'CONFIGURATION_ERROR'])
 
 /**
  * Stop is the only user-initiated cancellation. It is recorded as status 'cancelled' by the cancel
@@ -170,11 +205,25 @@ export async function updateProviderHealth(admin: SupabaseClient, userId: string
     enabled: disable ? false : row.enabled,
     is_default: disable ? false : row.is_default
   }
+  if (isSiteRow(row)) {
+    // Stracker AI (Default) is shared: a student's own request problem never switches it off for
+    // everyone. Only a broken key, model or balance takes it out of rotation until the owner fixes it.
+    const siteDisable = SITE_DISABLING_CODES.has(failure.aiCode)
+    const sitePatch: Record<string, unknown> = { ...patch, enabled: siteDisable ? false : row.enabled, is_default: siteDisable ? false : row.is_default }
+    if (!siteDisable && !STATUS_CHANGING_CODES.has(failure.aiCode)) sitePatch.connection_status = row.connection_status
+    const { error } = await admin.from(SITE_PROVIDER_TABLE).update(sitePatch).eq('id', row.id)
+    if (error) logAIEvent('warn', 'provider_health_update_failed', { scope: 'site', configId: row.id, code: failure.aiCode })
+    return
+  }
   const { error } = await admin.from('ai_provider_configs').update(patch).eq('user_id', userId).eq('id', row.id)
   if (error) logAIEvent('warn', 'provider_health_update_failed', { userId, configId: row.id, code: failure.aiCode })
 }
 
 async function refreshProviderHealth(admin: SupabaseClient, userId: string, row: ProviderConfigRow): Promise<void> {
+  if (isSiteRow(row)) {
+    await admin.from(SITE_PROVIDER_TABLE).update({ connection_status:'connected', cooldown_until:null, failure_count:0 }).eq('id',row.id)
+    return
+  }
   await admin.from('ai_provider_configs').update({ connection_status:'connected', cooldown_until:null, failure_count:0 }).eq('user_id',userId).eq('id',row.id)
 }
 
@@ -188,10 +237,10 @@ function jsonToolContent(value: unknown): string {
 
 function humanTaskState(row: ProviderConfigRow, fallbackFrom: ProviderConfigRow | null): Record<string, unknown> {
   return {
-    providerId:row.provider_id,
+    providerId:pid(row),
     providerName:providerName(row),
     modelId:row.model_id,
-    fallbackFrom: fallbackFrom ? { providerId:fallbackFrom.provider_id, providerName:providerName(fallbackFrom), modelId:fallbackFrom.model_id } : null
+    fallbackFrom: fallbackFrom ? { providerId:pid(fallbackFrom), providerName:providerName(fallbackFrom), modelId:fallbackFrom.model_id } : null
   }
 }
 
@@ -229,25 +278,49 @@ async function withProviderTimeout<T>(parent: AbortSignal, run: (signal: AbortSi
 }
 
 export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult> {
+  const state = { site: false }
+  try {
+    return await runAssistantCore(input, state)
+  } catch (error) {
+    // A Stracker AI (Default) failure never exposes the vendor, endpoint or provider wording.
+    if (state.site && error instanceof AIError) throw strackerUnavailable()
+    throw error
+  }
+}
+
+async function runAssistantCore(input: AgentRunInput, state: { site: boolean }): Promise<AgentRunResult> {
   const start = Date.now()
   const intentTools = requiresTools(input.message)
   const requiresReasoning = COMPLEX_INTENT.test(input.message)
-  const allCandidates = await getCandidates(input.adminClient,input.userId)
-  const examLine = await studentExamLine(input.adminClient,input.userId)
-  if (allCandidates.length === 0) await explainNoEnabledProvider(input.adminClient,input.userId)
+  const [ownCandidates, stracker, examLine] = await Promise.all([
+    getCandidates(input.adminClient,input.userId),
+    getStrackerContext(input.adminClient,input.userId),
+    studentExamLine(input.adminClient,input.userId)
+  ])
+  const preference = derivePreference(stracker.storedPreference, ownCandidates)
+  const allCandidates = [...stracker.rows, ...ownCandidates]
+  if (allCandidates.length === 0) {
+    await explainNoEnabledProvider(input.adminClient,input.userId)
+    // No own provider and the default is switched off or not set up yet.
+    throw strackerUnavailable()
+  }
   const usable = allCandidates.filter(row => runtimeHealth(row) === 'ready')
   const capabilityCandidates = usable.filter(row => !intentTools || deriveCapabilities(row).supportsTools)
-  const sort = (items: ProviderConfigRow[]) => [...items].sort((a,b) => candidateScore(b,requiresReasoning) - candidateScore(a,requiresReasoning))
+  const sort = (items: ProviderConfigRow[]) => [...items].sort((a,b) => candidateScore(b,requiresReasoning,preference) - candidateScore(a,requiresReasoning,preference))
   const candidates = sort(capabilityCandidates)
   if (!candidates.length) {
-    if (allCandidates.length === 0) throw new ApiError(409,'provider_not_configured','Connect and test an AI provider in Settings → AI Assistant before chatting.')
-    if (intentTools && !allCandidates.some(row => deriveCapabilities(row).supportsTools)) {
-      throw new ApiError(422,'tools_unavailable','Your enabled provider does not support Stracker data tools for this model. Test a tool-capable model in Settings → AI Assistant.')
+    const onlyDefault = ownCandidates.length === 0
+    if (intentTools && usable.length && !allCandidates.some(row => deriveCapabilities(row).supportsTools)) {
+      throw new ApiError(422,'tools_unavailable', onlyDefault
+        ? 'Stracker AI cannot read your saved Stracker data right now. Ask a general question, or add your own AI model to keep going.'
+        : 'Your enabled provider does not support Stracker data tools for this model. Test a tool-capable model in Settings → AI Assistant.')
     }
+    if (onlyDefault) throw strackerUnavailable()
     throw new ApiError(409,'provider_not_ready','No enabled provider is currently ready. Test the connection in Settings → AI Assistant or wait for its brief cooldown.')
   }
 
-  const preferred = allCandidates.find(row => row.is_default) ?? candidates[0]!
+  const preferredGroup = allCandidates.filter(row => isSiteRow(row) === (preference === 'stracker'))
+  const preferred = preferredGroup.find(row => row.is_default) ?? preferredGroup[0] ?? candidates[0]!
   let chosen = candidates.includes(preferred) ? preferred : candidates[0]!
   let fallbackFrom: ProviderConfigRow | null = chosen.id === preferred.id ? null : preferred
   if (fallbackFrom) input.emit('fallback',{ from:providerName(fallbackFrom), to:providerName(chosen), reason:'The preferred model is unavailable or cannot handle this request.' })
@@ -268,12 +341,29 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
   let finalText = ''
   let lastProvider: ProviderConfigRow | null = null
   const used = new Set<string>()
+  // One Stracker AI (Default) request slot per chat message, taken only when the default answers.
+  let strackerSlot = false
+  let strackerBlocked = false
 
   while (rounds <= TOOL_ITERATION_LIMIT) {
-    if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:lastProvider?.provider_id ?? null,modelId:lastProvider?.model_id ?? null,fallbackFrom:fallbackFrom?.provider_id ?? null }
+    if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:lastProvider ? pid(lastProvider) : null,modelId:lastProvider?.model_id ?? null,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
     if (Date.now() - start > TOTAL_BUDGET_MS) throw new ApiError(504,'task_timeout','This AI task reached its time limit. Retry with a shorter request.')
     const selected = chosen
     used.add(selected.id)
+    if (isSiteRow(selected) && !strackerSlot) {
+      const slot = await takeStrackerSlot(input.adminClient,input.userId,stracker.settings)
+      if (slot !== 'ok') {
+        strackerBlocked = true
+        const next = availableCandidates.find(row => !used.has(row.id) && !isSiteRow(row))
+        if (!next) throw strackerLimitError(slot)
+        fallbackFrom ??= selected
+        chosen = next
+        input.emit('fallback',{ from:providerName(selected),to:providerName(next),reason:slot === 'day' ? 'Today’s Stracker AI limit was reached.' : 'Stracker AI is busy right now.' })
+        continue
+      }
+      strackerSlot = true
+    }
+    state.site = isSiteRow(selected)
     const caps = deriveCapabilities(selected)
     const limits = TIER_LIMITS[modelTier(selected.model_id)]
     // Only send the (large) tool list when the question needs Stracker data: a plain "hello" is
@@ -299,7 +389,7 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
       lastProvider = selected
       rounds += 1
     } catch (error) {
-      if (input.signal.aborted) return { status:'cancelled',content:'',providerId:selected.provider_id,modelId:selected.model_id,fallbackFrom:fallbackFrom?.provider_id ?? null }
+      if (input.signal.aborted) return { status:'cancelled',content:'',providerId:pid(selected),modelId:selected.model_id,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
       const failure = safeProviderError(error,{ provider:selected.provider_id,model:selected.model_id })
       if (offerTools && (failure.aiCode === 'UNSUPPORTED_CAPABILITY' || failure.aiCode === 'REQUEST_INVALID') && !onProviderDelta.length) {
         // The model (or its schema dialect) rejects tool calling: answer once more without tools.
@@ -309,15 +399,15 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
       }
       logAIEvent('warn','provider_failure',{ taskId:input.taskId,userId:input.userId,stage:'completion',round:rounds,provider:selected.provider_id,model:selected.model_id,durationMs:Date.now()-start,...failure.diagnostics() })
       await updateProviderHealth(input.adminClient,input.userId,selected,failure)
-      const next = availableCandidates.find(row => !used.has(row.id))
+      const next = availableCandidates.find(row => !used.has(row.id) && !(strackerBlocked && isSiteRow(row)))
       if (!next || used.size > FALLBACK_LIMIT || !failure.fallbackEligible) throw failure
       if (onProviderDelta.length) input.emit('reset',{ reason:'The previous provider returned an incomplete response.' })
       fallbackFrom ??= selected
       chosen = next
       input.emit('fallback',{ from:providerName(selected),to:providerName(next),reason:fallbackReason(failure.aiCode) })
       logAIEvent('info','provider_fallback',{ taskId:input.taskId,userId:input.userId,from:selected.provider_id,fromModel:selected.model_id,to:next.provider_id,toModel:next.model_id,code:failure.aiCode })
-      await input.adminClient.from('ai_tasks').update({ status:'fallback',provider_id:next.provider_id,model_id:next.model_id,progress:'Trying your configured fallback model.' }).eq('user_id',input.userId).eq('id',input.taskId)
-      input.emit('status',{ status:'fallback',progress:`Trying your configured ${providerName(next)} model…`,...humanTaskState(next,selected) })
+      await input.adminClient.from('ai_tasks').update({ status:'fallback',provider_id:pid(next),model_id:next.model_id,progress:isSiteRow(next) ? 'Trying Stracker AI (Default).' : 'Trying your configured fallback model.' }).eq('user_id',input.userId).eq('id',input.taskId)
+      input.emit('status',{ status:'fallback',progress:isSiteRow(next) ? 'Trying Stracker AI (Default)…' : `Trying your configured ${providerName(next)} model…`,...humanTaskState(next,selected) })
       continue
     }
 
@@ -326,12 +416,12 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
       finalText = completion.text.trim()
       if (!finalText) throw new AIError('MALFORMED_RESPONSE',{ provider:selected.provider_id,model:selected.model_id,providerMessage:'empty final answer' })
       const safeText = redactPotentialSecrets(finalText).slice(0,20_000)
-      await input.adminClient.from('ai_messages').insert({ user_id:input.userId,conversation_id:input.conversationId,role:'assistant',content:safeText,provider_id:selected.provider_id,model_id:selected.model_id,status:'completed',metadata:{ fallback_from:fallbackFrom ? {provider_id:fallbackFrom.provider_id,model_id:fallbackFrom.model_id} : null } })
-      if (await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:selected.provider_id,modelId:selected.model_id,fallbackFrom:fallbackFrom?.provider_id ?? null }
-      await input.adminClient.from('ai_tasks').update({ status:'completed',provider_id:selected.provider_id,model_id:selected.model_id,progress:'Completed.',completed_at:new Date().toISOString(),metadata:{ fallback_from:fallbackFrom?.provider_id ?? null } }).eq('user_id',input.userId).eq('id',input.taskId)
+      await input.adminClient.from('ai_messages').insert({ user_id:input.userId,conversation_id:input.conversationId,role:'assistant',content:safeText,provider_id:pid(selected),model_id:selected.model_id,status:'completed',metadata:{ fallback_from:fallbackFrom ? {provider_id:pid(fallbackFrom),model_id:fallbackFrom.model_id} : null } })
+      if (await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:pid(selected),modelId:selected.model_id,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+      await input.adminClient.from('ai_tasks').update({ status:'completed',provider_id:pid(selected),model_id:selected.model_id,progress:'Completed.',completed_at:new Date().toISOString(),metadata:{ fallback_from:fallbackFrom ? pid(fallbackFrom) : null } }).eq('user_id',input.userId).eq('id',input.taskId)
       await input.adminClient.from('ai_conversations').update({ updated_at:new Date().toISOString() }).eq('user_id',input.userId).eq('id',input.conversationId)
       input.emit('done',{ content:safeText,...humanTaskState(selected,fallbackFrom),taskId:input.taskId })
-      return { status:'completed',content:safeText,providerId:selected.provider_id,modelId:selected.model_id,fallbackFrom:fallbackFrom?.provider_id ?? null }
+      return { status:'completed',content:safeText,providerId:pid(selected),modelId:selected.model_id,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
     }
 
     if (rounds > TOOL_ITERATION_LIMIT || toolCalls + toolCallsFromProvider.length > TOOL_CALL_LIMIT) {
@@ -341,15 +431,15 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
     let pendingAction: ActionPreview | undefined
     for (const call of toolCallsFromProvider) {
       toolCalls += 1
-      if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:selected.provider_id,modelId:selected.model_id,fallbackFrom:fallbackFrom?.provider_id ?? null }
+      if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:pid(selected),modelId:selected.model_id,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
       const progress = toolProgress(call.name)
-      await input.adminClient.from('ai_tasks').update({ status:'tool_call',provider_id:selected.provider_id,model_id:selected.model_id,progress }).eq('user_id',input.userId).eq('id',input.taskId)
-      input.emit('status',{ status:'tool_call',progress,providerId:selected.provider_id,modelId:selected.model_id })
+      await input.adminClient.from('ai_tasks').update({ status:'tool_call',provider_id:pid(selected),model_id:selected.model_id,progress }).eq('user_id',input.userId).eq('id',input.taskId)
+      input.emit('status',{ status:'tool_call',progress,providerId:pid(selected),modelId:selected.model_id })
       try {
-        const outcome = await prepareToolCall(input.userClient,input.userId,call,input.taskId,{ providerId:selected.provider_id,modelId:selected.model_id },input.adminClient,input.conversationId)
+        const outcome = await prepareToolCall(input.userClient,input.userId,call,input.taskId,{ providerId:pid(selected),modelId:selected.model_id },input.adminClient,input.conversationId)
         if (outcome.kind === 'confirmation') {
           pendingAction = outcome.action
-          input.emit('confirmation',{ action:outcome.action,providerId:selected.provider_id,modelId:selected.model_id })
+          input.emit('confirmation',{ action:outcome.action,providerId:pid(selected),modelId:selected.model_id })
           break
         }
         agentMessages.push({ role:'tool',toolCallId:call.id,toolName:call.name,content:jsonToolContent(outcome.result) })
@@ -360,12 +450,12 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
     }
     lastProvider = selected
     if (pendingAction) {
-      await input.adminClient.from('ai_tasks').update({ status:'waiting',progress:'Waiting for your confirmation.',provider_id:selected.provider_id,model_id:selected.model_id }).eq('user_id',input.userId).eq('id',input.taskId)
-      return { status:'waiting',content:completion.text,providerId:selected.provider_id,modelId:selected.model_id,fallbackFrom:fallbackFrom?.provider_id ?? null,action:pendingAction }
+      await input.adminClient.from('ai_tasks').update({ status:'waiting',progress:'Waiting for your confirmation.',provider_id:pid(selected),model_id:selected.model_id }).eq('user_id',input.userId).eq('id',input.taskId)
+      return { status:'waiting',content:completion.text,providerId:pid(selected),modelId:selected.model_id,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null,action:pendingAction }
     }
     rounds += 1
-    await input.adminClient.from('ai_tasks').update({ status:'running',progress:'Reviewing your Stracker data…',provider_id:selected.provider_id,model_id:selected.model_id }).eq('user_id',input.userId).eq('id',input.taskId)
-    input.emit('status',{ status:'running',progress:'Reviewing your Stracker data…',providerId:selected.provider_id,modelId:selected.model_id })
+    await input.adminClient.from('ai_tasks').update({ status:'running',progress:'Reviewing your Stracker data…',provider_id:pid(selected),model_id:selected.model_id }).eq('user_id',input.userId).eq('id',input.taskId)
+    input.emit('status',{ status:'running',progress:'Reviewing your Stracker data…',providerId:pid(selected),modelId:selected.model_id })
   }
   throw new ApiError(429,'tool_limit','Stracker AI reached its safe tool-call limit. Ask a smaller question to continue.')
 }
