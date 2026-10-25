@@ -36,6 +36,24 @@ class StrackerRepository {
     'user_exam_tracks',
   ];
 
+  /// True when the stored sign-in can no longer authorise requests: Supabase dropped it
+  /// (for example the refresh token was revoked or already used on another device) or the
+  /// access token has expired without a successful refresh. Every table then answers 401.
+  bool get sessionLost {
+    final Session? session = _client.auth.currentSession;
+    return session == null || session.isExpired;
+  }
+
+  /// Clears the dead session on this device only, so the app returns to the sign-in screen
+  /// instead of showing table errors. Other devices and the website stay signed in.
+  Future<void> endLostSession() async {
+    try {
+      await _client.auth.signOut(scope: SignOutScope.local);
+    } catch (_) {
+      // Already signed out locally; the auth listener has nothing more to do.
+    }
+  }
+
   Future<List<Map<String, dynamic>>> fetchRows(String table, String userId) async {
     try {
       final List<Map<String, dynamic>> rows = await _client
