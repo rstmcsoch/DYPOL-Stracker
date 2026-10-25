@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { KeyRound, QrCode, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Button, Field, Spinner } from './ui'
+import { mfaErrorMessage } from './mfa-errors'
 
 const CODE_PATTERN = /^\d{6}$/
 
@@ -28,6 +29,9 @@ export function MfaChallengeForm({ onVerified, submitLabel = 'Verify and continu
   const [error, setError] = useState<string | null>(null)
   const [factorState, setFactorState] = useState<'loading' | 'ready' | 'missing'>('loading')
   const factorId = useRef<string | null>(null)
+  // One verification at a time: a second submit (Enter + click, double tap) would spend a
+  // fresh challenge on the same code while the first is still in flight.
+  const inFlight = useRef(false)
 
   useEffect(() => {
     let active = true
@@ -46,13 +50,24 @@ export function MfaChallengeForm({ onVerified, submitLabel = 'Verify and continu
     setError(null)
     if (!CODE_PATTERN.test(code.trim())) { setError('Enter the 6-digit code shown in your authenticator app.'); return }
     if (!factorId.current || !supabase) { setError('No verified authenticator is enrolled for this account.'); return }
+    if (inFlight.current) return
+    inFlight.current = true
     setBusy(true)
-    const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId: factorId.current, code: code.trim() })
-    setBusy(false)
-    if (verifyError) {
-      setError('That code was not accepted. Use the current code from your authenticator app.')
+    try {
+      // A new challenge is created for every attempt, immediately before the code is checked.
+      const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId: factorId.current, code: code.trim() })
+      if (verifyError) {
+        setError(mfaErrorMessage(verifyError))
+        setCode('')
+        return
+      }
+    } catch (err) {
+      setError(mfaErrorMessage(err as { code?: string; status?: number }))
       setCode('')
       return
+    } finally {
+      inFlight.current = false
+      setBusy(false)
     }
     await onVerified()
   }
@@ -63,7 +78,7 @@ export function MfaChallengeForm({ onVerified, submitLabel = 'Verify and continu
   return (
     <form className="cc-form" onSubmit={submit} noValidate>
       <h3 className="cc-form__heading"><KeyRound size={18} aria-hidden="true" /> {heading}</h3>
-      <Field label="Six-digit code" htmlFor="cc-mfa-code" error={error} hint="Codes change every 30 seconds. Do not share them.">
+      <Field label="Six-digit code" htmlFor="cc-mfa-code" error={error} hint="Codes change every 30 seconds; the current code is accepted for its whole life. Do not share them.">
         <input id="cc-mfa-code" className="cc-input cc-input--code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ''))} disabled={busy} autoFocus />
       </Field>
       <div className="cc-form__actions">
@@ -115,7 +130,7 @@ export function MfaEnrollment({ onVerified }: { onVerified: () => void | Promise
     const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId: state.factorId, code: code.trim() })
     setBusy(false)
     if (verifyError) {
-      setError('That code did not match. Check the time on your device and enter the current code.')
+      setError(mfaErrorMessage(verifyError))
       setCode('')
       return
     }

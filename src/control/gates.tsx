@@ -89,7 +89,9 @@ export function MfaGate() {
       {mode === 'challenge' && (
         <>
           <MfaChallengeForm onVerified={refresh} />
-          <p className="cc-gate__links"><button type="button" className="cc-link" onClick={() => setMode('enroll')}>I need to set up an authenticator instead</button></p>
+          {/* A second authenticator cannot be added before this session is verified (Supabase refuses it),
+              so there is no self-service re-enrollment here; lost devices follow the recovery procedure. */}
+          <p className="cc-note">Lost the phone with your authenticator? Recovery is done by the owner through Supabase (docs/control-center.md, MFA recovery). There is no bypass on this page.</p>
         </>
       )}
       <div className="cc-gate__signout">
