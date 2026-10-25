@@ -38,7 +38,10 @@ export interface AgentRunResult {
 
 const TOOL_ITERATION_LIMIT = 4
 const TOOL_CALL_LIMIT = 8
-const FALLBACK_LIMIT = 2
+/** Attempts after the first: covers every owner-ordered Stracker AI model plus the student's own. */
+const FALLBACK_LIMIT = 12
+/** Per-attempt cap while another model is still waiting, so a hung model cannot eat the whole budget. */
+const CHAIN_STEP_TIMEOUT_MS = 20_000
 // Preview/thinking models can take well over 20 s to first token under load; the overall task
 // budget (below Vercel's 60 s maxDuration) is the real limit.
 const MODEL_TIMEOUT_MS = 45_000
@@ -128,6 +131,8 @@ export function candidateScore(row: ProviderConfigRow, requiresReasoning: boolea
   const caps = inferCapabilities(row.provider_id,row.model_id,row.protocol,row.capabilities)
   // The student's chosen group (Stracker AI or their own providers) always goes first; the other is fallback.
   const inPreferredGroup = isSiteRow(row) === (preference === 'stracker')
+  // Owner-ordered Stracker AI models keep the owner's order exactly (stable sort, equal scores).
+  if (isSiteRow(row)) return inPreferredGroup ? 1000 : 0
   return (inPreferredGroup ? 1000 : 0) + (row.is_default ? 100 : 0) + (requiresReasoning && caps.supportsReasoning ? 10 : 0) + (caps.supportsTools ? 2 : 0)
 }
 
@@ -283,7 +288,8 @@ export async function runAssistant(input: AgentRunInput): Promise<AgentRunResult
     return await runAssistantCore(input, state)
   } catch (error) {
     // A Stracker AI (Default) failure never exposes the vendor, endpoint or provider wording.
-    if (state.site && error instanceof AIError) throw strackerUnavailable()
+    // Running out of time while walking the owner's model chain reads the same: add your own model.
+    if (state.site && (error instanceof AIError || (error instanceof ApiError && error.code === 'task_timeout'))) throw strackerUnavailable()
     throw error
   }
 }
@@ -320,7 +326,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
   }
 
   const preferredGroup = allCandidates.filter(row => isSiteRow(row) === (preference === 'stracker'))
-  const preferred = preferredGroup.find(row => row.is_default) ?? preferredGroup[0] ?? candidates[0]!
+  const preferred = (preference === 'stracker' ? preferredGroup[0] : preferredGroup.find(row => row.is_default)) ?? preferredGroup[0] ?? candidates[0]!
   let chosen = candidates.includes(preferred) ? preferred : candidates[0]!
   let fallbackFrom: ProviderConfigRow | null = chosen.id === preferred.id ? null : preferred
   if (fallbackFrom) input.emit('fallback',{ from:providerName(fallbackFrom), to:providerName(chosen), reason:'The preferred model is unavailable or cannot handle this request.' })
@@ -384,7 +390,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
         signal,
         text => { onProviderDelta.push(text); input.emit('delta',{ text }) },
         taskType(input.message) === 'general' ? limits.general : limits.data
-      )),Math.min(MODEL_TIMEOUT_MS,remainingMs))
+      )),Math.min(availableCandidates.some(row => !used.has(row.id)) ? CHAIN_STEP_TIMEOUT_MS : MODEL_TIMEOUT_MS,remainingMs))
       await refreshProviderHealth(input.adminClient,input.userId,selected)
       lastProvider = selected
       rounds += 1
@@ -400,7 +406,8 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
       logAIEvent('warn','provider_failure',{ taskId:input.taskId,userId:input.userId,stage:'completion',round:rounds,provider:selected.provider_id,model:selected.model_id,durationMs:Date.now()-start,...failure.diagnostics() })
       await updateProviderHealth(input.adminClient,input.userId,selected,failure)
       const next = availableCandidates.find(row => !used.has(row.id) && !(strackerBlocked && isSiteRow(row)))
-      if (!next || used.size > FALLBACK_LIMIT || !failure.fallbackEligible) throw failure
+      // A shared Stracker AI model failing for any provider reason always hands over to the next model.
+      if (!next || used.size > FALLBACK_LIMIT || !(failure.fallbackEligible || isSiteRow(selected))) throw failure
       if (onProviderDelta.length) input.emit('reset',{ reason:'The previous provider returned an incomplete response.' })
       fallbackFrom ??= selected
       chosen = next

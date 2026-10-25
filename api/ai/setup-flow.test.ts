@@ -233,6 +233,8 @@ describe('chat reliability', () => {
   })
 })
 
+const STRACKER_UNAVAILABLE_TEXT = 'Stracker AI’s default models are not responding right now. Add your own AI model in the Stracker AI window (Add your own model) or in Settings → AI Assistant to keep going.'
+
 describe('Stracker AI (Default)', () => {
   const SITE_KEY = 'sk-site-secret-key-9876'
   const SITE_URL = 'https://hidden-vendor.example.com/v1'
@@ -291,7 +293,9 @@ describe('Stracker AI (Default)', () => {
     const { runAssistant } = await import('../_lib/agent.js')
     const error = await runAssistant(runInput('hello')).catch(failure => failure as { code: string; message: string })
     expect(error).toMatchObject({ code: 'stracker_ai_unavailable' })
-    expect((error as { message: string }).message).toBe('Stracker AI is temporarily unavailable. You can add your own AI model to keep going.')
+    expect((error as { message: string }).message).toBe(STRACKER_UNAVAILABLE_TEXT)
+    expect((error as { message: string }).message).toMatch(/Stracker AI window/)
+    expect((error as { message: string }).message).toMatch(/Settings → AI Assistant/)
   })
 
   it('falls back to the student’s own provider when the default fails', async () => {
@@ -309,16 +313,83 @@ describe('Stracker AI (Default)', () => {
     expect(db.site_ai_providers[0]).toMatchObject({ enabled: true })
   })
 
-  it('respects the preferred choice: own provider by default for existing users, Stracker after prefer_stracker', async () => {
+  it('admin models come first by default; an explicit own preference still wins', async () => {
     db.site_ai_providers = [await siteRow()]
     db.ai_provider_configs = [await ownRow()]
     const { runAssistant } = await import('../_lib/agent.js')
-    expect(await runAssistant(runInput('hello'))).toMatchObject({ providerId: 'gemini' })
-    expect((await call(await providers(), 'GET')).json.preference).toBe('own')
-    expect((await call(await providers(), 'PATCH', { action: 'prefer_stracker' })).status).toBe(200)
     expect(await runAssistant(runInput('hello'))).toMatchObject({ providerId: 'stracker' })
+    expect((await call(await providers(), 'GET')).json.preference).toBe('stracker')
     const id = db.ai_provider_configs[0]!.id as string
     expect((await call(await providers(), 'PATCH', { id, action: 'default' })).json.preference).toBe('own')
+    expect(await runAssistant(runInput('hello'))).toMatchObject({ providerId: 'gemini' })
+  })
+
+  it('walks the owner-ordered chain: #1 fails, #2 fails, #3 answers, and nothing secret is emitted', async () => {
+    const first = await siteRow({ display_name: 'Owner One', priority: 1, is_default: true })
+    const second = await siteRow({ display_name: 'Owner Two', model_id: 'models/gemini-second', priority: 2, is_default: false })
+    const third = await siteRow({ display_name: 'Owner Three', model_id: 'models/gemini-third', priority: 3, is_default: false })
+    db.site_ai_providers = [first, second, third]
+    db.ai_provider_configs = [await ownRow()]
+    const urls: string[] = []
+    let calls = 0
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(String(url)); calls += 1
+      if (calls === 1) return new Response(JSON.stringify({ error: { code: 503, message: 'overloaded', status: 'UNAVAILABLE' } }), { status: 503, headers: { 'content-type': 'application/json' } })
+      if (calls === 2) return new Response(JSON.stringify({ error: { code: 429, message: 'Quota exceeded', status: 'RESOURCE_EXHAUSTED' } }), { status: 429, headers: { 'content-type': 'application/json' } })
+      return new Response('data: {"candidates":[{"content":{"parts":[{"text":"From number three"}]}}]}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    }))
+    const events: Array<[string, unknown]> = []
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(runInput('hello', (event, data) => events.push([event, data])))
+    expect(result).toMatchObject({ status: 'completed', providerId: 'stracker', modelId: 'models/gemini-third', content: 'From number three' })
+    expect(calls).toBe(3)
+    expect(urls[0]).toContain('gemini-3.6-flash')
+    expect(urls[1]).toContain('gemini-second')
+    expect(urls[2]).toContain('gemini-third')
+    const emitted = JSON.stringify(events)
+    for (const secret of [SITE_KEY, SITE_URL, 'hidden-vendor', 'Owner One', 'Owner Two', 'Owner Three', '"gemini"', '"custom"']) expect(emitted).not.toContain(secret)
+  })
+
+  it('after every admin model fails, the student’s own model answers', async () => {
+    db.site_ai_providers = [await siteRow({ priority: 1 }), await siteRow({ priority: 2, is_default: false, display_name: 'Owner B' })]
+    db.ai_provider_configs = [await ownRow()]
+    let calls = 0
+    providerReply = () => (++calls <= 2
+      ? new Response(JSON.stringify({ error: { code: 500, message: 'internal', status: 'INTERNAL' } }), { status: 500, headers: { 'content-type': 'application/json' } })
+      : new Response('data: {"candidates":[{"content":{"parts":[{"text":"Own model"}]}}]}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } }))
+    const { runAssistant } = await import('../_lib/agent.js')
+    expect(await runAssistant(runInput('hello'))).toMatchObject({ status: 'completed', providerId: 'gemini', content: 'Own model' })
+    expect(calls).toBe(3)
+  })
+
+  it('when every admin model fails and the student has none, the message points to the AI window and Settings without leaking details', async () => {
+    db.site_ai_providers = [await siteRow({ priority: 1 }), await siteRow({ provider_id: 'custom', base_url: SITE_URL, protocol: 'openai-compatible', model_id: 'vendor/x', priority: 2, is_default: false })]
+    providerReply = () => new Response(JSON.stringify({ error: { code: 401, message: `bad key ${SITE_KEY} at ${SITE_URL}`, status: 'UNAUTHENTICATED' } }), { status: 401, headers: { 'content-type': 'application/json' } })
+    const { runAssistant } = await import('../_lib/agent.js')
+    const error = await runAssistant(runInput('hello')).catch(failure => failure as { code: string; message: string })
+    expect(error).toMatchObject({ code: 'stracker_ai_unavailable', message: STRACKER_UNAVAILABLE_TEXT })
+    expect(JSON.stringify(error)).not.toContain(SITE_KEY)
+    expect(JSON.stringify(error)).not.toContain('hidden-vendor')
+  })
+
+  it('owner reorder rewrites priorities 1..n and the chain follows the new order', async () => {
+    const a = await siteRow({ display_name: 'A', priority: 1 })
+    const b = await siteRow({ display_name: 'B', priority: 2, is_default: false })
+    const c = await siteRow({ display_name: 'C', priority: 3, is_default: false })
+    db.site_ai_providers = [a, b, c]
+    const { reorderSiteProviders, readSiteProviders } = await import('../_lib/stracker-default.js')
+    expect(await reorderSiteProviders(adminClient as never, c.id, 'up')).toEqual({ order: [a.id, c.id, b.id], position: 2 })
+    expect(db.site_ai_providers.map(row => [row.id, row.priority])).toEqual([[a.id, 1], [b.id, 3], [c.id, 2]])
+    expect(await reorderSiteProviders(adminClient as never, a.id, 'up')).toEqual({ order: [a.id, c.id, b.id], position: 1 })
+    expect(await reorderSiteProviders(adminClient as never, crypto.randomUUID(), 'down')).toBe('not_found')
+    expect((await readSiteProviders(adminClient as never)).length).toBe(3)
+  })
+
+  it('students cannot reorder the owner’s models', async () => {
+    db.site_ai_providers = [await siteRow({ priority: 1 })]
+    const res = await call(await providers(), 'PATCH', { id: db.site_ai_providers[0]!.id, action: 'move_up' })
+    expect(res.status).toBe(400)
+    expect(db.site_ai_providers[0]!.priority).toBe(1)
   })
 
   it('enforces the per-student Stracker AI limit with a clear message', async () => {

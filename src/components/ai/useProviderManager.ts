@@ -42,7 +42,7 @@ export interface ProviderManager {
   discoverModels:(draft:AIProviderDraft)=>Promise<DiscoverResult>
   saveProvider:(draft:AIProviderDraft)=>Promise<AIProviderConfig>
   testProvider:(id:string)=>Promise<{latencyMs?:number}>
-  patchProvider:(id:string,action:'enable'|'disable'|'default')=>Promise<void>
+  patchProvider:(id:string,action:'enable'|'disable'|'default'|'move_up'|'move_down')=>Promise<void>
   removeProvider:(id:string)=>Promise<void>
 }
 
@@ -121,7 +121,7 @@ export function useProviderManager(apiFetch:ApiFetch,scope:'user'|'site',canLoad
     finally { void refreshProviders() }
   },[apiFetch,refreshProviders,suffix])
 
-  const patchProvider = useCallback(async (id:string,action:'enable'|'disable'|'default') => {
+  const patchProvider = useCallback(async (id:string,action:'enable'|'disable'|'default'|'move_up'|'move_down') => {
     const result = await apiFetch<{provider?:AIProviderConfig;preference?:AIPreference}>(providersPath,{method:'PATCH',body:JSON.stringify({id,action})})
     if (result?.provider) putProvider(result.provider)
     else void refreshProviders()

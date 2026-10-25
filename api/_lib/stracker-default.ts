@@ -8,7 +8,7 @@ import { runtimeHealth, type ProviderConfigRow } from './registry.js'
  */
 export const STRACKER_AI_NAME = 'Stracker AI (Default)'
 export const STRACKER_PROVIDER_ID = 'stracker'
-export const STRACKER_UNAVAILABLE = 'Stracker AI is temporarily unavailable. You can add your own AI model to keep going.'
+export const STRACKER_UNAVAILABLE = 'Stracker AI’s default models are not responding right now. Add your own AI model in the Stracker AI window (Add your own model) or in Settings → AI Assistant to keep going.'
 export const STRACKER_DAILY_LIMIT = 'You have reached today’s Stracker AI limit. Add your own AI model to keep going, or try again tomorrow.'
 export const STRACKER_MINUTE_LIMIT = 'Stracker AI is handling several of your requests. Wait a minute and try again, or add your own AI model.'
 
@@ -50,9 +50,9 @@ export async function readSiteSettings(admin: SupabaseClient): Promise<SiteAISet
   return normalizeSiteSettings(data as Record<string, unknown> | null)
 }
 
-/** Enabled site providers in fallback order (preferred first). Read failures mean "none". */
+/** Enabled site providers in the owner's fallback order (priority 1 first). Read failures mean "none". */
 export async function readSiteProviders(admin: SupabaseClient): Promise<SiteProviderRow[]> {
-  const { data, error } = await admin.from('site_ai_providers').select('*').eq('enabled', true).order('is_default', { ascending: false }).order('updated_at', { ascending: false })
+  const { data, error } = await admin.from('site_ai_providers').select('*').eq('enabled', true).order('priority', { ascending: true }).order('created_at', { ascending: true })
   if (error) return []
   return ((data ?? []) as ProviderConfigRow[]).map(row => ({ ...row, site: true as const }))
 }
@@ -62,8 +62,8 @@ export function derivePreference(stored: string | null | undefined, userRows: Pr
   const usable = (row: ProviderConfigRow) => row.enabled && row.connection_status === 'connected'
   // "Own" only holds while the student still has a working provider; otherwise Stracker AI answers.
   if (stored === 'own') return userRows.some(usable) ? 'own' : 'stracker'
-  // No explicit choice: keep a student's working preferred provider; everyone else starts on Stracker AI.
-  return userRows.some(row => row.is_default && usable(row)) ? 'own' : 'stracker'
+  // No explicit choice: the owner's Stracker AI models come first, the student's own models follow.
+  return 'stracker'
 }
 
 export async function readStoredPreference(admin: SupabaseClient, userId: string): Promise<string | null> {
@@ -123,4 +123,23 @@ export async function takeStrackerSlot(admin: SupabaseClient, userId: string, se
   const day = await take(STRACKER_DAY_BUCKET, settings.perUserDaily, 86_400)
   if (day === null) return 'unavailable'
   return day ? 'ok' : 'day'
+}
+
+/**
+ * Owner reorder of the Stracker AI fallback chain: moves one model a place earlier ('up') or
+ * later ('down') and rewrites priorities as 1..n so the order is always gap-free and unique.
+ */
+export async function reorderSiteProviders(admin: SupabaseClient, id: string, direction: 'up' | 'down'): Promise<{ order: string[]; position: number } | 'not_found' | 'failed'> {
+  const { data, error } = await admin.from('site_ai_providers').select('id,priority,created_at').order('priority', { ascending: true }).order('created_at', { ascending: true })
+  if (error || !data) return 'failed'
+  const rows = [...(data as Array<{ id: string; priority?: number | null; created_at?: string | null }>)]
+    .sort((a, b) => (Number(a.priority) || 0) - (Number(b.priority) || 0) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))
+  const order = rows.map(row => row.id)
+  const from = order.indexOf(id)
+  if (from < 0) return 'not_found'
+  const to = direction === 'up' ? Math.max(0, from - 1) : Math.min(order.length - 1, from + 1)
+  if (to !== from) [order[from], order[to]] = [order[to]!, order[from]!]
+  const results = await Promise.all(order.map((rowId, index) => admin.from('site_ai_providers').update({ priority: index + 1 }).eq('id', rowId)))
+  if (results.some(result => result.error)) return 'failed'
+  return { order, position: to + 1 }
 }
