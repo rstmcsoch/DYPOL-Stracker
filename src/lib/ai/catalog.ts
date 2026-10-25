@@ -28,6 +28,8 @@ export interface AIModelOption {
   name: string
   capabilities: AICapabilities
   contextWindow?: number
+  /** Company behind the model (e.g. Google, OpenAI, NVIDIA), detected by the server during Discover. */
+  company?: string
 }
 
 export interface AIProviderConfig {

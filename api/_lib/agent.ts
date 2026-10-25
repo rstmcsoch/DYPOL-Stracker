@@ -7,7 +7,7 @@ import { AIError, connectionStatusFor, cooldownSecondsFor, type AIErrorCode } fr
 import { logAIEvent } from './diagnostics.js'
 import { SITE_PROVIDER_TABLE } from './provider-scope.js'
 import {
-  STRACKER_DAILY_LIMIT, STRACKER_MINUTE_LIMIT, STRACKER_UNAVAILABLE, derivePreference, isSiteRow, publicProviderId, publicProviderName,
+  STRACKER_DAILY_LIMIT, STRACKER_MINUTE_LIMIT, STRACKER_UNAVAILABLE, derivePreference, isSiteRow, publicModelId, publicProviderId, publicProviderName,
   readSiteProviders, readSiteSettings, readStoredPreference, takeStrackerSlot, type AIPreference, type SiteAISettings
 } from './stracker-default.js'
 import { MODEL_TOOLS, prepareToolCall, toolProgress, type ActionPreview } from './tools.js'
@@ -86,6 +86,11 @@ function providerName(config: ProviderConfigRow): string {
 /** Provider ID shown to the student and stored on their messages/tasks ("stracker" for the default). */
 function pid(config: ProviderConfigRow): string {
   return publicProviderId(config)
+}
+
+/** Model shown and stored for the student: the company for Stracker AI (Default) rows, never its model ID. */
+function mid(config: ProviderConfigRow): string {
+  return publicModelId(config)
 }
 
 export function strackerUnavailable(): ApiError {
@@ -244,8 +249,8 @@ function humanTaskState(row: ProviderConfigRow, fallbackFrom: ProviderConfigRow 
   return {
     providerId:pid(row),
     providerName:providerName(row),
-    modelId:row.model_id,
-    fallbackFrom: fallbackFrom ? { providerId:pid(fallbackFrom), providerName:providerName(fallbackFrom), modelId:fallbackFrom.model_id } : null
+    modelId:mid(row),
+    fallbackFrom: fallbackFrom ? { providerId:pid(fallbackFrom), providerName:providerName(fallbackFrom), modelId:mid(fallbackFrom) } : null
   }
 }
 
@@ -352,7 +357,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
   let strackerBlocked = false
 
   while (rounds <= TOOL_ITERATION_LIMIT) {
-    if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:lastProvider ? pid(lastProvider) : null,modelId:lastProvider?.model_id ?? null,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+    if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:lastProvider ? pid(lastProvider) : null,modelId:lastProvider ? mid(lastProvider) : null,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
     if (Date.now() - start > TOTAL_BUDGET_MS) throw new ApiError(504,'task_timeout','This AI task reached its time limit. Retry with a shorter request.')
     const selected = chosen
     used.add(selected.id)
@@ -395,8 +400,8 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
       lastProvider = selected
       rounds += 1
     } catch (error) {
-      if (input.signal.aborted) return { status:'cancelled',content:'',providerId:pid(selected),modelId:selected.model_id,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
-      const failure = safeProviderError(error,{ provider:selected.provider_id,model:selected.model_id })
+      if (input.signal.aborted) return { status:'cancelled',content:'',providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+      const failure = safeProviderError(error,{ provider:selected.provider_id,model:mid(selected) })
       if (offerTools && (failure.aiCode === 'UNSUPPORTED_CAPABILITY' || failure.aiCode === 'REQUEST_INVALID') && !onProviderDelta.length) {
         // The model (or its schema dialect) rejects tool calling: answer once more without tools.
         toolsRejected.add(selected.id)
@@ -413,7 +418,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
       chosen = next
       input.emit('fallback',{ from:providerName(selected),to:providerName(next),reason:fallbackReason(failure.aiCode) })
       logAIEvent('info','provider_fallback',{ taskId:input.taskId,userId:input.userId,from:selected.provider_id,fromModel:selected.model_id,to:next.provider_id,toModel:next.model_id,code:failure.aiCode })
-      await input.adminClient.from('ai_tasks').update({ status:'fallback',provider_id:pid(next),model_id:next.model_id,progress:isSiteRow(next) ? 'Trying Stracker AI (Default).' : 'Trying your configured fallback model.' }).eq('user_id',input.userId).eq('id',input.taskId)
+      await input.adminClient.from('ai_tasks').update({ status:'fallback',provider_id:pid(next),model_id:mid(next),progress:isSiteRow(next) ? 'Trying Stracker AI (Default).' : 'Trying your configured fallback model.' }).eq('user_id',input.userId).eq('id',input.taskId)
       input.emit('status',{ status:'fallback',progress:isSiteRow(next) ? 'Trying Stracker AI (Default)…' : `Trying your configured ${providerName(next)} model…`,...humanTaskState(next,selected) })
       continue
     }
@@ -421,14 +426,14 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
     const toolCallsFromProvider = completion.toolCalls
     if (!toolCallsFromProvider.length) {
       finalText = completion.text.trim()
-      if (!finalText) throw new AIError('MALFORMED_RESPONSE',{ provider:selected.provider_id,model:selected.model_id,providerMessage:'empty final answer' })
+      if (!finalText) throw new AIError('MALFORMED_RESPONSE',{ provider:selected.provider_id,model:mid(selected),providerMessage:'empty final answer' })
       const safeText = redactPotentialSecrets(finalText).slice(0,20_000)
-      await input.adminClient.from('ai_messages').insert({ user_id:input.userId,conversation_id:input.conversationId,role:'assistant',content:safeText,provider_id:pid(selected),model_id:selected.model_id,status:'completed',metadata:{ fallback_from:fallbackFrom ? {provider_id:pid(fallbackFrom),model_id:fallbackFrom.model_id} : null } })
-      if (await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:pid(selected),modelId:selected.model_id,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
-      await input.adminClient.from('ai_tasks').update({ status:'completed',provider_id:pid(selected),model_id:selected.model_id,progress:'Completed.',completed_at:new Date().toISOString(),metadata:{ fallback_from:fallbackFrom ? pid(fallbackFrom) : null } }).eq('user_id',input.userId).eq('id',input.taskId)
+      await input.adminClient.from('ai_messages').insert({ user_id:input.userId,conversation_id:input.conversationId,role:'assistant',content:safeText,provider_id:pid(selected),model_id:mid(selected),status:'completed',metadata:{ fallback_from:fallbackFrom ? {provider_id:pid(fallbackFrom),model_id:mid(fallbackFrom)} : null } })
+      if (await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+      await input.adminClient.from('ai_tasks').update({ status:'completed',provider_id:pid(selected),model_id:mid(selected),progress:'Completed.',completed_at:new Date().toISOString(),metadata:{ fallback_from:fallbackFrom ? pid(fallbackFrom) : null } }).eq('user_id',input.userId).eq('id',input.taskId)
       await input.adminClient.from('ai_conversations').update({ updated_at:new Date().toISOString() }).eq('user_id',input.userId).eq('id',input.conversationId)
       input.emit('done',{ content:safeText,...humanTaskState(selected,fallbackFrom),taskId:input.taskId })
-      return { status:'completed',content:safeText,providerId:pid(selected),modelId:selected.model_id,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+      return { status:'completed',content:safeText,providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
     }
 
     if (rounds > TOOL_ITERATION_LIMIT || toolCalls + toolCallsFromProvider.length > TOOL_CALL_LIMIT) {
@@ -438,15 +443,15 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
     let pendingAction: ActionPreview | undefined
     for (const call of toolCallsFromProvider) {
       toolCalls += 1
-      if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:pid(selected),modelId:selected.model_id,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+      if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
       const progress = toolProgress(call.name)
-      await input.adminClient.from('ai_tasks').update({ status:'tool_call',provider_id:pid(selected),model_id:selected.model_id,progress }).eq('user_id',input.userId).eq('id',input.taskId)
-      input.emit('status',{ status:'tool_call',progress,providerId:pid(selected),modelId:selected.model_id })
+      await input.adminClient.from('ai_tasks').update({ status:'tool_call',provider_id:pid(selected),model_id:mid(selected),progress }).eq('user_id',input.userId).eq('id',input.taskId)
+      input.emit('status',{ status:'tool_call',progress,providerId:pid(selected),modelId:mid(selected) })
       try {
-        const outcome = await prepareToolCall(input.userClient,input.userId,call,input.taskId,{ providerId:pid(selected),modelId:selected.model_id },input.adminClient,input.conversationId)
+        const outcome = await prepareToolCall(input.userClient,input.userId,call,input.taskId,{ providerId:pid(selected),modelId:mid(selected) },input.adminClient,input.conversationId)
         if (outcome.kind === 'confirmation') {
           pendingAction = outcome.action
-          input.emit('confirmation',{ action:outcome.action,providerId:pid(selected),modelId:selected.model_id })
+          input.emit('confirmation',{ action:outcome.action,providerId:pid(selected),modelId:mid(selected) })
           break
         }
         agentMessages.push({ role:'tool',toolCallId:call.id,toolName:call.name,content:jsonToolContent(outcome.result) })
@@ -457,12 +462,12 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean }):
     }
     lastProvider = selected
     if (pendingAction) {
-      await input.adminClient.from('ai_tasks').update({ status:'waiting',progress:'Waiting for your confirmation.',provider_id:pid(selected),model_id:selected.model_id }).eq('user_id',input.userId).eq('id',input.taskId)
-      return { status:'waiting',content:completion.text,providerId:pid(selected),modelId:selected.model_id,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null,action:pendingAction }
+      await input.adminClient.from('ai_tasks').update({ status:'waiting',progress:'Waiting for your confirmation.',provider_id:pid(selected),model_id:mid(selected) }).eq('user_id',input.userId).eq('id',input.taskId)
+      return { status:'waiting',content:completion.text,providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null,action:pendingAction }
     }
     rounds += 1
-    await input.adminClient.from('ai_tasks').update({ status:'running',progress:'Reviewing your Stracker data…',provider_id:pid(selected),model_id:selected.model_id }).eq('user_id',input.userId).eq('id',input.taskId)
-    input.emit('status',{ status:'running',progress:'Reviewing your Stracker data…',providerId:pid(selected),modelId:selected.model_id })
+    await input.adminClient.from('ai_tasks').update({ status:'running',progress:'Reviewing your Stracker data…',provider_id:pid(selected),model_id:mid(selected) }).eq('user_id',input.userId).eq('id',input.taskId)
+    input.emit('status',{ status:'running',progress:'Reviewing your Stracker data…',providerId:pid(selected),modelId:mid(selected) })
   }
   throw new ApiError(429,'tool_limit','Stracker AI reached its safe tool-call limit. Ask a smaller question to continue.')
 }

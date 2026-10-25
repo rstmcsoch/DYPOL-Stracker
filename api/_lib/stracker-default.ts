@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { runtimeHealth, type ProviderConfigRow } from './registry.js'
+import { publicCompanyName } from './model-company.js'
 
 /**
  * Stracker AI (Default): the owner's site-wide providers that every signed-in student can use.
@@ -29,6 +30,19 @@ export function publicProviderId(row: ProviderConfigRow): string {
 
 export function publicProviderName(row: ProviderConfigRow): string {
   return isSiteRow(row) ? STRACKER_AI_NAME : row.display_name || row.provider_id
+}
+
+/**
+ * The only model detail students see for a Stracker AI (Default) row: the company behind it
+ * (e.g. "Google", "NVIDIA"), or "Stracker AI" when unknown. Never the model ID or owner label.
+ */
+export function publicSiteModelName(row: Pick<ProviderConfigRow, 'provider_id' | 'model_id' | 'capabilities'>): string {
+  return publicCompanyName(row.provider_id, row.model_id, (row.capabilities as unknown as Record<string, unknown> | null | undefined)?.company)
+}
+
+/** Model ID shown and stored for students: the company for Stracker AI rows, the real ID for their own. */
+export function publicModelId(row: ProviderConfigRow): string {
+  return isSiteRow(row) ? publicSiteModelName(row) : row.model_id
 }
 
 /** Human model name, e.g. "models/gemini-3.6-flash" → "gemini-3.6-flash". */
@@ -94,7 +108,7 @@ export function publicStrackerStatus(input: { settings: SiteAISettings; rows: Pr
   const active = ready[0] ?? null
   return {
     name: STRACKER_AI_NAME,
-    model: active ? friendlyModelName(String(active.model_id)) : null,
+    model: active ? publicSiteModelName(active) : null,
     status: active ? 'ready' : 'unavailable',
     preferred: input.preference === 'stracker',
     dailyLimit: input.settings.perUserDaily,

@@ -5,6 +5,7 @@ import { AIError, normalizeHttpProviderError } from './ai-errors.js'
 import { fetchCustomProvider } from './secure-fetch.js'
 import { stripControlChars } from '../../src/lib/control-chars.js'
 import type { AIModelOption } from './registry.js'
+import { modelCompany } from './model-company.js'
 
 export interface ModelDiscoveryResult {
   models: AIModelOption[]
@@ -66,7 +67,16 @@ export async function discoverProviderModels(setup: ProviderSetup, apiKey: strin
     }
     const body = await getModels(setup.providerId,url,modelHeaders(setup,apiKey),controller.signal,setup.providerId === 'custom')
     const collection = Array.isArray(body.models) ? body.models : Array.isArray(body.data) ? body.data : []
-    const models = modelOptionsFromApi(setup.providerId, collection)
+    // Each discovered model carries its company (from its ID, the list's owned_by, or the provider).
+    const ownerById = new Map<string, string>()
+    for (const item of collection) {
+      const row = item as Record<string, unknown>
+      if (typeof row?.id === 'string' && typeof row.owned_by === 'string') ownerById.set(row.id.replace(/^models\//, ''), row.owned_by)
+    }
+    const models = modelOptionsFromApi(setup.providerId, collection).map(model => {
+      const company = modelCompany(setup.providerId, model.id, ownerById.get(model.id.replace(/^models\//, '')))
+      return company ? { ...model, company } : model
+    })
     const candidates = setup.providerId === 'custom'
       ? collection.map(item => item as Record<string, unknown>).filter(item => typeof item.id === 'string' && item.id.length <= 200)
         .map(item => ({ id: String(item.id), created: typeof item.created === 'number' ? item.created : null })).slice(0, 1000)

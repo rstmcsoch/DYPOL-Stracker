@@ -1,3 +1,4 @@
+import { maskStoredModel, publicStoredModelId } from '../_lib/model-company.js'
 import { z } from 'zod'
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import { ApiError, parseQueryValue, readJson, sendJson } from '../_lib/http.js'
@@ -35,9 +36,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         const resumableActions = (pendingActions ?? []).map(action => ({
           id:action.id,task_id:action.task_id,tool_name:action.tool_name,summary:action.summary,expires_at:action.expires_at,created_at:action.created_at,
           provider_id:tasksById.get(String(action.task_id))?.provider_id ?? null,
-          model_id:tasksById.get(String(action.task_id))?.model_id ?? null
+          model_id:publicStoredModelId(tasksById.get(String(action.task_id))?.provider_id,tasksById.get(String(action.task_id))?.model_id)
         }))
-        sendJson(res,200,{ conversation,messages:messages ?? [],pendingActions:resumableActions })
+        sendJson(res,200,{ conversation,messages:(messages ?? []).map(message => maskStoredModel(message as Record<string,unknown>)),pendingActions:resumableActions })
         return
       }
       const { data, error } = await adminClient.from('ai_conversations').select('id,title,created_at,updated_at').eq('user_id', userId).order('updated_at', { ascending: false }).limit(20)

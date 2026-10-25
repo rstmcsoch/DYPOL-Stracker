@@ -257,9 +257,9 @@ describe('Stracker AI (Default)', () => {
     expect(list.status).toBe(200)
     const stracker = list.json.stracker as Row
     expect(Object.keys(stracker).sort()).toEqual(['dailyLimit', 'model', 'name', 'preferred', 'status', 'usedToday'])
-    expect(stracker).toMatchObject({ name: 'Stracker AI (Default)', model: 'openai/gpt-oss-20b', status: 'ready', preferred: true })
+    expect(stracker).toMatchObject({ name: 'Stracker AI (Default)', model: 'OpenAI', status: 'ready', preferred: true })
     const text = JSON.stringify(list.json)
-    for (const secret of [SITE_KEY, '9876', SITE_URL, 'hidden-vendor', 'Owner Gemini', 'encrypted', 'base_url', 'key_hint', 'baseUrl', 'apiKey', '0000000000aa']) expect(text).not.toContain(secret)
+    for (const secret of ['gpt-oss-20b', SITE_KEY, '9876', SITE_URL, 'hidden-vendor', 'Owner Gemini', 'encrypted', 'base_url', 'key_hint', 'baseUrl', 'apiKey', '0000000000aa']) expect(text).not.toContain(secret)
     expect(list.json.preference).toBe('stracker')
   })
 
@@ -267,7 +267,7 @@ describe('Stracker AI (Default)', () => {
     const { publicStrackerStatus, DEFAULT_SITE_AI_SETTINGS } = await import('../_lib/stracker-default.js')
     const row = await siteRow({ base_url: SITE_URL })
     const ready = publicStrackerStatus({ settings: DEFAULT_SITE_AI_SETTINGS, rows: [row as never], preference: 'own', usedToday: 3 })
-    expect(ready).toEqual({ name: 'Stracker AI (Default)', model: 'gemini-3.6-flash', status: 'ready', preferred: false, dailyLimit: DEFAULT_SITE_AI_SETTINGS.perUserDaily, usedToday: 3 })
+    expect(ready).toEqual({ name: 'Stracker AI (Default)', model: 'Google', status: 'ready', preferred: false, dailyLimit: DEFAULT_SITE_AI_SETTINGS.perUserDaily, usedToday: 3 })
     const off = publicStrackerStatus({ settings: { ...DEFAULT_SITE_AI_SETTINGS, enabled: false }, rows: [row as never], preference: 'stracker', usedToday: 0 })
     expect(off).toMatchObject({ status: 'unavailable', model: null })
     expect(JSON.stringify(off)).not.toContain(SITE_URL)
@@ -341,13 +341,15 @@ describe('Stracker AI (Default)', () => {
     const events: Array<[string, unknown]> = []
     const { runAssistant } = await import('../_lib/agent.js')
     const result = await runAssistant(runInput('hello', (event, data) => events.push([event, data])))
-    expect(result).toMatchObject({ status: 'completed', providerId: 'stracker', modelId: 'models/gemini-third', content: 'From number three' })
+    expect(result).toMatchObject({ status: 'completed', providerId: 'stracker', modelId: 'Google', content: 'From number three' })
     expect(calls).toBe(3)
     expect(urls[0]).toContain('gemini-3.6-flash')
     expect(urls[1]).toContain('gemini-second')
     expect(urls[2]).toContain('gemini-third')
     const emitted = JSON.stringify(events)
-    for (const secret of [SITE_KEY, SITE_URL, 'hidden-vendor', 'Owner One', 'Owner Two', 'Owner Three', '"gemini"', '"custom"']) expect(emitted).not.toContain(secret)
+    for (const secret of [SITE_KEY, SITE_URL, 'hidden-vendor', 'Owner One', 'Owner Two', 'Owner Three', '"gemini"', '"custom"', 'gemini-third', 'gemini-second', 'gemini-3.6-flash']) expect(emitted).not.toContain(secret)
+    const stored = JSON.stringify([db.ai_messages, db.ai_tasks])
+    for (const modelId of ['gemini-third', 'gemini-second', 'gemini-3.6-flash']) expect(stored).not.toContain(modelId)
   })
 
   it('after every admin model fails, the student’s own model answers', async () => {

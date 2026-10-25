@@ -1,3 +1,4 @@
+import { maskStoredModel } from '../_lib/model-company.js'
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import { ApiError, readJson, sendJson } from '../_lib/http.js'
 import { withAuthenticatedRequest } from '../_lib/handler.js'
@@ -22,6 +23,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       .select('id,conversation_id,provider_id,model_id,task_type,status,progress,started_at,completed_at')
       .eq('user_id', userId).order('started_at', { ascending: false }).limit(10)
     if (error) throw new ApiError(503, 'tasks_unavailable', 'Recent AI task status could not be loaded. Try again.')
-    sendJson(res, 200, { tasks: data ?? [] })
+    sendJson(res, 200, { tasks: (data ?? []).map(task => maskStoredModel(task as Record<string, unknown>)) })
   })
 }
