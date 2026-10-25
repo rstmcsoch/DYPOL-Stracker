@@ -245,17 +245,18 @@ ThemeData buildStrackerTheme({
       ),
       textStyle: TextStyle(fontFamily: body, fontSize: 12, color: palette.bg),
     ),
-    // Android's own zoom-forward page transition, which is what the platform uses for
-    // activity changes. (The Cupertino builder lives in package:flutter/cupertino.dart and
-    // is not needed by an Android-only app.)
-    pageTransitionsTheme: const PageTransitionsTheme(
+    // Android 14+ predictive back: the page follows the back swipe and reveals the one
+    // below, and can be cancelled mid-gesture. Older Android versions and button presses
+    // get the platform's fade-forwards transition. (The Cupertino builder lives in
+    // package:flutter/cupertino.dart and is not needed by an Android-only app.)
+    pageTransitionsTheme: PageTransitionsTheme(
       builders: <TargetPlatform, PageTransitionsBuilder>{
-        TargetPlatform.android: ZoomPageTransitionsBuilder(),
-        TargetPlatform.fuchsia: ZoomPageTransitionsBuilder(),
-        TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
-        TargetPlatform.macOS: ZoomPageTransitionsBuilder(),
-        TargetPlatform.windows: ZoomPageTransitionsBuilder(),
-        TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+        TargetPlatform.android: PredictiveBackPageTransitionsBuilder(fallbackColor: palette.bg),
+        TargetPlatform.fuchsia: const ZoomPageTransitionsBuilder(),
+        TargetPlatform.iOS: const ZoomPageTransitionsBuilder(),
+        TargetPlatform.macOS: const ZoomPageTransitionsBuilder(),
+        TargetPlatform.windows: const ZoomPageTransitionsBuilder(),
+        TargetPlatform.linux: const ZoomPageTransitionsBuilder(),
       },
     ),
     cardTheme: CardThemeData(

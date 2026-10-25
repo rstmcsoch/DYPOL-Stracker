@@ -3,6 +3,8 @@ import '../core/format.dart';
 import '../data/app_data.dart';
 import '../data/models.dart';
 import 'focus.dart';
+import 'progress.dart';
+import 'recommend.dart';
 import 'revision.dart';
 
 /// Reminders inside the app.
@@ -74,3 +76,100 @@ List<String> reminderLines(AppData data, {String? today, DateTime? now}) {
 String reminderSummary(AppSettings settings) => settings.remindersEnabled
     ? 'On · ${settings.reminderTime} · ${settings.reminderTypes.join(', ')}'
     : 'Off';
+
+/// The website's reminder kinds (src/types `REMINDER_KINDS`), in its order. Only these are
+/// written to `app_settings.reminder_types`; the website drops anything else when it reads.
+const List<String> reminderKinds = <String>['revision', 'backlog', 'practice', 'pyq', 'mock', 'plan'];
+
+const Map<String, String> reminderLabel = <String, String>{
+  'revision': 'Due revision',
+  'backlog': 'Backlog',
+  'practice': 'Practice',
+  'pyq': 'PYQs',
+  'mock': 'Mock',
+  'plan': 'Study plan',
+};
+
+class ReminderItem {
+  const ReminderItem({required this.kind, required this.title, required this.body});
+
+  final String kind;
+  final String title;
+  final String body;
+}
+
+/// src/lib/jee/reminders.ts `computeReminders`: the reminders that apply right now. Only
+/// enabled kinds are returned, and each is backed by a real count.
+List<ReminderItem> computeReminders(AppData data, String today) {
+  final AppSettings settings = data.settings;
+  if (!settings.remindersEnabled) return const <ReminderItem>[];
+  final Set<String> enabled = settings.reminderTypes.toSet();
+  final List<ReminderItem> items = <ReminderItem>[];
+
+  if (enabled.contains('revision')) {
+    final int due =
+        data.revisions.where((Revision item) => item.completedAt == null && item.dueOn.compareTo(today) <= 0).length;
+    if (due > 0) {
+      items.add(ReminderItem(
+        kind: 'revision',
+        title: 'Revision is due',
+        body: '$due revision${due == 1 ? '' : 's'} due or overdue in Stracker.',
+      ));
+    }
+  }
+  if (enabled.contains('backlog')) {
+    final int due = data.backlogItems
+        .where((BacklogItem item) =>
+            isBacklogAwake(item, today) && item.dueOn != null && item.dueOn!.compareTo(today) <= 0)
+        .length;
+    if (due > 0) {
+      items.add(ReminderItem(
+        kind: 'backlog',
+        title: 'Backlog is due',
+        body: '$due backlog item${due == 1 ? '' : 's'} due today or earlier.',
+      ));
+    }
+  }
+  if (enabled.contains('practice') &&
+      !data.practiceSessions.any((PracticeSession item) => item.practiceDate == today)) {
+    items.add(const ReminderItem(
+      kind: 'practice',
+      title: 'No practice logged today',
+      body: 'A short DPP block keeps your accuracy honest.',
+    ));
+  }
+  if (enabled.contains('pyq')) {
+    int pending = 0;
+    for (final Chapter chapter in data.chapters) {
+      if (chapter.status == 'Not Started') continue;
+      pending += pyqCompletion(data.pyqRecords, chapter.id, 'Main', settings).pendingYears.length;
+    }
+    if (pending > 0) {
+      items.add(ReminderItem(
+        kind: 'pyq',
+        title: 'PYQs are waiting',
+        body: '$pending PYQ year${pending == 1 ? '' : 's'} pending on chapters you have started.',
+      ));
+    }
+  }
+  if (enabled.contains('mock')) {
+    final List<TestRecord> tests = <TestRecord>[...data.tests]
+      ..sort((TestRecord a, TestRecord b) => b.testDate.compareTo(a.testDate));
+    final int? days = tests.isEmpty ? null : daysBetween(tests.first.testDate, today);
+    if (days == null || days >= 14) {
+      items.add(ReminderItem(
+        kind: 'mock',
+        title: 'Time for a mock check',
+        body: days == null ? 'No test is logged yet.' : 'Your last test was $days days ago.',
+      ));
+    }
+  }
+  if (enabled.contains('plan') && !data.tasks.any((DailyTask task) => task.taskDate == today)) {
+    items.add(const ReminderItem(
+      kind: 'plan',
+      title: 'Plan today',
+      body: 'Add one task so today has a clear start.',
+    ));
+  }
+  return items;
+}

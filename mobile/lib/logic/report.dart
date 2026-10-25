@@ -12,11 +12,27 @@ import 'progress.dart';
 /// Sections: exam setup, syllabus progress, tests (with subject rows), mistakes by type,
 /// revision load, study time and weekly goals. Everything is derived from saved rows; nothing
 /// is invented, and empty sections say so instead of printing zeros as if they were data.
+/// Sections the report can include, in print order, with their labels and notes.
+const List<({String key, String label, String note})> reportSections = <({String key, String label, String note})>[
+  (key: 'setup', label: 'Exam setup', note: 'Exam dates and target score'),
+  (key: 'syllabus', label: 'Syllabus', note: 'Raw and weighted completion by subject'),
+  (key: 'tests', label: 'Test history', note: 'Results within the date range'),
+  (key: 'mistakes', label: 'Mistake breakdown', note: 'Recorded mistake categories'),
+  (key: 'study', label: 'Study hours', note: 'Logged focus sessions and weekly goals'),
+];
+
 String buildPrintableReport(
   AppData data, {
   String owner = 'Study notebook',
   String generatedOn = '',
+  String from = '',
+  String to = '',
+  Set<String>? sections,
 }) {
+  final Set<String> include = sections ?? <String>{for (final section in reportSections) section.key};
+  bool inRange(String date) => (from.isEmpty || date.compareTo(from) >= 0) && (to.isEmpty || date.compareTo(to) <= 0);
+  final List<TestRecord> rangeTests = data.tests.where((TestRecord test) => inRange(test.testDate)).toList();
+  final Set<String> rangeTestIds = <String>{for (final TestRecord test in rangeTests) test.id};
   final SyllabusProgress progress = syllabusProgress(data);
   final StudyTotals totals = studyTotals(data);
   final String date = generatedOn.isEmpty ? DateTime.now().toIso8601String().split('T').first : generatedOn;
@@ -54,109 +70,125 @@ String buildPrintableReport(
   out.writeln('</head><body><main>');
   out.writeln('<p class="brand">STRAKER · DYPOL LABS</p>');
   out.writeln('<h1>Study report</h1>');
-  out.writeln('<p class="sub">${_esc(owner)} · generated ${_esc(date)}</p>');
+  final String range = from.isEmpty && to.isEmpty
+      ? ''
+      : ' · ${from.isEmpty ? 'all history' : _esc(from)} to ${to.isEmpty ? 'today' : _esc(to)}';
+  out.writeln('<p class="sub">${_esc(owner)} · generated ${_esc(date)}$range</p>');
 
   // Setup
-  out.writeln('<section><h2>Exam setup</h2><table>');
-  out.writeln('<tr><th>Main exam</th><td>${_esc(data.settings.mainExamDate ?? 'Not set')}</td></tr>');
-  out.writeln('<tr><th>Advanced exam</th><td>${_esc(data.settings.advancedExamDate ?? 'Not set')}</td></tr>');
-  out.writeln('<tr><th>Target score</th><td>${data.settings.targetScore > 0 ? data.settings.targetScore.toStringAsFixed(0) : 'Not set'}</td></tr>');
-  out.writeln('</table></section>');
+  if (include.contains('setup')) {
+    out.writeln('<section><h2>Exam setup</h2><table>');
+    out.writeln('<tr><th>Main exam</th><td>${_esc(data.settings.mainExamDate ?? 'Not set')}</td></tr>');
+    out.writeln('<tr><th>Advanced exam</th><td>${_esc(data.settings.advancedExamDate ?? 'Not set')}</td></tr>');
+    out.writeln(
+        '<tr><th>Target score</th><td>${data.settings.targetScore > 0 ? data.settings.targetScore.toStringAsFixed(0) : 'Not set'}</td></tr>');
+    out.writeln('</table></section>');
+  }
 
   // Syllabus
-  out.writeln('<section><h2>Syllabus</h2><div class="stats">');
-  out.writeln('<div class="stat"><b>${_pct(progress.raw)}</b><span>raw completion</span></div>');
-  out.writeln('<div class="stat"><b>${_pct(progress.weighted)}</b><span>importance-weighted</span></div>');
-  out.writeln('<div class="stat"><b>${progress.completedChapters}/${progress.totalChapters}</b><span>chapters done or revised</span></div>');
-  out.writeln('</div>');
-  final Map<String, List<Chapter>> bySubject = <String, List<Chapter>>{};
-  for (final Chapter chapter in data.chapters) {
-    bySubject.putIfAbsent(chapter.subject, () => <Chapter>[]).add(chapter);
-  }
-  if (bySubject.isEmpty) {
-    out.writeln('<p class="empty">No chapters recorded yet.</p>');
-  } else {
-    out.writeln('<table><tr><th>Subject</th><th class="num">Chapters</th><th class="num">Weight</th></tr>');
-    for (final MapEntry<String, List<Chapter>> entry in bySubject.entries) {
-      final double weight = entry.value.fold<double>(
-          0, (double sum, Chapter c) => sum + (double.tryParse(c.weightage ?? '') ?? 0));
-      out.writeln('<tr><td>${_esc(entry.key)}</td><td class="num">${entry.value.length}</td>'
-          '<td class="num">${weight.toStringAsFixed(1)}</td></tr>');
+  if (include.contains('syllabus')) {
+    out.writeln('<section><h2>Syllabus</h2><div class="stats">');
+    out.writeln('<div class="stat"><b>${_pct(progress.raw)}</b><span>raw completion</span></div>');
+    out.writeln('<div class="stat"><b>${_pct(progress.weighted)}</b><span>importance-weighted</span></div>');
+    out.writeln(
+        '<div class="stat"><b>${progress.completedChapters}/${progress.totalChapters}</b><span>chapters done or revised</span></div>');
+    out.writeln('</div>');
+    final Map<String, List<Chapter>> bySubject = <String, List<Chapter>>{};
+    for (final Chapter chapter in data.chapters) {
+      bySubject.putIfAbsent(chapter.subject, () => <Chapter>[]).add(chapter);
     }
-    out.writeln('</table>');
-  }
-  out.writeln('</section>');
-
-  // Tests
-  out.writeln('<section><h2>Tests</h2>');
-  if (data.tests.isEmpty) {
-    out.writeln('<p class="empty">No tests recorded yet.</p>');
-  } else {
-    out.writeln('<table><tr><th>Date</th><th>Title</th><th>Type</th>'
-        '<th class="num">Score</th></tr>');
-    final List<TestRecord> sorted = <TestRecord>[...data.tests]
-      ..sort((TestRecord a, TestRecord b) => b.testDate.compareTo(a.testDate));
-    for (final TestRecord test in sorted) {
-      out.writeln('<tr><td>${_esc(test.testDate)}</td><td>${_esc(test.title)}</td>'
-          '<td>${_esc(test.testType)}</td>'
-          '<td class="num">${_mark(test.marksObtained, test.totalMarks)}</td></tr>');
-    }
-    out.writeln('</table>');
-    final List<TestSubjectScore> scores = data.testSubjectScores;
-    if (scores.isNotEmpty) {
-      out.writeln('<h2 style="margin-top:14px">Subject scores</h2>');
-      out.writeln('<table><tr><th>Test</th><th>Subject</th><th class="num">Marks</th></tr>');
-      for (final TestSubjectScore score in scores.take(40)) {
-        String title = '—';
-        for (final TestRecord test in data.tests) {
-          if (test.id == score.testId) {
-            title = test.title;
-            break;
-          }
-        }
-        out.writeln('<tr><td>${_esc(title)}</td><td>${_esc(score.subject)}</td>'
-            '<td class="num">${_mark(score.marksObtained, score.totalMarks)}</td></tr>');
+    if (bySubject.isEmpty) {
+      out.writeln('<p class="empty">No chapters recorded yet.</p>');
+    } else {
+      out.writeln('<table><tr><th>Subject</th><th class="num">Chapters</th><th class="num">Weight</th></tr>');
+      for (final MapEntry<String, List<Chapter>> entry in bySubject.entries) {
+        final double weight =
+            entry.value.fold<double>(0, (double sum, Chapter c) => sum + (double.tryParse(c.weightage ?? '') ?? 0));
+        out.writeln('<tr><td>${_esc(entry.key)}</td><td class="num">${entry.value.length}</td>'
+            '<td class="num">${weight.toStringAsFixed(1)}</td></tr>');
       }
       out.writeln('</table>');
     }
+    out.writeln('</section>');
   }
-  out.writeln('</section>');
+
+  // Tests
+  if (include.contains('tests')) {
+    out.writeln('<section><h2>Tests</h2>');
+    if (rangeTests.isEmpty) {
+      out.writeln('<p class="empty">No tests recorded in this range.</p>');
+    } else {
+      out.writeln('<table><tr><th>Date</th><th>Title</th><th>Type</th>'
+          '<th class="num">Score</th></tr>');
+      final List<TestRecord> sorted = <TestRecord>[...rangeTests]
+        ..sort((TestRecord a, TestRecord b) => b.testDate.compareTo(a.testDate));
+      for (final TestRecord test in sorted) {
+        out.writeln('<tr><td>${_esc(test.testDate)}</td><td>${_esc(test.title)}</td>'
+            '<td>${_esc(test.testType)}</td>'
+            '<td class="num">${_mark(test.marksObtained, test.totalMarks)}</td></tr>');
+      }
+      out.writeln('</table>');
+      final List<TestSubjectScore> scores =
+          data.testSubjectScores.where((TestSubjectScore score) => rangeTestIds.contains(score.testId)).toList();
+      if (scores.isNotEmpty) {
+        out.writeln('<h2 style="margin-top:14px">Subject scores</h2>');
+        out.writeln('<table><tr><th>Test</th><th>Subject</th><th class="num">Marks</th></tr>');
+        for (final TestSubjectScore score in scores.take(40)) {
+          String title = '—';
+          for (final TestRecord test in data.tests) {
+            if (test.id == score.testId) {
+              title = test.title;
+              break;
+            }
+          }
+          out.writeln('<tr><td>${_esc(title)}</td><td>${_esc(score.subject)}</td>'
+              '<td class="num">${_mark(score.marksObtained, score.totalMarks)}</td></tr>');
+        }
+        out.writeln('</table>');
+      }
+    }
+    out.writeln('</section>');
+  }
 
   // Mistakes
-  out.writeln('<section><h2>Mistakes</h2>');
-  if (data.mistakes.isEmpty) {
-    out.writeln('<p class="empty">No mistakes logged yet.</p>');
-  } else {
-    final Map<String, int> byType = <String, int>{};
-    for (final Mistake mistake in data.mistakes) {
-      byType[mistake.mistakeType.isEmpty ? 'unspecified' : mistake.mistakeType] =
-          (byType[mistake.mistakeType.isEmpty ? 'unspecified' : mistake.mistakeType] ?? 0) + 1;
+  if (include.contains('mistakes')) {
+    out.writeln('<section><h2>Mistakes</h2>');
+    if (data.mistakes.isEmpty) {
+      out.writeln('<p class="empty">No mistakes logged yet.</p>');
+    } else {
+      final Map<String, int> byType = <String, int>{};
+      for (final Mistake mistake in data.mistakes) {
+        byType[mistake.mistakeType.isEmpty ? 'unspecified' : mistake.mistakeType] =
+            (byType[mistake.mistakeType.isEmpty ? 'unspecified' : mistake.mistakeType] ?? 0) + 1;
+      }
+      out.writeln('<table><tr><th>Reason</th><th class="num">Count</th></tr>');
+      for (final MapEntry<String, int> entry in byType.entries) {
+        out.writeln('<tr><td>${_esc(entry.key)}</td><td class="num">${entry.value}</td></tr>');
+      }
+      out.writeln('</table>');
+      out.writeln('<p class="empty">${data.pendingRetries.length} waiting in the retry queue.</p>');
     }
-    out.writeln('<table><tr><th>Reason</th><th class="num">Count</th></tr>');
-    for (final MapEntry<String, int> entry in byType.entries) {
-      out.writeln('<tr><td>${_esc(entry.key)}</td><td class="num">${entry.value}</td></tr>');
-    }
-    out.writeln('</table>');
-    out.writeln('<p class="empty">${data.pendingRetries.length} waiting in the retry queue.</p>');
+    out.writeln('</section>');
   }
-  out.writeln('</section>');
 
   // Study time and goals
-  out.writeln('<section><h2>Study time</h2><div class="stats">');
-  out.writeln('<div class="stat"><b>${totals.totalMinutes ~/ 60}h ${totals.totalMinutes % 60}m</b>'
-      '<span>recorded study time</span></div>');
-  out.writeln('<div class="stat"><b>${totals.streak}</b><span>day streak</span></div>');
-  out.writeln('</div>');
-  if (data.goals.isNotEmpty) {
-    out.writeln('<table><tr><th>Goal</th><th class="num">Progress</th><th class="num">Target</th></tr>');
-    for (final WeeklyGoal goal in data.goals) {
-      out.writeln('<tr><td>${_esc(goal.title.isEmpty ? goal.goalType : goal.title)}</td>'
-          '<td class="num">${goal.progressValue.toStringAsFixed(1)}</td>'
-          '<td class="num">${goal.target.toStringAsFixed(1)}${goal.unit.isEmpty ? '' : ' ${_esc(goal.unit)}'}</td></tr>');
+  if (include.contains('study')) {
+    out.writeln('<section><h2>Study time</h2><div class="stats">');
+    out.writeln('<div class="stat"><b>${totals.totalMinutes ~/ 60}h ${totals.totalMinutes % 60}m</b>'
+        '<span>recorded study time</span></div>');
+    out.writeln('<div class="stat"><b>${totals.streak}</b><span>day streak</span></div>');
+    out.writeln('</div>');
+    if (data.goals.isNotEmpty) {
+      out.writeln('<table><tr><th>Goal</th><th class="num">Progress</th><th class="num">Target</th></tr>');
+      for (final WeeklyGoal goal in data.goals) {
+        out.writeln('<tr><td>${_esc(goal.title.isEmpty ? goal.goalType : goal.title)}</td>'
+            '<td class="num">${goal.progressValue.toStringAsFixed(1)}</td>'
+            '<td class="num">${goal.target.toStringAsFixed(1)}${goal.unit.isEmpty ? '' : ' ${_esc(goal.unit)}'}</td></tr>');
+      }
+      out.writeln('</table>');
     }
-    out.writeln('</table>');
+    out.writeln('</section>');
   }
-  out.writeln('</section>');
 
   out.writeln('<footer>Stracker · DYPOL LABS · printed from your own account</footer>');
   out.writeln('</main></body></html>');
@@ -168,18 +200,18 @@ List<int> printableReportBytes(
   AppData data, {
   String owner = 'Study notebook',
   String generatedOn = '',
+  String from = '',
+  String to = '',
+  Set<String>? sections,
 }) =>
-    utf8.encode(buildPrintableReport(data, owner: owner, generatedOn: generatedOn));
+    utf8.encode(
+      buildPrintableReport(data, owner: owner, generatedOn: generatedOn, from: from, to: to, sections: sections),
+    );
 
-String _esc(String value) => value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
+String _esc(String value) =>
+    value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 
-String _pct(double? fraction) => fraction == null
-    ? '—'
-    : '${(fraction * 100).clamp(0, 100).toStringAsFixed(1)}%';
+String _pct(double? fraction) => fraction == null ? '—' : '${(fraction * 100).clamp(0, 100).toStringAsFixed(1)}%';
 
 String _mark(double? obtained, double? total) {
   if (obtained == null || total == null || total == 0) return '—';

@@ -457,18 +457,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       }
                     },
                   ),
-                  Text('What to include', style: Theme.of(context).textTheme.labelMedium),
+                  Text('What to remind me about', style: Theme.of(context).textTheme.labelMedium),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
                     runSpacing: 6,
                     children: <Widget>[
-                      for (final String type in const <String>['revision', 'backlog', 'tests', 'goal'])
+                      for (final String type in reminderKinds)
                         FilterChip(
-                          label: Text(type),
+                          label: Text(reminderLabel[type] ?? type),
                           selected: draft.reminderTypes.contains(type),
                           onSelected: (bool selected) {
-                            final List<String> next = <String>[...draft.reminderTypes];
+                            // Only the website's kinds are saved; it drops anything else on read.
+                            final List<String> next = <String>[
+                              for (final String kind in draft.reminderTypes)
+                                if (reminderKinds.contains(kind)) kind,
+                            ];
                             if (selected) {
                               next.add(type);
                             } else {

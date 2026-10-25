@@ -68,11 +68,20 @@ class Routes {
         _ => null,
       };
 
-  /// Pushes a section on top of the shell, so Android's back button returns to the tab the
-  /// student came from.
-  static Future<void> open(BuildContext context, String key) async {
+  /// The shell's content-area navigator, set while the [AppShell] is mounted. Sections open
+  /// inside it, so the floating bottom bar (phones, portrait tablets) or the sidebar
+  /// (landscape tablets) stays in place, as on the website. Null outside the shell (tests,
+  /// sign-in), where the nearest navigator is used.
+  static GlobalKey<NavigatorState>? contentNavigator;
+
+  /// Opens a section. Android's back returns to where the student came from. From the
+  /// drawer or sidebar ([fromMenu]) the section replaces any open one instead of stacking,
+  /// like following a link in the website's menu.
+  static Future<void> open(BuildContext context, String key, {bool fromMenu = false}) async {
     final Widget? page = pageFor(key);
     if (page == null) return;
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    final NavigatorState navigator = contentNavigator?.currentState ?? Navigator.of(context);
+    if (fromMenu) navigator.popUntil((Route<dynamic> route) => route.isFirst);
+    await navigator.push(MaterialPageRoute<void>(builder: (_) => page, settings: RouteSettings(name: key)));
   }
 }

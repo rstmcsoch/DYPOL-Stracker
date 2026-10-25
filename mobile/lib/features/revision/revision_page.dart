@@ -16,21 +16,76 @@ import 'revision_actions.dart';
 
 /// Revision planner: overdue, today, upcoming and recently completed revisions, plus
 /// chapters that are finished but not yet on the ladder.
-class RevisionPage extends ConsumerWidget {
+class RevisionPage extends ConsumerStatefulWidget {
   const RevisionPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RevisionPage> createState() => _RevisionPageState();
+}
+
+/// The website's Revision desk: Overdue (oldest first), Due today, Tomorrow, Coming up
+/// (first ten) and a Recently completed record, plus the app's own "finished but not
+/// scheduled" shortcut.
+class _RevisionPageState extends ConsumerState<RevisionPage> {
+  bool _showCompleted = false;
+
+  @override
+  Widget build(BuildContext context) {
     final AppData data = ref.watch(dataControllerProvider).data;
     final String today = todayIso();
-    final RevisionBuckets buckets = revisionBuckets(data, today: today);
+    final String tomorrow = addDays(today, 1);
+    final List<Revision> open = data.revisions.where((Revision r) => r.completedAt == null).toList()
+      ..sort((Revision a, Revision b) => a.dueOn.compareTo(b.dueOn));
+    final List<Revision> overdue = open.where((Revision r) => r.dueOn.compareTo(today) < 0).toList();
+    final List<Revision> dueToday = open.where((Revision r) => r.dueOn == today).toList();
+    final List<Revision> dueTomorrow = open.where((Revision r) => r.dueOn == tomorrow).toList();
+    final List<Revision> upcoming = open.where((Revision r) => r.dueOn.compareTo(tomorrow) > 0).toList();
+    final List<Revision> completed = data.revisions.where((Revision r) => r.completedAt != null).toList()
+      ..sort((Revision a, Revision b) => (b.completedAt ?? '').compareTo(a.completedAt ?? ''));
+    final List<Revision> recent = completed.take(30).toList();
     final List<Chapter> unscheduled = chaptersWithoutRevision(data);
     final StrackerColors colors = context.stracker;
+    final int attention = overdue.length + dueToday.length;
+
+    Widget section(String title, String note, List<Revision> items, String empty, {int? limit, bool late = false}) {
+      final List<Revision> visible = limit == null ? items : items.take(limit).toList();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SectionHeading(title,
+              trailing: Pill('${items.length}', tone: late ? PillTone.bad : PillTone.neutral, dense: true)),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(note, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted)),
+          ),
+          NotebookCard(
+            dense: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                if (visible.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child:
+                        Text('✳  $empty', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted)),
+                  )
+                else
+                  for (final Revision revision in visible) RevisionTile(revision: revision, data: data),
+                if (limit != null && items.length > limit)
+                  Text(
+                    'And ${items.length - limit} more scheduled.',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
 
     return SectionPage(
-      title: 'Revisions',
-      subtitle: '${buckets.overdue.length} overdue · ${buckets.today.length} due today · '
-          '${buckets.upcoming.length} upcoming',
+      title: 'Revision desk',
+      subtitle: '$attention need attention',
       actions: <Widget>[
         IconButton(
           tooltip: 'Revision settings',
@@ -39,7 +94,8 @@ class RevisionPage extends ConsumerWidget {
         ),
       ],
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _pickChapter(context, ref, data, unscheduled.isEmpty ? const <Chapter>[] : unscheduled),
+        heroTag: 'revision-schedule',
+        onPressed: () => _pickChapter(context, ref, data, unscheduled),
         backgroundColor: colors.palette.accentDark,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_task, size: 19),
@@ -48,38 +104,36 @@ class RevisionPage extends ConsumerWidget {
       child: PageBody(
         refresh: () => ref.read(dataControllerProvider.notifier).load(silent: true),
         children: <Widget>[
-          InfoBanner(
-            'Your ladder: ${revisionGapLabel(data.settings.revisionGaps)}. Completing a revision '
-            'schedules the next one using the gaps in Settings → Study rhythm.',
-          ),
-          const SizedBox(height: 10),
-          if (buckets.isEmpty && unscheduled.isEmpty)
-            NotebookCard(
-              child: EmptyState(
-                title: 'Nothing scheduled',
-                message: 'Finish a chapter, then schedule its first revision. The ladder does the rest.',
-                icon: Icons.alarm_outlined,
-                action: ElevatedButton(
-                  onPressed: () => Routes.open(context, Routes.syllabus),
-                  child: const Text('Open syllabus'),
+          NotebookCard(
+            dense: true,
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.alarm, size: 18, color: attention > 0 ? colors.palette.red : colors.palette.accentDark),
+                const SizedBox(width: 8),
+                Text('$attention', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(width: 6),
+                const Expanded(child: Text('need attention')),
+                Flexible(
+                  child: Text(
+                    'Ladder ${revisionGapLabel(data.settings.revisionGaps)}',
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+                  ),
                 ),
-              ),
+              ],
             ),
-          if (buckets.overdue.isNotEmpty) ...<Widget>[
-            const SectionHeading('Overdue'),
-            for (final Revision revision in buckets.overdue)
-              RevisionTile(revision: revision, data: data),
-          ],
-          if (buckets.today.isNotEmpty) ...<Widget>[
-            const SectionHeading('Due today'),
-            for (final Revision revision in buckets.today)
-              RevisionTile(revision: revision, data: data),
-          ],
-          if (buckets.upcoming.isNotEmpty) ...<Widget>[
-            const SectionHeading('Upcoming'),
-            for (final Revision revision in buckets.upcoming.take(30))
-              RevisionTile(revision: revision, data: data),
-          ],
+          ),
+          if (overdue.isNotEmpty) section('Overdue', 'Oldest first.', overdue, 'You’re all caught up.', late: true),
+          section(
+            'Due today',
+            dueToday.isNotEmpty
+                ? '${dueToday.length} ready for a quick recall pass.'
+                : 'Nothing due today. Keep progressing.',
+            dueToday,
+            'Nothing due today.',
+          ),
+          section('Tomorrow', 'A little peek at what’s coming.', dueTomorrow, 'No revision due tomorrow.'),
+          section('Coming up', 'Scheduled next.', upcoming, 'No upcoming revisions scheduled.', limit: 10),
           if (unscheduled.isNotEmpty) ...<Widget>[
             const SectionHeading('Finished but not scheduled'),
             NotebookCard(
@@ -104,35 +158,51 @@ class RevisionPage extends ConsumerWidget {
               ),
             ),
           ],
-          if (buckets.completedRecently.isNotEmpty) ...<Widget>[
-            const SectionHeading('Completed in the last 14 days'),
-            NotebookCard(
-              child: Column(
-                children: <Widget>[
-                  for (final Revision revision in buckets.completedRecently.take(12))
-                    RevisionTile(revision: revision, data: data),
-                ],
-              ),
-            ),
-          ],
           const SizedBox(height: 10),
           NotebookCard(
-            title: 'Revision gaps',
-            subtitle: 'Stored in app_settings.revision_gaps and shared with the website.',
-            child: Text(
-              revisionGapLabel(data.settings.revisionGaps),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: colors.palette.textAccent),
+            dense: true,
+            onTap: () => setState(() => _showCompleted = !_showCompleted),
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.done_all, size: 18, color: colors.palette.green),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text('Recently completed', style: Theme.of(context).textTheme.titleSmall),
+                      Text(
+                        '${completed.length} revision${completed.length == 1 ? '' : 's'} in your record',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(_showCompleted ? 'Hide ↑' : 'Show ↓', style: TextStyle(color: colors.palette.textAccent)),
+              ],
             ),
           ),
+          if (_showCompleted) ...<Widget>[
+            const SizedBox(height: 8),
+            NotebookCard(
+              dense: true,
+              child: recent.isEmpty
+                  ? const EmptyState(title: 'No finished revisions yet.', icon: Icons.done_all)
+                  : Column(
+                      children: <Widget>[
+                        for (final Revision revision in recent) RevisionTile(revision: revision, data: data),
+                      ],
+                    ),
+            ),
+          ],
         ],
       ),
     );
   }
 
   void _pickChapter(BuildContext context, WidgetRef ref, AppData data, List<Chapter> candidates) {
-    final List<Chapter> options = candidates.isNotEmpty
-        ? candidates
-        : data.chapters.where((Chapter chapter) => chapter.isComplete).toList();
+    final List<Chapter> options =
+        candidates.isNotEmpty ? candidates : data.chapters.where((Chapter chapter) => chapter.isComplete).toList();
     showAppSheet<void>(
       context,
       title: 'Schedule a revision',

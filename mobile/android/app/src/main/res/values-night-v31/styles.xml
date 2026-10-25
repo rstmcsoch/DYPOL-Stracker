@@ -3,7 +3,9 @@
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowSplashScreenBackground">@color/splash_background</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
-        <item name="android:windowSplashScreenIconBackgroundColor">@color/icon_background</item>
+        <!-- No icon circle: the logo sits straight on the paper, with the studio name
+             near the bottom as on the in-app splash. -->
+        <item name="android:windowSplashScreenBrandingImage">@drawable/splash_branding</item>
         <item name="android:windowSplashScreenAnimationDuration">0</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

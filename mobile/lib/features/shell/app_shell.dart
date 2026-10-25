@@ -41,6 +41,31 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// layout switches between the bottom bar and the sidebar on rotation or resize.
   final GlobalKey _pagesKey = GlobalKey(debugLabel: 'shell-pages');
 
+  /// Sections open in this navigator, inside the content area, so the bottom bar or the
+  /// sidebar stays visible like on the website.
+  final GlobalKey<NavigatorState> _contentKey = GlobalKey<NavigatorState>(debugLabel: 'shell-content');
+  late final _SectionObserver _observer = _SectionObserver(_onSectionsChanged);
+
+  /// Whether a section page is open over the tabs (it then hosts its own floating buttons).
+  bool _sectionOpen = false;
+
+  void _onSectionsChanged() {
+    final bool open = _contentKey.currentState?.canPop() ?? false;
+    if (open != _sectionOpen && mounted) setState(() => _sectionOpen = open);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    Routes.contentNavigator = _contentKey;
+  }
+
+  @override
+  void dispose() {
+    if (Routes.contentNavigator == _contentKey) Routes.contentNavigator = null;
+    super.dispose();
+  }
+
   /// The website's Ask Stracker launcher grows into a labelled pill while the student
   /// scrolls down and folds back to a circle on scroll up or at the top.
   bool _aiExpanded = false;
@@ -67,6 +92,13 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   void _select(int index) {
     if (_quickOpen) setState(() => _quickOpen = false);
+    // A tab tap always lands on that tab, closing any open section (the website's bar is a
+    // set of links, not a history).
+    final NavigatorState? sections = _contentKey.currentState;
+    if (sections != null && sections.canPop()) {
+      sections.popUntil((Route<dynamic> route) => route.isFirst);
+      HapticFeedback.selectionClick();
+    }
     if (_index == index) return;
     // A short, light tap: the same feedback Android gives its own tab bars.
     HapticFeedback.selectionClick();
@@ -87,16 +119,43 @@ class _AppShellState extends ConsumerState<AppShell> {
       ProfilePage(),
     ];
 
+    final Widget tabs = NotificationListener<UserScrollNotification>(
+      onNotification: _onScroll,
+      child: FloatingClearance(
+        // Bottom room so the last card scrolls clear of the two floating buttons.
+        bottom: 140,
+        child: _FadeIndexedStack(index: _index, children: pages),
+      ),
+    );
+
+    // Sections (Syllabus, Backlog, Settings...) are pushed onto this navigator, so they
+    // render in the content area beside the sidebar or above the bottom bar. Android's
+    // back pops them first (NavigatorPopHandler), then the tab logic below runs.
     final Widget content = KeyedSubtree(
       key: _pagesKey,
-      child: NotificationListener<UserScrollNotification>(
-        onNotification: _onScroll,
-        child: SidebarScope(
-          visible: wide,
-          child: FloatingClearance(
-            // Bottom room so the last card scrolls clear of the two floating buttons.
-            bottom: 140,
-            child: _FadeIndexedStack(index: _index, children: pages),
+      child: SidebarScope(
+        visible: wide,
+        child: NavigatorPopHandler(
+          onPopWithResult: (Object? result) => _contentKey.currentState?.maybePop(),
+          child: HeroMode(
+            // Every section has its own add button; heroes between nested pages would
+            // only collide on the shared default tag.
+            enabled: false,
+            child: _ShellTabsScope(
+              tabs: tabs,
+              child: Navigator(
+                key: _contentKey,
+                observers: <NavigatorObserver>[_observer],
+                onGenerateInitialRoutes: (NavigatorState navigator, String initial) => <Route<dynamic>>[
+                  PageRouteBuilder<void>(
+                    settings: const RouteSettings(name: '/'),
+                    pageBuilder: (BuildContext context, Animation<double> a, Animation<double> b) => _ShellTabs(
+                      builder: () => tabs,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -106,9 +165,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       // Back from a secondary tab returns to Home; back on Home leaves the app, which is
       // the expected Android behaviour. An open drawer is closed first by its own history
       // entry, and a pushed section is popped by the Navigator before this runs.
-      canPop: _index == 0 && !_quickOpen,
+      canPop: _index == 0 && !_quickOpen && !_sectionOpen,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (didPop) return;
+        // An open section is popped by the content navigator's own handler.
+        if (_contentKey.currentState?.canPop() ?? false) return;
         if (_quickOpen) {
           setState(() => _quickOpen = false);
           return;
@@ -133,20 +194,67 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ],
               )
             : content,
-        floatingActionButton: _FloatingActions(
-          open: _quickOpen,
-          aiExpanded: _aiExpanded,
-          onToggle: () {
-            HapticFeedback.lightImpact();
-            setState(() => _quickOpen = !_quickOpen);
-          },
-          onClose: () => setState(() => _quickOpen = false),
-        ),
+        // A section hosts its own copy of the buttons (above its add button).
+        floatingActionButton: _sectionOpen
+            ? null
+            : _FloatingActions(
+                open: _quickOpen,
+                aiExpanded: _aiExpanded,
+                onToggle: () {
+                  HapticFeedback.lightImpact();
+                  setState(() => _quickOpen = !_quickOpen);
+                },
+                onClose: () => setState(() => _quickOpen = false),
+              ),
         bottomNavigationBar:
             wide ? null : _BottomTabs(key: const ValueKey<String>('bottom-tabs'), index: _index, onSelected: _select),
       ),
     );
   }
+}
+
+/// The first page of the content navigator. It rebuilds from the shell's latest widget
+/// tree through [_ShellTabsScope], because a route's page builder is only called once.
+class _ShellTabs extends StatelessWidget {
+  const _ShellTabs({required this.builder});
+
+  final Widget Function() builder;
+
+  @override
+  Widget build(BuildContext context) {
+    final _ShellTabsScope? scope = context.dependOnInheritedWidgetOfExactType<_ShellTabsScope>();
+    return scope?.tabs ?? builder();
+  }
+}
+
+class _ShellTabsScope extends InheritedWidget {
+  const _ShellTabsScope({required this.tabs, required super.child});
+
+  final Widget tabs;
+
+  @override
+  bool updateShouldNotify(_ShellTabsScope oldWidget) => !identical(oldWidget.tabs, tabs);
+}
+
+/// Tells the shell when sections are pushed or popped in the content area.
+class _SectionObserver extends NavigatorObserver {
+  _SectionObserver(this.onChange);
+
+  final VoidCallback onChange;
+
+  void _later() => WidgetsBinding.instance.addPostFrameCallback((_) => onChange());
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) => _later();
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => _later();
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) => _later();
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) => _later();
 }
 
 /// Crossfades between the four tabs over 180 ms while keeping each page's state and scroll
@@ -552,6 +660,7 @@ class NotebookScaffold extends ConsumerStatefulWidget {
     this.showBrand = false,
     this.bottom,
     this.floatingActions = true,
+    this.showMenu = true,
   });
 
   final String title;
@@ -566,6 +675,9 @@ class NotebookScaffold extends ConsumerStatefulWidget {
   /// Whether a pushed page shows the website's global Ask Stracker and quick-action
   /// buttons. Off only where they would be redundant (the AI chat itself).
   final bool floatingActions;
+
+  /// The website shows its two-line menu button on every page except Profile.
+  final bool showMenu;
 
   @override
   ConsumerState<NotebookScaffold> createState() => _NotebookScaffoldState();
@@ -642,7 +754,7 @@ class _NotebookScaffoldState extends ConsumerState<NotebookScaffold> {
             subtitle: subtitle,
             showBack: showBack,
             showBrand: showBrand,
-            showMenu: !showBack && !SidebarScope.of(context),
+            showMenu: widget.showMenu && !SidebarScope.of(context),
             examLabel: showBrand ? _examLabel(data) : null,
             actions: <Widget>[
               ...actions,
@@ -781,7 +893,7 @@ class _NotebookHeader extends StatelessWidget {
                   builder: (BuildContext context) => HeaderIcon(
                     label: 'Open navigation',
                     icon: Icons.menu,
-                    size: 22,
+                    glyph: const MenuLines(),
                     onTap: () => Scaffold.of(context).openDrawer(),
                   ),
                 ),
@@ -882,12 +994,16 @@ class HeaderIcon extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.size = 20,
+    this.glyph,
   });
 
   final String label;
   final IconData icon;
   final VoidCallback onTap;
   final double size;
+
+  /// Drawn instead of [icon] when set (the website's two-line menu mark).
+  final Widget? glyph;
 
   @override
   Widget build(BuildContext context) {
@@ -906,9 +1022,30 @@ class HeaderIcon extends StatelessWidget {
         child: SizedBox(
           width: 40,
           height: 44,
-          child: Icon(icon, size: size, color: colors.palette.ink),
+          child: Center(child: glyph ?? Icon(icon, size: size, color: colors.palette.ink)),
         ),
       ),
+    );
+  }
+}
+
+/// The website's mobile menu mark: two 20 x 2 rounded lines, 6 apart (`.mobile-menu-lines`),
+/// rather than Material's three-line icon.
+class MenuLines extends StatelessWidget {
+  const MenuLines({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color ink = context.stracker.palette.ink;
+    Widget line() => Container(
+          width: 20,
+          height: 2,
+          decoration: BoxDecoration(color: ink, borderRadius: BorderRadius.circular(2)),
+        );
+    return Column(
+      key: const ValueKey<String>('menu-lines'),
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[line(), const SizedBox(height: 6), line()],
     );
   }
 }
@@ -1007,7 +1144,7 @@ class NotebookDrawer extends ConsumerWidget {
     void go(String key) {
       HapticFeedback.selectionClick();
       if (!permanent) Navigator.of(context).pop();
-      Routes.open(context, key);
+      Routes.open(context, key, fromMenu: true);
     }
 
     Widget header() => Padding(
@@ -1150,6 +1287,9 @@ class NotebookDrawer extends ConsumerWidget {
                 group('Planning'),
                 item('Study now', Icons.explore_outlined, Routes.studyNow, highlight: true),
                 item('Study plan', Icons.event_note_outlined, Routes.planner),
+                // The desktop sidebar lists Settings under Planning; the phone drawer leaves
+                // it to Profile.
+                if (permanent) item('Settings', Icons.settings_outlined, Routes.settings),
               ],
             ),
           ),

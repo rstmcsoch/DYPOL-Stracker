@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
@@ -11,12 +12,16 @@ import '../../logic/revision.dart';
 
 /// Marks a revision complete and schedules the next rung of the ladder.
 /// Shared by the dashboard and the revision page so both write the same rows.
+/// Revisions being saved right now: a double tap cannot schedule the next rung twice.
+final Set<String> _completing = <String>{};
+
 Future<void> completeRevision(
   BuildContext context,
   WidgetRef ref,
   AppData data,
   Revision revision,
 ) async {
+  if (!_completing.add(revision.id)) return;
   final DataController controller = ref.read(dataControllerProvider.notifier);
   final Revision completed = revision.copyWith(completedAt: isoNow());
   final Revision? next = nextRevision(data: data, completed: completed);
@@ -26,17 +31,31 @@ Future<void> completeRevision(
       completed,
       if (next != null) next,
     ]);
-    if (chapter != null && chapter.status != 'Revised' && chapter.isComplete) {
+    if (chapter != null && chapter.status == 'Done') {
       await controller.saveChapter(chapter.copyWith(status: 'Revised'));
     }
     if (context.mounted) {
       showToast(
         context,
         next == null
-            ? 'Revision complete. That was the last rung in your ladder.'
-            : 'Revision complete. Next one on ${formatDate(next.dueOn)}.',
+            ? 'Revision done. Your memory just got a little stronger.'
+            : 'Revision done. Your memory just got a little stronger. Next one on ${formatDate(next.dueOn)}.',
       );
     }
+    await HapticFeedback.lightImpact();
+  } catch (error) {
+    if (context.mounted) showToast(context, error.toString(), error: true);
+  } finally {
+    _completing.remove(revision.id);
+  }
+}
+
+/// The website's "+1d": moves an open revision to tomorrow without completing it.
+Future<void> snoozeRevision(BuildContext context, WidgetRef ref, Revision revision) async {
+  try {
+    await ref.read(dataControllerProvider.notifier).saveRevision(revision.copyWith(dueOn: addDays(todayIso(), 1)));
+    if (context.mounted) showToast(context, 'Moved to tomorrow. It is still in your queue.');
+    await HapticFeedback.selectionClick();
   } catch (error) {
     if (context.mounted) showToast(context, error.toString(), error: true);
   }
@@ -49,8 +68,8 @@ Future<void> scheduleRevision(
   AppData data,
   Chapter chapter,
 ) async {
-  final bool exists = data.revisions.any((Revision revision) =>
-      revision.chapterId == chapter.id && revision.completedAt == null);
+  final bool exists =
+      data.revisions.any((Revision revision) => revision.chapterId == chapter.id && revision.completedAt == null);
   if (exists) {
     if (context.mounted) showToast(context, 'That chapter already has a revision scheduled.');
     return;
@@ -121,7 +140,11 @@ class RevisionTile extends ConsumerWidget {
                   Text(
                     chapter?.name ?? 'Chapter',
                     style: Theme.of(context).textTheme.titleSmall,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                if (showChapter && chapter != null)
+                  Text(chapter.subject, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted)),
                 Text(
                   done
                       ? 'Completed ${formatDateTime(revision.completedAt)}'
@@ -137,12 +160,20 @@ class RevisionTile extends ConsumerWidget {
               ],
             ),
           ),
-          if (!done)
-            TextButton(
+          if (!done) ...<Widget>[
+            IconButton(
+              tooltip: 'Move to tomorrow',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => snoozeRevision(context, ref, revision),
+              icon: Text('+1d', style: TextStyle(fontSize: 12, color: colors.inkSoft, fontWeight: FontWeight.w600)),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
               onPressed: () => completeRevision(context, ref, data, revision),
-              child: const Text('Done'),
-            )
-          else
+              icon: const Icon(Icons.check, size: 15),
+              label: const Text('Revised'),
+            ),
+          ] else
             Icon(Icons.check_circle, size: 18, color: colors.palette.green),
         ],
       ),

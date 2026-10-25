@@ -62,6 +62,25 @@ String newId() {
       '${hex.sublist(6, 8).join()}-${hex.sublist(8, 10).join()}-${hex.sublist(10, 16).join()}';
 }
 
+/// Website `stableId` (src/lib/id.ts): the same namespace always gives the same UUID-shaped
+/// id, so a row written by the app and one written by the website for the same thing (for
+/// example a test's time entry for one subject) update each other instead of duplicating.
+String stableId(String namespace) {
+  const List<int> seeds = <int>[2166136261, 2246822519, 3266489917, 668265263];
+  final List<int> input = namespace.toLowerCase().codeUnits;
+  final StringBuffer words = StringBuffer();
+  for (int index = 0; index < seeds.length; index += 1) {
+    int hash = seeds[index] & 0xffffffff;
+    for (final int unit in input) {
+      hash = (hash ^ (unit + index)) & 0xffffffff;
+      hash = (hash * 16777619) & 0xffffffff;
+    }
+    words.write(hash.toRadixString(16).padLeft(8, '0'));
+  }
+  final String w = words.toString();
+  return '${w.substring(0, 8)}-${w.substring(8, 12)}-5${w.substring(13, 16)}-a${w.substring(17, 20)}-${w.substring(20, 32)}';
+}
+
 /* ------------------------------------------------------------------ */
 /* Profile and settings                                                */
 /* ------------------------------------------------------------------ */
@@ -227,8 +246,10 @@ class AppSettings {
       examMode: _str(raw['exam_mode'], 'auto'),
       remindersEnabled: _bool(raw['reminders_enabled']),
       reminderTime: _str(raw['reminder_time'], '08:00'),
-      reminderTypes:
-          _stringList(raw['reminder_types']).isEmpty ? fallback.reminderTypes : _stringList(raw['reminder_types']),
+      // As the website's defaults.ts: keep only known kinds when a list is stored.
+      reminderTypes: raw['reminder_types'] is List
+          ? _stringList(raw['reminder_types']).where(_reminderKinds.contains).toList()
+          : fallback.reminderTypes,
       examId: _strOrNull(raw['exam_id']),
       examYear: _intOrNull(raw['exam_year']),
       examSession: _strOrNull(raw['exam_session']),
@@ -1570,3 +1591,5 @@ class ExamCatalogEntry {
         markingScheme: raw['marking_scheme'] is Map ? Map<String, dynamic>.from(raw['marking_scheme'] as Map) : null,
       );
 }
+
+const List<String> _reminderKinds = <String>['revision', 'backlog', 'practice', 'pyq', 'mock', 'plan'];

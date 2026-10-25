@@ -20,8 +20,11 @@ import 'package:stracker/features/pyq/pyq_page.dart';
 import 'package:stracker/features/practice/practice_page.dart';
 import 'package:stracker/features/mock/mock_analysis_page.dart';
 import 'package:stracker/features/backup/backup_page.dart';
+import 'package:stracker/features/home/home_page.dart';
+import 'package:stracker/features/profile/profile_page.dart';
 import 'package:stracker/features/decks/decks_page.dart';
 import 'package:stracker/features/syllabus/syllabus_page.dart';
+import 'package:stracker/features/tests/tests_page.dart';
 import 'package:stracker/features/focus/focus_page.dart';
 import 'package:stracker/features/mistakes/mistakes_page.dart';
 import 'package:stracker/features/planner/planner_page.dart';
@@ -81,6 +84,13 @@ Future<void> _pump(WidgetTester tester, Widget home, {double textScale = 1}) asy
     ),
   );
   await tester.pump(const Duration(milliseconds: 400));
+}
+
+/// Lets a route transition finish (pumpAndSettle would wait on the sync spinner forever).
+Future<void> _settle(WidgetTester tester) async {
+  for (int i = 0; i < 4; i += 1) {
+    await tester.pump(const Duration(milliseconds: 300));
+  }
 }
 
 Finder get _sidebar => find.byKey(const ValueKey<String>('sidebar'));
@@ -151,6 +161,75 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(_bottomTabs, findsOneWidget);
     expect(find.descendant(of: _bottomTabs, matching: find.bySemanticsLabel('Analytics')), findsOneWidget);
+  });
+
+  testWidgets('landscape tablet: a section opens beside the sidebar and back closes it', (WidgetTester tester) async {
+    addTearDown(tester.view.reset);
+    await _setWindow(tester, const Size(1280, 800));
+    await _pump(tester, const AppShell());
+    await tester.tap(find.descendant(of: _sidebar, matching: find.text('Syllabus')));
+    await _settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SyllabusPage), findsOneWidget);
+    expect(_sidebar, findsOneWidget, reason: 'the sidebar stays, like the desktop website');
+    expect(find.bySemanticsLabel('Open navigation'), findsNothing);
+
+    // Android back pops the section inside the content area, not the app.
+    await tester.binding.handlePopRoute();
+    await _settle(tester);
+    expect(find.byType(SyllabusPage), findsNothing);
+    expect(_sidebar, findsOneWidget);
+  });
+
+  testWidgets('phone: two-line menu on the right opens the drawer; sections keep the bottom bar',
+      (WidgetTester tester) async {
+    addTearDown(tester.view.reset);
+    await _setWindow(tester, const Size(412, 915));
+    await _pump(tester, const AppShell());
+    final Finder menu = find.bySemanticsLabel('Open navigation');
+    expect(menu, findsOneWidget);
+    expect(tester.getCenter(menu).dx, greaterThan(412 * 0.75), reason: 'top-right, as on the mobile website');
+    await tester.tap(menu);
+    await _settle(tester);
+    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('Syllabus')).first);
+    await _settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SyllabusPage), findsOneWidget);
+    expect(_bottomTabs, findsOneWidget, reason: 'the floating bar stays on every page');
+    expect(menu, findsOneWidget, reason: 'sections keep the menu button');
+
+    await tester.binding.handlePopRoute();
+    await _settle(tester);
+    expect(find.byType(SyllabusPage), findsNothing);
+
+    // Profile has no menu button, as on the website.
+    await tester.tap(find.descendant(of: _bottomTabs, matching: find.bySemanticsLabel('Profile')));
+    await _settle(tester);
+    expect(find.descendant(of: find.byType(ProfilePage), matching: menu), findsNothing);
+    expect(find.descendant(of: find.byType(HomePage), matching: menu), findsOneWidget);
+  });
+
+  testWidgets('Android back order: drawer first, then tab to Home, then the system default',
+      (WidgetTester tester) async {
+    addTearDown(tester.view.reset);
+    await _setWindow(tester, const Size(412, 915));
+    await _pump(tester, const AppShell());
+    await tester.tap(find.descendant(of: _bottomTabs, matching: find.bySemanticsLabel('Tests')));
+    await _settle(tester);
+    await tester.tap(find.descendant(of: find.byType(TestsPage), matching: find.bySemanticsLabel('Open navigation')));
+    await _settle(tester);
+    expect(find.byType(Drawer), findsOneWidget);
+
+    // 1) closes the drawer, 2) returns to Home, 3) on Home back is left to Android.
+    expect(await tester.binding.handlePopRoute(), isTrue);
+    await _settle(tester);
+    expect(find.byType(Drawer), findsNothing);
+    expect(find.byType(AppShell), findsOneWidget);
+    expect(await tester.binding.handlePopRoute(), isTrue);
+    await _settle(tester);
+    expect(
+        find.descendant(of: find.byType(HomePage), matching: find.bySemanticsLabel('Open navigation')), findsOneWidget);
+    expect(find.byType(AppShell), findsOneWidget);
   });
 
   testWidgets('smallest phone with large system font scale does not overflow', (WidgetTester tester) async {
