@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
@@ -30,7 +31,18 @@ class _SyllabusPageState extends ConsumerState<SyllabusPage> {
   final TextEditingController _search = TextEditingController();
   String _subject = 'All';
   String _status = 'All';
-  String _sort = 'Syllabus order';
+  String _priority = 'all';
+  String _strength = 'all';
+  String _tested = 'all';
+
+  void _clearFilters() => setState(() {
+        _search.clear();
+        _subject = 'All';
+        _status = 'All';
+        _priority = 'all';
+        _strength = 'all';
+        _tested = 'all';
+      });
 
   @override
   void dispose() {
@@ -46,38 +58,39 @@ class _SyllabusPageState extends ConsumerState<SyllabusPage> {
     final List<String> subjects = <String>['All', ...data.subjects];
     final String needle = _search.text.trim().toLowerCase();
 
-    List<Chapter> rows = data.chapters.where((Chapter chapter) {
-      final bool matchesSubject = _subject == 'All' || chapter.subject == _subject;
-      final bool matchesStatus = _status == 'All' || chapter.status == _status;
-      final bool matchesQuery = needle.isEmpty ||
-          '${chapter.name} ${chapter.subject} ${chapter.notes} ${chapter.formulaNotes}'
-              .toLowerCase()
-              .contains(needle);
-      return matchesSubject && matchesStatus && matchesQuery;
+    final Map<String, ChapterPerformance> performance = <String, ChapterPerformance>{
+      for (final ChapterPerformance row in chapterPerformance(data)) row.chapter.id: row,
+    };
+    final List<Chapter> rows = data.chapters.where((Chapter chapter) {
+      final String classification = performance[chapter.id]?.classification ?? 'Untested';
+      if (_subject != 'All' && chapter.subject != _subject) return false;
+      if (_status != 'All' && chapter.status != _status) return false;
+      if (_priority != 'all' && chapter.priority != _priority) return false;
+      if (_strength != 'all' && classification != _strength) return false;
+      if (_tested == 'tested' && classification == 'Untested') return false;
+      if (_tested == 'untested' && classification != 'Untested') return false;
+      return needle.isEmpty ||
+          '${chapter.name} ${chapter.subject} ${chapter.notes} ${chapter.formulaNotes}'.toLowerCase().contains(needle);
     }).toList();
-
     int subjectRank(Chapter chapter) => data.subjects.indexOf(chapter.subject);
-    switch (_sort) {
-      case 'Priority':
-        const List<String> order = <String>['High', 'Medium', 'Low'];
-        rows.sort((Chapter a, Chapter b) => order.indexOf(a.priority).compareTo(order.indexOf(b.priority)));
-      case 'Name':
-        rows.sort((Chapter a, Chapter b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      case 'Weakest first':
-        rows.sort((Chapter a, Chapter b) {
-          final double? first = practice[a.id]?.accuracy;
-          final double? second = practice[b.id]?.accuracy;
-          if (first == null && second == null) return 0;
-          if (first == null) return 1;
-          if (second == null) return -1;
-          return first.compareTo(second);
-        });
-      default:
-        rows.sort((Chapter a, Chapter b) {
-          final int bySubject = subjectRank(a).compareTo(subjectRank(b));
-          return bySubject != 0 ? bySubject : a.position.compareTo(b.position);
-        });
-    }
+    rows.sort((Chapter a, Chapter b) {
+      final int bySubject = subjectRank(a).compareTo(subjectRank(b));
+      return bySubject != 0 ? bySubject : a.position.compareTo(b.position);
+    });
+    final bool filtering = needle.isNotEmpty ||
+        _subject != 'All' ||
+        _status != 'All' ||
+        _priority != 'all' ||
+        _strength != 'all' ||
+        _tested != 'all';
+    final List<({String subject, int total, int complete})> strip = <({String subject, int total, int complete})>[
+      for (final String subject in data.subjects)
+        (
+          subject: subject,
+          total: data.chapters.where((Chapter c) => c.subject == subject).length,
+          complete: data.chapters.where((Chapter c) => c.subject == subject && c.isComplete).length,
+        ),
+    ].where((({String subject, int total, int complete}) row) => row.total > 0).toList();
 
     return SectionPage(
       title: 'Syllabus',
@@ -93,7 +106,55 @@ class _SyllabusPageState extends ConsumerState<SyllabusPage> {
       child: PageBody(
         refresh: () => ref.read(dataControllerProvider.notifier).load(silent: true),
         children: <Widget>[
-          SearchBox(controller: _search, hint: 'Search chapters and notes', onChanged: (_) => setState(() {})),
+          if (strip.isNotEmpty) ...<Widget>[
+            WrapGrid(
+              minItemWidth: 140,
+              children: <Widget>[
+                for (final ({String subject, int total, int complete}) item in strip)
+                  NotebookCard(
+                    dense: true,
+                    accent: context.stracker.subjectColor(item.subject),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                item.subject,
+                                style: Theme.of(context).textTheme.titleSmall,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text('${item.complete} / ${item.total} done', style: Theme.of(context).textTheme.labelSmall),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        LinearBar(
+                          value: item.complete / item.total,
+                          color: context.stracker.subjectColor(item.subject),
+                          height: 6,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${(item.complete / item.total * 100).round()}% mapped',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.stracker.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
+          Text('Your study map', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            '${data.chapters.length} chapter${data.chapters.length == 1 ? '' : 's'} across ${strip.length} '
+            'subject${strip.length == 1 ? '' : 's'}.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.stracker.muted),
+          ),
+          const SizedBox(height: 8),
+          SearchBox(controller: _search, hint: 'Find a chapter or note…', onChanged: (_) => setState(() {})),
           const SizedBox(height: 10),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -117,9 +178,7 @@ class _SyllabusPageState extends ConsumerState<SyllabusPage> {
                       backgroundColor: context.stracker.palette.paperSoft,
                       selectedColor: context.stracker.palette.accentLight,
                       side: BorderSide(
-                        color: _subject == subject
-                            ? context.stracker.palette.accent
-                            : context.stracker.palette.line,
+                        color: _subject == subject ? context.stracker.palette.accent : context.stracker.palette.line,
                       ),
                     ),
                   ),
@@ -134,39 +193,70 @@ class _SyllabusPageState extends ConsumerState<SyllabusPage> {
                   label: 'Status',
                   value: _status,
                   items: const <String>['All', 'Not Started', 'Studying', 'Done', 'Revised'],
+                  labelFor: (String v) => v == 'All' ? 'All statuses' : v,
                   onChanged: (String? value) => setState(() => _status = value ?? 'All'),
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(
-                child: AppSelect<String>(
-                  label: 'Sort',
-                  value: _sort,
-                  items: const <String>['Syllabus order', 'Priority', 'Name', 'Weakest first'],
-                  onChanged: (String? value) => setState(() => _sort = value ?? 'Syllabus order'),
-                ),
-              ),
+              if (filtering)
+                TextButton(onPressed: _clearFilters, child: const Text('Clear')),
             ],
+          ),
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.filter_list, size: 18),
+              title: const Text('More filters'),
+              children: <Widget>[
+                AppSelect<String>(
+                  label: 'Priority',
+                  value: _priority,
+                  items: const <String>['all', 'High', 'Medium', 'Low'],
+                  labelFor: (String v) => v == 'all' ? 'Any priority' : v,
+                  onChanged: (String? v) => setState(() => _priority = v ?? 'all'),
+                ),
+                AppSelect<String>(
+                  label: 'Performance',
+                  value: _strength,
+                  items: const <String>['all', 'Weak', 'Okay', 'Strong'],
+                  labelFor: (String v) => v == 'all' ? 'Any performance' : v,
+                  onChanged: (String? v) => setState(() => _strength = v ?? 'all'),
+                ),
+                AppSelect<String>(
+                  label: 'Test history',
+                  value: _tested,
+                  items: const <String>['all', 'tested', 'untested'],
+                  labelFor: (String v) => switch (v) {
+                    'tested' => 'Tested',
+                    'untested' => 'Untested',
+                    _ => 'Any',
+                  },
+                  onChanged: (String? v) => setState(() => _tested = v ?? 'all'),
+                ),
+              ],
+            ),
           ),
           if (rows.isEmpty)
             NotebookCard(
-              child: EmptyState(
-                title: 'No chapters match',
-                message: needle.isEmpty
-                    ? 'Add a chapter to start this subject.'
-                    : 'Try a different search or clear the filters.',
-                icon: Icons.menu_book_outlined,
-                action: OutlinedButton(
-                  onPressed: () {
-                    setState(() {
-                      _search.clear();
-                      _subject = 'All';
-                      _status = 'All';
-                    });
-                  },
-                  child: const Text('Clear filters'),
-                ),
-              ),
+              child: data.chapters.isEmpty
+                  ? EmptyState(
+                      title: 'No chapters yet.',
+                      message: '',
+                      icon: Icons.search,
+                      action: OutlinedButton.icon(
+                        onPressed: () => openChapterEditor(context, ref, data, null),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add chapter'),
+                      ),
+                    )
+                  : EmptyState(
+                      title: 'No chapters match.',
+                      message: '',
+                      icon: Icons.search,
+                      action: OutlinedButton(onPressed: _clearFilters, child: const Text('Clear filters')),
+                    ),
             )
           else
             for (final Chapter chapter in rows)
@@ -175,7 +265,14 @@ class _SyllabusPageState extends ConsumerState<SyllabusPage> {
                 data: data,
                 practice: practice[chapter.id],
               ),
-          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Text(
+              '${rows.length} showing',
+              textAlign: TextAlign.end,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.stracker.muted),
+            ),
+          ),
           InfoBanner(
             'Stages accept evidence: PYQs come from your PYQ records, Revised from a completed '
             'revision, Tested from a logged test. Manual toggles are your own claim and are shown as '
@@ -199,13 +296,11 @@ class _ChapterCard extends ConsumerWidget {
     final StrackerColors colors = context.stracker;
     final List<StageState> stages = chapterStages(data, chapter);
     final double pipeline = chapterPipelinePercent(stages);
-    final ChapterPerformance? performance = chapterPerformance(data)
-        .where((ChapterPerformance row) => row.chapter.id == chapter.id)
-        .firstOrNull;
+    final ChapterPerformance? performance =
+        chapterPerformance(data).where((ChapterPerformance row) => row.chapter.id == chapter.id).firstOrNull;
     final Color subjectColor = colors.subjectColor(chapter.subject);
     final List<Revision> open = data.revisions
-        .where((Revision revision) =>
-            revision.chapterId == chapter.id && revision.completedAt == null)
+        .where((Revision revision) => revision.chapterId == chapter.id && revision.completedAt == null)
         .toList();
 
     return Padding(
@@ -230,14 +325,38 @@ class _ChapterCard extends ConsumerWidget {
                         runSpacing: 4,
                         children: <Widget>[
                           Pill(chapter.subject, tone: PillTone.neutral, dense: true),
-                          Pill(
-                            chapter.status,
-                            tone: chapter.isComplete
-                                ? PillTone.good
-                                : (chapter.status == 'Studying' ? PillTone.accent : PillTone.neutral),
-                            dense: true,
+                          PopupMenuButton<String>(
+                            tooltip: 'Status for ${chapter.name}',
+                            initialValue: chapter.status,
+                            onSelected: (String value) => changeChapterStatus(context, ref, data, chapter, value),
+                            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                              for (final String value in const <String>['Not Started', 'Studying', 'Done', 'Revised'])
+                                PopupMenuItem<String>(value: value, child: Text(value)),
+                            ],
+                            child: Pill(
+                              chapter.status,
+                              icon: Icons.expand_more,
+                              tone: chapter.isComplete
+                                  ? PillTone.good
+                                  : (chapter.status == 'Studying' ? PillTone.accent : PillTone.neutral),
+                              dense: true,
+                            ),
                           ),
                           Pill('${chapter.priority} priority', dense: true),
+                          if ((chapter.weightage ?? '').isNotEmpty) Pill(chapter.weightage!, dense: true),
+                          if (performance == null || performance.classification == 'Untested')
+                            const Pill('Untested', dense: true)
+                          else
+                            Pill(
+                              '${performance.classification} · ${(performance.average ?? 0).round()}%',
+                              tone: switch (performance.classification) {
+                                'Weak' => PillTone.bad,
+                                'Okay' => PillTone.warn,
+                                _ => PillTone.good,
+                              },
+                              dense: true,
+                            ),
+                          if (performance?.dropping ?? false) const Pill('Dropping', tone: PillTone.bad, dense: true),
                           if (chapter.importance != 'medium')
                             Pill('${chapter.importance} weight', tone: PillTone.warn, dense: true),
                           if (open.isNotEmpty)
@@ -252,49 +371,47 @@ class _ChapterCard extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 9),
-            Row(
+            // Wraps on narrow phones instead of running off the card's edge.
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
               children: <Widget>[
                 for (final StageState stage in stages)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Tooltip(
-                      message: '${stage.label} · ${stage.source}',
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => toggleChapterStage(context, ref, data, chapter, stage),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: stage.done ? colors.palette.greenBg : colors.palette.paperMuted,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: stage.done
-                                  ? colors.palette.green.withValues(alpha: 0.4)
-                                  : colors.palette.line,
+                  Tooltip(
+                    message: '${stage.label} · ${stage.source}',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => toggleChapterStage(context, ref, data, chapter, stage),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: stage.done ? colors.palette.greenBg : colors.palette.paperMuted,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: stage.done ? colors.palette.green.withValues(alpha: 0.4) : colors.palette.line,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              stage.done
+                                  ? Icons.check_circle
+                                  : (stage.progress > 0 ? Icons.timelapse : Icons.circle_outlined),
+                              size: 11,
+                              color: stage.done ? colors.palette.green : colors.muted,
                             ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              Icon(
-                                stage.done
-                                    ? Icons.check_circle
-                                    : (stage.progress > 0 ? Icons.timelapse : Icons.circle_outlined),
-                                size: 11,
-                                color: stage.done ? colors.palette.green : colors.muted,
+                            const SizedBox(width: 3),
+                            Text(
+                              stage.label,
+                              style: TextStyle(
+                                fontFamily: 'Lexend',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: stage.done ? colors.palette.green : colors.palette.inkSoft,
                               ),
-                              const SizedBox(width: 3),
-                              Text(
-                                stage.label,
-                                style: TextStyle(
-                                  fontFamily: 'Lexend',
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                  color: stage.done ? colors.palette.green : colors.palette.inkSoft,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -316,8 +433,8 @@ class _ChapterCard extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       performance?.average == null
-                          ? 'No practice or test evidence yet.'
-                          : 'Test average ${percentLabel(performance!.average)} · ${performance.classification}',
+                          ? 'No usable score'
+                          : '${performance!.results.length} test${performance.results.length == 1 ? '' : 's'}',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
                     ),
                   ),
@@ -348,6 +465,7 @@ Future<void> openChapterEditor(
   final TextEditingController name = TextEditingController(text: chapter?.name ?? '');
   final TextEditingController notes = TextEditingController(text: chapter?.notes ?? '');
   final TextEditingController formulas = TextEditingController(text: chapter?.formulaNotes ?? '');
+  final TextEditingController weightage = TextEditingController(text: chapter?.weightage ?? '');
   String subject = chapter?.subject ?? (data.subjects.isEmpty ? 'Physics' : data.subjects.first);
   String status = chapter?.status ?? 'Not Started';
   String priority = chapter?.priority ?? 'Medium';
@@ -356,20 +474,20 @@ Future<void> openChapterEditor(
 
   await showAppSheet<void>(
     context,
-    title: creating ? 'Add chapter' : chapter.name,
+    title: creating ? 'Add a chapter' : 'Chapter notes',
     builder: (BuildContext sheetContext) => StatefulBuilder(
       builder: (BuildContext context, StateSetter setSheetState) {
-        final Chapter? live = creating
-            ? null
-            : data.chapters.where((Chapter row) => row.id == chapter.id).firstOrNull;
-        final Chapter base = live ?? chapter ?? Chapter(
-          id: newId(),
-          userId: data.userId,
-          subject: subject,
-          name: name.text,
-          createdAt: isoNow(),
-          updatedAt: isoNow(),
-        );
+        final Chapter? live = creating ? null : data.chapters.where((Chapter row) => row.id == chapter.id).firstOrNull;
+        final Chapter base = live ??
+            chapter ??
+            Chapter(
+              id: newId(),
+              userId: data.userId,
+              subject: subject,
+              name: name.text,
+              createdAt: isoNow(),
+              updatedAt: isoNow(),
+            );
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -393,6 +511,8 @@ Future<void> openChapterEditor(
               controller: name,
               error: nameError,
               required: true,
+              maxLength: 140,
+              hint: 'e.g. Centre of Mass',
               textCapitalization: TextCapitalization.words,
             ),
             AppSelect<String>(
@@ -419,17 +539,43 @@ Future<void> openChapterEditor(
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: AppSelect<String>(
-                    label: 'Importance (weight)',
-                    value: importance,
-                    items: const <String>['high', 'medium', 'low'],
-                    onChanged: (String? value) => setSheetState(() => importance = value ?? importance),
+                  child: AppField(
+                    label: 'Weightage (optional)',
+                    controller: weightage,
+                    maxLength: 80,
+                    hint: 'e.g. 4–6 questions',
                   ),
                 ),
               ],
             ),
-            AppField(label: 'Notes', controller: notes, maxLines: 4, maxLength: 20000),
-            AppField(label: 'Formula notes', controller: formulas, maxLines: 3, maxLength: 20000),
+            AppSelect<String>(
+              label: 'Importance (drives weighted progress)',
+              value: importance,
+              items: const <String>['high', 'medium', 'low'],
+              labelFor: (String value) => '${value[0].toUpperCase()}${value.substring(1)} importance',
+              onChanged: (String? value) => setSheetState(() => importance = value ?? importance),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Set in Settings → Exam → Weighted progress. Medium is the default for every chapter.',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.stracker.muted),
+              ),
+            ),
+            AppField(
+              label: 'Study notes',
+              controller: notes,
+              maxLines: 4,
+              maxLength: 20000,
+              hint: 'What do you want to remember about this chapter?',
+            ),
+            AppField(
+              label: 'Formulas & shortcuts',
+              controller: formulas,
+              maxLines: 3,
+              maxLength: 20000,
+              hint: 'Useful formulas, conditions, shortcuts…',
+            ),
             if (!creating) ...<Widget>[
               const SectionHeading('Preparation stages', padding: EdgeInsets.only(bottom: 6)),
               Wrap(
@@ -513,7 +659,17 @@ Future<void> openChapterEditor(
                   setSheetState(() => nameError = 'Chapter name is required.');
                   return;
                 }
+                final bool sameName = data.chapters.any((Chapter row) =>
+                    row.id != base.id &&
+                    row.subject == subject &&
+                    row.name.trim().toLowerCase() == trimmed.toLowerCase());
+                if (sameName) {
+                  setSheetState(() => nameError = 'That chapter already exists in this subject.');
+                  return;
+                }
+                final Chapter? previous = creating ? null : base;
                 final Chapter next = base.copyWith(
+                  weightage: weightage.text.trim().isEmpty ? null : weightage.text.trim(),
                   subject: subject,
                   name: trimmed,
                   status: status,
@@ -521,22 +677,20 @@ Future<void> openChapterEditor(
                   importance: importance,
                   notes: notes.text,
                   formulaNotes: formulas.text,
-                  completedOn: (status == 'Done' || status == 'Revised')
-                      ? (base.completedOn ?? todayIso())
-                      : null,
-                  position: base.position,
+                  completedOn: (status == 'Done' || status == 'Revised') ? (base.completedOn ?? todayIso()) : null,
+                  position: creating
+                      ? data.chapters.where((Chapter row) => row.subject == subject).length
+                      : base.position,
                 );
                 try {
-                  await ref.read(dataControllerProvider.notifier).saveChapter(next);
+                  await persistChapterStatus(ref, data, next, previous);
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                  if (context.mounted) {
-                    showToast(context, creating ? 'Chapter added.' : 'Chapter saved.');
-                  }
+                  if (context.mounted) showToast(context, 'Chapter saved to your syllabus.');
                 } catch (error) {
                   if (context.mounted) showToast(context, error.toString(), error: true);
                 }
               },
-              child: Text(creating ? 'Add chapter' : 'Save chapter'),
+              child: Text(creating ? 'Add chapter' : 'Save notes'),
             ),
           ],
         );
@@ -546,6 +700,68 @@ Future<void> openChapterEditor(
   name.dispose();
   notes.dispose();
   formulas.dispose();
+  weightage.dispose();
+}
+
+/// Website `persistChapterStatus`: saving a chapter as Done/Revised lays out the revision
+/// ladder from Settings (once, or again if it has none); moving it back out of complete
+/// removes the revisions still pending.
+Future<void> persistChapterStatus(WidgetRef ref, AppData data, Chapter next, Chapter? previous) async {
+  final DataController controller = ref.read(dataControllerProvider.notifier);
+  await controller.saveChapter(next);
+  final bool wasComplete = previous?.status == 'Done' || previous?.status == 'Revised';
+  final bool isComplete = next.status == 'Done' || next.status == 'Revised';
+  final List<Revision> chapterRevisions =
+      data.revisions.where((Revision revision) => revision.chapterId == next.id).toList();
+  if (isComplete && (!wasComplete || chapterRevisions.isEmpty)) {
+    final int firstNumber = chapterRevisions.fold<int>(
+          0,
+          (int max, Revision revision) => revision.revisionNumber > max ? revision.revisionNumber : max,
+        ) +
+        1;
+    final String now = isoNow();
+    final List<int> gaps = data.settings.revisionGaps;
+    await controller.saveRevisions(<Revision>[
+      for (int index = 0; index < gaps.length; index += 1)
+        Revision(
+          id: newId(),
+          userId: data.userId,
+          chapterId: next.id,
+          revisionNumber: firstNumber + index,
+          dueOn: addDays(next.completedOn ?? todayIso(), gaps[index] < 1 ? 1 : gaps[index]),
+          createdAt: now,
+          updatedAt: now,
+        ),
+    ]);
+  } else if (wasComplete && !isComplete) {
+    for (final Revision revision in chapterRevisions.where((Revision r) => r.completedAt == null)) {
+      await controller.deleteRevision(revision);
+    }
+  }
+}
+
+/// Website row status select: change status in place, with the same toasts.
+Future<void> changeChapterStatus(BuildContext context, WidgetRef ref, AppData data, Chapter chapter, String status) async {
+  if (status == chapter.status) return;
+  final bool complete = status == 'Done' || status == 'Revised';
+  final Chapter next = chapter.copyWith(
+    status: status,
+    completedOn: complete ? (chapter.completedOn ?? todayIso()) : null,
+  );
+  try {
+    await persistChapterStatus(ref, data, next, chapter);
+    if (!context.mounted) return;
+    if (complete) {
+      showToast(context, '${chapter.name} marked complete. Your revision dates are in the diary.');
+    } else if (chapter.isComplete) {
+      showToast(context, '${chapter.name} is back in progress.');
+    } else {
+      showToast(context, 'Status updated for ${chapter.name}.');
+    }
+    await HapticFeedback.selectionClick();
+  } catch (error) {
+    if (context.mounted) showToast(context, error.toString(), error: true);
+  }
 }
 
 /// Toggles one stage. PYQs, Revised and Tested can only be *claimed* here — the real

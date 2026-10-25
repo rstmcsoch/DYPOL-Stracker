@@ -29,8 +29,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brand/logo.png
-    - assets/brand/logo-adaptive.png
-    - assets/brand/logo.svg
+    - assets/brand/logo-mark.png
   fonts:
     - family: PatrickHand
       fonts:

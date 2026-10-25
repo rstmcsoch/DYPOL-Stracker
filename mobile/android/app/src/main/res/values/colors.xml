@@ -3,5 +3,6 @@
     <!-- Same paper tone as the web app's default palette, so the native launch frame and
          the Flutter splash are the same colour. -->
     <color name="splash_background">#F7F4EC</color>
-    <color name="icon_background">#D8E1CE</color>
+    <!-- Launcher icon background: the logo tile's own paper colour. -->
+    <color name="icon_background">#F1EAD9</color>
 </resources>

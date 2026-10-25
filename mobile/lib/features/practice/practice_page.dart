@@ -246,14 +246,15 @@ Future<void> openPracticeEditor(
   BuildContext context,
   WidgetRef ref,
   AppData data,
-  PracticeSession? session,
-) async {
+  PracticeSession? session, {
+  String? presetChapterId,
+}) async {
   if (data.chapters.isEmpty) {
     showToast(context, 'Add a chapter in the syllabus first.', error: true);
     return;
   }
   final bool creating = session == null;
-  Chapter selected = data.chapter(session?.chapterId) ?? data.chapters.first;
+  Chapter selected = data.chapter(session?.chapterId ?? presetChapterId) ?? data.chapters.first;
   final TextEditingController attempted = TextEditingController(text: session?.attempted.toString() ?? '');
   final TextEditingController correct = TextEditingController(text: session?.correct.toString() ?? '');
   // Incorrect is read-only and always attempted − correct.

@@ -91,16 +91,19 @@ class NotebookCard extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: accent == null
-                ? Border.all(color: colors.palette.line)
-                : Border(
-                    top: BorderSide(color: colors.palette.line),
-                    right: BorderSide(color: colors.palette.line),
-                    bottom: BorderSide(color: colors.palette.line),
-                    left: BorderSide(color: accent!, width: 3),
-                  ),
+            border: Border.all(color: colors.palette.line),
           ),
-          child: body,
+          // Flutter cannot paint a rounded border whose sides differ in colour (it throws
+          // during paint), so the accent edge is a strip over the left side, clipped by the
+          // card's rounded shape.
+          child: accent == null
+              ? body
+              : Stack(
+                  children: <Widget>[
+                    body,
+                    Positioned(left: 0, top: 0, bottom: 0, width: 3, child: ColoredBox(color: accent!)),
+                  ],
+                ),
         ),
       ),
     );

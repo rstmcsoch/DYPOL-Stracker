@@ -25,7 +25,7 @@ void main() {
       expect(html, contains(heading), reason: 'missing section $heading');
     }
     // ...and empty ones say so instead of printing zero as if it were data.
-    expect(html, contains('No tests recorded yet.'));
+    expect(html, contains('No tests recorded in this range.'));
     expect(html, contains('No mistakes logged yet.'));
     expect(html, contains('No chapters recorded yet.'));
     // Nothing from the implementation leaks into a document a student may print.

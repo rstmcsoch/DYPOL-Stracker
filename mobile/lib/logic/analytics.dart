@@ -440,3 +440,283 @@ List<String> studyPrompts(AppData data) {
   }
   return prompts;
 }
+
+/// The website's "Export test CSV" (lib/backup.ts `testsToCsv`): one row per test in the
+/// optional date range, oldest first, with recorded marks only. Cells that a spreadsheet
+/// would read as a formula are prefixed with an apostrophe.
+String testsToCsv(AppData data, {String from = '', String to = ''}) {
+  String cell(Object? value) {
+    String text = value == null ? '' : (value is double ? _jsNumber(value) : value.toString());
+    if (RegExp(r'^[=+@-]').hasMatch(text)) text = "'$text";
+    return '"${text.replaceAll('"', '""')}"';
+  }
+
+  const List<String> headers = <String>[
+    'Date', 'Test', 'Type', 'Subject', 'Chapter', 'Marks', 'Total', 'Percentage', 'Correct', 'Wrong', //
+    'Skipped', 'Negative marks', 'Time minutes', 'Notes', 'Physics marks', 'Physics total', 'Chemistry marks',
+    'Chemistry total', 'Maths marks', 'Maths total',
+  ];
+  final List<TestRecord> tests = data.tests
+      .where((TestRecord test) =>
+          (from.isEmpty || test.testDate.compareTo(from) >= 0) && (to.isEmpty || test.testDate.compareTo(to) <= 0))
+      .toList()
+    ..sort((TestRecord a, TestRecord b) => a.testDate.compareTo(b.testDate));
+  final List<String> rows = <String>[headers.map(cell).join(',')];
+  for (final TestRecord test in tests) {
+    final List<TestSubjectScore> scores =
+        data.testSubjectScores.where((TestSubjectScore score) => score.testId == test.id).toList();
+    final String subject = test.testType == 'Full Mock' ? 'All subjects' : (test.subject ?? '');
+    final String chapter = data.chapter(test.chapterId)?.name ?? '';
+    final MarksTotal? overall = overallTestScore(test, data.testSubjectScores);
+    final double? score = overallTestPercentage(test, data.testSubjectScores);
+    final bool useRaw = overall == null && (test.testType != 'Full Mock' || scores.isEmpty);
+    final Object? marks = overall?.marks ?? (useRaw ? test.marksObtained : null);
+    final Object? total = overall?.total ?? (useRaw ? test.totalMarks : null);
+    Object? scoreFor(String name, bool marksField) {
+      for (final TestSubjectScore row in scores) {
+        if (row.subject == name) return marksField ? row.marksObtained : row.totalMarks;
+      }
+      return null;
+    }
+
+    rows.add(<Object?>[
+      test.testDate, test.title, test.testType, subject, chapter, marks, total, //
+      score == null ? '' : '${score.toStringAsFixed(1)}%',
+      test.correct, test.wrong, test.skipped, test.negativeMarks, test.timeMinutes, test.notes,
+      scoreFor('Physics', true), scoreFor('Physics', false), scoreFor('Chemistry', true),
+      scoreFor('Chemistry', false), scoreFor('Maths', true), scoreFor('Maths', false),
+    ].map(cell).join(','));
+  }
+  return '\ufeff${rows.join('\r\n')}';
+}
+
+/* ------------------------------------------------------------------ */
+/* Website analytics page metrics (src/lib/analytics.ts,              */
+/* src/lib/study-aggregation.ts)                                      */
+
+bool _validCounts(TestRecord test, bool includeSkipped) {
+  final List<int?> values = includeSkipped
+      ? <int?>[test.correct, test.wrong, test.skipped]
+      : <int?>[test.correct, test.wrong];
+  return values.every((int? value) => value != null && value >= 0);
+}
+
+/// `getAccuracy`: correct / (correct + wrong) over tests with both counts.
+({int correct, int attempted, double? rate}) attemptAccuracy(AppData data) {
+  final Iterable<TestRecord> tests = data.tests.where((TestRecord t) => _validCounts(t, false));
+  final int correct = tests.fold<int>(0, (int s, TestRecord t) => s + t.correct!);
+  final int attempted = tests.fold<int>(0, (int s, TestRecord t) => s + t.correct! + t.wrong!);
+  return (correct: correct, attempted: attempted, rate: attempted > 0 ? correct / attempted * 100 : null);
+}
+
+/// `getAttemptRate`: attempted / (attempted + skipped) over tests with all three counts.
+({int attempted, int total, double? rate}) attemptRate(AppData data) {
+  final Iterable<TestRecord> tests = data.tests.where((TestRecord t) => _validCounts(t, true));
+  final int attempted = tests.fold<int>(0, (int s, TestRecord t) => s + t.correct! + t.wrong!);
+  final int total = tests.fold<int>(0, (int s, TestRecord t) => s + t.correct! + t.wrong! + t.skipped!);
+  return (attempted: attempted, total: total, rate: total > 0 ? attempted / total * 100 : null);
+}
+
+/// `getOverallTestTotal`: a whole-number positive total, from complete Full Mock rows or the test.
+double? overallTestTotal(TestRecord test, List<TestSubjectScore> scores) {
+  bool whole(double? v) => v != null && v.isFinite && v == v.roundToDouble() && v > 0;
+  if (test.testType == 'Full Mock') {
+    final Map<String, TestSubjectScore>? rows = _fullMockRows(test.id, scores);
+    if (rows != null) {
+      final List<double?> totals = rows.values.map((TestSubjectScore r) => r.totalMarks).toList();
+      if (totals.every(whole)) return totals.fold<double>(0, (double s, double? v) => s + v!);
+    }
+    if (scores.any((TestSubjectScore s) => s.testId == test.id)) return null;
+  }
+  return whole(test.totalMarks) ? test.totalMarks : null;
+}
+
+/// `getNegativeMarkImpact`.
+({double totalNegativeMarks, double? percentage, int testsIncluded}) negativeMarkImpact(AppData data) {
+  final List<TestRecord> recorded = data.tests
+      .where((TestRecord t) => t.negativeMarks != null && t.negativeMarks!.isFinite && t.negativeMarks! >= 0)
+      .toList();
+  final double totalNegative = recorded.fold<double>(0, (double s, TestRecord t) => s + t.negativeMarks!);
+  double comparable = 0;
+  double totalMarks = 0;
+  int included = 0;
+  for (final TestRecord test in recorded) {
+    final double? total = overallTestTotal(test, data.testSubjectScores);
+    if (total == null) continue;
+    comparable += test.negativeMarks!;
+    totalMarks += total;
+    included += 1;
+  }
+  return (
+    totalNegativeMarks: totalNegative,
+    percentage: totalMarks > 0 ? comparable / totalMarks * 100 : null,
+    testsIncluded: included,
+  );
+}
+
+/// `getMistakeCounts`: the five notebook types in the website's order.
+List<({String type, int count})> mistakeCounts(AppData data) => <({String type, int count})>[
+      for (final String type in const <String>['Concept', 'Silly', 'Calculation', 'Time', 'Guess'])
+        (type: type, count: data.mistakes.where((Mistake m) => m.mistakeType == type).length),
+    ];
+
+int _sessionMinutesBetween(AppData data, String start, String end) {
+  int sum = 0;
+  for (final StudySession session in data.sessions) {
+    final String date = indiaDateOf(session.startedAt);
+    if (date.compareTo(start) >= 0 && date.compareTo(end) <= 0) sum += session.durationMinutes;
+  }
+  return sum;
+}
+
+/// The IST calendar date of a timestamp; a plain yyyy-MM-dd passes through.
+String indiaDateOf(String value) {
+  final DateTime? parsed = DateTime.tryParse(value);
+  if (parsed == null) return value.length >= 10 ? value.substring(0, 10) : value;
+  if (!value.contains('T') && value.length <= 10) return value.substring(0, 10);
+  return isoDate(parsed.toUtc().add(const Duration(hours: 5, minutes: 30)));
+}
+
+const List<String> _monthShort = <String>[
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', //
+];
+
+DateTime _day(String iso) => DateTime.utc(int.parse(iso.substring(0, 4)), int.parse(iso.substring(5, 7)),
+    int.parse(iso.substring(8, 10)));
+
+String _isoUtc(DateTime d) => isoDate(DateTime(d.year, d.month, d.day));
+
+/// `makeStudyBars`: 14 days, 8 Monday-start weeks or 6 months, hours to one decimal.
+List<({String date, String label, double hours})> studyBars(AppData data, String view, String asOf) {
+  double hours(int minutes) => (minutes / 60 * 10).round() / 10;
+  final DateTime today = _day(asOf);
+  final List<({String date, String label, double hours})> bars = <({String date, String label, double hours})>[];
+  if (view == 'day') {
+    for (int index = 13; index >= 0; index -= 1) {
+      final DateTime d = today.subtract(Duration(days: index));
+      final String date = _isoUtc(d);
+      bars.add((date: date, label: '${d.day} ${_monthShort[d.month - 1]}', hours: hours(_sessionMinutesBetween(data, date, date))));
+    }
+    return bars;
+  }
+  if (view == 'week') {
+    final DateTime monday = today.subtract(Duration(days: today.weekday - 1));
+    for (int index = 7; index >= 0; index -= 1) {
+      final DateTime start = monday.subtract(Duration(days: 7 * index));
+      final String startIso = _isoUtc(start);
+      final String fullEnd = _isoUtc(start.add(const Duration(days: 6)));
+      final String end = fullEnd.compareTo(asOf) < 0 ? fullEnd : asOf;
+      bars.add((
+        date: startIso,
+        label: '${start.day} ${_monthShort[start.month - 1]}',
+        hours: hours(_sessionMinutesBetween(data, startIso, end)),
+      ));
+    }
+    return bars;
+  }
+  for (int index = 5; index >= 0; index -= 1) {
+    final DateTime monthStart = DateTime.utc(today.year, today.month - index, 1);
+    final String start = _isoUtc(monthStart);
+    final String fullEnd = _isoUtc(DateTime.utc(monthStart.year, monthStart.month + 1, 0));
+    final String end = fullEnd.compareTo(asOf) < 0 ? fullEnd : asOf;
+    bars.add((
+      date: start,
+      label: '${_monthShort[monthStart.month - 1]} ${(monthStart.year % 100).toString().padLeft(2, '0')}',
+      hours: hours(_sessionMinutesBetween(data, start, end)),
+    ));
+  }
+  return bars;
+}
+
+/// `makeStudyHeatmap`: 16 Monday-start weeks; levels against the daily goal.
+({List<({String date, int minutes, String level, bool future})> cells, int daysLogged}) studyHeatmap(
+  AppData data,
+  String asOf,
+) {
+  final DateTime today = _day(asOf);
+  final DateTime start = today.subtract(Duration(days: today.weekday - 1 + 15 * 7));
+  final int goal = data.settings.dailyStudyGoalMinutes < 1 ? 1 : data.settings.dailyStudyGoalMinutes;
+  final List<({String date, int minutes, String level, bool future})> cells =
+      <({String date, int minutes, String level, bool future})>[];
+  for (int index = 0; index < 16 * 7; index += 1) {
+    final String date = _isoUtc(start.add(Duration(days: index)));
+    final bool future = date.compareTo(asOf) > 0;
+    final int minutes = future ? 0 : _sessionMinutesBetween(data, date, date);
+    final double ratio = minutes / goal;
+    final String level = minutes == 0
+        ? 'none'
+        : ratio < 0.3
+            ? 'low'
+            : ratio < 0.7
+                ? 'medium'
+                : ratio < 1
+                    ? 'high'
+                    : 'goal';
+    cells.add((date: date, minutes: minutes, level: level, future: future));
+  }
+  return (
+    cells: cells,
+    daysLogged: cells.where((({String date, int minutes, String level, bool future}) c) => !c.future && c.minutes > 0).length,
+  );
+}
+
+/// The website's mock-target comparison: the latest Full Mock with a usable score.
+({double score, double gap, String state})? mockTargetComparison(AppData data) {
+  final List<TestRecord> mocks = data.tests.where((TestRecord t) => t.testType == 'Full Mock').toList()
+    ..sort((TestRecord a, TestRecord b) => b.testDate.compareTo(a.testDate));
+  for (final TestRecord test in mocks) {
+    final MarksTotal? aggregate = overallTestScore(test, data.testSubjectScores);
+    if (aggregate == null) continue;
+    final double target = data.settings.targetScore;
+    final double gap = target - aggregate.marks;
+    final double tolerance = target * 0.05 > 1 ? target * 0.05 : 1;
+    return (score: aggregate.marks, gap: gap, state: gap <= 0 ? 'above' : gap <= tolerance ? 'near' : 'below');
+  }
+  return null;
+}
+
+/// `getSubjectPerformance`: per subject, the mean of subject-test percentages and complete
+/// Full Mock subject results (JEE Advanced paper rows combine into one result per test).
+List<({String subject, double? average, int count})> subjectPerformance(AppData data) {
+  final List<String> subjects = <String>[];
+  void add(String? subject) {
+    if (subject != null && subject.isNotEmpty && !subjects.contains(subject)) subjects.add(subject);
+  }
+
+  examSubjectNames(data).forEach(add);
+  for (final Chapter chapter in data.chapters) {
+    add(chapter.subject);
+  }
+  trendSubjects(data).forEach(add);
+  final Map<String, List<double>> bySubject = <String, List<double>>{for (final String s in subjects) s: <double>[]};
+  for (final TestRecord test in data.tests) {
+    if (test.testType == 'Full Mock') {
+      final Set<String> seen = <String>{};
+      final Map<String, List<TestSubjectScore>> grouped = <String, List<TestSubjectScore>>{};
+      for (final TestSubjectScore score in data.testSubjectScores) {
+        if (score.testId != test.id || !seen.add(score.subject)) continue;
+        grouped.putIfAbsent(scoreSubjectBase(score.subject), () => <TestSubjectScore>[]).add(score);
+      }
+      grouped.forEach((String subject, List<TestSubjectScore> rows) {
+        if (rows.any((TestSubjectScore r) => r.marksObtained == null || r.totalMarks == null)) return;
+        final double marks = rows.fold<double>(0, (double s, TestSubjectScore r) => s + r.marksObtained!);
+        final double total = rows.fold<double>(0, (double s, TestSubjectScore r) => s + r.totalMarks!);
+        final double? value = validPercentage(marks, total);
+        if (value != null) bySubject[subject]?.add(value);
+      });
+    } else if (test.subject != null) {
+      final double? value = testPercentage(test);
+      if (value != null) bySubject[test.subject!]?.add(value);
+    }
+  }
+  return <({String subject, double? average, int count})>[
+    for (final String subject in subjects)
+      (
+        subject: subject,
+        average: bySubject[subject]!.isEmpty
+            ? null
+            : bySubject[subject]!.fold<double>(0, (double a, double b) => a + b) / bySubject[subject]!.length,
+        count: bySubject[subject]!.length,
+      ),
+  ];
+}

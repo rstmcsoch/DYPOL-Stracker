@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/date.dart';
@@ -13,6 +14,8 @@ import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/aggregation.dart';
 import '../../logic/exam.dart';
+import '../../logic/home_summary.dart';
+import '../../logic/onboarding.dart';
 import '../../logic/progress.dart';
 import '../auth/auth_controller.dart';
 import '../auth/auth_screens.dart';
@@ -33,18 +36,20 @@ class ProfilePage extends ConsumerWidget {
     final String today = todayIso();
     final SyllabusProgress progress = syllabusProgress(data);
     final StudyTotals totals = studyTotals(data, today: today);
-    final String name = data.profile?.displayName.isNotEmpty == true
-        ? data.profile!.displayName
-        : (data.settings.ownerName.isEmpty ? 'Stracker student' : data.settings.ownerName);
-    final String email = data.profile?.email.isNotEmpty == true
-        ? data.profile!.email
-        : 'Signed in';
+    // Same order as the website: the name chosen in setup, then the account profile.
+    final String name = data.settings.ownerName.trim().isNotEmpty
+        ? data.settings.ownerName.trim()
+        : (data.profile?.displayName.isNotEmpty == true ? data.profile!.displayName : 'Your notebook');
+    final StreakSummary streak = computeStreaks(data, today);
+    final String email = data.profile?.email.isNotEmpty == true ? data.profile!.email : 'Signed in';
     final List<String> tracks = availableTracks(data.settings);
     final String active = effectiveTrack(data.settings);
 
     return NotebookScaffold(
       title: 'Profile',
       showBrand: true,
+      // As on the website, Profile is a destination of its own with no menu button.
+      showMenu: false,
       actions: <Widget>[
         IconButton(
           tooltip: 'Settings',
@@ -67,7 +72,7 @@ class ProfilePage extends ConsumerWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Text(
-                    _initials(name),
+                    name.trim().isEmpty ? 'S' : name.trim()[0].toUpperCase(),
                     style: TextStyle(
                       fontFamily: 'PatrickHand',
                       fontSize: 24,
@@ -92,7 +97,6 @@ class ProfilePage extends ConsumerWidget {
                             tone: PillTone.accent,
                             dense: true,
                           ),
-                          Pill('${totals.streak} day streak', dense: true),
                         ],
                       ),
                     ],
@@ -106,7 +110,29 @@ class ProfilePage extends ConsumerWidget {
               ],
             ),
           ),
+          const SizedBox(height: 8),
+          // The website's study-rhythm row under the identity card.
+          WrapGrid(
+            minItemWidth: 96,
+            children: <Widget>[
+              StatTile(
+                value: '${streak.current} day${streak.current == 1 ? '' : 's'}',
+                label: 'current streak',
+                tone: streak.current > 0 ? colors.palette.orange : null,
+              ),
+              StatTile(value: '${streak.longest} day${streak.longest == 1 ? '' : 's'}', label: 'longest streak'),
+              StatTile(value: '${streak.weeklyConsistency}/7', label: 'active this week'),
+            ],
+          ),
           const SizedBox(height: 10),
+          const ExamSelectionCard(),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Theme, reading font, appearance and AI settings live under the gear at the top of this page.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
+            ),
+          ),
           NotebookCard(
             title: 'Your notebook',
             subtitle: 'Everything you have logged, in one place.',
@@ -256,13 +282,6 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  static String _initials(String name) {
-    final List<String> parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return 'S';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
-  }
-
   Future<void> _editName(BuildContext context, WidgetRef ref, AppData data, String current) async {
     final TextEditingController name = TextEditingController(text: current);
     await showAppSheet<void>(
@@ -283,8 +302,7 @@ class ProfilePage extends ConsumerWidget {
                 showToast(context, 'A name cannot be empty.', error: true);
                 return;
               }
-              final Profile profile = (data.profile ??
-                      Profile(id: data.userId, userId: data.userId, email: ''))
+              final Profile profile = (data.profile ?? Profile(id: data.userId, userId: data.userId, email: ''))
                   .copyWith(displayName: name.text.trim());
               try {
                 await ref.read(dataControllerProvider.notifier).saveProfile(profile);
@@ -344,9 +362,7 @@ class _AppearanceChoices extends ConsumerWidget {
         final AppData latest = ref.read(dataControllerProvider).data;
         final String stored = ref.read(themeControllerProvider).modeValue;
         try {
-          await ref
-              .read(dataControllerProvider.notifier)
-              .saveSettings(latest.settings.copyWith(theme: stored));
+          await ref.read(dataControllerProvider.notifier).saveSettings(latest.settings.copyWith(theme: stored));
         } catch (_) {
           // The screen has already switched; the account value is retried on the next save.
         }
@@ -410,9 +426,8 @@ class _TrackRow extends ConsumerWidget {
       text: config.targetScore == null ? '' : numberLabel(config.targetScore, digits: 0),
     );
     final TextEditingController notes = TextEditingController(text: config.notes);
-    String? examDate = config.examDate ?? (track == 'main1'
-        ? data.settings.mainExamDate
-        : (track == 'advanced' ? data.settings.advancedExamDate : null));
+    String? examDate = config.examDate ??
+        (track == 'main1' ? data.settings.mainExamDate : (track == 'advanced' ? data.settings.advancedExamDate : null));
     bool enabled = config.enabled;
 
     await showAppSheet<void>(
@@ -442,11 +457,9 @@ class _TrackRow extends ConsumerWidget {
             ),
             ElevatedButton(
               onPressed: () async {
-                final double? targetValue =
-                    target.text.trim().isEmpty ? null : double.tryParse(target.text.trim());
+                final double? targetValue = target.text.trim().isEmpty ? null : double.tryParse(target.text.trim());
                 try {
-                  final DataController controller =
-                      ref.read(dataControllerProvider.notifier);
+                  final DataController controller = ref.read(dataControllerProvider.notifier);
                   await controller.saveExamTrack(
                     config.copyWith(
                       label: label,
@@ -476,5 +489,170 @@ class _TrackRow extends ConsumerWidget {
     );
     target.dispose();
     notes.dispose();
+  }
+}
+
+/// The website's "Your exam" section (ExamSelectionSection): exam, target year, attempt /
+/// session, the Class 12 boards add-on and board, saved to the same app_settings columns.
+class ExamSelectionCard extends ConsumerStatefulWidget {
+  const ExamSelectionCard({super.key});
+
+  @override
+  ConsumerState<ExamSelectionCard> createState() => _ExamSelectionCardState();
+}
+
+class _ExamSelectionCardState extends ConsumerState<ExamSelectionCard> {
+  String? _examId;
+  int? _year;
+  String? _session;
+  String? _board;
+  bool _addon = false;
+  bool _saving = false;
+  String? _syncedFrom;
+
+  void _syncFrom(AppSettings settings) {
+    final String key = '${settings.examId}|${settings.examYear}|${settings.examSession}|'
+        '${settings.examBoard}|${settings.boardsAddon}';
+    if (_syncedFrom == key) return;
+    _syncedFrom = key;
+    _examId = settings.examId ?? 'jee';
+    _year = settings.examYear;
+    _session = settings.examSession;
+    _board = settings.examBoard;
+    _addon = settings.boardsAddon;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final DataState state = ref.watch(dataControllerProvider);
+    final AppData data = state.data;
+    final StrackerColors colors = context.stracker;
+    _syncFrom(data.settings);
+    final List<ExamCatalogEntry> catalog = data.examCatalog;
+    // An exam the student is already on stays selectable even if it was hidden later.
+    final List<ExamCatalogEntry> options = <ExamCatalogEntry>[
+      if (!catalog.any((ExamCatalogEntry e) => e.id == _examId))
+        _examId == 'jee'
+            ? fallbackJeeExam
+            : ExamCatalogEntry(id: _examId!, name: '$_examId (no longer listed)', category: 'Your exam'),
+      ...catalog,
+    ];
+    final ExamCatalogEntry exam =
+        options.firstWhere((ExamCatalogEntry e) => e.id == _examId, orElse: () => options.first);
+    final List<int> years = examYears(exam);
+    final List<int> yearChoices = <int>[if (_year != null && !years.contains(_year)) _year!, ...years];
+    final List<String> boardChoices = exam.boards.isNotEmpty ? exam.boards : schoolBoards;
+    final bool needsBoard = onboardingNeedsBoard(exam, _addon);
+    final TextStyle? small = Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted);
+
+    return NotebookCard(
+      title: 'Your exam',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (catalog.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: <Widget>[
+                  Expanded(child: Text('The exam list could not be loaded.', style: small)),
+                  TextButton(
+                    onPressed: () => ref.read(dataControllerProvider.notifier).load(silent: true),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          AppSelect<String>(
+            label: 'Exam',
+            value: exam.id,
+            items: <String>[for (final ExamCatalogEntry e in options) e.id],
+            labelFor: (String id) {
+              final ExamCatalogEntry e = options.firstWhere((ExamCatalogEntry x) => x.id == id);
+              return e.category.isEmpty ? e.name : '${e.name} · ${e.category}';
+            },
+            onChanged: (String? id) {
+              if (id == null) return;
+              final ExamCatalogEntry next = options.firstWhere((ExamCatalogEntry e) => e.id == id);
+              setState(() {
+                _examId = id;
+                if (!next.sessions.contains(_session)) _session = null;
+                if (!next.boardsAddon) _addon = false;
+              });
+            },
+          ),
+          AppSelect<int?>(
+            label: 'Target year',
+            value: _year,
+            items: <int?>[null, ...yearChoices],
+            labelFor: (int? y) => y == null ? 'Not set' : '$y',
+            onChanged: (int? y) => setState(() => _year = y),
+          ),
+          if (exam.sessions.isNotEmpty)
+            AppSelect<String?>(
+              label: exam.sessionLabel.isEmpty ? 'Attempt / session' : exam.sessionLabel,
+              value: exam.sessions.contains(_session) ? _session : null,
+              items: <String?>[null, ...exam.sessions],
+              labelFor: (String? v) => v ?? 'Not set',
+              onChanged: (String? v) => setState(() => _session = v),
+            ),
+          if (exam.boardsAddon)
+            SwitchRow(
+              title: 'Also track my Class 12 boards',
+              value: _addon,
+              onChanged: (bool v) => setState(() => _addon = v),
+            ),
+          if (needsBoard)
+            AppSelect<String?>(
+              label: exam.boards.isNotEmpty ? 'Board' : 'Class 12 board',
+              value: boardChoices.contains(_board) ? _board : null,
+              items: <String?>[null, ...boardChoices],
+              labelFor: (String? v) => v ?? 'Not set',
+              onChanged: (String? v) => setState(() => _board = v),
+            ),
+          Text('Subjects: ${onboardingSubjects(exam, session: _session, addon: _addon).join(', ')}', style: small),
+          if (!isJeeExam(exam.id)) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              'Your existing syllabus, tests and notes are kept as they are. A new notebook for this exam starts '
+              'with an empty syllabus you can fill in on the Syllabus page.',
+              style: small,
+            ),
+          ],
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: _saving ? null : () => _save(data.settings, exam, needsBoard),
+              icon: _saving
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.check, size: 16),
+              label: const Text('Save exam'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _save(AppSettings settings, ExamCatalogEntry exam, bool needsBoard) async {
+    setState(() => _saving = true);
+    try {
+      await ref.read(dataControllerProvider.notifier).saveSettings(
+            settings.copyWith(
+              examId: exam.id,
+              examYear: _year,
+              examSession: exam.sessions.isNotEmpty && (_session ?? '').isNotEmpty ? _session : null,
+              examBoard: needsBoard && (_board ?? '').isNotEmpty ? _board : null,
+              boardsAddon: exam.boardsAddon && _addon,
+            ),
+          );
+      if (mounted) showToast(context, 'Exam saved.');
+      await HapticFeedback.lightImpact();
+    } catch (error) {
+      if (mounted) showToast(context, error.toString(), error: true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 }

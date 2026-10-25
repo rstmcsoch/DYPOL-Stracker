@@ -2,23 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/date.dart';
-import '../../core/format.dart';
-import '../../core/iterables.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/validators.dart';
-import '../../core/widgets/charts.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
+import '../../logic/home_summary.dart';
 import '../../logic/mock.dart';
 import '../shell/app_shell.dart';
+import '../shell/routes.dart';
+import '../tests/tests_page.dart';
 
-/// Mock analysis: error logs by category (with the marks they cost), time per subject
-/// with a pacing hint, and the rule-based insights from logic/mock.dart.
+/// Mock analysis (website MockAnalysisPage): any recorded test, with recorded time and
+/// attempts, the student's own lost-mark classifications, and derived lines that each say
+/// what they are based on. Nothing is estimated.
 class MockAnalysisPage extends ConsumerStatefulWidget {
   const MockAnalysisPage({super.key});
 
@@ -32,30 +31,37 @@ class _MockAnalysisPageState extends ConsumerState<MockAnalysisPage> {
   @override
   Widget build(BuildContext context) {
     final AppData data = ref.watch(dataControllerProvider).data;
-    final List<TestRecord> mocks = mockTests(data);
-    final TestRecord? selected =
-        mocks.where((TestRecord test) => test.id == _testId).firstOrNull ?? mocks.firstOrNull;
+    final List<TestRecord> tests = <TestRecord>[...data.tests]
+      ..sort((TestRecord a, TestRecord b) => b.testDate.compareTo(a.testDate));
+    TestRecord? selected;
+    for (final TestRecord test in tests) {
+      if (test.id == _testId) selected = test;
+    }
+    selected ??= tests.isEmpty ? null : tests.first;
 
     return SectionPage(
       title: 'Mock analysis',
-      subtitle: mocks.isEmpty ? 'No full mocks recorded yet' : '${mocks.length} mocks',
+      subtitle: selected == null ? 'Record a test first.' : 'Recorded, classified and derived data, kept separate.',
       child: PageBody(
         refresh: () => ref.read(dataControllerProvider.notifier).load(silent: true),
         children: <Widget>[
-          if (mocks.isEmpty)
-            const NotebookCard(
+          if (selected == null)
+            NotebookCard(
               child: EmptyState(
-                title: 'No mocks to analyse',
-                message: 'Log a Full Mock (or a PYQ paper) in the test journal. Error logs and time '
-                    'splits attach to that test.',
+                title: 'No tests to analyse yet.',
+                message: '',
                 icon: Icons.analytics_outlined,
+                action: ElevatedButton(
+                  onPressed: () => openTestEditor(context, ref, data, null),
+                  child: const Text('Log a test'),
+                ),
               ),
             )
           else
             _MockDetail(
               data: data,
-              mocks: mocks,
-              test: selected!,
+              tests: tests,
+              test: selected,
               onSelect: (String id) => setState(() => _testId = id),
             ),
         ],
@@ -64,214 +70,338 @@ class _MockAnalysisPageState extends ConsumerState<MockAnalysisPage> {
   }
 }
 
+String _webMinutes(int? minutes) {
+  if (minutes == null) return '—';
+  final int safe = minutes < 0 ? 0 : minutes;
+  final int hours = safe ~/ 60;
+  final int mins = safe % 60;
+  return hours > 0 ? '${hours}h ${mins.toString().padLeft(2, '0')}m' : '${mins}m';
+}
+
 class _MockDetail extends ConsumerWidget {
-  const _MockDetail({
-    required this.data,
-    required this.mocks,
-    required this.test,
-    required this.onSelect,
-  });
+  const _MockDetail({required this.data, required this.tests, required this.test, required this.onSelect});
 
   final AppData data;
-  final List<TestRecord> mocks;
+  final List<TestRecord> tests;
   final TestRecord test;
   final ValueChanged<String> onSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final StrackerColors colors = context.stracker;
-    final MockAnalysis analysis = analyseMock(data, test);
-    final List<TestErrorLog> logs =
-        data.errorLogs.where((TestErrorLog row) => row.testId == test.id).toList();
+    final TextTheme text = Theme.of(context).textTheme;
+    final ({double? score, int taggedQuestions, double? taggedMarks}) summary = mockSummary(test, data);
+    final List<SubjectTimeRow> times = subjectTimeRows(test, data);
+    final bool hasRecordedTime = data.timeEntries.any(
+      (TestTimeEntry e) => e.testId == test.id && (e.minutes != null || e.attempted != null || e.unattempted != null),
+    );
+    final List<TestErrorLog> logs = data.errorLogs.where((TestErrorLog row) => row.testId == test.id).toList();
+    final List<CategoryTotal> totals = categoryTotals(logs);
+    final List<MockInsight> insights = mockInsights(test, data);
+    final TextStyle? muted = text.bodySmall?.copyWith(color: colors.muted);
+
+    Widget stat(String label, String value) => SizedBox(
+          width: 140,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(label, style: text.labelSmall?.copyWith(color: colors.muted)),
+              Text(value, style: text.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        );
+
+    final double maxBar = totals.isEmpty
+        ? 0
+        : totals
+            .map((CategoryTotal t) => t.marksLost ?? t.entries.toDouble())
+            .reduce((double a, double b) => a > b ? a : b);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        AppSelect<String>(
-          label: 'Mock',
-          value: test.id,
-          items: <String>[for (final TestRecord row in mocks) row.id],
-          labelFor: (String id) {
-            final TestRecord row = mocks.firstWhere((TestRecord candidate) => candidate.id == id);
-            return '${row.title} · ${formatDate(row.testDate)}';
-          },
-          onChanged: (String? value) {
-            if (value != null) onSelect(value);
-          },
-        ),
         NotebookCard(
-          title: test.title,
-          subtitle: '${formatDate(test.testDate)} · ${test.testType}',
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Row(
+              AppSelect<String>(
+                label: 'Test',
+                value: test.id,
+                items: <String>[for (final TestRecord row in tests) row.id],
+                labelFor: (String id) {
+                  final TestRecord row = tests.firstWhere((TestRecord candidate) => candidate.id == id);
+                  return '${prettyDate(row.testDate)} · ${row.title} · ${row.testType}';
+                },
+                onChanged: (String? value) {
+                  if (value != null) onSelect(value);
+                },
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 12,
+                runSpacing: 10,
                 children: <Widget>[
-                  ProgressRing(value: analysis.percentage, size: 88),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          percentLabel(analysis.percentage),
-                          style: Theme.of(context).textTheme.displaySmall,
-                        ),
-                        Text(
-                          '${numberLabel(analysis.totalLost, digits: 1)} marks accounted for by error logs',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
-                        ),
-                      ],
-                    ),
-                  ),
+                  stat('Recorded score', summary.score == null ? '—' : '${summary.score!.toStringAsFixed(1)}%'),
+                  stat('Type', test.testType),
+                  stat('Lost marks tagged', summary.taggedMarks == null ? '—' : jsNumberText(summary.taggedMarks!)),
+                  stat('Questions tagged', summary.taggedQuestions == 0 ? '—' : '${summary.taggedQuestions}'),
                 ],
               ),
-              if (analysis.insights.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 12),
-                for (final String insight in analysis.insights)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 5),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Icon(Icons.lightbulb_outline, size: 14, color: colors.palette.accent),
-                        const SizedBox(width: 7),
-                        Expanded(
-                          child: Text(insight, style: Theme.of(context).textTheme.bodySmall),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
             ],
           ),
         ),
-        const SizedBox(height: 10),
-        NotebookCard(
-          title: 'Where the marks went',
-          subtitle: 'From your error log, per category.',
-          trailing: TextButton(
-            onPressed: () => openErrorLogEditor(context, ref, data, test, null),
-            child: const Text('Add'),
+        _Heading(
+          title: 'Recorded time & attempts',
+          note: 'Only what you entered. Missing values stay blank.',
+          action: OutlinedButton.icon(
+            onPressed: () => openTimeDataEditor(context, ref, data, test),
+            icon: const Icon(Icons.schedule, size: 16),
+            label: Text('${hasRecordedTime ? 'Edit' : 'Add'} time'),
           ),
-          child: analysis.byCategory.isEmpty
-              ? Text(
-                  'No error logs for this mock yet. Log the categories that cost you marks — that is '
-                  'what turns a score into a plan.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
-                )
-              : Column(
-                  children: <Widget>[
-                    BarList(
-                      rows: <({String label, double value, String caption})>[
-                        for (final CategoryLoss item in analysis.byCategory)
-                          (
-                            label: item.category,
-                            value: analysis.totalLost == 0
-                                ? 0
-                                : (item.marksLost / analysis.totalLost).clamp(0, 1).toDouble(),
-                            caption: '${numberLabel(item.marksLost, digits: 1)} marks · '
-                                '${item.entries} log${item.entries == 1 ? '' : 's'}',
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    for (final TestErrorLog log in logs)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: Text(log.category),
-                        subtitle: Text(
-                          <String>[
-                            if (log.subject != null) log.subject!,
-                            if (log.chapterId != null) data.chapterName(log.chapterId),
-                            if (log.marksLost != null) '${numberLabel(log.marksLost, digits: 1)} marks',
-                            if (log.questions != null) '${log.questions} Q',
-                            if (log.note.isNotEmpty) log.note,
-                          ].join(' · '),
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 17),
-                          tooltip: 'Delete log',
-                          onPressed: () async {
-                            final bool confirmed = await confirmAction(
-                              context,
-                              title: 'Delete this log?',
-                              message: 'It is removed from the account on the website as well.',
-                            );
-                            if (!confirmed) return;
-                            try {
-                              await ref.read(dataControllerProvider.notifier).deleteErrorLog(log);
-                              if (context.mounted) showToast(context, 'Log deleted.');
-                            } catch (error) {
-                              if (context.mounted) showToast(context, error.toString(), error: true);
-                            }
-                          },
-                        ),
-                        onTap: () => openErrorLogEditor(context, ref, data, test, log),
-                      ),
-                  ],
-                ),
         ),
-        const SizedBox(height: 10),
         NotebookCard(
-          title: 'Time per subject',
-          subtitle: 'Minutes and questions you recorded, with pacing against a 180-minute paper.',
-          trailing: TextButton(
-            onPressed: () => openTimeEntryEditor(context, ref, data, test, null),
-            child: const Text('Add'),
-          ),
-          child: analysis.bySubject.isEmpty
+          child: times.isEmpty
               ? Text(
-                  'No time entries yet. Splitting time by subject shows whether one subject is eating '
-                  'the paper.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
+                  'No time or attempt data recorded for this test. Nothing is estimated — add it if you tracked it.',
+                  style: muted,
                 )
               : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    for (final SubjectTime item in analysis.bySubject)
+                    for (final SubjectTimeRow row in times)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            Row(
+                            Pill(row.subject, dense: true, icon: Icons.circle),
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 14,
+                              runSpacing: 4,
                               children: <Widget>[
-                                Expanded(
-                                  child: Text(item.subject, style: Theme.of(context).textTheme.titleSmall),
-                                ),
-                                Text(
-                                  minutesLabel(item.minutes),
-                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                        color: colors.muted,
-                                      ),
+                                _Num('Time', _webMinutes(row.minutes)),
+                                _Num('Attempted', row.attempted?.toString() ?? '—'),
+                                _Num('Unattempted', row.unattempted?.toString() ?? '—'),
+                                _Num(
+                                  'Marks',
+                                  '${row.marks == null ? '—' : jsNumberText(row.marks!)}'
+                                      '${row.total != null && row.total != 0 ? '/${jsNumberText(row.total!)}' : ''}',
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            LinearBar(
-                              value: (item.minutes / 180).clamp(0, 1).toDouble(),
-                              height: 6,
-                              color: colors.subjectColor(item.subject),
-                            ),
-                            Text(
-                              '${item.attempted} attempted · ${item.unattempted} left',
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: colors.muted,
-                                  ),
-                            ),
+                            if (row.marksPerMinute != null)
+                              Text('${row.marksPerMinute!.toStringAsFixed(2)} marks per minute spent', style: muted),
                           ],
                         ),
                       ),
                   ],
                 ),
         ),
+        _Heading(
+          title: 'Lost marks, classified',
+          note: 'Tag why marks were lost.',
+          action: ElevatedButton.icon(
+            onPressed: () => openErrorLogEditor(context, ref, data, test, null),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Classify'),
+          ),
+        ),
+        NotebookCard(
+          child: logs.isEmpty
+              ? Text('No classifications yet.', style: muted)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    for (final TestErrorLog log in logs) _LogRow(data: data, test: test, log: log),
+                  ],
+                ),
+        ),
+        const _Heading(title: 'Where the marks went', note: 'Your classifications, summed.'),
+        NotebookCard(
+          child: totals.isEmpty
+              ? Text('Classify some lost marks to see the breakdown.', style: muted)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    for (final CategoryTotal total in totals)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: LinearBar(
+                          value: maxBar == 0
+                              ? 0
+                              : ((total.marksLost ?? total.entries.toDouble()) / maxBar).clamp(0, 1).toDouble(),
+                          color: colors.palette.orange,
+                          label: '${total.category} · '
+                              '${total.marksLost != null ? '${jsNumberText(total.marksLost!)} marks' : '${total.entries} tag${total.entries == 1 ? '' : 's'}'}',
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+        const _Heading(title: 'Fix before your next mock', note: 'Each line shows its basis.'),
+        NotebookCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (insights.isEmpty)
+                Text('Not enough data yet.', style: muted)
+              else
+                for (final MockInsight insight in insights)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Pill(
+                          switch (insight.kind) {
+                            'recorded' => 'Recorded',
+                            'classified' => 'You classified',
+                            _ => 'Derived',
+                          },
+                          dense: true,
+                          tone: switch (insight.kind) {
+                            'recorded' => PillTone.neutral,
+                            'classified' => PillTone.accent,
+                            _ => PillTone.warn,
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(insight.text, style: text.bodySmall)),
+                      ],
+                    ),
+                  ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => Routes.open(context, Routes.weakAreas),
+                  child: const Text('See weak areas →'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 }
 
+class _Heading extends StatelessWidget {
+  const _Heading({required this.title, this.note, this.action});
+
+  final String title;
+  final String? note;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 16, 2, 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: <Widget>[
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Semantics(header: true, child: Text(title, style: text.titleMedium)),
+              if (note != null) Text(note!, style: text.labelSmall?.copyWith(color: context.stracker.muted)),
+            ],
+          ),
+          if (action != null) action!,
+        ],
+      ),
+    );
+  }
+}
+
+class _Num extends StatelessWidget {
+  const _Num(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme text = Theme.of(context).textTheme;
+    return Text.rich(
+      TextSpan(
+        text: '$label ',
+        style: text.labelSmall?.copyWith(color: context.stracker.muted),
+        children: <InlineSpan>[
+          TextSpan(text: value, style: text.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _LogRow extends ConsumerWidget {
+  const _LogRow({required this.data, required this.test, required this.log});
+
+  final AppData data;
+  final TestRecord test;
+  final TestErrorLog log;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final TextTheme text = Theme.of(context).textTheme;
+    final List<String> meta = <String>[
+      if (log.subject != null && log.subject!.isNotEmpty) log.subject!,
+      if (log.marksLost != null) '${jsNumberText(log.marksLost!)} marks',
+      if (log.questions != null) '${log.questions} question${log.questions == 1 ? '' : 's'}',
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(log.category, style: text.titleSmall),
+                if (meta.isNotEmpty)
+                  Text(meta.join(' · '), style: text.labelSmall?.copyWith(color: context.stracker.muted)),
+                if (log.note.isNotEmpty) Text(log.note, style: text.bodySmall),
+              ],
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Actions for ${log.category}',
+            onSelected: (String action) async {
+              if (action == 'edit') {
+                await openErrorLogEditor(context, ref, data, test, log);
+                return;
+              }
+              final bool confirmed = await confirmAction(
+                context,
+                title: 'Remove this classification?',
+                message: 'It is removed from the account on the website as well.',
+              );
+              if (!confirmed) return;
+              try {
+                await ref.read(dataControllerProvider.notifier).deleteErrorLog(log);
+                if (context.mounted) showToast(context, 'Classification removed.');
+              } catch (error) {
+                if (context.mounted) showToast(context, error.toString(), error: true);
+              }
+            },
+            itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
+              PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Website ClassifyDialog: category, optional subject, questions, marks lost and a note.
 Future<void> openErrorLogEditor(
   BuildContext context,
   WidgetRef ref,
@@ -280,45 +410,51 @@ Future<void> openErrorLogEditor(
   TestErrorLog? log,
 ) async {
   final bool creating = log == null;
-  final TextEditingController marks = TextEditingController(
-    text: log?.marksLost == null ? '' : numberLabel(log!.marksLost, digits: 1),
-  );
+  final TextEditingController marks =
+      TextEditingController(text: log?.marksLost == null ? '' : jsNumberText(log!.marksLost!));
   final TextEditingController questions = TextEditingController(text: log?.questions?.toString() ?? '');
   final TextEditingController note = TextEditingController(text: log?.note ?? '');
-  String category = log?.category ?? errorCategories.first;
+  String category = log?.category ?? 'Silly mistake';
+  final List<String> subjects = examSubjectNames(data);
   String? subject = log?.subject;
-  String? chapterId = log?.chapterId;
+  if (subject != null && !subjects.contains(subject)) subjects.add(subject);
   String? marksError;
+  String? questionsError;
+  bool saving = false;
 
   await showAppSheet<void>(
     context,
-    title: creating ? 'Log an error' : 'Edit error log',
+    title: creating ? 'Classify lost marks' : 'Edit classification',
     builder: (BuildContext sheetContext) => StatefulBuilder(
       builder: (BuildContext context, StateSetter setSheetState) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          AppSelect<String?>(
+            label: 'Subject',
+            value: subject,
+            items: <String?>[null, ...subjects],
+            labelFor: (String? value) => value ?? 'Not specified',
+            onChanged: (String? value) => setSheetState(() => subject = value),
+          ),
           AppSelect<String>(
-            label: 'Category',
+            label: 'Why did it happen?',
             value: category,
             items: errorCategories,
             onChanged: (String? value) => setSheetState(() => category = value ?? category),
           ),
-          AppSelect<String?>(
-            label: 'Subject (optional)',
-            value: subject,
-            items: <String?>[null, ...data.subjects],
-            labelFor: (String? value) => value ?? 'Not set',
-            onChanged: (String? value) => setSheetState(() => subject = value),
-          ),
-          AppSelect<String?>(
-            label: 'Chapter (optional)',
-            value: chapterId,
-            items: <String?>[null, ...data.chapters.map((Chapter chapter) => chapter.id)],
-            labelFor: (String? value) => value == null ? 'Not linked' : data.chapterName(value),
-            onChanged: (String? value) => setSheetState(() => chapterId = value),
-          ),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              Expanded(
+                child: AppField(
+                  label: 'Questions',
+                  controller: questions,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+                  error: questionsError,
+                ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: AppField(
                   label: 'Marks lost',
@@ -327,49 +463,77 @@ Future<void> openErrorLogEditor(
                   error: marksError,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppField(
-                  label: 'Questions',
-                  controller: questions,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-                ),
-              ),
             ],
           ),
-          AppField(label: 'Note', controller: note, maxLines: 3, maxLength: 2000),
-          ElevatedButton(
-            onPressed: () async {
-              final double? marksValue =
-                  marks.text.trim().isEmpty ? null : double.tryParse(marks.text.trim());
-              if (marksValue != null &&
-                  (marksValue < 0 || marksValue > 100000 || (marksValue * 100) % 25 != 0)) {
-                setSheetState(() => marksError = 'Use 0–100000 in steps of 0.25.');
-                return;
-              }
-              final TestErrorLog next = TestErrorLog(
-                id: log?.id ?? newId(),
-                userId: data.userId,
-                testId: test.id,
-                chapterId: chapterId,
-                subject: subject,
-                category: category,
-                marksLost: marksValue,
-                questions: int.tryParse(questions.text.trim()),
-                note: note.text,
-                createdAt: log?.createdAt ?? isoNow(),
-                updatedAt: isoNow(),
-              );
-              try {
-                await ref.read(dataControllerProvider.notifier).saveErrorLog(next);
-                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                if (context.mounted) showToast(context, creating ? 'Error logged.' : 'Error updated.');
-              } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
-              }
-            },
-            child: Text(creating ? 'Log error' : 'Save'),
+          AppField(label: 'Note (optional)', controller: note, maxLines: 3, maxLength: 5000),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: <Widget>[
+              TextButton(onPressed: () => Navigator.of(sheetContext).pop(), child: const Text('Cancel')),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        // Website validateErrorLog: marks 0–999999.99 with at most two decimals,
+                        // questions a whole number 0–10000.
+                        double? marksValue;
+                        String? nextMarksError;
+                        if (marks.text.trim().isNotEmpty) {
+                          final double? parsed = double.tryParse(marks.text.trim());
+                          if (parsed == null ||
+                              !parsed.isFinite ||
+                              parsed < 0 ||
+                              parsed > 999999.99 ||
+                              (parsed * 100 - (parsed * 100).round()).abs() > 1e-6) {
+                            nextMarksError = 'Enter marks lost as a number, 0 or more.';
+                          } else {
+                            marksValue = parsed;
+                          }
+                        }
+                        int? questionsValue;
+                        String? nextQuestionsError;
+                        if (questions.text.trim().isNotEmpty) {
+                          final int? parsed = int.tryParse(questions.text.trim());
+                          if (parsed == null || parsed < 0 || parsed > 10000) {
+                            nextQuestionsError = 'Enter a whole number of questions.';
+                          } else {
+                            questionsValue = parsed;
+                          }
+                        }
+                        setSheetState(() {
+                          marksError = nextMarksError;
+                          questionsError = nextQuestionsError;
+                        });
+                        if (nextMarksError != null || nextQuestionsError != null) return;
+                        final TestErrorLog next = TestErrorLog(
+                          id: log?.id ?? newId(),
+                          userId: data.userId,
+                          testId: test.id,
+                          chapterId: log?.chapterId,
+                          subject: subject,
+                          category: category,
+                          marksLost: marksValue,
+                          questions: questionsValue,
+                          note: note.text.trim(),
+                          createdAt: log?.createdAt ?? isoNow(),
+                          updatedAt: isoNow(),
+                        );
+                        setSheetState(() => saving = true);
+                        try {
+                          await ref.read(dataControllerProvider.notifier).saveErrorLog(next);
+                          if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                          if (context.mounted) {
+                            showToast(context, creating ? 'Classification added.' : 'Classification saved.');
+                          }
+                        } catch (error) {
+                          if (context.mounted) showToast(context, error.toString(), error: true);
+                          if (sheetContext.mounted) setSheetState(() => saving = false);
+                        }
+                      },
+                child: Text(creating ? 'Add classification' : 'Save'),
+              ),
+            ],
           ),
         ],
       ),
@@ -380,97 +544,151 @@ Future<void> openErrorLogEditor(
   note.dispose();
 }
 
-Future<void> openTimeEntryEditor(
-  BuildContext context,
-  WidgetRef ref,
-  AppData data,
-  TestRecord test,
-  TestTimeEntry? entry,
-) async {
-  final TextEditingController minutes =
-      TextEditingController(text: entry?.minutes?.toString() ?? '');
-  final TextEditingController attempted =
-      TextEditingController(text: entry?.attempted?.toString() ?? '');
-  final TextEditingController unattempted =
-      TextEditingController(text: entry?.unattempted?.toString() ?? '');
-  String? subject = entry?.subject;
-  String? minutesError;
+/// Website TimeDialog: one row per exam subject (minutes, attempted, unattempted), saved
+/// with the website's stable ids so both apps update the same rows.
+Future<void> openTimeDataEditor(BuildContext context, WidgetRef ref, AppData data, TestRecord test) async {
+  final List<TestTimeEntry> existing = data.timeEntries.where((TestTimeEntry e) => e.testId == test.id).toList();
+  TestTimeEntry? previousFor(String subject) {
+    for (final TestTimeEntry entry in existing) {
+      if (entry.subject == subject) return entry;
+    }
+    return null;
+  }
+
+  final List<String> subjects = examSubjectNames(data);
+  final Map<String, List<TextEditingController>> fields = <String, List<TextEditingController>>{
+    for (final String subject in subjects)
+      subject: <TextEditingController>[
+        TextEditingController(text: previousFor(subject)?.minutes?.toString() ?? ''),
+        TextEditingController(text: previousFor(subject)?.attempted?.toString() ?? ''),
+        TextEditingController(text: previousFor(subject)?.unattempted?.toString() ?? ''),
+      ],
+  };
+  String? error;
+  bool saving = false;
 
   await showAppSheet<void>(
     context,
-    title: entry == null ? 'Add time entry' : 'Edit time entry',
+    title: 'Time & attempts by subject',
     builder: (BuildContext sheetContext) => StatefulBuilder(
       builder: (BuildContext context, StateSetter setSheetState) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          AppSelect<String?>(
-            label: 'Subject',
-            value: subject,
-            items: <String?>[null, ...data.subjects],
-            labelFor: (String? value) => value ?? 'Whole paper',
-            onChanged: (String? value) => setSheetState(() => subject = value),
+          Text(
+            'Leave unknown fields blank.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.stracker.muted),
           ),
-          AppField(
-            label: 'Minutes',
-            controller: minutes,
-            keyboardType: TextInputType.number,
-            inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-            error: minutesError ?? Validators.minutes(minutes.text),
-          ),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: AppField(
-                  label: 'Attempted',
-                  controller: attempted,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-                ),
+          const SizedBox(height: 8),
+          for (final String subject in subjects) ...<Widget>[
+            Text(subject, style: Theme.of(context).textTheme.titleSmall),
+            Row(
+              children: <Widget>[
+                for (int i = 0; i < 3; i += 1) ...<Widget>[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: AppField(
+                      label: const <String>['Minutes', 'Attempted', 'Unattempted'][i],
+                      controller: fields[subject]![i],
+                      keyboardType: TextInputType.number,
+                      inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                error!,
+                style: TextStyle(color: context.stracker.palette.red),
+                semanticsLabel: error,
               ),
+            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: <Widget>[
+              TextButton(onPressed: () => Navigator.of(sheetContext).pop(), child: const Text('Cancel')),
               const SizedBox(width: 8),
-              Expanded(
-                child: AppField(
-                  label: 'Unattempted',
-                  controller: unattempted,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
-                ),
+              ElevatedButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        final List<TestTimeEntry> entries = <TestTimeEntry>[];
+                        final String now = isoNow();
+                        for (int index = 0; index < subjects.length; index += 1) {
+                          final String subject = subjects[index];
+                          final List<String> raw =
+                              fields[subject]!.map((TextEditingController c) => c.text.trim()).toList();
+                          final TestTimeEntry? previous = previousFor(subject);
+                          if (raw.every((String value) => value.isEmpty)) {
+                            if (previous != null) {
+                              entries.add(TestTimeEntry(
+                                id: previous.id,
+                                userId: previous.userId.isEmpty ? data.userId : previous.userId,
+                                testId: test.id,
+                                subject: previous.subject,
+                                label: previous.label,
+                                orderIndex: previous.orderIndex,
+                                createdAt: previous.createdAt,
+                                updatedAt: now,
+                              ));
+                            }
+                            continue;
+                          }
+                          final List<int?> values = raw.map((String v) => v.isEmpty ? null : int.tryParse(v)).toList();
+                          final bool bad = <int>[0, 1, 2].any((int i) => raw[i].isNotEmpty && values[i] == null) ||
+                              (values[0] != null && (values[0]! < 0 || values[0]! > 1440)) ||
+                              (values[1] != null && values[1]! < 0) ||
+                              (values[2] != null && values[2]! < 0);
+                          if (bad) {
+                            setSheetState(
+                              () => error = 'Use whole numbers for $subject: minutes 0–1440, and counts 0 or more.',
+                            );
+                            return;
+                          }
+                          entries.add(TestTimeEntry(
+                            // Reuse an older row's id so the app never duplicates a subject.
+                            id: previous?.id ?? stableId('${test.id}:time:$subject'),
+                            userId: data.userId,
+                            testId: test.id,
+                            subject: subject,
+                            label: '',
+                            minutes: values[0],
+                            attempted: values[1],
+                            unattempted: values[2],
+                            orderIndex: index,
+                            createdAt: previous?.createdAt ?? now,
+                            updatedAt: now,
+                          ));
+                        }
+                        setSheetState(() {
+                          error = null;
+                          saving = true;
+                        });
+                        try {
+                          for (final TestTimeEntry entry in entries) {
+                            await ref.read(dataControllerProvider.notifier).saveTimeEntry(entry);
+                          }
+                          if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                          if (context.mounted) showToast(context, 'Time data saved.');
+                        } catch (failure) {
+                          if (context.mounted) showToast(context, 'Could not save time data.', error: true);
+                          if (sheetContext.mounted) setSheetState(() => saving = false);
+                        }
+                      },
+                child: const Text('Save time data'),
               ),
             ],
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final String? error = Validators.minutes(minutes.text);
-              setSheetState(() => minutesError = error);
-              if (error != null) return;
-              final TestTimeEntry next = TestTimeEntry(
-                id: entry?.id ?? newId(),
-                userId: data.userId,
-                testId: test.id,
-                subject: subject,
-                label: subject ?? 'Whole paper',
-                minutes: int.tryParse(minutes.text.trim()),
-                attempted: int.tryParse(attempted.text.trim()),
-                unattempted: int.tryParse(unattempted.text.trim()),
-                orderIndex: entry?.orderIndex ?? 0,
-                createdAt: entry?.createdAt ?? isoNow(),
-                updatedAt: isoNow(),
-              );
-              try {
-                await ref.read(dataControllerProvider.notifier).saveTimeEntry(next);
-                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                if (context.mounted) showToast(context, 'Time entry saved.');
-              } catch (error) {
-                if (context.mounted) showToast(context, error.toString(), error: true);
-              }
-            },
-            child: const Text('Save'),
           ),
         ],
       ),
     ),
   );
-  minutes.dispose();
-  attempted.dispose();
-  unattempted.dispose();
+  for (final List<TextEditingController> list in fields.values) {
+    for (final TextEditingController controller in list) {
+      controller.dispose();
+    }
+  }
 }
