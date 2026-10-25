@@ -209,6 +209,57 @@ void main() {
     expect(find.descendant(of: find.byType(HomePage), matching: menu), findsOneWidget);
   });
 
+  testWidgets('Android predictive back: a section follows the swipe, cancels, and commits back to the tabs',
+      (WidgetTester tester) async {
+    addTearDown(tester.view.reset);
+    await _setWindow(tester, const Size(412, 915));
+    await _pump(tester, const AppShell());
+    await tester.tap(find.bySemanticsLabel('Open navigation'));
+    await _settle(tester);
+    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('Syllabus')).first);
+    await _settle(tester);
+    expect(find.byType(SyllabusPage), findsOneWidget);
+    final Rect resting = tester.getRect(find.byType(SyllabusPage));
+
+    Future<void> gesture(String method, [Map<String, Object?>? args]) async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'flutter/backgesture',
+        const StandardMethodCodec().encodeMethodCall(MethodCall(method, args)),
+        (ByteData? _) {},
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    const Map<String, Object?> start = <String, Object?>{
+      'touchOffset': <double>[5, 400],
+      'progress': 0.0,
+      'swipeEdge': 0,
+    };
+    const Map<String, Object?> drag = <String, Object?>{'x': 120.0, 'y': 400.0, 'progress': 0.4, 'swipeEdge': 0};
+
+    // The nested section (not the whole shell) shrinks with the swipe, then springs back on cancel.
+    await gesture('startBackGesture', start);
+    await gesture('updateBackGestureProgress', drag);
+    await _settle(tester);
+    final Rect dragged = tester.getRect(find.byType(SyllabusPage));
+    expect(dragged.width, lessThan(resting.width), reason: 'the page follows the back swipe');
+    expect(_bottomTabs, findsOneWidget, reason: 'the shell itself does not move');
+    await gesture('cancelBackGesture');
+    await _settle(tester);
+    expect(find.byType(SyllabusPage), findsOneWidget);
+    expect(tester.getRect(find.byType(SyllabusPage)), resting);
+
+    // A committed swipe pops only the section and lands on the tabs.
+    await gesture('startBackGesture', start);
+    await gesture('updateBackGestureProgress', drag);
+    await gesture('commitBackGesture');
+    await _settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SyllabusPage), findsNothing);
+    expect(find.byType(HomePage), findsOneWidget);
+    expect(_bottomTabs, findsOneWidget);
+  });
+
   testWidgets('Android back order: drawer first, then tab to Home, then the system default',
       (WidgetTester tester) async {
     addTearDown(tester.view.reset);

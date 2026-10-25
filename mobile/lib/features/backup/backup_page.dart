@@ -1,11 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/date.dart';
+import '../../core/platform/file_picker.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
@@ -32,6 +34,7 @@ class BackupPage extends ConsumerStatefulWidget {
 
 class _BackupPageState extends ConsumerState<BackupPage> {
   final TextEditingController _paste = TextEditingController();
+  String? _importFileName;
   bool _busy = false;
   Map<String, int>? _preview;
   Map<String, dynamic>? _payload;
@@ -279,6 +282,16 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                   ),
                   const SizedBox(height: 10),
                   if (_preview == null) ...<Widget>[
+                    Text('Select a Stracker JSON backup', style: text.titleSmall),
+                    const SizedBox(height: 6),
+                    ElevatedButton.icon(
+                      onPressed: _busy ? null : _chooseFile,
+                      icon: const Icon(Icons.file_open_outlined, size: 17),
+                      label: const Text('Choose backup file'),
+                    ),
+                    const SizedBox(height: 10),
+                    Text('Or paste it', style: text.labelMedium?.copyWith(color: colors.muted)),
+                    const SizedBox(height: 4),
                     AppField(
                       label: 'Paste a Stracker JSON backup',
                       controller: _paste,
@@ -301,9 +314,16 @@ class _BackupPageState extends ConsumerState<BackupPage> {
                     Row(
                       children: <Widget>[
                         Expanded(
-                          child: Text(
-                            'IMPORT PREVIEW',
-                            style: text.labelSmall?.copyWith(letterSpacing: 1.2, color: colors.muted),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'IMPORT PREVIEW',
+                                style: text.labelSmall?.copyWith(letterSpacing: 1.2, color: colors.muted),
+                              ),
+                              if (_importFileName != null)
+                                Text(_importFileName!, style: text.titleSmall, overflow: TextOverflow.ellipsis),
+                            ],
                           ),
                         ),
                         const Pill('Structure looks good', tone: PillTone.good, dense: true),
@@ -515,9 +535,27 @@ class _BackupPageState extends ConsumerState<BackupPage> {
     }
   }
 
-  void _previewImport() {
+  /// The website's "Select a Stracker JSON backup": the system picker, a .json file under
+  /// 60 MB, then the same preview as pasted text. Nothing is written until confirmed.
+  Future<void> _chooseFile() async {
+    await HapticFeedback.selectionClick();
     try {
-      final Map<String, dynamic> payload = parseBackupText(_paste.text);
+      final PickedTextFile? file = await pickTextFile();
+      if (file == null || !mounted) return;
+      if (!file.name.toLowerCase().endsWith('.json')) {
+        showToast(context, 'Choose a Stracker JSON file under 60 MB.', error: true);
+        return;
+      }
+      _previewImport(text: file.text, fileName: file.name);
+    } catch (error) {
+      if (mounted) showToast(context, error.toString(), error: true);
+    }
+  }
+
+  void _previewImport({String? text, String? fileName}) {
+    try {
+      final Map<String, dynamic> payload = parseBackupText(text ?? _paste.text);
+      _importFileName = fileName ?? 'Pasted backup';
       setState(() {
         _payload = payload;
         _preview = backupCounts(payload);

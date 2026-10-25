@@ -272,8 +272,8 @@ Future<void> _setWindow(WidgetTester tester, Size size) async {
   tester.view.viewPadding = const FakeViewPadding(top: 48, bottom: 32);
 }
 
-Future<DataController> _pump(WidgetTester tester, Widget home) async {
-  SharedPreferences.setMockInitialValues(<String, Object>{'stracker.cache.$_user': _snapshot()});
+Future<DataController> _pump(WidgetTester tester, Widget home, {Map<String, Object> extra = const <String, Object>{}}) async {
+  SharedPreferences.setMockInitialValues(<String, Object>{'stracker.cache.$_user': _snapshot(), ...extra});
   final SharedPreferences prefs = await SharedPreferences.getInstance();
   final DataController data = DataController(
     repository: StrackerRepository(SupabaseClient(
@@ -368,6 +368,24 @@ void main() {
         }
       });
     }
+  }
+
+  // Three pinned charts (the website's maximum) render again in Favourites at the top.
+  for (final (String name, Size size) in _sizes) {
+    testWidgets('Analytics with three favourites at $name: no overflow', (WidgetTester tester) async {
+      addTearDown(tester.view.reset);
+      await _setWindow(tester, size);
+      await _pump(tester, const AnalyticsPage(), extra: <String, Object>{
+        pinnedStorageKey(_user): <String>['target', 'heatmap', 'performance'],
+      });
+      expect(tester.takeException(), isNull);
+      expect(find.text('Favourites'), findsOneWidget);
+      expect(find.text('3/3 pinned'), findsOneWidget);
+      final Finder scrollables = find.byType(Scrollable);
+      await tester.drag(scrollables.first, const Offset(0, -6000), warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(tester.takeException(), isNull);
+    });
   }
 
   // Inline editors with the on-screen keyboard up: the page shrinks above it and scrolls
