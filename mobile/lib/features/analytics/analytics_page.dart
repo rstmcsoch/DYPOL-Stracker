@@ -5,10 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/date.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/charts.dart';
+import '../../core/widgets/multi_charts.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
@@ -18,6 +19,8 @@ import '../../data/models.dart';
 import '../../logic/analytics.dart';
 import '../../logic/home_summary.dart';
 import '../../logic/progress.dart';
+import '../../logic/weekly_report.dart';
+import '../../main.dart' show preferencesProvider;
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
 import '../tests/tests_page.dart';
@@ -37,6 +40,24 @@ String _fmt(double value, [int digits = 0]) {
   return digits > 0 && fixed.contains('.') ? fixed.replaceFirst(RegExp(r'\.?0+$'), '') : fixed;
 }
 
+const List<String> _months = <String>[
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec'
+];
+
+/// The website's chart tick: "5 Oct".
+String _shortDate(DateTime d) => '${d.day} ${_months[d.month - 1]}';
+
 String _duration(int minutes) {
   final int hours = minutes ~/ 60;
   final int mins = minutes % 60;
@@ -44,9 +65,58 @@ String _duration(int minutes) {
   return mins == 0 ? '${hours}h' : '${hours}h ${mins}m';
 }
 
+/// The website's pinned charts: up to three, a device-level preference per account.
+const int pinLimit = 3;
+const List<String> chartIds = <String>['performance', 'mistakes', 'study-hours', 'heatmap', 'syllabus', 'target'];
+const Map<String, String> chartTitles = <String, String>{
+  'performance': 'Marks & subjects',
+  'mistakes': 'Mistake breakdown',
+  'study-hours': 'Study hours',
+  'heatmap': 'Study-day rhythm',
+  'syllabus': 'Syllabus progress',
+  'target': 'Mock target',
+};
+
+String pinnedStorageKey(String userId) => 'stracker-pinned-charts:$userId';
+
 class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
   String _range = '90';
   String _hoursView = 'day';
+  List<String>? _pinned;
+
+  SharedPreferences? get _prefs {
+    try {
+      return ref.read(preferencesProvider);
+    } catch (_) {
+      return null; // No store (tests): pinning still works for the session.
+    }
+  }
+
+  List<String> _loadPinned(String userId) {
+    final List<String> raw = _prefs?.getStringList(pinnedStorageKey(userId)) ?? const <String>[];
+    return raw.where(chartIds.contains).take(pinLimit).toList();
+  }
+
+  Future<void> _togglePin(String userId, String id) async {
+    final List<String> current = List<String>.from(_pinned ?? _loadPinned(userId));
+    if (current.contains(id)) {
+      current.remove(id);
+    } else if (current.length >= pinLimit) {
+      showToast(
+        context,
+        'You can pin up to $pinLimit charts. Unpin one first — try the pin button on '
+        '“${chartTitles[current.first]}”.',
+        error: true,
+      );
+      return;
+    } else {
+      current.add(id);
+      showToast(context, '${chartTitles[id]} pinned to your favourites.');
+    }
+    setState(() => _pinned = current);
+    await HapticFeedback.selectionClick();
+    await _prefs?.setStringList(pinnedStorageKey(userId), current);
+  }
 
   /// The website's "Export trend CSV": same columns and file name, handed to the share sheet.
   Future<void> _exportTrendCsv(AppData data) async {
@@ -83,12 +153,13 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
     final bool hasSessions = data.sessions.any((StudySession s) => s.durationMinutes > 0);
     final bool hasMistakes = mistakes.any((({String type, int count}) m) => m.count > 0);
     final bool hasSubjectScores = subjects.any((({String subject, double? average, int count}) s) => s.average != null);
-    final List<TrendPoint> allTrend = testTrend(data, limit: 5000);
     final String? since =
         _range == 'all' ? null : isoDate(parseIsoDate(today)!.subtract(Duration(days: int.parse(_range))));
-    final List<TrendPoint> trend =
-        allTrend.where((TrendPoint p) => since == null || p.date.compareTo(since) >= 0).toList();
-    final bool hasTestScore = allTrend.isNotEmpty;
+    final List<({String date, double? overall, Map<String, double?> bySubject})> trendRows =
+        marksTrend(data, since: since);
+    final bool hasTestScore = marksTrend(data).any(
+        (({String date, double? overall, Map<String, double?> bySubject}) r) =>
+            r.overall != null || r.bySubject.values.any((double? v) => v != null));
     final bool hasAttemptData =
         accuracy.rate != null || attempt.rate != null || negative.totalNegativeMarks > 0 || data.sessions.isNotEmpty;
     final ({double score, double gap, String state})? target = mockTargetComparison(data);
@@ -98,6 +169,20 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
 
     Widget eyebrow(String value) => Text(value,
         style: text.labelSmall?.copyWith(color: colors.muted, letterSpacing: 0.8, fontWeight: FontWeight.w700));
+
+    final List<String> pinned = _pinned ??= _loadPinned(data.userId.isEmpty ? 'session' : data.userId);
+    Widget pinButton(String id) {
+      final bool on = pinned.contains(id);
+      final String title = chartTitles[id]!;
+      return IconButton(
+        visualDensity: VisualDensity.compact,
+        tooltip: on ? 'Unpin $title' : 'Pin $title to favourites',
+        isSelected: on,
+        icon: Icon(on ? Icons.push_pin : Icons.push_pin_outlined,
+            size: 17, color: on ? colors.palette.accent : colors.muted),
+        onPressed: () => _togglePin(data.userId.isEmpty ? 'session' : data.userId, id),
+      );
+    }
 
     Widget chartHead(String kicker, String title, String note, {Widget? action}) => Padding(
           padding: const EdgeInsets.only(bottom: 10),
@@ -115,6 +200,8 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
                 ),
               ),
               if (action != null) ...<Widget>[const SizedBox(width: 8), action],
+              if (chartTitles.entries.where((MapEntry<String, String> e) => e.value == title).isNotEmpty)
+                pinButton(chartTitles.entries.firstWhere((MapEntry<String, String> e) => e.value == title).key),
             ],
           ),
         );
@@ -166,6 +253,292 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
           ),
         );
 
+    Widget cardFor(String id) {
+      switch (id) {
+        case 'performance':
+          return NotebookCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                chartHead(
+                  'PERCENTAGE, NOT RAW MARKS',
+                  'Marks & subjects',
+                  'The trend of your comparable results, with the subject balance beside it.',
+                ),
+                if (!hasTestScore && !hasSubjectScores)
+                  noData('Marks & subjects', 'Log a test with marks and a total to start the trend.')
+                else ...<Widget>[
+                  if (hasTestScore) ...<Widget>[
+                    AppSelect<String>(
+                      label: 'Choose marks trend range',
+                      value: _range,
+                      items: const <String>['30', '90', '180', 'all'],
+                      labelFor: (String v) => switch (v) {
+                        '30' => 'Last 30 days',
+                        '90' => 'Last 90 days',
+                        '180' => 'Last 6 months',
+                        _ => 'All recorded tests',
+                      },
+                      onChanged: (String? v) => setState(() => _range = v ?? _range),
+                    ),
+                    if (!trendRows.any((({String date, double? overall, Map<String, double?> bySubject}) r) =>
+                        r.overall != null || r.bySubject.values.any((double? v) => v != null)))
+                      noData('Marks trend', 'No comparable test result in this range yet.')
+                    else
+                      MultiLineChart(
+                        times: <int>[
+                          for (final ({String date, double? overall, Map<String, double?> bySubject}) r in trendRows)
+                            parseIsoDate(r.date)!.millisecondsSinceEpoch,
+                        ],
+                        tickLabel: (int t) => _shortDate(DateTime.fromMillisecondsSinceEpoch(t)),
+                        series: <ChartSeries>[
+                          ChartSeries(
+                            label: 'Overall',
+                            color: colors.palette.inkSoft,
+                            dashed: true,
+                            values: <double?>[
+                              for (final ({String date, double? overall, Map<String, double?> bySubject}) r
+                                  in trendRows)
+                                r.overall,
+                            ],
+                          ),
+                          for (final ({String subject, double? average, int count}) s in subjects)
+                            ChartSeries(
+                              label: s.subject,
+                              color: colors.subjectColor(s.subject),
+                              values: <double?>[
+                                for (final ({String date, double? overall, Map<String, double?> bySubject}) r
+                                    in trendRows)
+                                  r.bySubject[s.subject],
+                              ],
+                            ),
+                        ],
+                      ),
+                  ],
+                  const SizedBox(height: 10),
+                  if (hasSubjectScores) ...<Widget>[
+                    RadarChart(
+                      labels: <String>[
+                        for (final ({String subject, double? average, int count}) s in subjects) s.subject
+                      ],
+                      values: <double>[
+                        for (final ({String subject, double? average, int count}) s in subjects) s.average ?? 0,
+                      ],
+                    ),
+                    WrapGrid(
+                      minItemWidth: 110,
+                      children: <Widget>[
+                        for (final ({String subject, double? average, int count}) s in subjects)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Pill(s.subject, dense: true),
+                              Text(s.average == null ? '—' : '${s.average!.round()}%', style: text.titleMedium),
+                              Text('${s.count} result${s.count == 1 ? '' : 's'}', style: muted),
+                              LinearBar(
+                                value: ((s.average ?? 0) / 100).clamp(0, 1).toDouble(),
+                                color: colors.subjectColor(s.subject),
+                                height: 5,
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ] else
+                    noData('Subject balance', 'Add scores to any subject test or mock to compare subjects.'),
+                ],
+              ],
+            ),
+          );
+        case 'mistakes':
+          return NotebookCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                chartHead(
+                  'NOTICE THE REPEATS',
+                  'Mistake breakdown',
+                  'Only entries saved in your notebook appear here.',
+                  action: TextButton(
+                    onPressed: () => Routes.open(context, Routes.mistakes),
+                    child: const Text('Open notebook ↗'),
+                  ),
+                ),
+                if (hasMistakes) ...<Widget>[
+                  _Bars(
+                    values: <double>[for (final ({String type, int count}) m in mistakes) m.count.toDouble()],
+                    labels: <String>[for (final ({String type, int count}) m in mistakes) m.type],
+                    colors: <Color>[
+                      colors.palette.accent,
+                      colors.palette.orange,
+                      colors.palette.green,
+                      colors.palette.red,
+                      colors.muted,
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    children: <Widget>[
+                      for (final ({String type, int count}) m in mistakes)
+                        Text('${m.type} ${m.count}', style: text.labelMedium),
+                    ],
+                  ),
+                ] else
+                  noData('Mistake breakdown', 'A few honest notes in the mistake notebook make this useful.'),
+              ],
+            ),
+          );
+        case 'study-hours':
+          return NotebookCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                chartHead('SHOWING UP COUNTS', 'Study hours', 'Logged focus sessions only.'),
+                SegmentedButton<String>(
+                  segments: const <ButtonSegment<String>>[
+                    ButtonSegment<String>(value: 'day', label: Text('day')),
+                    ButtonSegment<String>(value: 'week', label: Text('week')),
+                    ButtonSegment<String>(value: 'month', label: Text('month')),
+                  ],
+                  selected: <String>{_hoursView},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (Set<String> value) {
+                    HapticFeedback.selectionClick();
+                    setState(() => _hoursView = value.first);
+                  },
+                ),
+                const SizedBox(height: 10),
+                if (hasSessions)
+                  Builder(builder: (BuildContext context) {
+                    final List<({String date, String label, double hours})> bars = studyBars(data, _hoursView, today);
+                    return _Bars(
+                      values: <double>[for (final ({String date, String label, double hours}) b in bars) b.hours],
+                      labels: <String>[for (final ({String date, String label, double hours}) b in bars) b.label],
+                      colors: <Color>[colors.palette.green],
+                      sparseLabels: true,
+                    );
+                  })
+                else
+                  noData('Study hours', 'Run a focus session — the timer logs your study time.'),
+              ],
+            ),
+          );
+        case 'heatmap':
+          return NotebookCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                chartHead(
+                  'A CALENDAR OF SHOWING UP',
+                  'Study-day rhythm',
+                  'Day intensity is compared with your current daily study goal.',
+                ),
+                if (hasSessions)
+                  _Heatmap(data: data, today: today)
+                else
+                  noData('Study-day rhythm', 'Complete a focus block to light up your first day.'),
+              ],
+            ),
+          );
+        case 'syllabus':
+          return NotebookCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                chartHead(
+                  'CHAPTERS MOVING FORWARD',
+                  'Syllabus progress',
+                  '$doneChapters done or revised of $totalChapters recorded chapters.',
+                  action: ProgressRing(
+                    value: totalChapters == 0 ? 0 : doneChapters / totalChapters * 100,
+                    size: 64,
+                    stroke: 6,
+                  ),
+                ),
+                if (totalChapters == 0)
+                  noData('Syllabus progress', 'Chapters appear here as soon as your syllabus has rows.')
+                else
+                  for (final ({String subject, double? average, int count}) s in subjects)
+                    Builder(builder: (BuildContext context) {
+                      final List<Chapter> list = data.chapters.where((Chapter c) => c.subject == s.subject).toList();
+                      final int done = list.where((Chapter c) => c.status == 'Done' || c.status == 'Revised').length;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Row(children: <Widget>[
+                              Expanded(child: Text(s.subject, style: text.titleSmall, overflow: TextOverflow.ellipsis)),
+                              Text('$done / ${list.length} chapters', style: muted),
+                            ]),
+                            const SizedBox(height: 3),
+                            LinearBar(
+                              value: list.isEmpty ? 0 : done / list.length,
+                              color: colors.subjectColor(s.subject),
+                              height: 6,
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+              ],
+            ),
+          );
+        case 'target':
+          return NotebookCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                chartHead(
+                  'A TARGET, NOT A VERDICT',
+                  'Mock target',
+                  'New mocks need all three subject scores; valid saved legacy totals remain comparable.',
+                  action: Icon(Icons.track_changes, size: 20, color: colors.muted),
+                ),
+                if (target == null)
+                  noData('Mock target', 'Add all three subject scores on a full mock to compare it with your target.')
+                else
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: <Widget>[
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+                        Text(_fmt(target.score, 1), style: text.headlineSmall),
+                        Text('latest mock marks', style: muted),
+                      ]),
+                      Text(
+                        target.state == 'above'
+                            ? '↑'
+                            : target.state == 'near'
+                                ? '≈'
+                                : '↓',
+                        style: text.headlineSmall,
+                      ),
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+                        Text(_fmt(data.settings.targetScore), style: text.headlineSmall),
+                        Text('target score', style: muted),
+                      ]),
+                      Pill(
+                        '${target.state == 'above' ? 'Above target' : target.state == 'near' ? 'Near target' : 'Below target'}'
+                        ' · ${target.gap > 0 ? '${_fmt(target.gap, 1)} to go' : '${_fmt(target.gap.abs(), 1)} ahead'}',
+                        tone: target.state == 'above'
+                            ? PillTone.good
+                            : target.state == 'near'
+                                ? PillTone.warn
+                                : PillTone.bad,
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          );
+      }
+      return const SizedBox.shrink();
+    }
+
     return NotebookScaffold(
       title: 'Analytics',
       showBrand: true,
@@ -192,6 +565,8 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          WeeklyReportCard(data: data, today: today),
           const SizedBox(height: 10),
           const SectionHeading('Learning pipeline'),
           Text('Stages are independent; counts can overlap.', style: muted),
@@ -291,67 +666,34 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
             ),
           ],
           const SizedBox(height: 10),
-          NotebookCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                chartHead(
-                  'PERCENTAGE, NOT RAW MARKS',
-                  'Marks & subjects',
-                  'The trend of your comparable results, with the subject balance beside it.',
-                ),
-                if (!hasTestScore && !hasSubjectScores)
-                  noData('Marks & subjects', 'Log a test with marks and a total to start the trend.')
-                else ...<Widget>[
-                  if (hasTestScore) ...<Widget>[
-                    AppSelect<String>(
-                      label: 'Choose marks trend range',
-                      value: _range,
-                      items: const <String>['30', '90', '180', 'all'],
-                      labelFor: (String v) => switch (v) {
-                        '30' => 'Last 30 days',
-                        '90' => 'Last 90 days',
-                        '180' => 'Last 6 months',
-                        _ => 'All recorded tests',
-                      },
-                      onChanged: (String? v) => setState(() => _range = v ?? _range),
-                    ),
-                    if (trend.isEmpty)
-                      noData('Marks trend', 'No comparable test result in this range yet.')
-                    else
-                      LineSeriesChart(
-                        points: <double>[for (final TrendPoint p in trend) p.percentage],
-                        labels: <String>[for (final TrendPoint p in trend) prettyDate(p.date)],
-                        height: 160,
-                      ),
-                  ],
-                  const SizedBox(height: 10),
-                  if (hasSubjectScores)
-                    WrapGrid(
-                      minItemWidth: 110,
+          if (pinned.isNotEmpty) ...<Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(2, 6, 2, 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        for (final ({String subject, double? average, int count}) s in subjects)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Pill(s.subject, dense: true),
-                              Text(s.average == null ? '—' : '${s.average!.round()}%', style: text.titleMedium),
-                              Text('${s.count} result${s.count == 1 ? '' : 's'}', style: muted),
-                              LinearBar(
-                                value: ((s.average ?? 0) / 100).clamp(0, 1).toDouble(),
-                                color: colors.subjectColor(s.subject),
-                                height: 5,
-                              ),
-                            ],
-                          ),
+                        Text('Favourites', style: text.titleMedium),
+                        Text(
+                          'Your pinned charts stay at the top. Pin or unpin from any chart’s header — up to $pinLimit.',
+                          style: muted,
+                        ),
                       ],
-                    )
-                  else
-                    noData('Subject balance', 'Add scores to any subject test or mock to compare subjects.'),
+                    ),
+                  ),
+                  Pill('${pinned.length}/$pinLimit pinned', dense: true),
                 ],
-              ],
+              ),
             ),
-          ),
+            for (final String id in pinned) ...<Widget>[
+              KeyedSubtree(key: ValueKey<String>('fav-$id'), child: cardFor(id)),
+              const SizedBox(height: 10),
+            ],
+          ],
+          cardFor('performance'),
           Padding(
             padding: const EdgeInsets.fromLTRB(2, 16, 2, 8),
             child: Column(
@@ -406,190 +748,15 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
               child: noData('Attempt metrics', 'Log correct/wrong counts with a test, or run a focus session.'),
             ),
           const SizedBox(height: 10),
-          NotebookCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                chartHead(
-                  'NOTICE THE REPEATS',
-                  'Mistake breakdown',
-                  'Only entries saved in your notebook appear here.',
-                  action: TextButton(
-                    onPressed: () => Routes.open(context, Routes.mistakes),
-                    child: const Text('Open notebook ↗'),
-                  ),
-                ),
-                if (hasMistakes) ...<Widget>[
-                  _Bars(
-                    values: <double>[for (final ({String type, int count}) m in mistakes) m.count.toDouble()],
-                    labels: <String>[for (final ({String type, int count}) m in mistakes) m.type],
-                    colors: <Color>[
-                      colors.palette.accent,
-                      colors.palette.orange,
-                      colors.palette.green,
-                      colors.palette.red,
-                      colors.muted,
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 4,
-                    children: <Widget>[
-                      for (final ({String type, int count}) m in mistakes)
-                        Text('${m.type} ${m.count}', style: text.labelMedium),
-                    ],
-                  ),
-                ] else
-                  noData('Mistake breakdown', 'A few honest notes in the mistake notebook make this useful.'),
-              ],
-            ),
-          ),
+          cardFor('mistakes'),
           const SizedBox(height: 10),
-          NotebookCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                chartHead('SHOWING UP COUNTS', 'Study hours', 'Logged focus sessions only.'),
-                SegmentedButton<String>(
-                  segments: const <ButtonSegment<String>>[
-                    ButtonSegment<String>(value: 'day', label: Text('day')),
-                    ButtonSegment<String>(value: 'week', label: Text('week')),
-                    ButtonSegment<String>(value: 'month', label: Text('month')),
-                  ],
-                  selected: <String>{_hoursView},
-                  showSelectedIcon: false,
-                  onSelectionChanged: (Set<String> value) {
-                    HapticFeedback.selectionClick();
-                    setState(() => _hoursView = value.first);
-                  },
-                ),
-                const SizedBox(height: 10),
-                if (hasSessions)
-                  Builder(builder: (BuildContext context) {
-                    final List<({String date, String label, double hours})> bars = studyBars(data, _hoursView, today);
-                    return _Bars(
-                      values: <double>[for (final ({String date, String label, double hours}) b in bars) b.hours],
-                      labels: <String>[for (final ({String date, String label, double hours}) b in bars) b.label],
-                      colors: <Color>[colors.palette.green],
-                      sparseLabels: true,
-                    );
-                  })
-                else
-                  noData('Study hours', 'Run a focus session — the timer logs your study time.'),
-              ],
-            ),
-          ),
+          cardFor('study-hours'),
           const SizedBox(height: 10),
-          NotebookCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                chartHead(
-                  'A CALENDAR OF SHOWING UP',
-                  'Study-day rhythm',
-                  'Day intensity is compared with your current daily study goal.',
-                ),
-                if (hasSessions)
-                  _Heatmap(data: data, today: today)
-                else
-                  noData('Study-day rhythm', 'Complete a focus block to light up your first day.'),
-              ],
-            ),
-          ),
+          cardFor('heatmap'),
           const SizedBox(height: 10),
-          NotebookCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                chartHead(
-                  'CHAPTERS MOVING FORWARD',
-                  'Syllabus progress',
-                  '$doneChapters done or revised of $totalChapters recorded chapters.',
-                  action: ProgressRing(
-                    value: totalChapters == 0 ? 0 : doneChapters / totalChapters * 100,
-                    size: 64,
-                    stroke: 6,
-                  ),
-                ),
-                if (totalChapters == 0)
-                  noData('Syllabus progress', 'Chapters appear here as soon as your syllabus has rows.')
-                else
-                  for (final ({String subject, double? average, int count}) s in subjects)
-                    Builder(builder: (BuildContext context) {
-                      final List<Chapter> list = data.chapters.where((Chapter c) => c.subject == s.subject).toList();
-                      final int done = list.where((Chapter c) => c.status == 'Done' || c.status == 'Revised').length;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Row(children: <Widget>[
-                              Expanded(child: Text(s.subject, style: text.titleSmall, overflow: TextOverflow.ellipsis)),
-                              Text('$done / ${list.length} chapters', style: muted),
-                            ]),
-                            const SizedBox(height: 3),
-                            LinearBar(
-                              value: list.isEmpty ? 0 : done / list.length,
-                              color: colors.subjectColor(s.subject),
-                              height: 6,
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-              ],
-            ),
-          ),
+          cardFor('syllabus'),
           const SizedBox(height: 10),
-          NotebookCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                chartHead(
-                  'A TARGET, NOT A VERDICT',
-                  'Mock target',
-                  'New mocks need all three subject scores; valid saved legacy totals remain comparable.',
-                  action: Icon(Icons.track_changes, size: 20, color: colors.muted),
-                ),
-                if (target == null)
-                  noData('Mock target', 'Add all three subject scores on a full mock to compare it with your target.')
-                else
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: <Widget>[
-                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-                        Text(_fmt(target.score, 1), style: text.headlineSmall),
-                        Text('latest mock marks', style: muted),
-                      ]),
-                      Text(
-                        target.state == 'above'
-                            ? '↑'
-                            : target.state == 'near'
-                                ? '≈'
-                                : '↓',
-                        style: text.headlineSmall,
-                      ),
-                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-                        Text(_fmt(data.settings.targetScore), style: text.headlineSmall),
-                        Text('target score', style: muted),
-                      ]),
-                      Pill(
-                        '${target.state == 'above' ? 'Above target' : target.state == 'near' ? 'Near target' : 'Below target'}'
-                        ' · ${target.gap > 0 ? '${_fmt(target.gap, 1)} to go' : '${_fmt(target.gap.abs(), 1)} ahead'}',
-                        tone: target.state == 'above'
-                            ? PillTone.good
-                            : target.state == 'near'
-                                ? PillTone.warn
-                                : PillTone.bad,
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
+          cardFor('target'),
           const SizedBox(height: 10),
           NotebookCard(
             child: Row(
@@ -784,4 +951,147 @@ class _Heatmap extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The website's "Your week" card (WeeklyReportCard). Comparisons appear only when both
+/// weeks have real data for the same subject.
+class WeeklyReportCard extends StatelessWidget {
+  const WeeklyReportCard({super.key, required this.data, required this.today});
+
+  final AppData data;
+  final String today;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final TextTheme text = Theme.of(context).textTheme;
+    final TextStyle? muted = text.bodySmall?.copyWith(color: colors.muted);
+    final WeeklyReport report = buildWeeklyReport(data, today);
+    Widget stat(String label, String value) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(label, style: text.labelSmall?.copyWith(color: colors.muted)),
+            Text(value, style: text.titleMedium),
+          ],
+        );
+    final String accuracy = report.practiceAccuracy == null ? '—' : '${jsRound(report.practiceAccuracy!)}%';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SectionHeading(
+          'Your week',
+          trailing: Text('${formatDate(report.start)} – ${formatDate(report.end)}', style: muted),
+        ),
+        NotebookCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              WrapGrid(
+                minItemWidth: 120,
+                children: <Widget>[
+                  stat('Studied', _weekMinutes(report.studiedMinutes)),
+                  stat('Lecture', _weekMinutes(report.activity.of('Lecture'))),
+                  stat('Practice', _weekMinutes(report.activity.of('Practice'))),
+                  stat('Revision', _weekMinutes(report.activity.of('Revision'))),
+                  stat('Tests', '${report.testsLogged}'),
+                  stat('Questions', indianGrouping(report.questionsAttempted)),
+                  stat('Practice accuracy', accuracy),
+                  stat('Active days', '${report.activeDays}/7'),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: <Widget>[
+                  Text('Strongest subject', style: text.labelMedium),
+                  if (report.strongestSubject == null)
+                    Text('not enough data yet', style: muted?.copyWith(fontStyle: FontStyle.italic))
+                  else ...<Widget>[
+                    Pill(report.strongestSubject!.subject, dense: true),
+                    Text('${jsRound(report.strongestSubject!.value)}%', style: text.titleSmall),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: <Widget>[
+                  Text('Weakest area', style: text.labelMedium),
+                  if (report.weakestArea == null)
+                    Text('not enough data yet', style: muted?.copyWith(fontStyle: FontStyle.italic))
+                  else ...<Widget>[
+                    Text(report.weakestArea!.name, style: text.titleSmall),
+                    Text('${report.weakestArea!.basis}, ${jsRound(report.weakestArea!.value)}%', style: muted),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (report.comparisons.isNotEmpty)
+                for (final String line in report.comparisons) Text('• $line', style: text.bodySmall)
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(Icons.date_range, size: 14, color: colors.muted),
+                    const SizedBox(width: 5),
+                    Expanded(child: Text(report.historyNote, style: muted)),
+                  ],
+                ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: colors.palette.accentLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(Icons.lightbulb_outline, size: 16, color: colors.palette.textAccent),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(children: <InlineSpan>[
+                          const TextSpan(text: 'Next change: ', style: TextStyle(fontWeight: FontWeight.w700)),
+                          TextSpan(text: report.actionable),
+                        ]),
+                        style: text.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// toLocaleString('en-IN') for whole numbers: 1,23,456.
+String indianGrouping(int value) {
+  final String digits = value.abs().toString();
+  if (digits.length <= 3) return value.toString();
+  final String last = digits.substring(digits.length - 3);
+  String rest = digits.substring(0, digits.length - 3);
+  final List<String> groups = <String>[];
+  while (rest.length > 2) {
+    groups.insert(0, rest.substring(rest.length - 2));
+    rest = rest.substring(0, rest.length - 2);
+  }
+  if (rest.isNotEmpty) groups.insert(0, rest);
+  return '${value < 0 ? '-' : ''}${groups.join(',')},$last';
+}
+
+/// The website's jee/shared minutesLabel: "2h 05m", "45m".
+String _weekMinutes(int minutes) {
+  final int safe = minutes < 0 ? 0 : minutes;
+  final int hours = safe ~/ 60;
+  final int mins = safe % 60;
+  return hours > 0 ? '${hours}h ${mins.toString().padLeft(2, '0')}m' : '${mins}m';
 }

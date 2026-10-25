@@ -720,3 +720,46 @@ List<({String subject, double? average, int count})> subjectPerformance(AppData 
       ),
   ];
 }
+
+/// Website `getMarksTrend`: one row per test from [since] (inclusive, null = all), by date,
+/// with the overall % and each subject's % (null where nothing comparable was recorded).
+List<({String date, double? overall, Map<String, double?> bySubject})> marksTrend(AppData data, {String? since}) {
+  final List<TestRecord> tests = data.tests
+      .where((TestRecord t) => since == null || t.testDate.compareTo(since) >= 0)
+      .toList()
+    ..sort((TestRecord a, TestRecord b) => a.testDate.compareTo(b.testDate));
+  return <({String date, double? overall, Map<String, double?> bySubject})>[
+    for (final TestRecord test in tests)
+      (
+        date: test.testDate,
+        overall: overallTestPercentage(test, data.testSubjectScores),
+        bySubject: _trendSubjects(data, test),
+      ),
+  ];
+}
+
+Map<String, double?> _trendSubjects(AppData data, TestRecord test) {
+  final Map<String, double?> bySubject = <String, double?>{};
+  if (test.testType == 'Full Mock') {
+    final Set<String> seen = <String>{};
+    final Map<String, ({double marks, double total, bool incomplete})> grouped =
+        <String, ({double marks, double total, bool incomplete})>{};
+    for (final TestSubjectScore score in data.testSubjectScores) {
+      if (score.testId != test.id || !seen.add(score.subject)) continue;
+      final String base = scoreSubjectBase(score.subject);
+      final ({double marks, double total, bool incomplete}) current =
+          grouped[base] ?? (marks: 0, total: 0, incomplete: false);
+      grouped[base] = (
+        marks: current.marks + (score.marksObtained ?? 0),
+        total: current.total + (score.totalMarks ?? 0),
+        incomplete: current.incomplete || score.marksObtained == null || score.totalMarks == null,
+      );
+    }
+    grouped.forEach((String subject, ({double marks, double total, bool incomplete}) value) {
+      bySubject[subject] = value.incomplete ? null : validPercentage(value.marks, value.total);
+    });
+  } else if (test.subject != null && test.subject!.isNotEmpty) {
+    bySubject[test.subject!] = testPercentage(test);
+  }
+  return bySubject;
+}
