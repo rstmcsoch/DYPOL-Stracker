@@ -88,7 +88,7 @@ function pid(config: ProviderConfigRow): string {
   return publicProviderId(config)
 }
 
-/** Model shown and stored for the student: the company for Stracker AI (Default) rows, never its model ID. */
+/** Model shown and stored for the student: the company + family label, never the model ID. */
 function mid(config: ProviderConfigRow): string {
   return publicModelId(config)
 }

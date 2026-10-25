@@ -49,7 +49,7 @@ function useActiveAI() {
     const useStracker = strackerReady && (preference === 'stracker' || !ownPreferred)
     const active = useStracker
       ? { providerId:'stracker',name:STRACKER_AI_NAME,model:stracker?.model ?? null }
-      : ownPreferred ? { providerId:ownPreferred.provider_id,name:ownPreferred.display_name || providerLabel(ownPreferred.provider_id),model:ownPreferred.model_id } : null
+      : ownPreferred ? { providerId:ownPreferred.provider_id,name:ownPreferred.display_name || providerLabel(ownPreferred.provider_id),model:ownPreferred.model_label || null } : null
     return { configured:Boolean(active),active,strackerUnavailable:stracker?.status === 'unavailable',hasOwn:own.length > 0 }
   },[providers,stracker,preference])
 }

@@ -35,12 +35,13 @@ describe('model company mapping', () => {
     expect(publicCompanyName('custom', 'house-model-1', 'Acme Labs')).toBe('Acme Labs')
   })
 
-  it('masks stored Stracker AI model IDs, including old rows, but not the student\'s own', () => {
+  it('masks every stored model ID for students, including old rows and their own models', () => {
     expect(publicStoredModelId('stracker', 'nvidia/nemotron-3-ultra-550b-a55b:free')).toBe('NVIDIA Nemotron')
     expect(publicStoredModelId('stracker', 'Google Gemini')).toBe('Google Gemini')
     expect(publicStoredModelId('stracker', 'secret-house-model')).toBe('Secret')
     expect(publicStoredModelId('stracker', 'x7-1b')).toBe('Stracker AI')
-    expect(publicStoredModelId('openai', 'gpt-4.1-mini')).toBe('gpt-4.1-mini')
+    expect(publicStoredModelId('openai', 'gpt-5.6-sol')).toBe('OpenAI ChatGPT')
+    expect(publicStoredModelId('custom', 'x7-1b')).toBe('AI model')
     expect(publicStoredModelId('stracker', null)).toBeNull()
     const masked = maskStoredModel({ provider_id: 'stracker', model_id: 'models/gemini-3.6-flash', metadata: { fallback_from: { provider_id: 'stracker', model_id: 'claude-x' } } })
     expect(JSON.stringify(masked)).not.toMatch(/gemini-3|claude-x/)

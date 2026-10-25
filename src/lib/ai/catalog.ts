@@ -37,6 +37,8 @@ export interface AIProviderConfig {
   provider_id: AIProviderId
   display_name: string
   model_id: string
+  /** Company + family label (e.g. "OpenAI ChatGPT"): the only model name students see. */
+  model_label?: string
   base_url: string | null
   protocol: AIProtocol
   organization_id: string | null

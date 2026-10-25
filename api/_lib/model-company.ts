@@ -104,24 +104,23 @@ export function modelCompany(providerId: string | null | undefined, modelId: str
   return label ? label.slice(0, MAX_LABEL) : null
 }
 
-/** Label students see for the default model in use, or just "Stracker AI". */
-export function publicCompanyName(providerId: string | null | undefined, modelId: string | null | undefined, stored?: unknown): string {
+/** Label students see for a model: company + family, else the fallback ("Stracker AI" for the default). */
+export function publicCompanyName(providerId: string | null | undefined, modelId: string | null | undefined, stored?: unknown, fallback: string = UNKNOWN_COMPANY): string {
   if (typeof stored === 'string' && stored.trim()) return stored.trim().slice(0, MAX_LABEL)
-  return modelCompany(providerId, modelId) ?? UNKNOWN_COMPANY
+  return modelCompany(providerId, modelId) ?? fallback
 }
 
-const KNOWN_LABELS = new Set([...FAMILY_PATTERNS.map(([, label]) => label), ...Object.values(PROVIDER_COMPANY), UNKNOWN_COMPANY])
+const KNOWN_LABELS = new Set([...FAMILY_PATTERNS.map(([, label]) => label), ...Object.values(PROVIDER_COMPANY), UNKNOWN_COMPANY, 'AI model'])
 
 /**
- * Model ID as returned to a student from stored history: rows answered by Stracker AI (Default)
- * (provider "stracker") only ever show the label, including rows saved before this masking.
+ * Model name as returned to a student from stored history: always the company + family label
+ * (Stracker AI and the student's own models), including rows saved before this masking.
  */
 export function publicStoredModelId(providerId: unknown, modelId: unknown): string | null {
   if (modelId === null || modelId === undefined) return null
   const value = String(modelId)
-  if (providerId !== 'stracker') return value
   if (KNOWN_LABELS.has(value)) return value
-  return modelCompany(null, value) ?? UNKNOWN_COMPANY
+  return modelCompany(providerId === 'stracker' ? null : String(providerId ?? ''), value) ?? (providerId === 'stracker' ? UNKNOWN_COMPANY : 'AI model')
 }
 
 /** Applies publicStoredModelId to one stored message/task row (and its fallback metadata). */

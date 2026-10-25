@@ -40,9 +40,9 @@ export function publicSiteModelName(row: Pick<ProviderConfigRow, 'provider_id' |
   return publicCompanyName(row.provider_id, row.model_id, (row.capabilities as unknown as Record<string, unknown> | null | undefined)?.company)
 }
 
-/** Model ID shown and stored for students: the company for Stracker AI rows, the real ID for their own. */
+/** Model name shown and stored for students: always the company + family label, never the model ID. */
 export function publicModelId(row: ProviderConfigRow): string {
-  return isSiteRow(row) ? publicSiteModelName(row) : row.model_id
+  return isSiteRow(row) ? publicSiteModelName(row) : publicCompanyName(row.provider_id, row.model_id, (row.capabilities as unknown as Record<string, unknown> | null | undefined)?.company, 'AI model')
 }
 
 /** Human model name, e.g. "models/gemini-3.6-flash" → "gemini-3.6-flash". */
