@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowDown, ArrowUpRight, Check, ChevronDown, CircleAlert, Plus, Clock3, History, LoaderCircle, Maximize2, MessageSquarePlus, Minimize2, Minus, RefreshCw, RotateCcw, Send, ShieldCheck, Sparkles, Square, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUpRight, Check, ChevronDown, CircleAlert, Plus, Clock3, History, LoaderCircle, Maximize2, MessageSquarePlus, Minimize2, Minus, RefreshCw, RotateCcw, Send, Settings as SettingsIcon, ShieldCheck, Sparkles, Square, Trash2, X } from 'lucide-react'
 import { useAI, type AIActionConfirmation, type AIMessage } from '../../contexts/AIContext'
 import { providerLabel } from '../../lib/ai/catalog'
 import { useAuth } from '../../contexts/AuthContext'
@@ -27,6 +27,7 @@ const SUGGESTIONS = [
 
 /** Settings link that opens the "add your own model" editor straight away. */
 export const ADD_OWN_MODEL_PATH = '/settings?add-ai=1#ai-provider-settings'
+export const AI_SETTINGS_PATH = '/settings#ai-provider-settings'
 
 function activeProviderLabel(providerId:string|undefined|null,providers:Array<{provider_id:string;display_name:string}>):string {
   if (!providerId) return 'AI Assistant'
@@ -97,7 +98,7 @@ function AssistantMessage({ message }: { message:AIMessage }) {
       {message.confirmation && <ActionConfirmationCard action={message.confirmation} messageId={message.id} />}
       {message.fallbackFrom && message.status === 'completed' && <div className="ai-fallback-note"><ArrowUpRight size={13} /><span>Switched from {fallbackName} to {providerName}; this answer came from the displayed model.</span></div>}
       {message.result && message.status === 'completed' && <div className="ai-result-proof"><span><Check size={14} /> Saved and verified in Stracker</span>{resultRoute && <button onClick={() => navigate(resultRoute)}>View in Stracker <ArrowUpRight size={13} /></button>}</div>}
-      {message.status === 'failed' && <div className="ai-retry-row"><span><CircleAlert size={14} /> {message.error ?? 'The request did not complete.'}</span>{message.errorCode?.startsWith('stracker_ai') && <Button size="sm" variant="secondary" onClick={() => navigate(ADD_OWN_MODEL_PATH)}><Plus size={14} /> Add your own model</Button>}{message.retryable !== false && <Button size="sm" variant="secondary" onClick={() => void retryLast()}><RotateCcw size={14} /> Retry</Button>}</div>}
+      {message.status === 'failed' && <div className="ai-retry-row"><span><CircleAlert size={14} /> {message.error ?? 'The request did not complete.'}</span>{message.errorCode?.startsWith('stracker_ai') && <Button size="sm" variant="secondary" onClick={() => navigate(ADD_OWN_MODEL_PATH)}><Plus size={14} /> Add your own model</Button>}{message.errorCode === 'stracker_ai_unavailable' && <Button size="sm" variant="quiet" onClick={() => navigate(AI_SETTINGS_PATH)}><SettingsIcon size={14} /> AI settings</Button>}{message.retryable !== false && <Button size="sm" variant="secondary" onClick={() => void retryLast()}><RotateCcw size={14} /> Retry</Button>}</div>}
       {message.status === 'cancelled' && <div className="ai-cancelled-note"><Square size={12} /> Request stopped. No Stracker change was made.</div>}
       {message.content.trim() && message.status !== 'running' && <div className="ai-message-actions"><CopyButton text={message.content} label="Copy response" /></div>}
       {(providerId || message.status === 'completed') && <div className="ai-message-meta">{providerId && <><AIProviderMark provider={providerId} small /><span>{providerName}</span>{message.modelId && <span className="ai-model-name">{message.modelId}</span>}</>}{message.createdAt && <time dateTime={message.createdAt}>{new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit'}).format(new Date(message.createdAt))}</time>}</div>}

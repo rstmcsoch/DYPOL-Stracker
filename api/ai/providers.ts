@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import { ApiError, readJson, sendJson } from '../_lib/http.js'
 import { scoped, scopeColumns, withProviderScope, type ProviderScope } from '../_lib/provider-scope.js'
-import { derivePreference, publicStrackerStatus, readSiteProviders, readSiteSettings, readStoredPreference, strackerUsedToday, writePreference, normalizeSiteSettings } from '../_lib/stracker-default.js'
+import { derivePreference, publicStrackerStatus, readSiteProviders, readSiteSettings, readStoredPreference, strackerUsedToday, writePreference, normalizeSiteSettings, reorderSiteProviders } from '../_lib/stracker-default.js'
 import { decryptCredential, encryptCredential, maskedCredential } from '../_lib/secrets.js'
 import { verifyModelApproval } from '../_lib/model-approval.js'
 import { normalizeProviderSetup, safeProviderConfig, type ProviderConfigRow } from '../_lib/registry.js'
@@ -23,6 +23,8 @@ const providerWriteSchema = z.object({
 }).strict()
 const patchSchema = z.union([
   z.object({ id: z.uuid(), action: z.enum(['enable','disable','default']) }).strict(),
+  /** Owner only (site scope): move a Stracker AI model one place earlier/later in the fallback order. */
+  z.object({ id: z.uuid(), action: z.enum(['move_up','move_down']) }).strict(),
   /** Students only: make Stracker AI (Default) their preferred AI. */
   z.object({ action: z.literal('prefer_stracker') }).strict()
 ])
@@ -45,7 +47,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
 async function handleProviders(req: ApiRequest, res: ApiResponse, scope: ProviderScope): Promise<void> {
     const { admin: adminClient, actorId: userId, table } = scope
     if (req.method === 'GET') {
-      const { data, error } = await scoped(scope, adminClient.from(table).select('*')).order('created_at', { ascending: true })
+      const base = scoped(scope, adminClient.from(table).select('*'))
+      const { data, error } = await (scope.kind === 'site' ? base.order('priority', { ascending: true }) : base).order('created_at', { ascending: true })
       if (error) throw new ApiError(503, 'provider_config_unavailable', 'AI provider settings could not be loaded. Try again.')
       const rows = (data ?? []) as ProviderConfigRow[]
       const providers = rows.map(row => safeProviderConfig(row))
@@ -137,6 +140,10 @@ async function handleProviders(req: ApiRequest, res: ApiResponse, scope: Provide
       }
       if (!row.id) row.id = crypto.randomUUID()
       if (!existing) row.created_at = now
+      if (!existing && scope.kind === 'site') {
+        const { data: last } = await adminClient.from(table).select('priority').order('priority', { ascending: false }).limit(1).maybeSingle()
+        row.priority = (Number((last as { priority?: number } | null)?.priority) || 0) + 1
+      }
       // `capabilities` must always be JSON, including for built-in providers.
       if (row.capabilities === undefined) row.capabilities = setup.capabilities ?? {}
       const { data: saved, error } = await adminClient.from(table).upsert(row).select('*').single()
@@ -155,6 +162,18 @@ async function handleProviders(req: ApiRequest, res: ApiResponse, scope: Provide
         if (scope.kind !== 'user') throw new ApiError(400, 'invalid_provider_action', 'That provider setting could not be changed.')
         if (!await writePreference(adminClient, userId, 'stracker')) throw new ApiError(503, 'provider_save_failed', 'The preferred AI could not be updated. Try again.')
         sendJson(res, 200, { preference: 'stracker' })
+        return
+      }
+      if (action.action === 'move_up' || action.action === 'move_down') {
+        if (scope.kind !== 'site') throw new ApiError(400, 'invalid_provider_action', 'That provider setting could not be changed.')
+        const moved = await reorderSiteProviders(adminClient, action.id, action.action === 'move_up' ? 'up' : 'down')
+        if (moved === 'not_found') throw new ApiError(404, 'provider_not_found', 'That provider configuration is no longer available.')
+        const failed = moved === 'failed'
+        const ids = failed ? [] : moved.order
+        const to = failed ? 0 : moved.position - 1
+        await scope.audit?.('site_ai.provider_reorder', action.id, failed ? 'failed' : 'success', { direction: action.action, position: to + 1 })
+        if (failed) throw new ApiError(503, 'provider_save_failed', 'The model order could not be fully saved. Reload and check the order.')
+        sendJson(res, 200, { order: ids })
         return
       }
       const { data, error } = await scoped(scope, adminClient.from(table).select('*')).eq('id', action.id).maybeSingle()

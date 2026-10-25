@@ -1,7 +1,7 @@
 import { modelPreferences } from '../../lib/ai/model-preferences'
 import { pickDefaultModel, rankModels } from '../../lib/ai/model-ranking'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { AlertTriangle, Check, CircleHelp, KeyRound, LoaderCircle, Pencil, Plus, RefreshCw, ShieldCheck, Sparkles, Star, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, CircleHelp, KeyRound, LoaderCircle, ArrowDown, ArrowUp, Pencil, Plus, RefreshCw, ShieldCheck, Sparkles, Star, Trash2 } from 'lucide-react'
 import { AI_PROVIDERS, AI_STATUS_COPY, DEFAULT_CAPABILITIES, providerLabel, statusTone, type AIModelOption, type AIProviderConfig, type AIProviderId } from '../../lib/ai/catalog'
 import { defaultModelFor } from '../../lib/ai/model-catalog'
 import { useAI } from '../../contexts/AIContext'
@@ -214,12 +214,12 @@ export function AIProviderSettings({ manager,variant,local = false,hideListError
     finally { setDiscovering(false) }
   }
 
-  const runProviderAction = async (id:string,action:'test'|'enable'|'disable'|'default') => {
+  const runProviderAction = async (id:string,action:'test'|'enable'|'disable'|'default'|'move_up'|'move_down') => {
     setWorkingId(id)
     try {
       if (action === 'test') await testProvider(id)
       else await patchProvider(id,action)
-      notify(action === 'test' ? 'Provider connection successful.' : action === 'disable' ? 'Provider disabled.' : action === 'default' ? 'Preferred AI updated.' : 'Provider enabled.')
+      notify(action === 'move_up' || action === 'move_down' ? 'Fallback order updated.' : action === 'test' ? 'Provider connection successful.' : action === 'disable' ? 'Provider disabled.' : action === 'default' ? 'Preferred AI updated.' : 'Provider enabled.')
     } catch (error) { notify(error instanceof Error ? error.message : 'That provider action failed. Try again.', 'error') }
     finally { setWorkingId(null) }
   }
@@ -243,7 +243,7 @@ export function AIProviderSettings({ manager,variant,local = false,hideListError
   return <>
     <NotebookCard className="settings-section ai-settings-card" id="ai-provider-settings">
       <div className="ai-settings-heading">
-        <div className="settings-section-heading"><span className="settings-section-icon ai-settings-spark"><Sparkles size={18} /></span><div><h2>{site ? 'Stracker AI (Default) models' : 'AI Assistant'}</h2><p>{site ? 'Every signed-in student can use these models without adding a key. Students only ever see “Stracker AI (Default)” and the model name.' : 'Stracker AI (Default) works right away. You can also add your own AI model and choose which one to prefer.'}</p></div></div>
+        <div className="settings-section-heading"><span className="settings-section-icon ai-settings-spark"><Sparkles size={18} /></span><div><h2>{site ? 'Stracker AI (Default) models' : 'AI Assistant'}</h2><p>{site ? 'Every signed-in student can use these models without adding a key. They are tried in order (#1 first); if one fails, the next is used automatically, then the student’s own models. Students only ever see “Stracker AI (Default)” and the model name.' : 'Stracker AI (Default) works right away. You can also add your own AI model and choose which one to prefer.'}</p></div></div>
         {headerAction}
       </div>
       <div className="ai-privacy-note" role="note"><ShieldCheck size={17} /><span>{site ? <><strong>Keys stay server-side.</strong> Credentials are encrypted at rest with the same protection as student keys and are never sent to any browser or app. Students never see the key, endpoint or provider account.</> : <><strong>Your key stays server-side.</strong> Provider credentials are encrypted at rest and are never stored in browser storage or returned to the app. Your messages and relevant Stracker data are sent to the AI you use; for your own models, provider billing, quota, and privacy terms apply.</>}</span></div>
@@ -253,16 +253,18 @@ export function AIProviderSettings({ manager,variant,local = false,hideListError
 
       <div className="ai-provider-list" aria-live="polite">
         {!site && !local && <StrackerAIRow stracker={stracker} preferred={preference === 'stracker' || !providers.some(provider => provider.enabled && provider.connection_status === 'connected')} onPrefer={onPreferStracker} busy={preferring} onAddOwn={openNew} loading={providersLoading && !stracker} />}
-        {providersLoading && providers.length === 0 ? <div className="ai-settings-loading"><LoaderCircle size={17} className="spin" /> Checking provider connections…</div> : providers.length ? providers.map(provider => {
+        {providersLoading && providers.length === 0 ? <div className="ai-settings-loading"><LoaderCircle size={17} className="spin" /> Checking provider connections…</div> : providers.length ? providers.map((provider,index) => {
           const busy = workingId === provider.id
           const canEnable = !provider.enabled && provider.connection_status === 'connected'
           return <div className="ai-provider-row" key={provider.id}>
             <AIProviderMark provider={provider.provider_id} />
-            <div className="ai-provider-copy"><div className="ai-provider-title"><strong>{provider.display_name || providerLabel(provider.provider_id)}</strong><StatusBadge tone={statusTone(provider.connection_status)}>{AI_STATUS_COPY[provider.connection_status]}</StatusBadge>{provider.is_default && (site || preference === 'own') && <span className="ai-preferred-tag"><Star size={11} fill="currentColor" /> Preferred</span>}</div><div className="ai-provider-meta"><span>{provider.model_id}</span><span>{provider.masked_key}</span>{provider.enabled ? <span>Enabled</span> : <span>Disabled</span>}</div></div>
+            <div className="ai-provider-copy"><div className="ai-provider-title">{site && <span className="ai-preferred-tag" title="Fallback order: tried in this order for every student">#{index + 1}</span>}<strong>{provider.display_name || providerLabel(provider.provider_id)}</strong><StatusBadge tone={statusTone(provider.connection_status)}>{AI_STATUS_COPY[provider.connection_status]}</StatusBadge>{!site && provider.is_default && preference === 'own' && <span className="ai-preferred-tag"><Star size={11} fill="currentColor" /> Preferred</span>}</div><div className="ai-provider-meta"><span>{provider.model_id}</span><span>{provider.masked_key}</span>{provider.enabled ? <span>Enabled</span> : <span>Disabled</span>}</div></div>
             <div className="ai-provider-actions">
               <Button size="sm" variant="quiet" onClick={() => void runProviderAction(provider.id,'test')} disabled={busy}>{busy ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />} <span className="ai-action-label">Test</span></Button>
               {canEnable ? <Button size="sm" variant="secondary" onClick={() => void runProviderAction(provider.id,'enable')} disabled={busy}><Check size={14} /><span className="ai-action-label">Enable</span></Button> : provider.enabled ? <Button size="sm" variant="quiet" onClick={() => void runProviderAction(provider.id,'disable')} disabled={busy}><span className="ai-action-label">Disable</span></Button> : null}
-              {provider.enabled && (!provider.is_default || (!site && preference !== 'own')) && <Button size="sm" variant="quiet" onClick={() => void runProviderAction(provider.id,'default')} disabled={busy}><Star size={14} /><span className="ai-action-label">Preferred</span></Button>}
+              {!site && provider.enabled && (!provider.is_default || preference !== 'own') && <Button size="sm" variant="quiet" onClick={() => void runProviderAction(provider.id,'default')} disabled={busy}><Star size={14} /><span className="ai-action-label">Preferred</span></Button>}
+              {site && <Button size="sm" variant="quiet" aria-label={`Move ${provider.display_name} up`} title="Move up (tried earlier)" onClick={() => void runProviderAction(provider.id,'move_up')} disabled={busy || index === 0}><ArrowUp size={14} /></Button>}
+              {site && <Button size="sm" variant="quiet" aria-label={`Move ${provider.display_name} down`} title="Move down (tried later)" onClick={() => void runProviderAction(provider.id,'move_down')} disabled={busy || index === providers.length - 1}><ArrowDown size={14} /></Button>}
               <Button size="sm" variant="quiet" aria-label={`Edit ${provider.display_name}`} onClick={() => openEdit(provider)}><Pencil size={14} /><span className="ai-action-label">Edit</span></Button>
               <Button size="sm" variant="quiet" aria-label={`Remove ${provider.display_name}`} onClick={() => setRemoveTarget(provider)}><Trash2 size={14} /><span className="ai-action-label">Remove</span></Button>
             </div>
