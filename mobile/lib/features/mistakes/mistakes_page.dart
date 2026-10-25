@@ -16,6 +16,7 @@ import '../../data/models.dart';
 import '../../logic/analytics.dart';
 import '../shell/app_shell.dart';
 import '../shell/routes.dart';
+import '../../core/widgets/wandering_eyes.dart';
 
 /// The five types the database accepts (web MISTAKE_TYPES).
 const List<String> mistakeTypes = <String>['Concept', 'Silly', 'Calculation', 'Time', 'Guess'];
@@ -354,7 +355,7 @@ class _MistakeImageState extends ConsumerState<_MistakeImage> {
     if (_loading) {
       return const SizedBox(
         height: 90,
-        child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+        child: Center(child: WanderingEyes(height: 20)),
       );
     }
     final Uint8List? bytes = _bytes;

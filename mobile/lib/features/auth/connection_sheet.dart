@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../data/connection_check.dart';
+import '../../core/widgets/wandering_eyes.dart';
 
 /// A plain-language connection check: "can this phone reach my account?".
 ///
@@ -72,11 +73,7 @@ class _ConnectionSheetState extends State<_ConnectionSheet> {
               if (_running)
                 Row(
                   children: <Widget>[
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+                    const WanderingEyes(height: 14, delay: Duration.zero),
                     const SizedBox(width: 10),
                     Text('Checking…', style: Theme.of(context).textTheme.bodySmall),
                   ],

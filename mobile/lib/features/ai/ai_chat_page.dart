@@ -11,6 +11,7 @@ import '../../data/ai_client.dart';
 import '../../data/models.dart';
 import '../shell/app_shell.dart';
 import 'ai_markdown.dart';
+import '../../core/widgets/wandering_eyes.dart';
 
 /// Stracker AI. Talks only to the deployed `/api/ai/*` functions with the user's own
 /// Supabase token; provider keys live server-side. Streams the same SSE events the website
@@ -282,6 +283,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       title: 'Stracker AI',
       showBack: true,
       floatingActions: false,
+      scrollBehindHeader: false,
       actions: <Widget>[
         IconButton(
           tooltip: 'New chat',
@@ -354,14 +356,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                                 child: bubble.streaming && bubble.text.isEmpty
                                     ? Row(
                                         children: <Widget>[
-                                          SizedBox(
-                                            width: 13,
-                                            height: 13,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: colors.palette.accent,
-                                            ),
-                                          ),
+                                          const WanderingEyes(height: 13, delay: Duration.zero),
                                           const SizedBox(width: 8),
                                           Text(
                                             _status ?? 'Thinking…',
@@ -751,7 +746,7 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(20),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: WanderingEyes(height: 28)),
             )
           else if (_rows.isEmpty)
             const EmptyState(

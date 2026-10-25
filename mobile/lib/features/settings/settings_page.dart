@@ -5,8 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/date.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/theme/palettes.dart';
-import '../../core/theme/theme_controller.dart';
 import '../../core/validators.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
@@ -16,6 +14,7 @@ import '../../data/data_controller.dart';
 import '../../data/models.dart';
 import '../../logic/exam.dart';
 import '../../logic/reminders.dart';
+import '../auth/auth_controller.dart';
 import '../auth/auth_screens.dart';
 import '../auth/connection_sheet.dart';
 import '../shell/app_shell.dart';
@@ -98,7 +97,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (_draft == null) _seed(data.settings);
     final AppSettings draft = _draft!;
     final StrackerColors colors = context.stracker;
-    final ThemeState appearance = ref.watch(themeControllerProvider);
 
     return SectionPage(
       title: 'Settings',
@@ -116,88 +114,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           refresh: () => ref.read(dataControllerProvider.notifier).load(silent: true),
           children: <Widget>[
             if (_error != null) ...<Widget>[ErrorNotice(_error!), const SizedBox(height: 10)],
-            NotebookCard(
-              title: 'Appearance',
-              subtitle: 'Shared with Settings → Appearance on the website.',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text('Notebook theme', style: Theme.of(context).textTheme.labelMedium),
-                  const SizedBox(height: 6),
-                  WrapGrid(
-                    minItemWidth: 150,
-                    children: <Widget>[
-                      for (final (ThemeMode mode, String title, String desc) in const <(ThemeMode, String, String)>[
-                        (ThemeMode.light, 'Warm paper', 'Light notebook paper'),
-                        (ThemeMode.dark, 'Chalkboard', 'Dark, high-contrast study mode'),
-                        (ThemeMode.system, 'Auto', 'Follow your device setting'),
-                      ])
-                        _ThemeChoice(
-                          mode: mode,
-                          title: title,
-                          description: desc,
-                          selected: appearance.mode == mode,
-                          onTap: () async {
-                            await HapticFeedback.selectionClick();
-                            await ref.read(themeControllerProvider.notifier).setMode(mode);
-                            _touch(_draft!.copyWith(theme: ref.read(themeControllerProvider).modeValue));
-                          },
-                        ),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6, bottom: 8),
-                    child: Text(
-                      appearance.mode == ThemeMode.system
-                          ? 'Auto theme follows the device appearance.'
-                          : 'You’re seeing a live preview. It is kept on this phone and saved to your account with Save.',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.stracker.muted),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text('Color theme', style: Theme.of(context).textTheme.labelMedium),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: <Widget>[
-                      for (final ({String id, String label, String description}) option in strackerPaletteOptions)
-                        Tooltip(
-                          message: option.description,
-                          child: ChoiceChip(
-                            label: Text(option.label),
-                            selected: draft.colorTheme == option.id,
-                            showCheckmark: false,
-                            onSelected: (_) async {
-                              await ref.read(themeControllerProvider.notifier).setPalette(option.id);
-                              _touch(_draft!.copyWith(colorTheme: option.id));
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  AppSelect<String>(
-                    label: 'Reading font',
-                    value: draft.interfaceFont,
-                    items: const <String>['lexend', 'poppins', 'sora', 'open-sans'],
-                    labelFor: (String value) => switch (value) {
-                      'poppins' => 'Poppins',
-                      'sora' => 'Sora',
-                      'open-sans' => 'Open Sans',
-                      _ => 'Lexend (default)',
-                    },
-                    helper: 'Patrick Hand stays for headings — it is the Stracker identity.',
-                    onChanged: (String? value) async {
-                      if (value == null) return;
-                      await ref.read(themeControllerProvider.notifier).setReadingFont(value);
-                      _touch(_draft!.copyWith(interfaceFont: value));
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
             NotebookCard(
               title: 'Study rhythm',
               subtitle: 'Goals and thresholds decide what counts as weak, strong or due.',
@@ -494,6 +410,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
+                    leading: const Icon(Icons.palette_outlined, size: 19),
+                    title: const Text('Appearance'),
+                    subtitle: Text(
+                      'Theme, colour palette and reading font are chosen in Profile',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, size: 18),
+                    onTap: () => Routes.open(context, Routes.profile),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
                     leading: const Icon(Icons.lock_outline, size: 19),
                     title: const Text('Change password'),
                     trailing: const Icon(Icons.chevron_right, size: 18),
@@ -523,6 +451,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     trailing: const Icon(Icons.chevron_right, size: 18),
                     onTap: () => showConnectionSheet(context),
                   ),
+                  // The only sign-out in the app (not in the menu or sidebar), always confirmed.
+                  ListTile(
+                    key: const ValueKey<String>('settings-sign-out'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    leading: Icon(Icons.logout, size: 19, color: colors.palette.red),
+                    title: Text('Sign out', style: TextStyle(color: colors.palette.red)),
+                    subtitle: Text(
+                      'Clears the offline copy on this device',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted),
+                    ),
+                    onTap: _signOut,
+                  ),
                 ],
               ),
             ),
@@ -543,8 +484,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  Future<void> _signOut() async {
+    final bool confirmed = await confirmAction(
+      context,
+      title: 'Sign out?',
+      message: 'The offline copy on this device is cleared. Your account data is untouched.',
+      confirmLabel: 'Sign out',
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await ref.read(dataControllerProvider.notifier).clearDeviceCache();
+      await ref.read(authControllerProvider.notifier).signOut();
+    } catch (error) {
+      if (mounted) showToast(context, error.toString(), error: true);
+    }
+  }
+
   Future<void> _save(AppData data) async {
-    final AppSettings draft = _draft!;
+    // Appearance is chosen (and saved) in Profile; keep whatever is current there.
+    final AppSettings current = ref.read(dataControllerProvider).data.settings;
+    final AppSettings draft = _draft!.copyWith(
+      theme: current.theme,
+      colorTheme: current.colorTheme,
+      interfaceFont: current.interfaceFont,
+    );
     final String? thresholdError = Validators.thresholds(
       double.tryParse(_weak.text) ?? -1,
       double.tryParse(_strong.text) ?? -1,
@@ -599,80 +562,5 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-}
-
-/// Website theme card: a three-line paper swatch, title, description and a check when chosen.
-class _ThemeChoice extends StatelessWidget {
-  const _ThemeChoice({
-    required this.mode,
-    required this.title,
-    required this.description,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final ThemeMode mode;
-  final String title;
-  final String description;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final StrackerColors colors = context.stracker;
-    final (Color paper, Color line) = switch (mode) {
-      ThemeMode.dark => (const Color(0xFF1F2A26), const Color(0xFF3C4A44)),
-      ThemeMode.light => (const Color(0xFFFFFBF2), const Color(0xFFE4D9C4)),
-      ThemeMode.system => (colors.palette.paperSoft, colors.palette.line),
-    };
-    return Semantics(
-      selected: selected,
-      button: true,
-      label: '$title. $description',
-      excludeSemantics: true,
-      child: Material(
-        color: colors.palette.paperSoft,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: selected ? colors.palette.accentDark : colors.palette.line, width: selected ? 2 : 1),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Container(
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: paper,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: line),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: <Widget>[
-                      for (int i = 0; i < 3; i++) Container(height: 1.5, color: line),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: <Widget>[
-                    Expanded(child: Text(title, style: Theme.of(context).textTheme.titleSmall)),
-                    if (selected) Icon(Icons.check_circle, size: 16, color: colors.palette.accentDark),
-                  ],
-                ),
-                Text(description, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.muted)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

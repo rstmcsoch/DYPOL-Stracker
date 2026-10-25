@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -7,21 +9,19 @@ import '../../core/date.dart';
 import '../../core/layout.dart';
 import '../../core/format.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/theme/theme_controller.dart';
 import '../../core/widgets/dialogs.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
-import '../../logic/exam.dart';
 import '../analytics/analytics_page.dart';
-import '../auth/auth_controller.dart';
 import '../home/home_page.dart';
 import '../planner/planner_page.dart';
 import '../practice/practice_page.dart';
 import '../profile/profile_page.dart';
 import '../tests/tests_page.dart';
+import '../../core/widgets/wandering_eyes.dart';
 import 'routes.dart';
 
 /// The four primary destinations. Each page keeps its own scroll position because the
@@ -178,6 +178,9 @@ class _AppShellState extends ConsumerState<AppShell> {
       },
       child: Scaffold(
         backgroundColor: colors.palette.bg,
+        // Pages scroll behind the floating bottom bar; its own fade and blur keep the bar
+        // readable, so there is no solid strip under it.
+        extendBody: !wide,
         body: wide
             ? Row(
                 // Stretch gives the pages a bounded height, which the crossfade needs.
@@ -301,38 +304,15 @@ class _BottomTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final StrackerColors colors = context.stracker;
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Material(
-          color: colors.palette.paper,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
-            side: BorderSide(color: colors.palette.lineStrong),
-          ),
-          shadowColor: Colors.transparent,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              // --shadow-float
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: dark ? const Color(0x73000000) : const Color(0x2929332D),
-                  blurRadius: 42,
-                  offset: const Offset(0, 18),
-                ),
-                BoxShadow(
-                  color: dark ? const Color(0x33000000) : const Color(0x1429332D),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
+    return ChromeFade(
+      fromTop: false,
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.only(bottom: 10),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, ChromeFade.fade, 10, 0),
+          child: FrostedBar(
+            radius: 22,
             child: Padding(
               padding: const EdgeInsets.all(6),
               child: Row(
@@ -356,6 +336,93 @@ class _BottomTabs extends StatelessWidget {
   }
 }
 
+/// The soft wash behind a floating bar: the page colour, nearly opaque at the screen edge
+/// and fading to clear towards the content, so lists scroll under the bar instead of
+/// stopping at a solid strip (the system bars are transparent, see app.dart). Paint only:
+/// no blur here, the one blur per bar is inside [FrostedBar].
+class ChromeFade extends StatelessWidget {
+  const ChromeFade({super.key, required this.fromTop, required this.child});
+
+  /// Height of the fade beyond the bar.
+  static const double fade = 14;
+
+  final bool fromTop;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bg = context.stracker.palette.bg;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: fromTop ? Alignment.topCenter : Alignment.bottomCenter,
+          end: fromTop ? Alignment.bottomCenter : Alignment.topCenter,
+          colors: <Color>[bg.withValues(alpha: 0.94), bg.withValues(alpha: 0.72), bg.withValues(alpha: 0)],
+          stops: const <double>[0, 0.55, 1],
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// The website's rounded floating bar surface, translucent with one light background blur
+/// so the content passing under it stays readable. Tinted from the palette in both themes
+/// (no fixed black or white).
+class FrostedBar extends StatelessWidget {
+  const FrostedBar({super.key, required this.radius, required this.child});
+
+  final double radius;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
+    final BorderRadius shape = BorderRadius.circular(radius);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: shape,
+        // A soft, palette-tinted --shadow-float; light enough not to read as a black slab.
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: colors.palette.ink.withValues(alpha: dark ? 0.18 : 0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: shape,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Material(
+            color: colors.palette.paper.withValues(alpha: dark ? 0.80 : 0.84),
+            shape: RoundedRectangleBorder(
+              borderRadius: shape,
+              side: BorderSide(color: colors.palette.lineStrong.withValues(alpha: 0.7)),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// How far the floating header reaches down the page (status bar, bar and its fade). Pages
+/// start their content below it and scroll underneath. Zero outside a [NotebookScaffold].
+class ChromeInsets extends InheritedWidget {
+  const ChromeInsets({super.key, required this.top, required super.child});
+
+  final double top;
+
+  static double topOf(BuildContext context) => context.dependOnInheritedWidgetOfExactType<ChromeInsets>()?.top ?? 0;
+
+  @override
+  bool updateShouldNotify(ChromeInsets oldWidget) => oldWidget.top != top;
+}
+
 class _BottomTabItem extends StatelessWidget {
   const _BottomTabItem({required this.label, required this.icon, required this.selected, required this.onTap});
 
@@ -377,7 +444,8 @@ class _BottomTabItem extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
-          color: selected ? colors.palette.accentLight : Colors.transparent,
+          // A quiet accent wash for the active tab, as on the website, in both themes.
+          color: selected ? colors.palette.accent.withValues(alpha: 0.16) : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: InkWell(
@@ -661,6 +729,7 @@ class NotebookScaffold extends ConsumerStatefulWidget {
     this.bottom,
     this.floatingActions = true,
     this.showMenu = true,
+    this.scrollBehindHeader = true,
   });
 
   final String title;
@@ -678,6 +747,11 @@ class NotebookScaffold extends ConsumerStatefulWidget {
 
   /// The website shows its two-line menu button on every page except Profile.
   final bool showMenu;
+
+  /// Whether [body] starts under the floating header and scrolls behind it. [PageBody]
+  /// reads [ChromeInsets] for its first-card offset; a body that does not (the AI chat
+  /// with its pinned composer) sets this to false and is placed below the header instead.
+  final bool scrollBehindHeader;
 
   @override
   ConsumerState<NotebookScaffold> createState() => _NotebookScaffoldState();
@@ -738,40 +812,52 @@ class _NotebookScaffoldState extends ConsumerState<NotebookScaffold> {
       );
     }
     final Widget? bottom = widget.bottom;
+    final double topInset = MediaQuery.viewPaddingOf(context).top;
+    final double barHeight = _NotebookHeader.barHeight(context);
+    // Status bar + the bar's 8 px top margin + the bar + the fade under it.
+    final double headerExtent = topInset + 8 + barHeight + ChromeFade.fade;
+    final Widget header = _NotebookHeader(
+      title: title,
+      subtitle: subtitle,
+      showBack: showBack,
+      showBrand: showBrand,
+      height: barHeight,
+      showMenu: widget.showMenu && !SidebarScope.of(context),
+      actions: <Widget>[
+        ...actions,
+        SyncPill(state: data),
+        HeaderIcon(
+          label: 'Search notebook',
+          icon: Icons.search,
+          onTap: () => showAppSheet<void>(
+            context,
+            title: 'Search notebook',
+            builder: (BuildContext sheetContext) => const GlobalSearchBody(),
+          ),
+        ),
+      ],
+    );
     final Widget scaffold = Scaffold(
       backgroundColor: colors.palette.bg,
       drawer: const NotebookDrawer(),
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: bottom,
+      extendBody: bottom == null,
       // The header is drawn by the app rather than by Material's AppBar: the Material
       // version paints its own elevation tint and hover/splash overlay across the title
-      // area, which appeared as a large pale band over the top of the page. This one is
-      // the website's floating rounded top bar: brand, exam chip, theme, search, menu.
-      body: Column(
+      // area. This one is the website's floating rounded top bar (brand or title, sync,
+      // search, menu) over a soft fade, with the page scrolling underneath it.
+      body: Stack(
         children: <Widget>[
-          _NotebookHeader(
-            title: title,
-            subtitle: subtitle,
-            showBack: showBack,
-            showBrand: showBrand,
-            showMenu: widget.showMenu && !SidebarScope.of(context),
-            examLabel: showBrand ? _examLabel(data) : null,
-            actions: <Widget>[
-              ...actions,
-              SyncPill(state: data),
-              const ThemeToggleButton(),
-              HeaderIcon(
-                label: 'Search notebook',
-                icon: Icons.search,
-                onTap: () => showAppSheet<void>(
-                  context,
-                  title: 'Search notebook',
-                  builder: (BuildContext sheetContext) => const GlobalSearchBody(),
-                ),
-              ),
-            ],
+          Positioned.fill(
+            top: widget.scrollBehindHeader ? 0 : headerExtent - ChromeFade.fade,
+            child: SafeArea(
+              top: false,
+              bottom: false,
+              child: ChromeInsets(top: widget.scrollBehindHeader ? headerExtent : 0, child: body),
+            ),
           ),
-          Expanded(child: SafeArea(top: false, child: body)),
+          Positioned(top: 0, left: 0, right: 0, child: header),
         ],
       ),
     );
@@ -784,16 +870,6 @@ class _NotebookScaffoldState extends ConsumerState<NotebookScaffold> {
       },
       child: scaffold,
     );
-  }
-
-  /// Same wording as the website's `.mobile-exam-title`.
-  static String _examLabel(DataState state) {
-    final AppSettings settings = state.data.settings;
-    if (state.loading || (settings.examId == null && !settings.onboardingCompleted)) {
-      return 'Study home';
-    }
-    if (isJeeSettings(settings)) return 'JEE ${settings.examYear ?? 2027}';
-    return chosenExamTitle(state.data);
   }
 }
 
@@ -832,8 +908,8 @@ class _NotebookHeader extends StatelessWidget {
     required this.showBack,
     required this.showBrand,
     required this.actions,
+    required this.height,
     this.showMenu = true,
-    this.examLabel,
   });
 
   final String title;
@@ -842,63 +918,53 @@ class _NotebookHeader extends StatelessWidget {
   final bool showMenu;
   final bool showBrand;
   final List<Widget> actions;
-  final String? examLabel;
+  final double height;
+
+  /// The bar's height: 52 dp, growing with large system font sizes so the two-line title
+  /// block always fits. Computed (not measured) so the page can offset its first card by
+  /// the same amount in the same frame.
+  static double barHeight(BuildContext context) {
+    final double text = MediaQuery.textScalerOf(context).scale(40);
+    return text + 10 > 52 ? text + 10 : 52;
+  }
 
   @override
   Widget build(BuildContext context) {
     final StrackerColors colors = context.stracker;
-    // The bar floats below the status bar, which is painted in the page colour, so the
-    // system strip and the page read as one surface with the rounded bar on top.
     final double topInset = MediaQuery.viewPaddingOf(context).top;
-    final bool narrow = MediaQuery.sizeOf(context).width < 360;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(10, topInset + 8, 10, 6),
-      child: Material(
-        color: colors.palette.paper,
-        elevation: 0,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(color: colors.palette.lineStrong),
-        ),
-        // A minimum, not a fixed height: large system font sizes grow the bar instead of
-        // clipping the title.
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 52),
-          child: Row(
-            children: <Widget>[
-              if (showBack)
-                HeaderIcon(
-                  label: 'Back',
-                  icon: Icons.arrow_back,
-                  size: 22,
-                  onTap: () => Navigator.of(context).maybePop(),
-                )
-              else
-                const SizedBox(width: 12),
-              Expanded(
-                child: Row(
-                  children: <Widget>[
-                    Flexible(flex: 3, child: showBrand ? _brand(colors) : _titleBlock(colors)),
-                    if (examLabel != null && !narrow) ...<Widget>[
-                      const SizedBox(width: 6),
-                      _ExamChip(label: examLabel!),
-                    ],
-                  ],
-                ),
-              ),
-              ...actions,
-              if (showMenu)
-                Builder(
-                  builder: (BuildContext context) => HeaderIcon(
-                    label: 'Open navigation',
-                    icon: Icons.menu,
-                    glyph: const MenuLines(),
-                    onTap: () => Scaffold.of(context).openDrawer(),
+    return ChromeFade(
+      fromTop: true,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(10, topInset + 8, 10, ChromeFade.fade),
+        child: FrostedBar(
+          radius: 18,
+          child: SizedBox(
+            height: height,
+            child: Row(
+              children: <Widget>[
+                if (showBack)
+                  HeaderIcon(
+                    label: 'Back',
+                    icon: Icons.arrow_back,
+                    size: 22,
+                    onTap: () => Navigator.of(context).maybePop(),
+                  )
+                else
+                  const SizedBox(width: 12),
+                Expanded(child: showBrand ? _brand(colors) : _titleBlock(colors)),
+                ...actions,
+                if (showMenu)
+                  Builder(
+                    builder: (BuildContext context) => HeaderIcon(
+                      label: 'Open navigation',
+                      icon: Icons.menu,
+                      glyph: const MenuLines(),
+                      onTap: () => Scaffold.of(context).openDrawer(),
+                    ),
                   ),
-                ),
-              const SizedBox(width: 2),
-            ],
+                const SizedBox(width: 2),
+              ],
+            ),
           ),
         ),
       ),
@@ -913,7 +979,7 @@ class _NotebookHeader extends StatelessWidget {
           ),
           const SizedBox(width: 9),
           // With the exam chip beside it the brand is the website's compact one: no eyebrow.
-          Flexible(child: _titleBlock(colors, eyebrow: examLabel == null ? 'DYPOL LABS' : null)),
+          Flexible(child: _titleBlock(colors, eyebrow: 'DYPOL LABS')),
         ],
       );
 
@@ -948,39 +1014,6 @@ class _NotebookHeader extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-/// The exam pill next to the brand, as on the website's mobile top bar.
-class _ExamChip extends StatelessWidget {
-  const _ExamChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final StrackerColors colors = context.stracker;
-    return Flexible(
-      flex: 2,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: colors.palette.accentLight,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontFamily: 'Lexend',
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: colors.palette.textAccent,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1080,42 +1113,10 @@ class SyncPill extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           child: state.loading
-              ? SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 1.8, color: colors.palette.accent),
-                )
+              ? WanderingEyes(height: 10, color: colors.palette.accent)
               : Icon(Icons.cloud_sync_outlined, size: 19, color: tone, semanticLabel: label),
         ),
       ),
-    );
-  }
-}
-
-class ThemeToggleButton extends ConsumerWidget {
-  const ThemeToggleButton({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ThemeState appearance = ref.watch(themeControllerProvider);
-    final Brightness effective = appearance.mode == ThemeMode.system
-        ? MediaQuery.platformBrightnessOf(context)
-        : (appearance.mode == ThemeMode.dark ? Brightness.dark : Brightness.light);
-    final bool dark = effective == Brightness.dark;
-    return HeaderIcon(
-      label: dark ? 'Switch to light' : 'Switch to night',
-      icon: dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-      onTap: () async {
-        await ref.read(themeControllerProvider.notifier).toggle(effective);
-        final DataController controller = ref.read(dataControllerProvider.notifier);
-        final AppData data = ref.read(dataControllerProvider).data;
-        final ThemeState next = ref.read(themeControllerProvider);
-        try {
-          await controller.saveSettings(data.settings.copyWith(theme: next.modeValue));
-        } catch (_) {
-          // The local switch already applied; the account value is retried on the next save.
-        }
-      },
     );
   }
 }
@@ -1293,28 +1294,8 @@ class NotebookDrawer extends ConsumerWidget {
               ],
             ),
           ),
+          // Sign out lives in Settings only (with a confirm step), not in the menu.
           Divider(height: 1, color: colors.palette.line),
-          ListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 18),
-            leading: Icon(Icons.logout, size: 19, color: colors.palette.red),
-            title: Text(
-              'Sign out',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(color: colors.palette.red),
-            ),
-            onTap: () async {
-              if (!permanent) Navigator.of(context).pop();
-              final bool confirmed = await confirmAction(
-                context,
-                title: 'Sign out?',
-                message: 'The offline copy on this device is cleared. Your account data is untouched.',
-                confirmLabel: 'Sign out',
-              );
-              if (!confirmed) return;
-              await ref.read(dataControllerProvider.notifier).clearDeviceCache();
-              await ref.read(authControllerProvider.notifier).signOut();
-            },
-          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
             child: Text(
@@ -1496,9 +1477,11 @@ class PageBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.paddingOf(context).bottom;
     final double clearance = FloatingClearance.maybeOf(context) ?? 88;
+    // The first card starts below the floating header, and the list scrolls behind it.
+    final double top = ChromeInsets.topOf(context);
     final Widget list = ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: padding ?? EdgeInsets.fromLTRB(14, 12, 14, clearance + bottomInset),
+      padding: (padding ?? EdgeInsets.fromLTRB(14, 12, 14, clearance + bottomInset)).add(EdgeInsets.only(top: top)),
       children: <Widget>[
         ContentWidth(
           child: LayoutBuilder(
@@ -1511,7 +1494,7 @@ class PageBody extends StatelessWidget {
       ],
     );
     if (refresh == null) return list;
-    return RefreshIndicator(onRefresh: refresh!, child: list);
+    return RefreshIndicator(onRefresh: refresh!, edgeOffset: top, child: list);
   }
 }
 
