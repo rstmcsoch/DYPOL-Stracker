@@ -128,7 +128,7 @@ void main() {
   });
 
   group('Planner', () {
-    testWidgets('an offline task keeps the editor open, then saves once online', (WidgetTester tester) async {
+    testWidgets('an offline task is saved on the phone at once, then synced once online', (WidgetTester tester) async {
       final (FakeBackend backend, DataController data) = (await tester.runAsync(seeded))!;
       await pumpSignedIn(tester, const PlannerPage(), data: data);
       await tester.tap(find.text('Add task').first);
@@ -136,11 +136,13 @@ void main() {
       await tester.enterText(field('Task'), 'Solve 20 Kirchhoff problems');
       backend.offline = true;
       await tapButton(tester, 'Add task');
-      expect(find.textContaining('Check your connection'), findsOneWidget);
-      expect(find.text('Solve 20 Kirchhoff problems'), findsOneWidget);
-      expect(data.state.data.tasks, isEmpty);
+      expect(find.textContaining('Check your connection'), findsNothing, reason: 'no failure toast offline');
+      expect(data.state.data.tasks.single.title, 'Solve 20 Kirchhoff problems', reason: 'kept, not rolled back');
+      expect(data.state.pending, 1);
+      expect(backend.tables['daily_tasks'] ?? const <Object>[], isEmpty);
       backend.offline = false;
-      await tapButton(tester, 'Add task');
+      await tester.runAsync(() => data.syncNow());
+      expect(data.state.pending, 0);
       expect(data.state.data.tasks.single.title, 'Solve 20 Kirchhoff problems');
       expect(backend.tables['daily_tasks'], hasLength(1));
       backend.expectAllWritesFit(schema);
@@ -210,7 +212,7 @@ void main() {
   });
 
   group('Focus', () {
-    testWidgets('a block whose save fails is kept on the phone and saved by Retry', (WidgetTester tester) async {
+    testWidgets('a block whose save is rejected is kept on the phone and saved by Retry', (WidgetTester tester) async {
       final (FakeBackend backend, DataController data) = (await tester.runAsync(seeded))!;
       final ProviderContainer scope = await pumpSignedIn(tester, const SizedBox(), data: data);
       final FocusController focus = scope.read(focusControllerProvider.notifier);
@@ -218,14 +220,14 @@ void main() {
       focus.clock = () => now;
       focus.start();
       now = now.add(const Duration(minutes: 12));
-      backend.offline = true;
+      backend.failures['study_sessions'] = postgrestError('XX000', 'server busy');
       final FocusSaveResult failed = (await tester.runAsync(() => focus.end(save: true)))!;
       expect(failed.error, contains('kept on this phone'));
       expect(focus.pending.value, hasLength(1));
       expect(focus.pending.value.single.durationMinutes, 12);
       expect(data.readDeviceValue('focus-pending'), isNotNull, reason: 'survives an app restart');
 
-      backend.offline = false;
+      backend.failures.remove('study_sessions');
       final FocusSaveResult retried = (await tester.runAsync(focus.retryPending))!;
       expect(retried.error, isNull);
       expect(retried.minutes, 12);

@@ -478,6 +478,15 @@ class _BottomTabItem extends StatelessWidget {
   }
 }
 
+/// How far the shell's floating bottom tabs reach over a section drawn inside it: the
+/// body's bottom padding (which the shell's extended body raises to the tabs' height)
+/// beyond the system inset that Material already keeps floating buttons clear of. Zero
+/// with the sidebar, on pages pushed above the shell, and while the keyboard is open.
+double shellBottomBarLift(BuildContext context) {
+  final double lift = MediaQuery.paddingOf(context).bottom - MediaQuery.viewPaddingOf(context).bottom;
+  return lift > 0 ? lift : 0;
+}
+
 /// The website's launcher rule: a labelled pill while scrolling down, a circle on scroll up
 /// or near the top. Null for horizontal scrolling, which leaves it as it is.
 bool? aiLauncherExpanded(UserScrollNotification note, bool current) {
@@ -792,7 +801,14 @@ class _NotebookScaffoldState extends ConsumerState<NotebookScaffold> {
           child: body,
         ),
       );
-      floatingActionButton = Column(
+      floatingActionButton = Padding(
+        // A section is drawn inside the shell, whose floating bottom tabs extend over it.
+        // Material places a FAB from the system inset only, so without this lift the
+        // buttons sit behind the tabs. The shell reports the tabs as extra bottom padding;
+        // lifting by it puts the buttons exactly where the tab pages show them.
+        key: const ValueKey<String>('floating-actions'),
+        padding: EdgeInsets.only(bottom: shellBottomBarLift(context)),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
@@ -809,6 +825,7 @@ class _NotebookScaffoldState extends ConsumerState<NotebookScaffold> {
           ),
           if (pageFab != null) ...<Widget>[const SizedBox(height: 12), pageFab],
         ],
+      ),
       );
     }
     final Widget? bottom = widget.bottom;
@@ -1087,30 +1104,60 @@ class SyncPill extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final StrackerColors colors = context.stracker;
-    final String label = state.saving
-        ? 'Saving'
-        : state.offline
-            ? 'Offline'
-            : 'Synced';
-    final Color tone = state.saving
+    final int pending = state.pending;
+    final String label = pending > 0
+        ? '$pending ${pending == 1 ? 'change' : 'changes'} waiting to sync'
+        : state.saving || state.syncing
+            ? 'Saving'
+            : state.offline
+                ? 'Offline'
+                : 'Synced';
+    final Color tone = state.saving || state.syncing || pending > 0
         ? colors.palette.orange
         : state.offline
             ? colors.palette.red
             : colors.palette.green;
+    final String action = pending > 0 ? 'tap to sync now' : 'tap to refresh';
     return Semantics(
       label: state.error ??
           (state.lastSyncedAt == null
-              ? '$label — not synced yet, tap to refresh'
-              : '$label — last synced ${formatDateTime(state.lastSyncedAt)}, tap to refresh'),
+              ? '$label — not synced yet, $action'
+              : '$label — last synced ${formatDateTime(state.lastSyncedAt)}, $action'),
       button: true,
       child: InkWell(
+        key: const ValueKey<String>('sync-now'),
         borderRadius: BorderRadius.circular(999),
-        onTap: () => ref.read(dataControllerProvider.notifier).load(),
+        // Sync now: sends the changes saved offline first, then refreshes from the cloud.
+        onTap: () => ref.read(dataControllerProvider.notifier).syncNow(),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           child: state.loading
               ? WanderingEyes(height: 10, color: colors.palette.accent)
-              : Icon(Icons.cloud_sync_outlined, size: 19, color: tone, semanticLabel: label),
+              : Stack(
+                  clipBehavior: Clip.none,
+                  children: <Widget>[
+                    Icon(Icons.cloud_sync_outlined, size: 19, color: tone, semanticLabel: label),
+                    if (pending > 0)
+                      Positioned(
+                        right: -6,
+                        top: -5,
+                        child: Container(
+                          key: const ValueKey<String>('sync-pending-count'),
+                          constraints: const BoxConstraints(minWidth: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          decoration: BoxDecoration(
+                            color: colors.palette.orange,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: Text(
+                            pending > 99 ? '99+' : '$pending',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 9, height: 1.5, color: Colors.white, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
         ),
       ),
     );

@@ -1,4 +1,7 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/app_theme.dart';
 import 'wandering_eyes.dart';
@@ -103,6 +106,134 @@ Future<T?> showAppSheet<T>(
       );
     },
   );
+}
+
+/// A small window centred over a blurred, dimmed screen, sized to its content: the same
+/// look as the notebook search. For quick single-field edits (such as the display name)
+/// that would otherwise open the tall form sheet. Closes on the X, a tap outside it and
+/// Android back. [onDisposed] runs once the closing animation has finished.
+Future<T?> showCompactDialog<T>(
+  BuildContext context, {
+  required String title,
+  required WidgetBuilder builder,
+  VoidCallback? onDisposed,
+  double maxWidth = 420,
+}) {
+  // Like the search window it sits on the root navigator so the blur covers the whole
+  // screen (sidebar and bottom tabs included); the signed-in providers are carried over.
+  ProviderContainer? container;
+  try {
+    container = ProviderScope.containerOf(context, listen: false);
+  } catch (_) {
+    container = null;
+  }
+  return showGeneralDialog<T>(
+    context: context,
+    useRootNavigator: true,
+    barrierDismissible: true,
+    barrierLabel: 'Close',
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (BuildContext dialogContext, Animation<double> animation, Animation<double> secondary) {
+      final Widget window = _DisposeWith(
+        onDisposed: onDisposed,
+        child: CompactDialogWindow(title: title, maxWidth: maxWidth, child: Builder(builder: builder)),
+      );
+      return container == null ? window : UncontrolledProviderScope(container: container, child: window);
+    },
+    transitionBuilder: (BuildContext context, Animation<double> animation, Animation<double> secondary, Widget child) {
+      final CurvedAnimation curve = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      return Stack(
+        children: <Widget>[
+          // Purely visual: taps go through to the route's barrier, which closes the window.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedBuilder(
+                animation: curve,
+                builder: (BuildContext context, Widget? _) => BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 6 * curve.value, sigmaY: 6 * curve.value),
+                  child: ColoredBox(color: Colors.black.withValues(alpha: 0.30 * curve.value)),
+                ),
+              ),
+            ),
+          ),
+          FadeTransition(
+            opacity: curve,
+            child: ScaleTransition(scale: Tween<double>(begin: 0.96, end: 1).animate(curve), child: child),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// The compact window itself: title, X and the content, no taller than it needs to be.
+/// Public for tests.
+class CompactDialogWindow extends StatelessWidget {
+  const CompactDialogWindow({super.key, required this.title, required this.child, this.maxWidth = 420});
+
+  final String title;
+  final Widget child;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    final MediaQueryData media = MediaQuery.of(context);
+    final double width = (media.size.width * 0.9).clamp(0.0, maxWidth);
+    final double available = media.size.height - media.viewInsets.bottom - media.padding.vertical - 32;
+    return SafeArea(
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 120),
+        padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: width,
+              maxWidth: width,
+              maxHeight: available < 160 ? 160 : available,
+            ),
+            child: Material(
+              key: const ValueKey<String>('compact-dialog'),
+              color: colors.palette.paper,
+              elevation: 16,
+              shadowColor: Colors.black54,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(color: colors.palette.line),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 8, 6, 0),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(child: Text(title, style: Theme.of(context).textTheme.headlineSmall)),
+                        IconButton(
+                          tooltip: 'Close',
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          icon: const Icon(Icons.close, size: 20),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      child: child,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Runs [onDisposed] when the sheet's content leaves the tree, i.e. after its closing
