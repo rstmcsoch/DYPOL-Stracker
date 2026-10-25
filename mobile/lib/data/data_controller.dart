@@ -190,11 +190,29 @@ class DataController extends StateNotifier<DataState> {
       );
       await _writeSnapshot(data);
     } catch (error) {
+      if (_isAuthFailure(error)) {
+        // A revoked or expired sign-in makes every table answer 401. Showing that as a
+        // notebook error leaves the student stuck; return to sign-in instead. The cached
+        // copy stays on the device for the next sign-in.
+        state = state.copyWith(
+          loading: false,
+          offline: true,
+          error: 'Your session expired. Sign in again to continue syncing.',
+        );
+        await _repository.endLostSession();
+        return;
+      }
       final String message = error is AppFailure
           ? error.message
           : 'Your notebook could not be refreshed. Showing the copy saved on this device.';
       state = state.copyWith(loading: false, offline: true, error: message);
     }
+  }
+
+  bool _isAuthFailure(Object error) {
+    final String? code = error is AppFailure ? error.code : null;
+    if (code == 'PGRST301' || code == 'PGRST302' || code == 'PGRST303') return true;
+    return (code == '42501' || code == '401') && _repository.sessionLost;
   }
 
   /// First sign-in: create the profile, settings, exam tracks and the JEE syllabus so the

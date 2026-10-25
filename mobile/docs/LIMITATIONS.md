@@ -28,11 +28,12 @@ presented as working functionality anywhere in the app.
    642–654 has no `android-x86`). This project applies no ABI filter — check
    `android/app/build.gradle` — so the universal APK contains every ABI the engine can
    produce. 32-bit x86 devices and very old x86 emulator images therefore cannot run it.
-5. **Java/Kotlin shrinking is off by default.** `minifyEnabled`/`shrinkResources` are gated
-   behind the `-PstrackerMinify` Gradle property because the R8 + plugin interaction cannot be
-   verified without a build. Dart is still AOT-compiled and icons/code are tree-shaken, so the
-   result is a real release build, just a few megabytes larger. Enable the flag once a device
-   run confirms nothing breaks.
+5. **Release builds use R8 (`minifyEnabled` + `shrinkResources`), `--obfuscate` and
+   `--split-debug-info`.** A local release build with all of these succeeds; it has not yet been
+   exercised on a physical device. If a plugin misbehaves only in release, rebuild with
+   `-PstrackerNoMinify` to confirm and add a keep rule to `android/app/proguard-rules.pro`.
+   Native libraries are stored compressed (`jniLibs.useLegacyPackaging`), which roughly halves
+   the universal APK download. Obfuscated stack traces need the `stracker-symbols` artifact.
 6. **`flutter analyze` / `flutter test` are advisory steps in CI.** They run on every build,
    their error lines are copied into the run summary and raised as annotations, but they do not
    block the artifact: a lint-level finding should not deny the owner an installable APK.

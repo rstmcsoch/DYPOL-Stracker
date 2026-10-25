@@ -12,6 +12,7 @@ import '../../core/widgets/notebook.dart';
 import '../../data/app_data.dart';
 import '../../data/data_controller.dart';
 import '../../data/models.dart';
+import '../../logic/exam.dart';
 import '../analytics/analytics_page.dart';
 import '../auth/auth_controller.dart';
 import '../home/home_page.dart';
@@ -210,7 +211,6 @@ class NotebookScaffold extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final StrackerColors colors = context.stracker;
     final DataState data = ref.watch(dataControllerProvider);
-    final bool compact = MediaQuery.sizeOf(context).width < 400;
     return Scaffold(
       backgroundColor: colors.palette.bg,
       drawer: const NotebookDrawer(),
@@ -218,8 +218,8 @@ class NotebookScaffold extends ConsumerWidget {
       bottomNavigationBar: bottom,
       // The header is drawn by the app rather than by Material's AppBar: the Material
       // version paints its own elevation tint and hover/splash overlay across the title
-      // area, which on a tablet (or a desktop-mode window with a mouse) appeared as a
-      // large pale band over the top of the page. This one is a single opaque surface.
+      // area, which appeared as a large pale band over the top of the page. This one is
+      // the website's floating rounded top bar: brand, exam chip, theme, search, menu.
       body: Column(
         children: <Widget>[
           _NotebookHeader(
@@ -227,28 +227,36 @@ class NotebookScaffold extends ConsumerWidget {
             subtitle: subtitle,
             showBack: showBack,
             showBrand: showBrand,
+            examLabel: showBrand ? _examLabel(data) : null,
             actions: <Widget>[
               ...actions,
               SyncPill(state: data),
-              // On a narrow phone the title block and four action buttons do not fit
-              // beside each other; search moves into the drawer there instead.
-              if (!compact)
-                HeaderIcon(
-                  label: 'Search notebook',
-                  icon: Icons.search,
-                  onTap: () => showAppSheet<void>(
-                    context,
-                    title: 'Search notebook',
-                    builder: (BuildContext sheetContext) => const GlobalSearchBody(),
-                  ),
-                ),
               const ThemeToggleButton(),
+              HeaderIcon(
+                label: 'Search notebook',
+                icon: Icons.search,
+                onTap: () => showAppSheet<void>(
+                  context,
+                  title: 'Search notebook',
+                  builder: (BuildContext sheetContext) => const GlobalSearchBody(),
+                ),
+              ),
             ],
           ),
           Expanded(child: SafeArea(top: false, child: body)),
         ],
       ),
     );
+  }
+
+  /// Same wording as the website's `.mobile-exam-title`.
+  static String _examLabel(DataState state) {
+    final AppSettings settings = state.data.settings;
+    if (state.loading || (settings.examId == null && !settings.onboardingCompleted)) {
+      return 'Study home';
+    }
+    if (isJeeSettings(settings)) return 'JEE ${settings.examYear ?? 2027}';
+    return chosenExamTitle(state.data);
   }
 }
 
@@ -287,6 +295,7 @@ class _NotebookHeader extends StatelessWidget {
     required this.showBack,
     required this.showBrand,
     required this.actions,
+    this.examLabel,
   });
 
   final String title;
@@ -294,20 +303,27 @@ class _NotebookHeader extends StatelessWidget {
   final bool showBack;
   final bool showBrand;
   final List<Widget> actions;
+  final String? examLabel;
 
   @override
   Widget build(BuildContext context) {
     final StrackerColors colors = context.stracker;
-    // The status bar is painted in the same colour, so the header and the system strip
-    // read as one surface instead of two stacked blocks.
+    // The bar floats below the status bar, which is painted in the page colour, so the
+    // system strip and the page read as one surface with the rounded bar on top.
     final double topInset = MediaQuery.viewPaddingOf(context).top;
-    return Material(
-      color: colors.palette.bg,
-      elevation: 0,
-      child: Padding(
-        padding: EdgeInsets.only(top: topInset),
+    final bool narrow = MediaQuery.sizeOf(context).width < 360;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(10, topInset + 8, 10, 6),
+      child: Material(
+        color: colors.palette.paper,
+        elevation: 0,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: colors.palette.lineStrong),
+        ),
         child: SizedBox(
-          height: 56,
+          height: 52,
           child: Row(
             children: <Widget>[
               if (showBack)
@@ -318,6 +334,20 @@ class _NotebookHeader extends StatelessWidget {
                   onTap: () => Navigator.of(context).maybePop(),
                 )
               else
+                const SizedBox(width: 12),
+              Expanded(
+                child: Row(
+                  children: <Widget>[
+                    Flexible(flex: 3, child: showBrand ? _brand(colors) : _titleBlock(colors)),
+                    if (examLabel != null && !narrow) ...<Widget>[
+                      const SizedBox(width: 6),
+                      _ExamChip(label: examLabel!),
+                    ],
+                  ],
+                ),
+              ),
+              ...actions,
+              if (!showBack)
                 Builder(
                   builder: (BuildContext context) => HeaderIcon(
                     label: 'Open navigation',
@@ -327,10 +357,6 @@ class _NotebookHeader extends StatelessWidget {
                   ),
                 ),
               const SizedBox(width: 2),
-              Expanded(child: showBrand ? _brand(colors) : _titleBlock(colors)),
-              const SizedBox(width: 4),
-              ...actions,
-              const SizedBox(width: 4),
             ],
           ),
         ),
@@ -345,7 +371,8 @@ class _NotebookHeader extends StatelessWidget {
             child: Image.asset('assets/brand/logo.png', width: 28, height: 28, errorBuilder: _logoError(28)),
           ),
           const SizedBox(width: 9),
-          Flexible(child: _titleBlock(colors, eyebrow: 'DYPOL LABS')),
+          // With the exam chip beside it the brand is the website's compact one: no eyebrow.
+          Flexible(child: _titleBlock(colors, eyebrow: examLabel == null ? 'DYPOL LABS' : null)),
         ],
       );
 
@@ -384,8 +411,41 @@ class _NotebookHeader extends StatelessWidget {
   }
 }
 
-/// A header button with no Material overlay: the tap target is 44 dp, the ripple is a
-/// haptic tick instead of a splash that would paint a pale rectangle over the header.
+/// The exam pill next to the brand, as on the website's mobile top bar.
+class _ExamChip extends StatelessWidget {
+  const _ExamChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final StrackerColors colors = context.stracker;
+    return Flexible(
+      flex: 2,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: colors.palette.accentLight,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: 'Lexend',
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: colors.palette.textAccent,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A header button: a 40 x 44 dp tap target, a native ripple clipped to a circle (never a
+/// rectangle across the bar) and a light haptic tick.
 class HeaderIcon extends StatelessWidget {
   const HeaderIcon({
     super.key,
@@ -412,12 +472,10 @@ class HeaderIcon extends StatelessWidget {
           onTap();
         },
         customBorder: const CircleBorder(),
-        splashFactory: NoSplash.splashFactory,
-        highlightColor: Colors.transparent,
         hoverColor: Colors.transparent,
         focusColor: Colors.transparent,
         child: SizedBox(
-          width: 44,
+          width: 40,
           height: 44,
           child: Icon(icon, size: size, color: colors.palette.ink),
         ),

@@ -92,11 +92,11 @@ android {
                         "only for a throwaway test build.")
             }
             // Dart is AOT-compiled and its icons/dead code are tree-shaken by the Flutter
-            // tool regardless of these flags. Java/Kotlin shrinking is left off until the
-            // first build has been run on a device; enable it with -PstrackerMinify to
-            // shrink further once the runtime behaviour is confirmed.
-            minifyEnabled = project.hasProperty("strackerMinify")
-            shrinkResources = project.hasProperty("strackerMinify")
+            // tool. R8 additionally shrinks the Java/Kotlin plugin shims and unused Android
+            // resources. -PstrackerNoMinify turns it off for diagnosing a suspected R8 issue.
+            def minify = !project.hasProperty("strackerNoMinify")
+            minifyEnabled = minify
+            shrinkResources = minify
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
         debug {
@@ -115,6 +115,12 @@ android {
     packaging {
         resources {
             excludes += ["META-INF/*.kotlin_module"]
+        }
+        // Store the native libraries compressed. The universal APK carries the Flutter
+        // engine for three ABIs; compressed it is roughly half the download, and Android
+        // extracts only the ABI the phone uses at install time.
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 }
