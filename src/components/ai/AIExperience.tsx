@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowDown, ArrowUpRight, Check, ChevronDown, CircleAlert, Plus, Clock3, History, LoaderCircle, Maximize2, MessageSquarePlus, Minimize2, Minus, RefreshCw, RotateCcw, Send, ShieldCheck, Sparkles, Square, Trash2, X } from 'lucide-react'
 import { useAI, type AIActionConfirmation, type AIMessage } from '../../contexts/AIContext'
@@ -8,6 +8,12 @@ import { useToast } from '../../contexts/ToastContext'
 import { Button, Dialog, IconButton, StatusBadge } from '../ui'
 import { AIProviderMark } from './AIProviderMark'
 import { STRACKER_AI_NAME, StrackerUnavailableNotice } from './StrackerAIRow'
+import { CopyButton } from './markdown/CopyButton'
+
+// The Markdown/GFM renderer is its own chunk (KaTeX is a further chunk loaded only for math),
+// so neither the public site nor the notebook's first load grows.
+const loadMarkdown = () => import('./markdown/AIMarkdown')
+const AIMarkdown = lazy(loadMarkdown)
 import { useScrollExpanded } from '../../lib/ui/scroll-expand'
 import { useExit } from '../../lib/ui/use-exit'
 import { isSafeAppPath } from '../../lib/safe-path'
@@ -47,13 +53,16 @@ function useActiveAI() {
   },[providers,stracker,preference])
 }
 
-function MessageBody({ content }: { content:string }) {
+/** AI answers: full Markdown (plain text shows until the renderer chunk arrives). */
+function MessageBody({ content,streaming=false }: { content:string;streaming?:boolean }) {
   const safe = content.trim()
   if (!safe) return null
-  const blocks = safe.split(/```/)
-  return <div className="ai-message-body">{blocks.map((block,index) => index % 2 === 1
-    ? <pre className="ai-code-block" key={index}><code>{block.replace(/^\w+\n/,'').trimEnd()}</code></pre>
-    : <span className="ai-message-prose" key={index}>{block}</span>)}</div>
+  return <div className="ai-message-body"><Suspense fallback={<span className="ai-message-prose">{safe}</span>}><AIMarkdown content={safe} streaming={streaming} /></Suspense></div>
+}
+
+/** The student's own message: plain text with its line breaks kept. */
+function PlainBody({ content }: { content:string }) {
+  return <div className="ai-message-body ai-message-plain"><span className="ai-message-prose">{content}</span></div>
 }
 
 function ActionConfirmationCard({ action,messageId }: { action:AIActionConfirmation; messageId:string }) {
@@ -83,20 +92,21 @@ function AssistantMessage({ message }: { message:AIMessage }) {
   return <article className={`ai-message ai-message-assistant ${message.status === 'failed' ? 'is-error' : ''}`}>
     <div className="ai-message-avatar"><AIProviderMark provider={providerId || 'custom'} small /></div>
     <div className="ai-message-main">
-      {message.content && <MessageBody content={message.content} />}
+      {message.content && <MessageBody content={message.content} streaming={message.status === 'running'} />}
       {message.status === 'running' && !message.content && <div className="ai-typing-indicator" aria-label="Assistant is responding"><i /><i /><i /></div>}
       {message.confirmation && <ActionConfirmationCard action={message.confirmation} messageId={message.id} />}
       {message.fallbackFrom && message.status === 'completed' && <div className="ai-fallback-note"><ArrowUpRight size={13} /><span>Switched from {fallbackName} to {providerName}; this answer came from the displayed model.</span></div>}
       {message.result && message.status === 'completed' && <div className="ai-result-proof"><span><Check size={14} /> Saved and verified in Stracker</span>{resultRoute && <button onClick={() => navigate(resultRoute)}>View in Stracker <ArrowUpRight size={13} /></button>}</div>}
       {message.status === 'failed' && <div className="ai-retry-row"><span><CircleAlert size={14} /> {message.error ?? 'The request did not complete.'}</span>{message.errorCode?.startsWith('stracker_ai') && <Button size="sm" variant="secondary" onClick={() => navigate(ADD_OWN_MODEL_PATH)}><Plus size={14} /> Add your own model</Button>}{message.retryable !== false && <Button size="sm" variant="secondary" onClick={() => void retryLast()}><RotateCcw size={14} /> Retry</Button>}</div>}
       {message.status === 'cancelled' && <div className="ai-cancelled-note"><Square size={12} /> Request stopped. No Stracker change was made.</div>}
+      {message.content.trim() && message.status !== 'running' && <div className="ai-message-actions"><CopyButton text={message.content} label="Copy response" /></div>}
       {(providerId || message.status === 'completed') && <div className="ai-message-meta">{providerId && <><AIProviderMark provider={providerId} small /><span>{providerName}</span>{message.modelId && <span className="ai-model-name">{message.modelId}</span>}</>}{message.createdAt && <time dateTime={message.createdAt}>{new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit'}).format(new Date(message.createdAt))}</time>}</div>}
     </div>
   </article>
 }
 
 function UserMessage({ message }: { message:AIMessage }) {
-  return <article className="ai-message ai-message-user"><div className="ai-user-bubble"><MessageBody content={message.content} /><time dateTime={message.createdAt}>{new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit'}).format(new Date(message.createdAt))}</time></div></article>
+  return <article className="ai-message ai-message-user"><div className="ai-user-stack"><div className="ai-user-bubble"><PlainBody content={message.content} /><time dateTime={message.createdAt}>{new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit'}).format(new Date(message.createdAt))}</time></div><div className="ai-message-actions"><CopyButton text={message.content} label="Copy your message" /></div></div></article>
 }
 
 function ConversationMessages({ compact=false }: { compact?:boolean }) {
@@ -206,6 +216,7 @@ export function AIExperience() {
   const navigate = useNavigate()
   const { notify } = useToast()
   useEffect(() => { historyOpenRef.current = historyOpen },[historyOpen])
+  useEffect(() => { if (panelOpen || largeOpen) void loadMarkdown().catch(() => undefined) },[panelOpen,largeOpen])
   useEffect(() => {
     const media = window.matchMedia('(max-width:520px)')
     const update = () => setSmallScreen(media.matches)

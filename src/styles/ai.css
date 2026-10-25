@@ -251,7 +251,7 @@
   .ai-history-backdrop { display:none; }
   .ai-history-sidebar { position:absolute; z-index:3; top:0; bottom:0; left:0; width:min(76vw,260px); min-width:0; border-right:1px solid var(--line-strong); box-shadow:12px 0 30px rgba(34,42,36,.15); transform:translateX(-105%); transition:transform .2s ease; }
   .ai-workspace-body.history-open .ai-history-sidebar { transform:translateX(0); }
-  .ai-history-backdrop { position:absolute; z-index:2; inset:0; display:block; border:0; background:rgba(26,31,28,.32); }
+  .ai-history-backdrop { position:absolute; z-index:2; inset:0; border:0; background:rgba(26,31,28,.32); }
   .ai-workspace-toolbar { align-items:flex-start; }.ai-workspace-toolbar > div:last-child { flex-wrap:wrap; justify-content:flex-end; }
   .ai-workspace-body.history-open .ai-history-backdrop { display:block; }
   .ai-workspace-chat .ai-message-scroll { padding-right:9px; padding-left:9px; }
@@ -277,3 +277,46 @@
 .ai-add-own-model { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border:1px solid var(--line); border-radius:999px; color:var(--ink-soft); background:var(--paper); font:600 max(.75rem, calc(10px * var(--body-scale))) var(--font-body); cursor:pointer; }
 .ai-add-own-model:hover,.ai-add-own-model:focus-visible { color:var(--ink); border-color:color-mix(in srgb,var(--green) 40%,var(--line)); }
 @media (max-width: 520px) { .ai-stracker-notice { flex-wrap:wrap; } }
+
+/* The history backdrop is only a mobile overlay. On wider screens it used to render as an empty
+   default <button> stretched to full height beside the sidebar (a tall rounded bar). */
+.ai-history-backdrop { display:none; }
+
+/* Copy actions under each message. */
+.ai-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.ai-user-stack { display:flex; flex-direction:column; align-items:flex-end; gap:2px; max-width:min(88%,550px); min-width:0; }
+.ai-user-stack .ai-user-bubble { max-width:100%; }
+.ai-message-actions { display:flex; align-items:center; gap:4px; margin-top:-2px; }
+.ai-copy-button { display:inline-flex; align-items:center; gap:4px; min-width:26px; min-height:26px; justify-content:center; padding:3px 6px; border:1px solid transparent; border-radius:7px; color:var(--muted); background:transparent; cursor:pointer; }
+.ai-copy-button:hover { color:var(--ink); border-color:var(--line); background:var(--paper-soft); }
+.ai-copy-button:focus-visible { outline:3px solid color-mix(in srgb,var(--accent) 45%,transparent); outline-offset:1px; }
+.ai-copy-button.is-copied { color:var(--green); }
+.ai-copy-button.is-failed { color:var(--red); }
+.app-shell .ai-copy-button, .app-shell .ai-copy-button span { font-size:max(.75rem, calc(.75rem * var(--body-scale))) !important; font-weight:500 !important; }
+
+/* Markdown answers. Every color comes from theme tokens so light, dark and custom themes agree. */
+.ai-markdown { display:grid; gap:.55em; min-width:0; }
+.ai-markdown > * { margin:0; }
+.ai-markdown :is(ul,ol) { margin:0; padding-left:1.35em; display:grid; gap:.2em; }
+.ai-markdown li > :is(ul,ol) { margin-top:.2em; }
+.ai-markdown li > p { margin:0; }
+.ai-markdown li.task-list-item { list-style:none; margin-left:-1.25em; }
+.ai-markdown li.task-list-item input { margin:0 .4em 0 0; vertical-align:-1px; accent-color:var(--accent); }
+.ai-markdown strong { font-weight:700; color:var(--ink); }
+.ai-markdown a { color:var(--accent); text-decoration:underline; text-underline-offset:2px; overflow-wrap:anywhere; }
+.ai-markdown blockquote { padding:.15em 0 .15em .8em; border-left:3px solid var(--line-strong); color:var(--ink-soft); }
+.ai-markdown hr { width:100%; height:0; border:0; border-top:1px solid var(--line); }
+.ai-markdown :not(pre) > code { padding:.08em .32em; border:1px solid var(--line); border-radius:5px; background:var(--paper-muted); font-size:.88em; overflow-wrap:anywhere; }
+.ai-md-table-wrap { max-width:100%; overflow-x:auto; border:1px solid var(--line); border-radius:8px; -webkit-overflow-scrolling:touch; }
+.ai-md-table-wrap:focus-visible { outline:2px solid color-mix(in srgb,var(--accent) 45%,transparent); }
+.ai-md-table-wrap table { width:max-content; min-width:100%; border-collapse:collapse; }
+.ai-md-table-wrap :is(th,td) { padding:.4em .65em; border-bottom:1px solid var(--line); border-right:1px solid var(--line); text-align:left; vertical-align:top; max-width:28em; }
+.ai-md-table-wrap :is(th,td):last-child { border-right:0; }
+.ai-md-table-wrap tr:last-child td { border-bottom:0; }
+.ai-md-table-wrap th { background:var(--paper-muted); font-weight:700; }
+.ai-code-panel { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:9px; background:var(--paper-muted); }
+.ai-code-head { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:2px 4px 2px 10px; border-bottom:1px solid var(--line); color:var(--muted); background:var(--paper-soft); font-weight:600; line-height:1.2; text-transform:lowercase; }
+.ai-code-panel .ai-code-block { margin:0; border-radius:0; background:transparent; font-size:.8em; }
+.ai-markdown .katex { font-size:1.08em; color:var(--ink); }
+.ai-markdown .katex-display { margin:.2em 0; padding:.2em 0; overflow-x:auto; overflow-y:hidden; }
+.ai-markdown .katex-error { color:var(--ink-soft)!important; }
