@@ -27,6 +27,8 @@ export function AISettingsSection() {
   const [removeTarget,setRemoveTarget] = useState<AIProviderConfig|null>(null)
   // New provider: Stracker picks the best tested model unless the student chooses one.
   const [autoModel,setAutoModel] = useState(false)
+  // Custom providers: model ID → signed proof that it passed the chat test during Discover.
+  const [approvals,setApprovals] = useState<Record<string,string>>({})
 
   const openNew = () => {
     setEditing(null); setModels([]); setModelsMessage(''); setDiscoveryAvailable(false); setAutoModel(true)
@@ -36,8 +38,12 @@ export function AISettingsSection() {
     setEditing(provider); setModels([]); setModelsMessage(''); setDiscoveryAvailable(false); setAutoModel(false)
     setDraft({ id:provider.id,providerId:provider.provider_id,displayName:provider.display_name,modelId:provider.model_id,apiKey:'',baseUrl:provider.base_url,protocol:provider.protocol,organizationId:provider.organization_id,region:provider.region === 'china' ? 'china' : 'international',capabilities:{...provider.capabilities} })
   }
-  const closeEditor = () => { setDraft(null); setEditing(null); setModels([]); setModelsMessage(''); setSaving(false); setDiscovering(false) }
-  const patchDraft = (patch:Partial<AIProviderDraft>) => setDraft(current => current ? { ...current,...patch } : current)
+  const closeEditor = () => { setApprovals({}); setDraft(null); setEditing(null); setModels([]); setModelsMessage(''); setSaving(false); setDiscovering(false) }
+  const patchDraft = (patch:Partial<AIProviderDraft>) => {
+    // A changed endpoint, protocol or key invalidates the models tested by Discover.
+    if ('baseUrl' in patch || 'protocol' in patch || 'apiKey' in patch || 'providerId' in patch) setApprovals({})
+    setDraft(current => current ? { ...current,...patch } : current)
+  }
 
   const save = async () => {
     if (!draft || saving) return
@@ -47,13 +53,15 @@ export function AISettingsSection() {
     setSaving(true)
     try {
       const candidates = auto ? await rankedCandidates() : []
+      const approvalToken = draft.providerId === 'custom' ? approvals[draft.modelId.trim()] : undefined
       const saved = await saveProvider({
-        ...draft,displayName:draft.displayName?.trim() || undefined,modelId:candidates[0] ?? (draft.modelId.trim() || DEFAULT_MODEL[draft.providerId]),apiKey:draft.apiKey?.trim() || undefined,
+        ...draft,approvalToken,displayName:draft.displayName?.trim() || undefined,modelId:candidates[0] ?? (draft.modelId.trim() || DEFAULT_MODEL[draft.providerId]),apiKey:draft.apiKey?.trim() || undefined,
         baseUrl:draft.providerId === 'custom' || ['openai','deepseek'].includes(draft.providerId) ? draft.baseUrl?.trim() || null : undefined,
         organizationId:draft.providerId === 'openai' ? draft.organizationId?.trim() || null : undefined
       })
       closeEditor()
       if (candidates.length > 1) await autoPick(saved,candidates)
+      else if (approvalToken && saved.provider_id === 'custom' && saved.connection_status === 'connected') notify(`${saved.display_name || providerLabel(saved.provider_id)} is connected and ready with “${saved.model_id}” (tested during Discover).`)
       else await autoTest(saved)
     } catch (error) { notify(error instanceof Error ? error.message : 'Provider settings could not be saved.', 'error') }
     finally { setSaving(false) }
@@ -122,17 +130,27 @@ export function AISettingsSection() {
       const changedConnection = draft.baseUrl !== editing.base_url || draft.protocol !== editing.protocol || draft.organizationId !== editing.organization_id || draft.region !== (editing.region === 'china' ? 'china' : 'international') || JSON.stringify(draft.capabilities ?? {}) !== JSON.stringify(editing.capabilities ?? {})
       if (changedConnection) { notify('Save these connection changes first, then reopen this provider to discover models.', 'info'); return }
     }
-    setDiscovering(true); setModelsMessage(''); setModels([])
+    const custom = draft.providerId === 'custom'
+    setDiscovering(true); setModels([]); setApprovals({})
+    setModelsMessage(custom ? 'Loading the model list and testing the best chat models with your key…' : '')
     try {
       const result = await discoverModels({
         ...draft,modelId:draft.modelId.trim() || DEFAULT_MODEL[draft.providerId],
         baseUrl:draft.providerId === 'custom' || ['openai','deepseek'].includes(draft.providerId) ? draft.baseUrl?.trim() || null : undefined,
         organizationId:draft.providerId === 'openai' ? draft.organizationId?.trim() || null : undefined
       })
+      if (custom && result.probe) {
+        // Only models that replied to a real chat test are offered, best first; the best is filled in.
+        setModels(result.models ?? []); setApprovals(result.approvals ?? {}); setDiscoveryAvailable(Boolean(result.models?.length))
+        setModelsMessage(result.message ?? '')
+        const best = result.rankedModelIds?.[0]
+        if (best) setDraft(current => current ? { ...current,modelId:best } : current)
+        return
+      }
       setModels(result.models ?? []); setDiscoveryAvailable(Boolean(result.discoveryAvailable))
       setModelsMessage(result.message ?? (result.models.length ? `Found ${result.models.length} available models.` : 'No models were listed. Enter a model ID manually.'))
       if (result.models.length && !autoModel && !result.models.some(model => model.id === draft.modelId)) patchDraft({modelId:(result.rankedModelIds?.[0] ?? rankModels(result.models.map(model => model.id),draft.providerId === 'custom' ? [] : modelPreferences(draft.providerId))[0]) ?? result.models[0]?.id ?? draft.modelId})
-    } catch (error) { setModelsMessage(error instanceof Error ? error.message : 'Models could not be loaded. Enter a model ID manually.') }
+    } catch (error) { setModelsMessage(`${custom ? 'The model list could not be loaded, so no model was tested. ' : ''}${error instanceof Error ? error.message : 'Models could not be loaded. Enter a model ID manually.'}`) }
     finally { setDiscovering(false) }
   }
 
@@ -202,7 +220,8 @@ export function AISettingsSection() {
       </div>
       <div className="ai-editor-fields">
         <Field label="Display name" hint="Optional name used in the assistant and fallback notices."><input maxLength={80} value={draft.displayName ?? ''} onChange={event => patchDraft({displayName:event.target.value})} placeholder={selectedProvider.label} /></Field>
-        <div className="ai-model-field"><Field label="Model ID" required={!(autoModel && !editing && draft.providerId !== 'custom')} hint={autoModel && !editing && draft.providerId !== 'custom' ? 'Leave empty: Stracker tests the newest fast models for your key and picks the best one.' : 'Use Discover when supported, or enter a model ID from your provider account.'}><input list="ai-model-list" value={draft.modelId} onChange={event => { patchDraft({modelId:event.target.value}); if (!editing) setAutoModel(!event.target.value.trim()) }} placeholder={autoModel && !editing && draft.providerId !== 'custom' ? 'Auto (best tested model)' : DEFAULT_MODEL[draft.providerId] || 'e.g. provider-model-name'} autoComplete="off" /><datalist id="ai-model-list">{models.map(model => <option key={model.id} value={model.id} label={model.name} />)}</datalist></Field><Button type="button" variant="secondary" size="sm" onClick={() => void discover()} disabled={discovering || saving}>{discovering ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />} Discover</Button></div>
+        <div className="ai-model-field"><Field label="Model ID" required={!(autoModel && !editing && draft.providerId !== 'custom')} hint={autoModel && !editing && draft.providerId !== 'custom' ? 'Leave empty: Stracker tests the newest fast models for your key and picks the best one.' : draft.providerId === 'custom' ? 'Press Discover: Stracker finds and tests the best chat models for your key and fills in the best one.' : 'Use Discover when supported, or enter a model ID from your provider account.'}><input list="ai-model-list" value={draft.modelId} onChange={event => { patchDraft({modelId:event.target.value}); if (!editing) setAutoModel(!event.target.value.trim()) }} placeholder={autoModel && !editing && draft.providerId !== 'custom' ? 'Auto (best tested model)' : DEFAULT_MODEL[draft.providerId] || 'e.g. provider-model-name'} autoComplete="off" /><datalist id="ai-model-list">{models.map(model => <option key={model.id} value={model.id} label={model.name} />)}</datalist></Field><Button type="button" variant="secondary" size="sm" onClick={() => void discover()} disabled={discovering || saving}>{discovering ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />} Discover</Button></div>
+        {draft.providerId === 'custom' && models.length > 0 && Object.keys(approvals).length > 0 && <Field label="Tested models" hint="Best first. Each one replied to a real chat test with your key; you can still type another model ID above."><select value={approvals[draft.modelId] ? draft.modelId : ''} onChange={event => event.target.value && patchDraft({modelId:event.target.value})}>{!approvals[draft.modelId] && <option value="">Custom model ID (not tested)</option>}{models.map((model,index) => <option key={model.id} value={model.id}>{index === 0 ? `${model.id} (best)` : model.id}</option>)}</select></Field>}
         {draft.providerId === 'custom' && <Field label="API protocol" required hint="Custom APIs must implement the selected chat-completions or messages protocol."><select value={draft.protocol} onChange={event => patchDraft({protocol:event.target.value as AIProviderDraft['protocol']})}><option value="openai-compatible">OpenAI-compatible</option><option value="anthropic-compatible">Anthropic-compatible</option></select></Field>}
         {(draft.providerId === 'custom' || ['openai','deepseek'].includes(draft.providerId)) && <Field label="API base URL" required hint="HTTPS only. Private, local, and link-local network endpoints are blocked."><input type="url" autoComplete="url" value={draft.baseUrl ?? ''} onChange={event => patchDraft({baseUrl:event.target.value})} placeholder={selectedProvider.defaultBaseUrl ?? 'https://api.example.com/v1'} /></Field>}
         {draft.providerId === 'qwen' && <Field label="Qwen service region" hint="The endpoint follows your selected DashScope region."><select value={draft.region ?? 'international'} onChange={event => patchDraft({region:event.target.value as 'international'|'china'})}><option value="international">International</option><option value="china">China mainland</option></select></Field>}
@@ -210,7 +229,7 @@ export function AISettingsSection() {
         <Field label={editing ? 'Replace API key' : 'API key'} required={!editing} hint={editing ? `Saved key: ${editing.masked_key}. Leave blank to keep it; entering a key replaces it.` : 'The key is sent over HTTPS directly to Stracker’s secure API, encrypted, and never returned.'}><input type="password" autoComplete="new-password" value={draft.apiKey ?? ''} onChange={event => patchDraft({apiKey:event.target.value})} placeholder={editing ? 'Leave blank to keep current key' : 'Paste your provider API key'} /></Field>
         {draft.providerId === 'custom' && <div className="ai-capability-box"><strong>Capabilities declared by this endpoint</strong><span>Only enable features you have verified this model supports.</span><div className="ai-capability-options">{([['supportsTools','Tool calling'],['supportsVision','Image input'],['supportsStructuredOutput','Structured output'],['supportsReasoning','Reasoning models']] as const).map(([key,label]) => <label key={key}><input type="checkbox" checked={Boolean(draft.capabilities?.[key])} onChange={event => patchDraft({capabilities:{...draft.capabilities,[key]:event.target.checked}})} /><span>{label}</span></label>)}</div></div>}
         {modelsMessage && <div className={`ai-discovery-message ${discoveryAvailable ? 'available' : ''}`} role="status">{discovering && <LoaderCircle size={14} className="spin" />}{modelsMessage}</div>}
-        <div className="ai-editor-note"><KeyRound size={15} /><span>Saving changed connection details disables this provider until a fresh connection test succeeds. Test the selected model before relying on it.</span></div>
+        <div className="ai-editor-note"><KeyRound size={15} /><span>{draft.providerId === 'custom' && approvals[draft.modelId] ? 'This model passed a live chat test during Discover, so saving connects it right away.' : 'Saving changed connection details disables this provider until a fresh connection test succeeds. Test the selected model before relying on it.'}</span></div>
       </div>
       <div className="dialog-actions ai-editor-actions"><Button type="button" variant="secondary" onClick={closeEditor} disabled={saving}>Cancel</Button><Button type="button" loading={saving} onClick={() => void save()}><Check size={15} /> {saving ? 'Saving provider…' : editing ? 'Save changes' : 'Save provider'}</Button></div>
     </Dialog>}

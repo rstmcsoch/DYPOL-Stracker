@@ -53,6 +53,8 @@ export interface AIProviderDraft {
   organizationId?:string|null
   region?:'international'|'china'
   capabilities?:Record<string,boolean>
+  /** Custom providers only: signed proof from Discover that this model passed a real chat test. */
+  approvalToken?:string
 }
 /**
  * Deployment-level AI backend status, from the public /api/ai/health check:
@@ -79,7 +81,7 @@ interface AIContextValue {
   backendHealth:AIBackendHealth|null
   checkBackendHealth:()=>Promise<void>
   refreshProviders:()=>Promise<void>
-  discoverModels:(draft:AIProviderDraft)=>Promise<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>}>
+  discoverModels:(draft:AIProviderDraft)=>Promise<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>;approvals?:Record<string,string>;probe?:{listed:number;tried:number;passed:number}}>
   saveProvider:(draft:AIProviderDraft)=>Promise<AIProviderConfig>
   testProvider:(id:string)=>Promise<{latencyMs?:number}>
   patchProvider:(id:string,action:'enable'|'disable'|'default')=>Promise<void>
@@ -272,7 +274,9 @@ export function AIProvider({ children }: { children:ReactNode }) {
   const discoverModels = useCallback(async (draft:AIProviderDraft) => {
     const { id,...setup } = draft
     const useSavedConfiguration = Boolean(id && !draft.apiKey)
-    return apiFetch<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>}>('/api/ai/models',{method:'POST',body:JSON.stringify(useSavedConfiguration ? { configId:id } : setup)})
+    const { approvalToken:_unused,...discovery } = setup
+    void _unused
+    return apiFetch<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>;approvals?:Record<string,string>;probe?:{listed:number;tried:number;passed:number}}>('/api/ai/models',{method:'POST',body:JSON.stringify(useSavedConfiguration ? { configId:id } : discovery)})
   },[apiFetch])
 
   // Every write returns the saved row, so the list is updated in place instead of re-downloading

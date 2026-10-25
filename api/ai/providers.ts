@@ -2,7 +2,8 @@ import { z } from 'zod'
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import { ApiError, readJson, sendJson } from '../_lib/http.js'
 import { withAuthenticatedRequest } from '../_lib/handler.js'
-import { encryptCredential, maskedCredential } from '../_lib/secrets.js'
+import { decryptCredential, encryptCredential, maskedCredential } from '../_lib/secrets.js'
+import { verifyModelApproval } from '../_lib/model-approval.js'
 import { normalizeProviderSetup, safeProviderConfig, type ProviderConfigRow } from '../_lib/registry.js'
 
 const providerWriteSchema = z.object({
@@ -15,7 +16,9 @@ const providerWriteSchema = z.object({
   protocol: z.enum(['google','openai-compatible','anthropic-compatible']).optional(),
   organizationId: z.string().nullable().optional(),
   region: z.enum(['international','china']).optional(),
-  capabilities: z.record(z.string(), z.unknown()).optional()
+  capabilities: z.record(z.string(), z.unknown()).optional(),
+  /** Custom providers: signed proof from discovery that this exact model passed a chat test. */
+  approvalToken: z.string().max(400).optional()
 }).strict()
 const patchSchema = z.object({ id: z.uuid(), action: z.enum(['enable','disable','default']) }).strict()
 const deleteSchema = z.object({ id: z.uuid() }).strict()
@@ -33,7 +36,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     if (req.method === 'POST') {
       const parsed = providerWriteSchema.safeParse(body)
       if (!parsed.success) throw new ApiError(400, 'invalid_provider_configuration', 'Check the provider, model, and connection details, then try again.')
-      const input = parsed.data
+      const { approvalToken, ...input } = parsed.data
       // Endpoint validation (DNS checks for custom URLs) and the existing-row read are independent: run them together.
       const [setup, { data: existingData, error: existingError }] = await Promise.all([
         normalizeProviderSetup(input as unknown as Record<string, unknown>),
@@ -53,6 +56,19 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       const capabilitiesChanged = setup.providerId === 'custom' && JSON.stringify(existing?.capabilities ?? {}) !== JSON.stringify(setup.capabilities ?? {})
       const changed = !existing || Boolean(apiKey) || existing.provider_id !== setup.providerId || existing.model_id !== setup.modelId ||
         existing.base_url !== setup.baseUrl || existing.protocol !== setup.protocol || existing.organization_id !== setup.organizationId || capabilitiesChanged
+      // Custom provider whose model passed the discovery chat test with this endpoint and key:
+      // detection and testing were the same step, so save it as connected (built-ins unchanged).
+      let approved = false
+      if (setup.providerId === 'custom' && approvalToken) {
+        let storedKey = apiKey
+        if (!storedKey && existing) { try { storedKey = decryptCredential(existing.encrypted_api_key) } catch { storedKey = undefined } }
+        approved = Boolean(storedKey) && verifyModelApproval(approvalToken, { userId, baseUrl: setup.baseUrl, protocol: setup.protocol, modelId: setup.modelId, apiKey: storedKey! })
+      }
+      let makeDefault = false
+      if (approved && !(existing?.is_default)) {
+        const { count } = await adminClient.from('ai_provider_configs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_default', true)
+        makeDefault = (count ?? 0) === 0
+      }
       const now = new Date().toISOString()
       const firstKey = apiKey ?? ''
       const row: Record<string, unknown> = {
@@ -70,10 +86,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         capabilities: setup.providerId === 'custom'
           ? setup.capabilities
           : undefined,
-        enabled: changed ? false : existing?.enabled ?? false,
-        is_default: changed ? false : existing?.is_default ?? false,
-        connection_status: changed ? 'not_tested' : existing?.connection_status ?? 'not_tested',
-        last_checked_at: changed ? null : existing?.last_checked_at ?? null,
+        enabled: approved ? true : changed ? false : existing?.enabled ?? false,
+        is_default: approved ? Boolean(existing?.is_default) || makeDefault : changed ? false : existing?.is_default ?? false,
+        connection_status: approved ? 'connected' : changed ? 'not_tested' : existing?.connection_status ?? 'not_tested',
+        last_checked_at: approved ? now : changed ? null : existing?.last_checked_at ?? null,
         cooldown_until: null,
         failure_count: changed ? 0 : existing?.failure_count ?? 0,
         updated_at: now
@@ -85,7 +101,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       const { data: saved, error } = await adminClient.from('ai_provider_configs').upsert(row).select('*').single()
       if (error || !saved) throw new ApiError(503, 'provider_save_failed', 'The provider configuration could not be saved. No AI request was sent.')
       const safe = safeProviderConfig(saved as ProviderConfigRow)
-      sendJson(res, 200, { provider: safe, saved: true, changed, keyMask: apiKey ? maskedCredential(firstKey) : safe.masked_key })
+      sendJson(res, 200, { provider: safe, saved: true, changed, approved, keyMask: apiKey ? maskedCredential(firstKey) : safe.masked_key })
       return
     }
 

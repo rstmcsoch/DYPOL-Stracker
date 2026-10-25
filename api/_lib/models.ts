@@ -10,6 +10,8 @@ export interface ModelDiscoveryResult {
   models: AIModelOption[]
   discoveryAvailable: boolean
   message?: string
+  /** Custom endpoints only: every listed ID with its `created` stamp, for ranking (never sent to the client). */
+  candidates?: { id: string; created?: number | null }[]
 }
 
 function modelHeaders(setup: ProviderSetup, apiKey: string): Record<string, string> {
@@ -65,9 +67,13 @@ export async function discoverProviderModels(setup: ProviderSetup, apiKey: strin
     const body = await getModels(setup.providerId,url,modelHeaders(setup,apiKey),controller.signal,setup.providerId === 'custom')
     const collection = Array.isArray(body.models) ? body.models : Array.isArray(body.data) ? body.data : []
     const models = modelOptionsFromApi(setup.providerId, collection)
+    const candidates = setup.providerId === 'custom'
+      ? collection.map(item => item as Record<string, unknown>).filter(item => typeof item.id === 'string' && item.id.length <= 200)
+        .map(item => ({ id: String(item.id), created: typeof item.created === 'number' ? item.created : null })).slice(0, 1000)
+      : undefined
     if (!models.length && setup.providerId !== 'custom') {
       return { models, discoveryAvailable: false, message: 'No compatible text models were returned. Check the provider account and enter a model ID from its current API documentation.' }
     }
-    return { models, discoveryAvailable: true }
+    return { models, discoveryAvailable: true, ...(candidates ? { candidates } : {}) }
   } finally { clearTimeout(timer) }
 }
