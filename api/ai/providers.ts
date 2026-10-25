@@ -34,10 +34,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       const parsed = providerWriteSchema.safeParse(body)
       if (!parsed.success) throw new ApiError(400, 'invalid_provider_configuration', 'Check the provider, model, and connection details, then try again.')
       const input = parsed.data
-      const setup = await normalizeProviderSetup(input as unknown as Record<string, unknown>)
-      const { data: existingData, error: existingError } = input.id
-        ? await adminClient.from('ai_provider_configs').select('*').eq('user_id', userId).eq('id', input.id).maybeSingle()
-        : { data: null, error: null }
+      // Endpoint validation (DNS checks for custom URLs) and the existing-row read are independent: run them together.
+      const [setup, { data: existingData, error: existingError }] = await Promise.all([
+        normalizeProviderSetup(input as unknown as Record<string, unknown>),
+        input.id
+          ? adminClient.from('ai_provider_configs').select('*').eq('user_id', userId).eq('id', input.id).maybeSingle()
+          : Promise.resolve({ data: null, error: null })
+      ])
       if (existingError) throw new ApiError(503, 'provider_config_unavailable', 'AI provider settings could not be checked. Try again.')
       const existing = existingData as ProviderConfigRow | null
       if (input.id && !existing) throw new ApiError(404, 'provider_not_found', 'That provider configuration is no longer available.')

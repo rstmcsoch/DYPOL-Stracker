@@ -25,7 +25,6 @@ export function AISettingsSection() {
   const [discovering,setDiscovering] = useState(false)
   const [workingId,setWorkingId] = useState<string|null>(null)
   const [removeTarget,setRemoveTarget] = useState<AIProviderConfig|null>(null)
-  const [removing,setRemoving] = useState(false)
   // New provider: Stracker picks the best tested model unless the student chooses one.
   const [autoModel,setAutoModel] = useState(false)
 
@@ -148,11 +147,12 @@ export function AISettingsSection() {
   }
 
   const confirmRemove = async () => {
-    if (!removeTarget || removing) return
-    setRemoving(true)
-    try { await removeProvider(removeTarget.id); notify(`${providerLabel(removeTarget.provider_id)} credentials removed from Stracker.`); setRemoveTarget(null) }
+    if (!removeTarget) return
+    // Close at once; the row is removed optimistically and comes back with an error if the server refuses.
+    const target = removeTarget
+    setRemoveTarget(null)
+    try { await removeProvider(target.id); notify(`${providerLabel(target.provider_id)} credentials removed from Stracker.`) }
     catch (error) { notify(error instanceof Error ? error.message : 'The provider could not be removed.', 'error') }
-    finally { setRemoving(false) }
   }
 
   const selectedProvider = draft ? AI_PROVIDERS.find(provider => provider.id === draft.providerId) : null
@@ -215,6 +215,6 @@ export function AISettingsSection() {
       <div className="dialog-actions ai-editor-actions"><Button type="button" variant="secondary" onClick={closeEditor} disabled={saving}>Cancel</Button><Button type="button" loading={saving} onClick={() => void save()}><Check size={15} /> {saving ? 'Saving provider…' : editing ? 'Save changes' : 'Save provider'}</Button></div>
     </Dialog>}
 
-    {removeTarget && <Dialog title="Remove this provider?" subtitle="Its encrypted API key and saved connection settings will be deleted from your Stracker account." onClose={() => !removing && setRemoveTarget(null)} className="dialog-narrow"><div className="ai-remove-copy"><AIProviderMark provider={removeTarget.provider_id} /><div><strong>{removeTarget.display_name || providerLabel(removeTarget.provider_id)}</strong><span>{removeTarget.masked_key} · {removeTarget.model_id}</span></div></div><div className="dialog-actions"><Button variant="secondary" onClick={() => setRemoveTarget(null)} disabled={removing}>Keep provider</Button><Button variant="danger" loading={removing} onClick={() => void confirmRemove()}><Trash2 size={15} /> Remove key</Button></div></Dialog>}
+    {removeTarget && <Dialog title="Remove this provider?" subtitle="Its encrypted API key and saved connection settings will be deleted from your Stracker account." onClose={() => setRemoveTarget(null)} className="dialog-narrow"><div className="ai-remove-copy"><AIProviderMark provider={removeTarget.provider_id} /><div><strong>{removeTarget.display_name || providerLabel(removeTarget.provider_id)}</strong><span>{removeTarget.masked_key} · {removeTarget.model_id}</span></div></div><div className="dialog-actions"><Button variant="secondary" onClick={() => setRemoveTarget(null)}>Keep provider</Button><Button variant="danger" onClick={() => void confirmRemove()}><Trash2 size={15} /> Remove key</Button></div></Dialog>}
   </>
 }

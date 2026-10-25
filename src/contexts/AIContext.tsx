@@ -275,27 +275,44 @@ export function AIProvider({ children }: { children:ReactNode }) {
     return apiFetch<{models:AIModelOption[];discoveryAvailable:boolean;message?:string;rankedModelIds?:string[];modelPreferences?:Record<string,string[]>}>('/api/ai/models',{method:'POST',body:JSON.stringify(useSavedConfiguration ? { configId:id } : setup)})
   },[apiFetch])
 
+  // Every write returns the saved row, so the list is updated in place instead of re-downloading
+  // all providers after each action (each GET is another authenticated serverless round trip).
+  const putProvider = useCallback((provider:AIProviderConfig) => {
+    setProviders(current => {
+      const others = current.filter(item => item.id !== provider.id)
+      const next = provider.is_default ? others.map(item => item.is_default ? { ...item,is_default:false } : item) : others
+      const index = current.findIndex(item => item.id === provider.id)
+      if (index < 0) return [...next,provider]
+      const merged = [...next]; merged.splice(Math.min(index,merged.length),0,provider); return merged
+    })
+  },[])
+
   const saveProvider = useCallback(async (draft:AIProviderDraft) => {
     const result = await apiFetch<{provider?:AIProviderConfig}>('/api/ai/providers',{method:'POST',body:JSON.stringify(draft)})
-    await refreshProviders()
     if (!result.provider) throw new AIRequestError('The provider was not saved. Try again.','provider_not_returned',200)
+    putProvider(result.provider)
     return result.provider
-  },[apiFetch,refreshProviders])
+  },[apiFetch,putProvider])
 
   const testProvider = useCallback(async (id:string) => {
     try { return await apiFetch<{latencyMs?:number}>('/api/ai/test-connection',{method:'POST',body:JSON.stringify({configId:id})}) ?? {} }
-    finally { await refreshProviders() }
+    // The test writes connection status server-side; reload it in the background, not before returning.
+    finally { void refreshProviders() }
   },[apiFetch,refreshProviders])
 
   const patchProvider = useCallback(async (id:string,action:'enable'|'disable'|'default') => {
-    await apiFetch('/api/ai/providers',{method:'PATCH',body:JSON.stringify({id,action})})
-    await refreshProviders()
-  },[apiFetch,refreshProviders])
+    const result = await apiFetch<{provider?:AIProviderConfig}>('/api/ai/providers',{method:'PATCH',body:JSON.stringify({id,action})})
+    if (result?.provider) putProvider(result.provider)
+    else void refreshProviders()
+  },[apiFetch,putProvider,refreshProviders])
 
+  /** Optimistic: the row disappears at once and is restored if the server refuses. */
   const removeProvider = useCallback(async (id:string) => {
-    await apiFetch('/api/ai/providers',{method:'DELETE',body:JSON.stringify({id})})
-    await refreshProviders()
-  },[apiFetch,refreshProviders])
+    let snapshot:AIProviderConfig[] = []
+    setProviders(current => { snapshot = current; return current.filter(item => item.id !== id) })
+    try { await apiFetch('/api/ai/providers',{method:'DELETE',body:JSON.stringify({id})}) }
+    catch (error) { setProviders(snapshot); throw error }
+  },[apiFetch])
 
   const openConversation = useCallback(async (id:string) => {
     if (requestLockRef.current) return

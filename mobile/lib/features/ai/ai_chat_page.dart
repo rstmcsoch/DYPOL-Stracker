@@ -592,7 +592,8 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
     setState(() => _busy = true);
     try {
       await action();
-      await _load();
+      // Refresh the list in the background; the action itself already finished.
+      unawaited(_load());
     } catch (error) {
       if (mounted) showToast(context, error.toString(), error: true);
     } finally {
@@ -695,7 +696,19 @@ class _ProvidersBodyState extends State<_ProvidersBody> {
                               message: 'The saved key has been removed.',
                             );
                             if (!confirmed) return;
-                            await _run(() => widget.client.deleteProvider(provider.id));
+                            // Optimistic: drop the row now, restore it if the server refuses.
+                            final List<AiProvider> before = _rows;
+                            setState(() => _rows = <AiProvider>[
+                                  for (final AiProvider row in _rows)
+                                    if (row.id != provider.id) row,
+                                ]);
+                            try {
+                              await widget.client.deleteProvider(provider.id);
+                            } catch (error) {
+                              if (!mounted) return;
+                              setState(() => _rows = before);
+                              showToast(context, error.toString(), error: true);
+                            }
                           },
                           child: Text(
                             'Remove',

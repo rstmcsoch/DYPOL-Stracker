@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -254,15 +255,24 @@ class DataController extends StateNotifier<DataState> {
   /* Generic write plumbing                                             */
   /* ------------------------------------------------------------------ */
 
+  /// Optimistic write: the change shows on screen at once, the cloud write follows, and a
+  /// failure rolls the screen back (or reloads if other edits landed meanwhile) and rethrows.
   Future<void> _run(Future<void> Function() action, Future<void> Function() apply) async {
+    final AppData before = state.data;
     state = state.copyWith(saving: true, error: null);
+    await apply();
+    final AppData optimistic = state.data;
     try {
       await action();
-      await apply();
       state = state.copyWith(saving: false, offline: false);
     } catch (error) {
       final String message =
           error is AppFailure ? error.message : 'That change could not be saved. Try again.';
+      if (identical(state.data, optimistic)) {
+        _apply(before);
+      } else {
+        unawaited(load(silent: true));
+      }
       state = state.copyWith(saving: false, error: message);
       throw AppFailure(message);
     }
@@ -348,22 +358,18 @@ class DataController extends StateNotifier<DataState> {
   Future<void> deleteChapter(Chapter chapter) async {
     await _run(
       () async {
-        for (final String table in const <String>[
-          'chapter_revisions',
-          'chapter_stages',
-          'practice_sessions',
-          'pyq_records',
-          'study_cards',
-          'test_chapter_links',
-        ]) {
-          final List<Map<String, dynamic>> rows =
-              await _repository.fetchRows(table, _userId);
-          for (final Map<String, dynamic> row in rows) {
-            if (row['chapter_id'] == chapter.id) {
-              await _repository.deleteRow(table, '${row['id']}', _userId);
-            }
-          }
-        }
+        // One filtered delete per child table, all in parallel, then the chapter itself.
+        await Future.wait(<Future<void>>[
+          for (final String table in const <String>[
+            'chapter_revisions',
+            'chapter_stages',
+            'practice_sessions',
+            'pyq_records',
+            'study_cards',
+            'test_chapter_links',
+          ])
+            _repository.deleteWhere(table, 'chapter_id', chapter.id, _userId),
+        ]);
         await _repository.deleteRow('chapters', chapter.id, _userId);
       },
       () async {
@@ -426,13 +432,7 @@ class DataController extends StateNotifier<DataState> {
         await _repository.upsertRow('tests', test.toMap());
         if (subjectScores != null) {
           if (subjectScores.isEmpty) {
-            final List<Map<String, dynamic>> rows =
-                await _repository.fetchRows('test_subject_scores', _userId);
-            for (final Map<String, dynamic> row in rows) {
-              if (row['test_id'] == test.id) {
-                await _repository.deleteRow('test_subject_scores', '${row['id']}', _userId);
-              }
-            }
+            await _repository.deleteWhere('test_subject_scores', 'test_id', test.id, _userId);
           } else {
             await _repository.upsertRows(
               'test_subject_scores',
@@ -464,19 +464,15 @@ class DataController extends StateNotifier<DataState> {
   Future<void> deleteTest(TestRecord test) async {
     await _run(
       () async {
-        for (final String table in const <String>[
-          'test_subject_scores',
-          'test_chapter_links',
-          'test_error_logs',
-          'test_time_entries',
-        ]) {
-          final List<Map<String, dynamic>> rows = await _repository.fetchRows(table, _userId);
-          for (final Map<String, dynamic> row in rows) {
-            if (row['test_id'] == test.id) {
-              await _repository.deleteRow(table, '${row['id']}', _userId);
-            }
-          }
-        }
+        await Future.wait(<Future<void>>[
+          for (final String table in const <String>[
+            'test_subject_scores',
+            'test_chapter_links',
+            'test_error_logs',
+            'test_time_entries',
+          ])
+            _repository.deleteWhere(table, 'test_id', test.id, _userId),
+        ]);
         await _repository.deleteRow('tests', test.id, _userId);
       },
       () async => _apply(state.data.copyWith(

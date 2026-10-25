@@ -1,4 +1,7 @@
 {
+  "regions": [
+    "hnd1"
+  ],
   "functions": {
     "api/ai/*.ts": {
       "maxDuration": 60
