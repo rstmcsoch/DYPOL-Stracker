@@ -10,6 +10,7 @@ import '../../core/widgets/notebook.dart';
 import '../../data/ai_client.dart';
 import '../../data/models.dart';
 import '../shell/app_shell.dart';
+import 'ai_markdown.dart';
 
 /// Stracker AI. Talks only to the deployed `/api/ai/*` functions with the user's own
 /// Supabase token; provider keys live server-side. Streams the same SSE events the website
@@ -330,14 +331,19 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                     itemCount: _messages.length,
                     itemBuilder: (BuildContext context, int index) {
                       final _ChatBubble bubble = _messages[index];
+                      final bool showCopy = bubble.text.trim().isNotEmpty && !bubble.streaming;
                       return Align(
                         alignment: bubble.isUser ? Alignment.centerRight : Alignment.centerLeft,
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
                             maxWidth: MediaQuery.sizeOf(context).width * 0.82,
                           ),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
+                          child: Column(
+                            crossAxisAlignment:
+                                bubble.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                            children: <Widget>[
+                          Container(
+                            margin: EdgeInsets.only(bottom: showCopy ? 0 : 8),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: bubble.isUser ? colors.palette.accentLight : colors.palette.paper,
@@ -364,12 +370,25 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                                       ),
                                     ],
                                   )
-                                : SelectableText(
-                                    bubble.text,
-                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                          color: bubble.failed ? colors.palette.red : null,
-                                        ),
-                                  ),
+                                : bubble.isUser
+                                    ? SelectableText(
+                                        bubble.text,
+                                        style: _chatTextStyle(context),
+                                      )
+                                    : AiMarkdown(
+                                        text: bubble.text,
+                                        color: bubble.failed ? colors.palette.red : null,
+                                      ),
+                          ),
+                          if (showCopy)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: ChatCopyButton(
+                                text: bubble.text,
+                                label: bubble.isUser ? 'Copy your message' : 'Copy response',
+                              ),
+                            ),
+                            ],
                           ),
                         ),
                       );
@@ -527,6 +546,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 
 /// Compact line under the title: which model answers, a small "Add your own model" button,
 /// and the professional warning when Stracker AI (Default) is unavailable.
+/// Chat text is 90% of body size; the empty state uses smaller variants, matching the web chat.
+TextStyle? _scaled(TextStyle? style, double factor) =>
+    style?.copyWith(fontSize: (style.fontSize ?? 14) * factor);
+
+TextStyle? _chatTextStyle(BuildContext context) => _scaled(Theme.of(context).textTheme.bodyMedium, 0.9);
+
 class _ModelStrip extends StatelessWidget {
   const _ModelStrip({required this.models, required this.strackerFailed, required this.onAddOwn});
 
@@ -610,14 +635,14 @@ class _EmptyChat extends StatelessWidget {
         Text(
           'Ask about your own notebook',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineSmall,
+          style: _scaled(Theme.of(context).textTheme.headlineSmall, 0.9),
         ),
         const SizedBox(height: 6),
         Text(
           'Stracker AI reads your syllabus, tests, revisions and mistakes, so its answers are about '
           'your own preparation. Stracker AI (Default) is ready to use, or add your own model.',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.muted),
+          style: _scaled(Theme.of(context).textTheme.bodySmall, 0.8)?.copyWith(color: colors.muted),
         ),
         const SizedBox(height: 16),
         for (final String prompt in const <String>[
@@ -632,7 +657,7 @@ class _EmptyChat extends StatelessWidget {
               onPressed: () => promptSelected(prompt),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(prompt, style: Theme.of(context).textTheme.bodySmall),
+                child: Text(prompt, style: _scaled(Theme.of(context).textTheme.bodySmall, 0.8)),
               ),
             ),
           ),

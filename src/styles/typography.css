@@ -404,3 +404,22 @@ html[data-app-font='active'] .pub-page :where(*) {
   .typography-live-preview { align-items: flex-start; flex-direction: column; gap: 12px; padding: 14px; }
   .typography-preview-button { width: 100%; }
 }
+
+/* Stracker AI chat (compact window and large workspace): empty-state copy and messages are
+   slightly smaller than general body copy. Eyebrow and greeting are 90%, intro and suggestion
+   chips 80%, and every message (AI and the student's own) 90% of the previous size. */
+.app-shell .ai-welcome .eyebrow { font-size: calc(max(var(--type-overline-size), calc(var(--type-overline-size) * var(--body-scale))) * .9) !important; }
+.app-shell .ai-welcome h2 { font-size: calc(var(--type-h2-size) * .9) !important; }
+.app-shell .ai-welcome > p { font-size: calc(max(1rem, calc(1rem * var(--body-scale))) * .8) !important; }
+.app-shell .ai-suggestion-grid button { font-size: calc(var(--type-button-size) * var(--body-scale) * .8) !important; }
+.app-shell .ai-message-body { font-size: calc(max(1rem, calc(1rem * var(--body-scale))) * .9) !important; }
+/* Markdown inside a message inherits the message size instead of page-level heading/paragraph sizes. */
+.app-shell .ai-message-body :is(p, li, td, th, blockquote) { font-size: inherit !important; line-height: inherit !important; font-family: inherit !important; }
+.app-shell .ai-message-body :is(h1, h2, h3, h4, h5, h6) { margin: .35em 0 0 !important; font-family: var(--font-body) !important; font-weight: 700 !important; line-height: 1.3 !important; }
+.app-shell .ai-message-body h1 { font-size: 1.3em !important; }
+.app-shell .ai-message-body h2 { font-size: 1.2em !important; }
+.app-shell .ai-message-body h3 { font-size: 1.1em !important; }
+.app-shell .ai-message-body :is(h4, h5, h6) { font-size: 1em !important; }
+.app-shell .ai-message-body :is(h1, h2, h3, h4, h5, h6) :is(b, strong, em) { font-family: inherit !important; font-weight: inherit !important; }
+.app-shell .ai-message-body strong { font-weight: 700 !important; }
+.app-shell .ai-message-body .ai-copy-button { font-size: max(.75rem, calc(.75rem * var(--body-scale))) !important; }
