@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { BarChart3, Check, ClipboardList, Edit3, Plus, Target, Timer, Trash2 } from 'lucide-react'
 import { Button, Dialog, EmptyState, Field, NotebookCard, OverflowMenu, PageHeader, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
-import { ChapterSelect, ChipFilter, Meter, Pct, SubjectSelect, minutesLabel } from '../components/jee/shared'
+import { ChapterSelect, ChipFilter, chapterWithSubject, Meter, Pct, SubjectSelect, minutesLabel } from '../components/jee/shared'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { createId } from '../lib/id'
@@ -67,7 +67,7 @@ export default function PracticePage() {
 
     <section className="jee-stat-grid" aria-label="Practice summary">
       <NotebookCard className="jee-stat"><span>Questions attempted</span><strong>{overall.attempted.toLocaleString('en-IN')}</strong><small>{overall.sessions} block{overall.sessions === 1 ? '' : 's'} in view</small></NotebookCard>
-      <NotebookCard className="jee-stat"><span>Accuracy</span><strong><Pct value={overall.accuracy} digits={1} /></strong><small>{overall.correct} correct · {overall.incorrect} incorrect</small></NotebookCard>
+      <NotebookCard className="jee-stat"><span>Accuracy</span><strong><Pct value={overall.accuracy} digits={1} /></strong><small>{overall.correct} correct · {overall.incorrect} incorrect{overall.skipped ? ` · ${overall.skipped} skipped` : ''}</small></NotebookCard>
       <NotebookCard className="jee-stat"><span>Recent accuracy</span><strong><Pct value={overall.recentAccuracy} digits={1} /></strong><small>last three blocks</small></NotebookCard>
       <NotebookCard className="jee-stat"><span>Practice volume</span><strong>{minutesLabel(overall.timeMinutes)}</strong><small>time recorded in view</small></NotebookCard>
     </section>
@@ -108,6 +108,7 @@ export default function PracticePage() {
                     <span><b>{item.attempted}</b> attempted</span>
                     <span><b>{item.correct}</b> correct</span>
                     <span><b>{item.incorrect}</b> incorrect</span>
+                    <span><b>{item.skipped ?? 0}</b> skipped</span>
                     <span><b><Pct value={accuracy} digits={0} /></b> accuracy</span>
                     {item.time_minutes !== null && <span><Timer size={12} aria-hidden="true" /> {minutesLabel(item.time_minutes)}</span>}
                   </div>
@@ -142,7 +143,7 @@ async function savePractice(id: string, value: PracticeValue, data: AppData, ups
   const existing = data.practiceSessions.find(item => item.id === id)
   const record: PracticeSession = {
     id, chapter_id: value.chapter_id, practice_date: value.practice_date, attempted: value.attempted, correct: value.correct,
-    incorrect: value.incorrect, source: value.source, time_minutes: value.time_minutes, notes: value.notes,
+    incorrect: value.incorrect, skipped: value.skipped, source: value.source, time_minutes: value.time_minutes, notes: value.notes,
     created_at: createdAt ?? existing?.created_at ?? now, updated_at: now
   }
   await upsert('practice_sessions', record)
@@ -177,6 +178,7 @@ function ChapterPracticeRow({ chapter, agg, weakThreshold, onLog }: { chapter: C
       <span><b><Pct value={agg.accuracy} digits={0} /></b> accuracy</span>
       <span>recent <b><Pct value={agg.recentAccuracy} digits={0} /></b>{trend !== null && trend !== 0 && <em className={trend > 0 ? 'jee-up' : 'jee-down'}>{trend > 0 ? '▲' : '▼'} {Math.abs(Math.round(trend))}</em>}</span>
       <span><b>{agg.incorrect}</b> incorrect</span>
+      {agg.skipped > 0 && <span><b>{agg.skipped}</b> skipped</span>}
     </div>
     <Meter value={agg.accuracy} label={`${chapter.name} practice accuracy`} tone={weak ? 'orange' : 'green'} />
     <p className="jee-muted jee-small">{agg.sessions} block{agg.sessions === 1 ? '' : 's'}{agg.timeMinutes ? ` · ${minutesLabel(agg.timeMinutes)}` : ''}{agg.attempted < PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL ? ` · needs ${PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL} questions before it flags weakness` : ''}</p>
@@ -196,6 +198,7 @@ function PracticeDialog({ data, initialChapterId = '', existing, onClose, onSave
     attempted: existing ? String(existing.attempted) : '',
     correct: existing ? String(existing.correct) : '',
     incorrect: existing ? String(existing.incorrect) : '',
+    skipped: existing ? String(existing.skipped ?? 0) : '',
     source: existing?.source ?? 'DPP',
     minutes: existing?.time_minutes != null ? String(existing.time_minutes) : '',
     notes: existing?.notes ?? ''
@@ -227,13 +230,14 @@ function PracticeDialog({ data, initialChapterId = '', existing, onClose, onSave
         <SubjectSelect value={subject} onChange={value => { setSubject(value as Subject | 'all'); set('chapterId', '') }} allowAll label="Subject filter" />
         <Field label="Date" error={errors.date} required><input type="date" max={today} value={form.date} onChange={event => set('date', event.target.value)} /></Field>
       </div>
-      <div className="jee-field-wide"><ChapterSelect chapters={data.chapters} value={form.chapterId} onChange={value => set('chapterId', value)} subject={subject} label="Chapter" /></div>
+      <div className="jee-field-wide"><ChapterSelect chapters={data.chapters} value={form.chapterId} onChange={value => set('chapterId', value)} subject={subject} label="Chapter" formatLabel={chapterWithSubject} /></div>
       {errors.chapterId && <p className="field-error" role="alert">{errors.chapterId}</p>}
       <div className="form-grid three">
-        <Field label="Attempted" error={errors.attempted} required><input inputMode="numeric" value={form.attempted} onChange={event => set('attempted', event.target.value)} placeholder="120" /></Field>
+        <Field label="Attempted" hint="Excludes skipped" error={errors.attempted} required><input inputMode="numeric" value={form.attempted} onChange={event => set('attempted', event.target.value)} placeholder="120" /></Field>
         <Field label="Correct" error={errors.correct} required><input inputMode="numeric" value={form.correct} onChange={event => set('correct', event.target.value)} placeholder="92" /></Field>
         <Field label="Incorrect" hint="Attempted − correct"><input inputMode="numeric" value={derivedIncorrect} readOnly aria-readonly="true" tabIndex={-1} placeholder="—" className="jee-derived-input" /></Field>
       </div>
+      <Field label="Skipped (optional)" hint="Not attempted. Recorded separately; never counted as incorrect." error={errors.skipped}><input inputMode="numeric" value={form.skipped ?? ''} onChange={event => set('skipped', event.target.value)} placeholder="0" /></Field>
       <div className="form-grid two">
         <Field label="Source"><select value={form.source} onChange={event => set('source', event.target.value)}>{PRACTICE_SOURCES.map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
         <Field label="Time spent (min, optional)" error={errors.minutes}><input inputMode="numeric" value={form.minutes} onChange={event => set('minutes', event.target.value)} placeholder="45" /></Field>

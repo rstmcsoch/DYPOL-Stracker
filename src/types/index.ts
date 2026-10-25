@@ -53,6 +53,8 @@ export interface PracticeSession extends BaseRecord {
   attempted: number
   correct: number
   incorrect: number
+  /** Questions skipped (not attempted). Separate from attempted/correct/incorrect; older rows may omit it (treated as 0). */
+  skipped?: number
   source: PracticeSource
   time_minutes: number | null
   notes: string

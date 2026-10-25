@@ -11,6 +11,7 @@ import { createId } from '../lib/id'
 import { MAX_MARKS_OBTAINED, MAX_NEGATIVE_MARKS, MAX_TOTAL_MARKS, POSTGRES_INTEGER_MAX, nullableNumberInput, subjectScoreInputSchema, testFormSchema } from '../lib/test-validation'
 import type { Subject, TestRecord, TestType, TestSubjectScore, TestChapterLink } from '../types'
 import { useCurrentExam, useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
+import { FULL_MOCK_SCOPE_HINT, keepEnteredScores } from '../lib/test-form'
 import { defaultTotalFor, fullMockDefaults, markingSchemeFor, scoreSubjectBase, type JeeFullPattern } from '../lib/exams/marking'
 
 type SortKey = 'date' | 'score' | 'title'
@@ -126,8 +127,10 @@ export default function TestsPage() {
     })
     const errors: TestFieldErrors = parsed.success ? {} : displayFieldErrors(parsed.error.issues)
 
-    const selectedChapter = values.chapter_id ? data.chapters.find(item => item.id === values.chapter_id) : null
-    if (values.chapter_id && (!selectedChapter || (values.subject && selectedChapter.subject !== values.subject))) {
+    // A Full Mock spans every subject: single-subject and chapter fields never apply to it.
+    const isFullMock = values.test_type === 'Full Mock'
+    const selectedChapter = !isFullMock && values.chapter_id ? data.chapters.find(item => item.id === values.chapter_id) : null
+    if (!isFullMock && values.chapter_id && (!selectedChapter || (values.subject && selectedChapter.subject !== values.subject))) {
       errors.chapter_id = 'Choose a chapter that belongs to the selected subject.'
     }
 
@@ -178,7 +181,7 @@ export default function TestsPage() {
 
     const test: TestRecord = {
       id: testId, title: parsed.data.title, test_date: parsed.data.test_date, test_type: parsed.data.test_type,
-      subject: values.subject || selectedChapter?.subject || null, chapter_id: values.chapter_id || null,
+      subject: isFullMock ? null : values.subject || selectedChapter?.subject || null, chapter_id: isFullMock ? null : values.chapter_id || null,
       marks_obtained: completeMock ? mockMarks : retainLegacyMockScore ? existingTest?.marks_obtained ?? null : parsed.data.marks_obtained,
       total_marks: completeMock ? mockTotal : retainLegacyMockScore ? existingTest?.total_marks ?? null : parsed.data.total_marks,
       correct: parsed.data.correct, wrong: parsed.data.wrong, skipped: parsed.data.skipped, total_questions: parsed.data.total_questions ?? null,
@@ -327,7 +330,7 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
   }
   const changeTestType = (type: TestType) => {
     setValues(prev => type === 'Full Mock'
-      ? { ...prev, test_type: type, mockScores: fullMockDefaults(schemeValue, mockSubjects, prev.jeePattern) }
+      ? { ...prev, test_type: type, mockScores: keepEnteredScores(fullMockDefaults(schemeValue, mockSubjects, prev.jeePattern), prev.mockScores) }
       : { ...prev, test_type: type, total: initial ? prev.total : defaultTotalFor(schemeValue, type, prev.subject) })
     setErrors(current => { const next = { ...current }; delete next._form; return next })
   }
@@ -346,6 +349,7 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
     })
     setErrors(current => { const next = { ...current }; delete next._form; return next })
   }
+  const fullMock = values.test_type === 'Full Mock'
   const chapterOptions = data.chapters.filter(chapter => !values.subject || chapter.subject === values.subject)
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -365,12 +369,12 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
     <form className="form-stack" noValidate onSubmit={handleSubmit}>
       {errors._form && <div className="form-error" role="alert">{errors._form}</div>}
       <div className="form-grid two"><Field label="Test title" required error={errors.title} hint={values.title.length >= 120 ? `${values.title.length}/160 characters — long titles are trimmed with an ellipsis in lists` : undefined}><input autoFocus required maxLength={160} value={values.title} onChange={event => patch('title', event.target.value)} placeholder="e.g. Electrostatics weekly test" /></Field><Field label="Date" required error={errors.test_date}><input type="date" required value={values.test_date} onChange={event => patch('test_date', event.target.value)} /></Field></div>
-      <div className="form-grid two"><Field label="Test type"><select value={values.test_type} onChange={event => changeTestType(event.target.value as TestType)}>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field><Field label="Subject"><select value={values.subject} onChange={event => changeSubject(event.target.value as Subject | '')}><option value="">— choose subject —</option>{formSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field></div>
-      {presetChapter && <div className="preset-chapter-note" role="status"><BookOpen size={15} aria-hidden="true" /><span>Chapter preselected from Weak areas: <strong>{presetChapter.name}</strong><SubjectBadge subject={presetChapter.subject} /></span></div>}
-      <Field label="Chapter (optional)" error={errors.chapter_id}><select value={values.chapter_id} onChange={event => patch('chapter_id', event.target.value)}><option value="">— choose chapter —</option>{chapterOptions.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field>
+      <div className="form-grid two"><Field label="Test type"><select value={values.test_type} onChange={event => changeTestType(event.target.value as TestType)}>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field>{!fullMock && <Field label="Subject"><select value={values.subject} onChange={event => changeSubject(event.target.value as Subject | '')}><option value="">— choose subject —</option>{formSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field>}</div>
+      {presetChapter && !fullMock && <div className="preset-chapter-note" role="status"><BookOpen size={15} aria-hidden="true" /><span>Chapter preselected from Weak areas: <strong>{presetChapter.name}</strong><SubjectBadge subject={presetChapter.subject} /></span></div>}
+      {!fullMock && <Field label="Chapter (optional)" error={errors.chapter_id}><select value={values.chapter_id} onChange={event => patch('chapter_id', event.target.value)}><option value="">— choose chapter —</option>{chapterOptions.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field>}
       {isJee && values.test_type === 'Full Mock' && <Field label="JEE paper pattern"><select value={values.jeePattern} onChange={event => changeJeePattern(event.target.value as JeeFullPattern)} aria-label="JEE paper pattern"><option value="main">JEE Main — 300 total</option><option value="advanced-paper-1">JEE Advanced — Paper 1 only (180)</option><option value="advanced-both">JEE Advanced — Both papers (360 combined)</option></select></Field>}
       {schemeValue && values.test_type === 'Full Mock' && <p className="field-hint">Marking defaults: {schemeValue.source}. Totals are pre-filled and can be edited.{schemeValue.notes ? ` ${schemeValue.notes}` : ''}</p>}
-      {values.test_type === 'Full Mock' ? <div className="mock-score-section"><div><span className="field-label">Subject scores <small>(enter each result that you have)</small></span><span className="field-hint">The overall result sums every subject. Each subject score is checked against its own total; leave unknown scores blank.</span></div><div className="mock-score-grid">{Object.entries(values.mockScores).map(([subject, part]) => {
+      {values.test_type === 'Full Mock' ? <div className="mock-score-section"><div><span className="field-label">Subject scores <small>(enter each result that you have)</small></span><span className="field-hint mock-scope-hint">{FULL_MOCK_SCOPE_HINT}</span><span className="field-hint">The overall result sums every subject. Each subject score is checked against its own total; leave unknown scores blank.</span></div><div className="mock-score-grid">{Object.entries(values.mockScores).map(([subject, part]) => {
         const marksError = errors[`${subject}.marks`]
         const totalError = errors[`${subject}.total`]
         const marksErrorId = `mock-${subject.toLowerCase()}-marks-error`

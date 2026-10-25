@@ -10,6 +10,12 @@
 .jee-down { color: var(--red); font-style: normal; margin-left: 4px; font-size: max(.8125rem, calc(11px * var(--body-scale))); }
 .jee-link { display: inline-flex; align-items: center; gap: 3px; min-height: 36px; padding: 4px 6px; border: 0; background: transparent; color: var(--accent); font:600 13px var(--font-body); cursor: pointer; }
 .jee-link:hover { text-decoration: underline; }
+.jee-backlog-due-links { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; }
+.jee-snooze-quick { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 4px 10px; border: 1px solid var(--line, currentColor); border-radius: 999px; background: transparent; color: inherit; font: 600 12px var(--font-body); cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.jee-snooze-quick:hover { color: var(--accent); }
+.jee-snooze-quick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.jee-snooze-quick:disabled { opacity: .55; cursor: progress; }
+@media (max-width: 520px) { .jee-snooze-quick .jee-snooze-text { display: none; } .jee-snooze-quick { padding: 4px 8px; } }
 .jee-tag { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border-radius: 999px; background: var(--paper-muted); color: var(--ink-soft); font-size: max(.8125rem, calc(11px * var(--body-scale))); white-space: nowrap; }
 .jee-note { margin: 6px 0 0; color: var(--ink-soft); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

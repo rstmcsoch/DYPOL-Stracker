@@ -18,8 +18,15 @@ export function ChipFilter<T extends string>({ label, value, options, onChange }
   </div>
 }
 
-export function ChapterSelect({ chapters, value, onChange, subject, label = 'Chapter', allowNone = false, noneLabel = 'All chapters' }: {
+/** Option label that names the subject too, e.g. “Maths · Quadratic Equations”. */
+export function chapterWithSubject(chapter: Pick<Chapter, 'name' | 'subject'>): string {
+  return `${chapter.subject} · ${chapter.name}`
+}
+
+export function ChapterSelect({ chapters, value, onChange, subject, label = 'Chapter', allowNone = false, noneLabel = 'All chapters', formatLabel }: {
   chapters: Chapter[]; value: string; onChange: (value: string) => void; subject?: Subject | 'all' | ''; label?: string; allowNone?: boolean; noneLabel?: string
+  /** Optional option-label formatter; defaults to the bare chapter name (grouped by subject). */
+  formatLabel?: (chapter: Chapter) => string
 }) {
   const examList = useExamSubjects()
   const visible = chapters.filter(chapter => !subject || subject === 'all' || chapter.subject === subject)
@@ -31,7 +38,7 @@ export function ChapterSelect({ chapters, value, onChange, subject, label = 'Cha
       {groupSubjects.map(item => {
         const group = visible.filter(chapter => chapter.subject === item)
         if (!group.length) return null
-        return <optgroup key={item} label={item}>{group.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</optgroup>
+        return <optgroup key={item} label={item}>{group.map(chapter => <option key={chapter.id} value={chapter.id}>{formatLabel ? formatLabel(chapter) : chapter.name}</option>)}</optgroup>
       })}
     </select>
   </label>

@@ -8,7 +8,7 @@ import { indiaToday } from '../../lib/date'
 import { aggregatePractice, pyqCompletion, syllabusProgress } from '../../lib/jee/progress'
 import { currentExamMode, effectiveTrack, isJeeSettings, trackLabels, trackReadiness } from '../../lib/jee/exam'
 import { PRIMARY_ACTIVITIES, studyMinutesByActivity, weekRange } from '../../lib/jee/study-time'
-import { computeReminders, isAwake } from '../../lib/jee/reminders'
+import { backlogDueCounts, computeReminders } from '../../lib/jee/reminders'
 import type { ActivityMinutes } from '../../lib/jee/study-time'
 
 /**
@@ -26,7 +26,7 @@ export function HomeSnapshot() {
   const practice = useMemo(() => aggregatePractice(data.practiceSessions), [data.practiceSessions])
   const pyqMain = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Main', data.settings), [data.pyqRecords, data.settings])
   const pyqAdv = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Advanced', data.settings), [data.pyqRecords, data.settings])
-  const backlogDue = data.backlogItems.filter(item => isAwake(item, today) && item.due_on !== null && item.due_on <= today).length
+  const backlog = useMemo(() => backlogDueCounts(data.backlogItems, today), [data.backlogItems, today])
   const mode = currentExamMode(data, today)
   const activeTrack = effectiveTrack(data.settings)
   const track = trackReadiness(data, activeTrack, today)
@@ -58,7 +58,10 @@ export function HomeSnapshot() {
         {jee && <div><strong><Pct value={pyqMain.percent} /></strong><span>JEE Main PYQs</span></div>}
         {jee && <div><strong><Pct value={pyqAdv.percent} /></strong><span>Advanced PYQs</span></div>}
       </div>
-      <button type="button" className="jee-link" onClick={() => navigate('/backlog')}>Backlog due: <strong>{backlogDue}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
+      <div className="jee-backlog-due-links">
+        <button type="button" className="jee-link" onClick={() => navigate('/backlog')}>Backlog due now: <strong>{backlog.dueNow}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
+        <button type="button" className="jee-link" onClick={() => navigate('/backlog')}>Due tomorrow: <strong>{backlog.dueTomorrow}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
+      </div>
     </NotebookCard>
 
     <NotebookCard className="jee-snap-card jee-snap-exam">

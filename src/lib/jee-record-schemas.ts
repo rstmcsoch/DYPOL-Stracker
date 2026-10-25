@@ -23,6 +23,7 @@ export const practiceSessionSchema = z.object({
   chapter_id: uuid,
   practice_date: dateValue,
   attempted: count, correct: count, incorrect: count,
+  skipped: count.optional(),
   source: z.enum(PRACTICE_SOURCES),
   time_minutes: z.number().finite().int().min(0).max(1440).nullable(),
   notes: z.string().max(5000)

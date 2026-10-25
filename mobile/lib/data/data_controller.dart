@@ -430,6 +430,10 @@ class DataController extends StateNotifier<DataState> {
     await _run(
       () async {
         await _repository.upsertRow('tests', test.toMap());
+        // A Full Mock has no single chapter: drop any chapter link left from an earlier type.
+        if (test.testType == 'Full Mock') {
+          await _repository.deleteWhere('test_chapter_links', 'test_id', test.id, _userId);
+        }
         if (subjectScores != null) {
           if (subjectScores.isEmpty) {
             await _repository.deleteWhere('test_subject_scores', 'test_id', test.id, _userId);
@@ -448,7 +452,8 @@ class DataController extends StateNotifier<DataState> {
               ? scores.where((TestSubjectScore row) => row.testId != test.id).toList()
               : <TestSubjectScore>[
                   for (final TestSubjectScore row in scores)
-                    if (!subjectScores.any((TestSubjectScore next) => next.subject == row.subject))
+                    if (row.testId != test.id ||
+                        !subjectScores.any((TestSubjectScore next) => next.subject == row.subject))
                       row,
                   ...subjectScores,
                 ];
@@ -456,6 +461,11 @@ class DataController extends StateNotifier<DataState> {
         _apply(state.data.copyWith(
           tests: _put(state.data.tests, test, (TestRecord row) => row.id),
           testSubjectScores: scores,
+          testChapterLinks: test.testType == 'Full Mock'
+              ? state.data.testChapterLinks
+                  .where((TestChapterLink row) => row.testId != test.id)
+                  .toList()
+              : state.data.testChapterLinks,
         ));
       },
     );

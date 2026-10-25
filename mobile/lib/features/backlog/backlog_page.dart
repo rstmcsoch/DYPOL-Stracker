@@ -166,7 +166,8 @@ class _BacklogTile extends ConsumerWidget {
                 ),
               ),
             const SizedBox(height: 4),
-            Row(
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
                 if (!item.isDone)
                   TextButton(
@@ -177,14 +178,21 @@ class _BacklogTile extends ConsumerWidget {
                     ),
                     child: const Text('Clear'),
                   ),
+                if (!item.isDone && item.snoozedUntil != addDays(today, 1))
+                  TextButton.icon(
+                    onPressed: () => _snooze(context, ref, item, addDays(today, 1)),
+                    icon: const Icon(Icons.snooze, size: 16),
+                    label: const Text('Snooze until tomorrow'),
+                  ),
                 if (!item.isDone && item.status != 'snoozed')
                   TextButton(
-                    onPressed: () => _save(
-                      context,
-                      ref,
-                      item.copyWithStatus('snoozed', snoozedUntil: addDays(today, 3)),
-                    ),
+                    onPressed: () => _snooze(context, ref, item, addDays(today, 3)),
                     child: const Text('Snooze 3d'),
+                  ),
+                if (!item.isDone && item.status != 'snoozed')
+                  TextButton(
+                    onPressed: () => _snooze(context, ref, item, addDays(today, 7)),
+                    child: const Text('Snooze 7d'),
                   ),
                 if (item.status == 'snoozed' || item.isDone)
                   TextButton(
@@ -214,6 +222,18 @@ class _BacklogTile extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// One snooze write per item at a time; rapid repeat taps are ignored until it settles.
+  static final Set<String> _snoozing = <String>{};
+
+  Future<void> _snooze(BuildContext context, WidgetRef ref, BacklogItem item, String until) async {
+    if (!_snoozing.add(item.id)) return;
+    try {
+      await _save(context, ref, item.copyWithStatus('snoozed', snoozedUntil: until));
+    } finally {
+      _snoozing.remove(item.id);
+    }
   }
 
   Future<void> _save(BuildContext context, WidgetRef ref, BacklogItem next) async {
@@ -290,18 +310,36 @@ Future<void> openBacklogEditor(
             ],
           ),
           AppSelect<String?>(
-            label: 'Subject (optional)',
+            label: 'Subject',
             value: subject,
-            items: <String?>[null, ...data.subjects],
-            labelFor: (String? value) => value ?? 'No subject',
-            onChanged: (String? value) => setSheetState(() => subject = value),
+            items: <String?>[null, ...<String>{...data.subjects, if (subject != null) subject!}],
+            labelFor: (String? value) => value ?? 'Choose subject (optional)',
+            // A subject change drops a linked chapter only when it belongs to another subject.
+            onChanged: (String? value) => setSheetState(() {
+              subject = value;
+              final Chapter? linked = data.chapter(chapterId);
+              if (linked != null && value != null && linked.subject != value) chapterId = null;
+            }),
           ),
           AppSelect<String?>(
             label: 'Chapter (optional)',
             value: chapterId,
-            items: <String?>[null, ...data.chapters.map((Chapter chapter) => chapter.id)],
-            labelFor: (String? value) => value == null ? 'Not linked' : data.chapterName(value),
-            onChanged: (String? value) => setSheetState(() => chapterId = value),
+            items: <String?>[
+              null,
+              ...data.chapters
+                  .where((Chapter chapter) => subject == null || chapter.subject == subject || chapter.id == chapterId)
+                  .map((Chapter chapter) => chapter.id),
+            ],
+            labelFor: (String? value) {
+              final Chapter? chapter = data.chapter(value);
+              return chapter == null ? 'Not linked' : '${chapter.subject} · ${chapter.name}';
+            },
+            // A linked chapter brings its real subject, so the pair can never disagree.
+            onChanged: (String? value) => setSheetState(() {
+              chapterId = value;
+              final Chapter? linked = data.chapter(value);
+              if (linked != null) subject = linked.subject;
+            }),
           ),
           AppDateField(
             label: 'Due by (optional)',

@@ -19,6 +19,7 @@ const practiceSessionSchema = z.object({
   attempted: nonNegativePostgresInteger.max(100000),
   correct: nonNegativePostgresInteger.max(100000),
   incorrect: nonNegativePostgresInteger.max(100000),
+  skipped: nonNegativePostgresInteger.max(100000).optional(),
   source: z.enum(PRACTICE_SOURCES),
   time_minutes: z.number().finite().int().min(0).max(1440).nullable().optional()
 }).refine(value => value.correct + value.incorrect <= value.attempted, {
