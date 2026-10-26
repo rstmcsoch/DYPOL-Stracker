@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { inferCapabilities, runtimeHealth, type ProviderConfigRow, type AIProviderId } from './registry.js'
 import { decryptCredential, redactPotentialSecrets } from './secrets.js'
-import { completeWithProvider, providerCallFromConfig, safeProviderError, type AgentMessage } from './provider-adapters.js'
+import { completeWithProvider, providerCallFromConfig, safeProviderError, type AgentMessage, type ModelTool } from './provider-adapters.js'
 import { ApiError } from './http.js'
 import { AIError, connectionStatusFor, cooldownSecondsFor, type AIErrorCode } from './ai-errors.js'
 import { logAIEvent } from './diagnostics.js'
@@ -36,17 +36,20 @@ export interface AgentRunResult {
   action?: ActionPreview
 }
 
-const TOOL_ITERATION_LIMIT = 4
-const TOOL_CALL_LIMIT = 8
+const TOOL_ITERATION_LIMIT = 8
+/** Hard ceiling across the whole task. A single broad question may fan out many reads. */
+const TOOL_CALL_LIMIT = 24
+/** Execute at most this many tools per model turn so the next answer stays fast. */
+const TOOLS_PER_ROUND = 6
 /** Attempts after the first: covers every owner-ordered Stracker AI model plus the student's own. */
 const FALLBACK_LIMIT = 12
-/** Per-attempt cap while another model is still waiting, so a hung model cannot eat the whole budget. */
+/** First-token cap while another model is still waiting. Not used once this model has replied. */
 const CHAIN_STEP_TIMEOUT_MS = 20_000
 // Preview/thinking models can take well over 20 s to first token under load; the overall task
 // budget (below Vercel's 60 s maxDuration) is the real limit.
 const MODEL_TIMEOUT_MS = 45_000
 const TOTAL_BUDGET_MS = 53_000
-const MAX_CONTEXT_CHARS = 26_000
+const MAX_CONTEXT_CHARS = 48_000
 
 const SYSTEM_PROMPT = `You are Stracker AI, an assistant for an exam-preparation study notebook. Be warm, concise, and practical. Help with the student's own exam and subjects (stated below when known); do not assume JEE or Physics/Chemistry/Maths unless that is their exam.
 
@@ -118,9 +121,9 @@ export function modelTier(modelId: string): ModelTier {
   return 'standard'
 }
 const TIER_LIMITS: Record<ModelTier, { history: number; rounds: number; general: number; data: number }> = {
-  fast: { history: 8, rounds: 3, general: 600, data: 900 },
-  standard: { history: 16, rounds: 5, general: 900, data: 1400 },
-  rich: { history: 20, rounds: 6, general: 1500, data: 2400 }
+  fast: { history: 12, rounds: 4, general: 700, data: 1200 },
+  standard: { history: 24, rounds: 6, general: 1000, data: 1800 },
+  rich: { history: 32, rounds: 7, general: 1600, data: 2600 }
 }
 
 function dropLeadingNonUser(messages: AgentMessage[]): AgentMessage[] {
@@ -130,6 +133,58 @@ function dropLeadingNonUser(messages: AgentMessage[]): AgentMessage[] {
 
 export function requiresTools(message: string): boolean {
   return STRACKER_INTENT.test(message) || /\b(my|mine|me)\b/i.test(message)
+}
+
+const OVERVIEW_TOOLS = [
+  'get_dashboard_summary', 'get_test_history', 'get_subject_performance', 'get_chapter_performance',
+  'get_weak_areas', 'get_mistake_summary', 'get_study_time_summary', 'get_revision_due', 'get_daily_tasks', 'get_settings'
+]
+const TOOL_GROUPS: Array<{ test: RegExp; tools: string[] }> = [
+  { test: /\b(mistake|silly mistake|error log)\b/i, tools: ['find_chapters', 'get_mistake_summary', 'create_mistake', 'update_mistake', 'delete_mistake'] },
+  { test: /\b(test|mock|score|marks|pyq|percentage|average)\b/i, tools: ['find_chapters', 'get_settings', 'get_test_history', 'get_test_details', 'get_subject_performance', 'get_dashboard_summary', 'create_test', 'update_test', 'update_subject_score', 'delete_test'] },
+  { test: /\b(task|planner|to-?do|today)\b/i, tools: ['get_daily_tasks', 'create_task', 'update_task', 'complete_task', 'delete_task', 'find_chapters'] },
+  { test: /\brevis/i, tools: ['get_revision_due', 'mark_revision_complete', 'update_revision_schedule', 'find_chapters'] },
+  { test: /\b(chapter|syllabus|weak)\b/i, tools: ['find_chapters', 'get_chapter_performance', 'get_weak_areas', 'get_subject_performance', 'get_dashboard_summary'] },
+  { test: /\b(setting|exam date|target score|weekly goal)\b/i, tools: ['get_settings', 'update_settings', 'create_weekly_goal', 'update_weekly_goal', 'complete_weekly_goal'] },
+  { test: /\b(analytic|progress|performance|dashboard|guidance|guide|plan|recommend|strategy|about me|know about)\b/i, tools: OVERVIEW_TOOLS }
+]
+const WRITE_TOOL = /^(create|update|delete|complete|mark)_/
+const WRITE_INTENT = /\b(add|create|delete|remove|update|record|mark|complete|change|set|log|save)\b/i
+
+/**
+ * Send only the tools this question can use. The full catalog is large enough to slow every
+ * provider call and to make models fan out into the tool-call ceiling before they answer.
+ */
+export function toolsForMessage(message: string, catalog: ModelTool[] = MODEL_TOOLS): ModelTool[] {
+  const names = new Set<string>()
+  let matched = false
+  for (const group of TOOL_GROUPS) {
+    if (!group.test.test(message)) continue
+    matched = true
+    for (const name of group.tools) names.add(name)
+  }
+  if (!matched) for (const name of OVERVIEW_TOOLS) names.add(name)
+  const wantsWrite = WRITE_INTENT.test(message)
+  const byName = new Map(catalog.map(tool => [tool.name, tool]))
+  const selected: ModelTool[] = []
+  for (const name of names) {
+    const tool = byName.get(name)
+    if (!tool) continue
+    if (!wantsWrite && WRITE_TOOL.test(name)) continue
+    selected.push(tool)
+    if (selected.length >= 12) break
+  }
+  if (selected.length) return selected
+  return OVERVIEW_TOOLS.slice(0, 3).flatMap(name => {
+    const tool = byName.get(name)
+    return tool ? [tool] : []
+  })
+}
+
+/** Hung first token may fall through quickly. A model that already replied keeps the long timeout. */
+export function providerStepTimeoutMs(modelHasProgress: boolean, moreCandidatesWaiting: boolean, remainingMs: number, modelTimeout = MODEL_TIMEOUT_MS, chainTimeout = CHAIN_STEP_TIMEOUT_MS): number {
+  const cap = modelHasProgress || !moreCandidatesWaiting ? modelTimeout : chainTimeout
+  return Math.max(1_000, Math.min(cap, remainingMs))
 }
 
 export function candidateScore(row: ProviderConfigRow, requiresReasoning: boolean, preference: AIPreference = 'own'): number {
@@ -241,7 +296,7 @@ function jsonToolContent(value: unknown): string {
   let content: string
   try { content = JSON.stringify(value) } catch { content = '{"error":"Tool result could not be formatted."}' }
   content = redactPotentialSecrets(content)
-  if (content.length > 12_000) return `${content.slice(0, 11_950)}[truncated]}`
+  if (content.length > 6_000) return JSON.stringify({ truncated: true, preview: content.slice(0, 5_600) })
   return content
 }
 
@@ -258,13 +313,15 @@ function deriveCapabilities(row: ProviderConfigRow) {
   return inferCapabilities(row.provider_id,row.model_id,row.protocol,row.capabilities)
 }
 
-function selectedSystem(pageContext: string | null, taskKind: string, canUseTools: boolean, examLine = '', toolsWithheld = false): string {
+function selectedSystem(pageContext: string | null, taskKind: string, canUseTools: boolean, examLine = '', toolsWithheld = false, answerFromResults = false): string {
   const context = pageContext ? `\nCurrent Stracker section: ${pageContext}. This is only a navigation hint; read relevant information through the listed tools.` : ''
   const task = `\nCurrent task category: ${taskKind}.`
-  const tools = toolsWithheld
+  const tools = answerFromResults
+    ? '\nTool results are already in the conversation. Answer the student now in plain language and do not call more tools.'
+    : toolsWithheld
     ? '\nThis looks like general study help, so no Stracker data tools are attached to this message. Do not claim to know the student’s saved data; if they want it, invite them to ask about their tests, chapters, mistakes or tasks.'
     : canUseTools
-    ? '\nUse the provided read tools when answering about saved Stracker data. When a user asks for an app change, call the correct write tool only after collecting required details; wait for the app confirmation.'
+    ? '\nUse at most four of the provided tools, then answer. For a broad progress or analytics question, call get_dashboard_summary first instead of every read tool, and do not repeat a tool you already called. When a user asks for an app change, call the correct write tool only after collecting required details; wait for the app confirmation.'
     : '\nNo Stracker data tools are enabled for this model. Do not claim to know the user’s saved data or perform an app action. For a personal Stracker question, explain that a tool-capable tested provider must be enabled in AI Assistant settings.'
   return `${SYSTEM_PROMPT}${examLine}${context}${task}${tools}`
 }
@@ -344,9 +401,9 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
   if (fallbackFrom) input.emit('fallback',{ from:providerName(fallbackFrom), to:providerName(chosen), reason:'The preferred model is unavailable or cannot handle this request.' })
   const availableCandidates = candidates.filter(row => row.id !== chosen.id)
   const agentMessages: AgentMessage[] = input.priorMessages
-    .slice(-20)
-    .map(message => ({ role:message.role, content:redactPotentialSecrets(message.content).slice(0, 5000) }))
-  agentMessages.push({ role:'user',content:redactPotentialSecrets(input.message).slice(0, 5000) })
+    .slice(-32)
+    .map(message => ({ role:message.role, content:redactPotentialSecrets(message.content).slice(0, 8_000) }))
+  agentMessages.push({ role:'user',content:redactPotentialSecrets(input.message).slice(0, 8_000) })
   let cumulativeChars = agentMessages.reduce((sum,message) => sum + message.content.length, 0)
   while (agentMessages.length > 2 && cumulativeChars > MAX_CONTEXT_CHARS) {
     const removed = agentMessages.shift()!
@@ -356,13 +413,25 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
   let rounds = 0
   // Set when a model rejects tool declarations; the same model then answers without tools.
   const toolsRejected = new Set<string>()
-  let finalText = ''
+  const progressed = new Set<string>()
+  const toolCache = new Map<string, string>()
+  let answeringWithoutTools = false
   let lastProvider: ProviderConfigRow | null = null
   const used = new Set<string>()
   // One Stracker AI (Default) daily slot per student input, taken before the first default
   // model is called (so errors still count) and never again for fallbacks within the same input.
   let strackerSlot = false
   let strackerBlocked = false
+
+  const finish = async (selected: ProviderConfigRow, text: string): Promise<AgentRunResult> => {
+    const safeText = redactPotentialSecrets(text).slice(0, 20_000)
+    await input.adminClient.from('ai_messages').insert({ user_id:input.userId,conversation_id:input.conversationId,role:'assistant',content:safeText,provider_id:pid(selected),model_id:mid(selected),status:'completed',metadata:{ fallback_from:fallbackFrom ? {provider_id:pid(fallbackFrom),model_id:mid(fallbackFrom)} : null } })
+    if (await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+    await input.adminClient.from('ai_tasks').update({ status:'completed',provider_id:pid(selected),model_id:mid(selected),progress:'Completed.',completed_at:new Date().toISOString(),metadata:{ fallback_from:fallbackFrom ? pid(fallbackFrom) : null } }).eq('user_id',input.userId).eq('id',input.taskId)
+    await input.adminClient.from('ai_conversations').update({ updated_at:new Date().toISOString() }).eq('user_id',input.userId).eq('id',input.conversationId)
+    input.emit('done',{ content:safeText,...humanTaskState(selected,fallbackFrom),taskId:input.taskId })
+    return { status:'completed',content:safeText,providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+  }
 
   while (rounds <= TOOL_ITERATION_LIMIT) {
     if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:lastProvider ? pid(lastProvider) : null,modelId:lastProvider ? mid(lastProvider) : null,fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
@@ -385,27 +454,30 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
     state.site = isSiteRow(selected)
     const caps = deriveCapabilities(selected)
     const limits = TIER_LIMITS[modelTier(selected.model_id)]
-    // Only send the (large) tool list when the question needs Stracker data: a plain "hello" is
-    // answered faster, and a model that rejected tools answers without them.
-    const offerTools = caps.supportsTools && intentTools && !toolsRejected.has(selected.id) && rounds < limits.rounds
+    const offeredTools = toolsForMessage(input.message)
+    // Only send tools when the question needs Stracker data. A plain "hello" is faster, and a
+    // model that rejected tools — or already used its tool rounds — answers from what it has.
+    const offerTools = !answeringWithoutTools && caps.supportsTools && intentTools && !toolsRejected.has(selected.id) && rounds < limits.rounds && offeredTools.length > 0
     const history = agentMessages.length > limits.history * 2 && !agentMessages.some(message => message.role === 'tool') ? dropLeadingNonUser(agentMessages.slice(-limits.history)) : agentMessages
     const onProviderDelta: string[] = []
     let completion
     const remainingMs = TOTAL_BUDGET_MS - (Date.now() - start)
     if (remainingMs <= 0) throw new ApiError(504,'task_timeout','This AI task reached its time limit. Retry with a shorter request.')
+    const moreWaiting = availableCandidates.some(row => !used.has(row.id))
     try {
       completion = await withProviderTimeout(input.signal, signal => completeWithProvider(providerCallFromConfig(
         selected,
         decryptCredential(selected.encrypted_api_key),
-        selectedSystem(input.pageContext,taskType(input.message),offerTools,examLine,!offerTools && caps.supportsTools && !intentTools),
+        selectedSystem(input.pageContext,taskType(input.message),offerTools,examLine,!offerTools && caps.supportsTools && !intentTools, answeringWithoutTools),
         history,
-        offerTools ? MODEL_TOOLS : [],
+        offerTools ? offeredTools : [],
         signal,
         text => { onProviderDelta.push(text); input.emit('delta',{ text }) },
         taskType(input.message) === 'general' ? limits.general : limits.data
-      )),Math.min(availableCandidates.some(row => !used.has(row.id)) ? CHAIN_STEP_TIMEOUT_MS : MODEL_TIMEOUT_MS,remainingMs))
+      )),providerStepTimeoutMs(progressed.has(selected.id), moreWaiting, remainingMs))
       await refreshProviderHealth(input.adminClient,input.userId,selected)
       lastProvider = selected
+      progressed.add(selected.id)
       rounds += 1
     } catch (error) {
       if (input.signal.aborted) return { status:'cancelled',content:'',providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
@@ -431,27 +503,41 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
       continue
     }
 
+    if (!completion) throw new AIError('INTERNAL_ERROR', { provider: selected.provider_id, model: mid(selected) })
     const toolCallsFromProvider = completion.toolCalls
     if (!toolCallsFromProvider.length) {
-      finalText = completion.text.trim()
+      const finalText = completion.text.trim()
       if (!finalText) throw new AIError('MALFORMED_RESPONSE',{ provider:selected.provider_id,model:mid(selected),providerMessage:'empty final answer' })
-      const safeText = redactPotentialSecrets(finalText).slice(0,20_000)
-      await input.adminClient.from('ai_messages').insert({ user_id:input.userId,conversation_id:input.conversationId,role:'assistant',content:safeText,provider_id:pid(selected),model_id:mid(selected),status:'completed',metadata:{ fallback_from:fallbackFrom ? {provider_id:pid(fallbackFrom),model_id:mid(fallbackFrom)} : null } })
-      if (await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
-      await input.adminClient.from('ai_tasks').update({ status:'completed',provider_id:pid(selected),model_id:mid(selected),progress:'Completed.',completed_at:new Date().toISOString(),metadata:{ fallback_from:fallbackFrom ? pid(fallbackFrom) : null } }).eq('user_id',input.userId).eq('id',input.taskId)
-      await input.adminClient.from('ai_conversations').update({ updated_at:new Date().toISOString() }).eq('user_id',input.userId).eq('id',input.conversationId)
-      input.emit('done',{ content:safeText,...humanTaskState(selected,fallbackFrom),taskId:input.taskId })
-      return { status:'completed',content:safeText,providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+      return finish(selected, finalText)
     }
 
-    if (rounds > TOOL_ITERATION_LIMIT || toolCalls + toolCallsFromProvider.length > TOOL_CALL_LIMIT) {
-      throw new ApiError(429,'tool_limit','Stracker AI reached its safe tool-call limit. Ask a smaller question to continue.')
+    const room = TOOL_CALL_LIMIT - toolCalls
+    // A fan-out or a long tool loop used to throw here and show the student nothing.
+    // Park the calls and spend the next turn writing the answer from data already retrieved.
+    if (answeringWithoutTools || rounds > TOOL_ITERATION_LIMIT) {
+      return finish(selected, completion.text.trim() || 'I looked through your Stracker notebook. Ask about recent tests, weak chapters, mistakes, or today’s plan if you want that piece on its own.')
     }
+    if (rounds >= TOOL_ITERATION_LIMIT || room <= 0) {
+      agentMessages.push({ role:'assistant',content:completion.text,toolCalls:toolCallsFromProvider,providerData:completion.providerData })
+      for (const call of toolCallsFromProvider) {
+        agentMessages.push({ role:'tool',toolCallId:call.id,toolName:call.name,content:jsonToolContent({ note:'Stop calling tools and answer now from the results already in this conversation.' }) })
+      }
+      answeringWithoutTools = true
+      continue
+    }
+    const accepted = toolCallsFromProvider.slice(0, Math.min(room, TOOLS_PER_ROUND))
+    const skipped = toolCallsFromProvider.slice(accepted.length)
     agentMessages.push({ role:'assistant',content:completion.text,toolCalls:toolCallsFromProvider,providerData:completion.providerData })
     let pendingAction: ActionPreview | undefined
-    for (const call of toolCallsFromProvider) {
-      toolCalls += 1
+    for (const call of accepted) {
       if (input.signal.aborted || await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+      const signature = `${call.name}:${(() => { try { return JSON.stringify(call.arguments ?? {}) } catch { return '' } })()}`
+      const cached = toolCache.get(signature)
+      if (cached) {
+        agentMessages.push({ role:'tool',toolCallId:call.id,toolName:call.name,content:cached })
+        continue
+      }
+      toolCalls += 1
       const progress = toolProgress(call.name)
       await input.adminClient.from('ai_tasks').update({ status:'tool_call',provider_id:pid(selected),model_id:mid(selected),progress }).eq('user_id',input.userId).eq('id',input.taskId)
       input.emit('status',{ status:'tool_call',progress,providerId:pid(selected),modelId:mid(selected) })
@@ -462,22 +548,28 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
           input.emit('confirmation',{ action:outcome.action,providerId:pid(selected),modelId:mid(selected) })
           break
         }
-        agentMessages.push({ role:'tool',toolCallId:call.id,toolName:call.name,content:jsonToolContent(outcome.result) })
+        const content = jsonToolContent(outcome.result)
+        toolCache.set(signature, content)
+        agentMessages.push({ role:'tool',toolCallId:call.id,toolName:call.name,content })
       } catch (error) {
         const message = error instanceof ApiError ? error.message : 'Stracker could not validate that tool request. No data was changed.'
-        agentMessages.push({ role:'tool',toolCallId:call.id,toolName:call.name,content:jsonToolContent({ error:message }) })
+        const content = jsonToolContent({ error:message })
+        toolCache.set(signature, content)
+        agentMessages.push({ role:'tool',toolCallId:call.id,toolName:call.name,content })
       }
+    }
+    for (const call of skipped) {
+      agentMessages.push({ role:'tool',toolCallId:call.id,toolName:call.name,content:jsonToolContent({ skipped:true, note:'Not run this turn. Answer from the tools that did run. Call this again only if it is essential.' }) })
     }
     lastProvider = selected
     if (pendingAction) {
       await input.adminClient.from('ai_tasks').update({ status:'waiting',progress:'Waiting for your confirmation.',provider_id:pid(selected),model_id:mid(selected) }).eq('user_id',input.userId).eq('id',input.taskId)
       return { status:'waiting',content:completion.text,providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null,action:pendingAction }
     }
-    rounds += 1
     await input.adminClient.from('ai_tasks').update({ status:'running',progress:'Reviewing your Stracker data…',provider_id:pid(selected),model_id:mid(selected) }).eq('user_id',input.userId).eq('id',input.taskId)
     input.emit('status',{ status:'running',progress:'Reviewing your Stracker data…',providerId:pid(selected),modelId:mid(selected) })
   }
-  throw new ApiError(429,'tool_limit','Stracker AI reached its safe tool-call limit. Ask a smaller question to continue.')
+  throw new ApiError(429,'tool_limit','Stracker AI could not finish that in one pass. Ask about one part, such as recent tests, weak chapters, or mistakes.')
 }
 
 export function labelProvider(id: string): string {
