@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { toGeminiSchema } from './provider-adapters.js'
 import { MODEL_TOOLS } from './tools.js'
 import { modelOptionsFromApi } from './registry.js'
-import { modelTier, requiresTools } from './agent.js'
+import { keepStreamedAnswer, modelTier, providerDeadlineMs, requiresTools } from './agent.js'
 
 const FORBIDDEN = ['additionalProperties', 'default', 'const', 'pattern', 'multipleOf', 'exclusiveMinimum', 'anyOf', '$schema']
 function keys(value: unknown, out = new Set<string>()): Set<string> {
@@ -55,5 +55,17 @@ describe('model tiers and tool intent', () => {
   it('only attaches tools when a message needs Stracker data', () => {
     expect(requiresTools('Hello')).toBe(false)
     expect(requiresTools('What is my average?')).toBe(true)
+    expect(requiresTools('What you know about me, tell my analytics')).toBe(true)
+    const essay = 'sometimes i think maybe change stream but they already paid fees and bought books so no. just need some real method that works for someone like me who gets low always and confidence is gone. '.repeat(12)
+    expect(essay.length).toBeGreaterThan(800)
+    expect(requiresTools(essay)).toBe(false)
+  })
+  it('lets a live stream finish and keeps a real partial answer', () => {
+    expect(providerDeadlineMs(false, false, true, 50_000, 100)).toBe(20_000)
+    expect(providerDeadlineMs(false, false, true, 50_000, 3_500)).toBe(28_000)
+    expect(providerDeadlineMs(true, false, true, 50_000, 3_500)).toBe(45_000)
+    expect(providerDeadlineMs(false, true, true, 50_000)).toBe(45_000)
+    expect(keepStreamedAnswer('Sure,')).toBe(false)
+    expect(keepStreamedAnswer('A real method starts with one chapter a day, reviewed the next morning, instead of restarting the whole syllabus every week.')).toBe(true)
   })
 })
