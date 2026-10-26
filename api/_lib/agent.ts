@@ -444,7 +444,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
         strackerBlocked = true
         const next = availableCandidates.find(row => !used.has(row.id) && !isSiteRow(row))
         if (!next) throw strackerLimitError(slot,state.hasOwn)
-        fallbackFrom ??== selected
+        fallbackFrom ??= selected
         chosen = next
         input.emit('fallback',{ from:providerName(selected),to:providerName(next),reason:slot === 'day' ? 'Today’s Stracker AI limit was reached.' : 'Stracker AI is busy right now.' })
         continue
@@ -494,7 +494,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
       // A shared Stracker AI model failing for any provider reason always hands over to the next model.
       if (!next || used.size > FALLBACK_LIMIT || !(failure.fallbackEligible || isSiteRow(selected))) throw failure
       if (onProviderDelta.length) input.emit('reset',{ reason:'The previous provider returned an incomplete response.' })
-      fallbackFrom ??== selected
+      fallbackFrom ??= selected
       chosen = next
       input.emit('fallback',{ from:providerName(selected),to:providerName(next),reason:fallbackReason(failure.aiCode) })
       logAIEvent('info','provider_fallback',{ taskId:input.taskId,userId:input.userId,from:selected.provider_id,fromModel:selected.model_id,to:next.provider_id,toModel:next.model_id,code:failure.aiCode })
