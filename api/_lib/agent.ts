@@ -68,6 +68,11 @@ The current Stracker date is ${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asi
 
 const STRACKER_INTENT = /\b(my|mine|stracker|test|tests|score|marks|average|performance|weak|strong|chapter|revision|revis(e|ion)|mistake|task|goal|study time|study hours|dashboard|analytics|exam date|add|create|delete|remove|update|record|mark|complete|change|set|plan|compare|trend|today's tasks)\b/i
 const COMPLEX_INTENT = /\b(analy[sz]|compare|trend|why|plan|recommend|strategy|historical|performance|weakest|repeated|drop(ping)?|month|week)\b/i
+/** Words that mean the student is talking about saved notebook data, not just their life. */
+const NOTEBOOK_TOPIC = /\b(analytics|dashboard|scores?|marks|average|weak|mistakes?|revisions?|revis(?:e|ion)|today'?s tasks|study time|study hours|performance|chapters?|syllabus|pyq|mocks?|tests?|tasks?|goals?|exam date|settings?|stracker)\b/i
+const WRITE_VERB = /\b(add|create|delete|remove|update|record|log|save|complete|mark)\b/i
+/** A streamed answer at least this long is kept if the provider clock runs out. Shorter stubs still fall through. */
+const KEEP_PARTIAL_CHARS = 80
 
 function fallbackReason(code: AIErrorCode): string {
   switch (code) {
@@ -107,8 +112,8 @@ function strackerLimitError(result: 'minute' | 'day' | 'unavailable', hasOwn = f
 }
 
 function taskType(message: string): 'action' | 'analytics' | 'general' {
-  if (/\b(add|create|delete|remove|update|record|mark|complete|change|set)\b/i.test(message)) return 'action'
-  if (COMPLEX_INTENT.test(message) || STRACKER_INTENT.test(message)) return 'analytics'
+  if (requiresTools(message) && WRITE_VERB.test(message) && NOTEBOOK_TOPIC.test(message)) return 'action'
+  if (requiresTools(message)) return 'analytics'
   return 'general'
 }
 
@@ -131,8 +136,21 @@ function dropLeadingNonUser(messages: AgentMessage[]): AgentMessage[] {
   return first > 0 ? messages.slice(first) : messages
 }
 
+/**
+ * Tools only when the student is asking about saved Stracker data or a notebook change.
+ * A long personal note ("change stream", "someone like me") is plain text. Attaching the
+ * tool catalog to that makes every provider call slow, which is why a ~4,000 character
+ * message was timing out and hopping models.
+ */
 export function requiresTools(message: string): boolean {
-  return STRACKER_INTENT.test(message) || /\b(my|mine|me)\b/i.test(message)
+  if (/\b(about me|know about me|my analytics|my progress|my tests|my scores|my marks|my mistakes|weak areas)\b/i.test(message)) return true
+  if (message.length > 800) return WRITE_VERB.test(message) && NOTEBOOK_TOPIC.test(message)
+  return NOTEBOOK_TOPIC.test(message) || STRACKER_INTENT.test(message) || /\b(my|mine)\b/i.test(message)
+}
+
+/** Keep a real answer that was already streaming. A short stub ("Sure,") still falls through. */
+export function keepStreamedAnswer(text: string): boolean {
+  return text.trim().length >= KEEP_PARTIAL_CHARS
 }
 
 const OVERVIEW_TOOLS = [
@@ -181,10 +199,23 @@ export function toolsForMessage(message: string, catalog: ModelTool[] = MODEL_TO
   })
 }
 
-/** Hung first token may fall through quickly. A model that already replied keeps the long timeout. */
+/** Hung first token may fall through quickly. Once any text is streaming, keep the long timeout. */
 export function providerStepTimeoutMs(modelHasProgress: boolean, moreCandidatesWaiting: boolean, remainingMs: number, modelTimeout = MODEL_TIMEOUT_MS, chainTimeout = CHAIN_STEP_TIMEOUT_MS): number {
   const cap = modelHasProgress || !moreCandidatesWaiting ? modelTimeout : chainTimeout
   return Math.max(1_000, Math.min(cap, remainingMs))
+}
+
+/** Silence uses the short cap. The first streamed token switches to the full model timeout. */
+export function providerDeadlineMs(hasStreamedText: boolean, modelHasProgress: boolean, moreCandidatesWaiting: boolean, remainingMs: number, messageLength = 0): number {
+  if (hasStreamedText || modelHasProgress) return providerStepTimeoutMs(true, moreCandidatesWaiting, remainingMs)
+  const silenceCap = messageLength >= 1_500 ? 28_000 : CHAIN_STEP_TIMEOUT_MS
+  return providerStepTimeoutMs(false, moreCandidatesWaiting, remainingMs, MODEL_TIMEOUT_MS, silenceCap)
+}
+
+function answerTokenLimit(message: string, kind: 'action' | 'analytics' | 'general', limits: { general: number; data: number }): number {
+  const base = kind === 'general' ? limits.general : limits.data
+  if (message.length < 800) return base
+  return Math.min(3_200, Math.max(base, kind === 'general' ? 2_200 : 2_600))
 }
 
 export function candidateScore(row: ProviderConfigRow, requiresReasoning: boolean, preference: AIPreference = 'own'): number {
@@ -326,21 +357,32 @@ function selectedSystem(pageContext: string | null, taskKind: string, canUseTool
   return `${SYSTEM_PROMPT}${examLine}${context}${task}${tools}`
 }
 
-async function withProviderTimeout<T>(parent: AbortSignal, run: (signal: AbortSignal) => Promise<T>,timeoutMs=MODEL_TIMEOUT_MS): Promise<T> {
+async function withProviderTimeout<T>(parent: AbortSignal, run: (signal: AbortSignal, noteActivity: () => void) => Promise<T>, timeoutMs = MODEL_TIMEOUT_MS, extendedTimeoutMs = timeoutMs): Promise<T> {
   const controller = new AbortController()
   let timedOut = false
-  const abort = () => controller.abort(parent.reason)
-  if (parent.aborted) abort()
-  else parent.addEventListener('abort',abort,{once:true})
-  const timer = setTimeout(() => { timedOut = true; controller.abort(new DOMException('AI provider request timed out','TimeoutError')) }, timeoutMs)
+  let extended = false
+  const started = Date.now()
+  const abortFromParent = () => controller.abort(parent.reason)
+  if (parent.aborted) abortFromParent()
+  else parent.addEventListener('abort', abortFromParent, { once: true })
+  const fire = () => { timedOut = true; controller.abort(new DOMException('AI provider request timed out', 'TimeoutError')) }
+  let timer = setTimeout(fire, timeoutMs)
+  const noteActivity = () => {
+    if (extended || extendedTimeoutMs <= timeoutMs) return
+    extended = true
+    clearTimeout(timer)
+    const left = extendedTimeoutMs - (Date.now() - started)
+    if (left <= 0) { fire(); return }
+    timer = setTimeout(fire, left)
+  }
   try {
-    return await run(controller.signal)
+    return await run(controller.signal, noteActivity)
   } catch (error) {
     if (timedOut && !parent.aborted) throw new AIError('TIMEOUT', { userMessage: 'The provider took too long to respond. Try again or use another configured provider.' })
     throw error
   } finally {
     clearTimeout(timer)
-    parent.removeEventListener('abort',abort)
+    parent.removeEventListener('abort', abortFromParent)
   }
 }
 
@@ -464,17 +506,19 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
     const remainingMs = TOTAL_BUDGET_MS - (Date.now() - start)
     if (remainingMs <= 0) throw new ApiError(504,'task_timeout','This AI task reached its time limit. Retry with a shorter request.')
     const moreWaiting = availableCandidates.some(row => !used.has(row.id))
+    const silentMs = providerDeadlineMs(false, progressed.has(selected.id), moreWaiting, remainingMs, input.message.length)
+    const fullMs = providerDeadlineMs(true, progressed.has(selected.id), moreWaiting, remainingMs, input.message.length)
     try {
-      completion = await withProviderTimeout(input.signal, signal => completeWithProvider(providerCallFromConfig(
+      completion = await withProviderTimeout(input.signal, (signal, noteActivity) => completeWithProvider(providerCallFromConfig(
         selected,
         decryptCredential(selected.encrypted_api_key),
         selectedSystem(input.pageContext,taskType(input.message),offerTools,examLine,!offerTools && caps.supportsTools && !intentTools, answeringWithoutTools),
         history,
         offerTools ? offeredTools : [],
         signal,
-        text => { onProviderDelta.push(text); input.emit('delta',{ text }) },
-        taskType(input.message) === 'general' ? limits.general : limits.data
-      )),providerStepTimeoutMs(progressed.has(selected.id), moreWaiting, remainingMs))
+        text => { onProviderDelta.push(text); noteActivity(); input.emit('delta',{ text }) },
+        answerTokenLimit(input.message, taskType(input.message), limits)
+      )), silentMs, fullMs)
       await refreshProviderHealth(input.adminClient,input.userId,selected)
       lastProvider = selected
       progressed.add(selected.id)
@@ -482,6 +526,11 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
     } catch (error) {
       if (input.signal.aborted) return { status:'cancelled',content:'',providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
       const failure = safeProviderError(error,{ provider:selected.provider_id,model:mid(selected) })
+      const streamed = onProviderDelta.join('').trim()
+      if (failure.aiCode === 'TIMEOUT' && keepStreamedAnswer(streamed)) {
+        logAIEvent('info','kept_partial_answer',{ taskId:input.taskId,userId:input.userId,provider:selected.provider_id,model:selected.model_id,chars:streamed.length })
+        return finish(selected, streamed)
+      }
       if (offerTools && (failure.aiCode === 'UNSUPPORTED_CAPABILITY' || failure.aiCode === 'REQUEST_INVALID') && !onProviderDelta.length) {
         // The model (or its schema dialect) rejects tool calling: answer once more without tools.
         toolsRejected.add(selected.id)
