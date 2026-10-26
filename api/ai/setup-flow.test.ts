@@ -97,7 +97,7 @@ describe('AI setup flow', () => {
     expect((await call(await testConnection(), 'POST', { configId: crypto.randomUUID() }, false)).status).toBe(401)
   })
 
-  it('save → test → enabled and preferred → listed without the key', async () => {
+  it('save \u2192 test \u2192 enabled and preferred \u2192 listed without the key', async () => {
     const saved = await call(await providers(), 'POST', { providerId: 'gemini', modelId: 'gemini-2.5-flash', apiKey: 'AIza-test-key-1234', displayName: '', region: 'international', capabilities: {} })
     expect(saved.status).toBe(200)
     const id = (saved.json.provider as Row).id as string
@@ -175,7 +175,7 @@ describe('AI request path', () => {
     await expect(runAssistant(runInput('hello'))).rejects.toMatchObject({ code: 'provider_disabled' })
   })
 
-  it('tells the model the student’s exam and subjects (non-JEE)', async () => {
+  it('tells the model the student\u2019s exam and subjects (non-JEE)', async () => {
     const { studentExamLine } = await import('../_lib/agent.js')
     db.app_settings = [{ user_id: USER, exam_id: 'neet-ug', exam_year: 2027 }]
     db.exam_catalog = [{ id: 'neet-ug', name: 'NEET UG', subjects: ['Physics', 'Chemistry', 'Biology'] }]
@@ -235,9 +235,22 @@ describe('chat reliability', () => {
     expect(result).toMatchObject({ status: 'completed', content: 'Hello!' })
     expect(bodies[0]).not.toContain('functionDeclarations')
   })
+
+  it('a long personal note is answered as plain text, without the tool catalog', async () => {
+    await connectedProvider()
+    const essay = 'sometimes i think maybe change stream but they already paid fees and bought books so no. just need some real method that works for someone like me who gets low always and confidence is gone. '.repeat(12)
+    const bodies: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => { bodies.push(String(init.body)); return sse('Start with one chapter a day and review it the next morning.') }))
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input(essay))
+    expect(result.status).toBe('completed')
+    expect(result.content).toContain('one chapter')
+    expect(bodies[0]).not.toContain('functionDeclarations')
+    expect(bodies[0]).toContain('2200')
+  })
 })
 
-const STRACKER_UNAVAILABLE_TEXT = 'Stracker AI’s default models are not responding right now. Add your own AI model in the Stracker AI window (Add your own model) or in Settings → AI Assistant to keep going.'
+const STRACKER_UNAVAILABLE_TEXT = 'Stracker AI\u2019s default models are not responding right now. Add your own AI model in the Stracker AI window (Add your own model) or in Settings \u2192 AI Assistant to keep going.'
 
 describe('Stracker AI (Default)', () => {
   const SITE_KEY = 'sk-site-secret-key-9876'
@@ -299,10 +312,10 @@ describe('Stracker AI (Default)', () => {
     expect(error).toMatchObject({ code: 'stracker_ai_unavailable' })
     expect((error as { message: string }).message).toBe(STRACKER_UNAVAILABLE_TEXT)
     expect((error as { message: string }).message).toMatch(/Stracker AI window/)
-    expect((error as { message: string }).message).toMatch(/Settings → AI Assistant/)
+    expect((error as { message: string }).message).toMatch(/Settings \u2192 AI Assistant/)
   })
 
-  it('falls back to the student’s own provider when the default fails', async () => {
+  it('falls back to the student\u2019s own provider when the default fails', async () => {
     db.site_ai_providers = [await siteRow()]
     db.ai_provider_configs = [await ownRow()]
     db.ai_user_preferences = [{ user_id: USER, preferred: 'stracker' }]
@@ -358,7 +371,7 @@ describe('Stracker AI (Default)', () => {
     for (const modelId of ['gemini-third', 'gemini-second', 'gemini-3.6-flash']) expect(stored).not.toContain(modelId)
   })
 
-  it('after every admin model fails, the student’s own model answers', async () => {
+  it('after every admin model fails, the student\u2019s own model answers', async () => {
     db.site_ai_providers = [await siteRow({ priority: 1 }), await siteRow({ priority: 2, is_default: false, display_name: 'Owner B' })]
     db.ai_provider_configs = [await ownRow()]
     let calls = 0
@@ -409,7 +422,7 @@ describe('Stracker AI (Default)', () => {
     expect(rpcCalls.filter(call => call.name === 'ai_take_daily_slot')).toHaveLength(0)
   })
 
-  it('when today’s default limit is used up, chat goes straight on with the student’s own model', async () => {
+  it('when today\u2019s default limit is used up, chat goes straight on with the student\u2019s own model', async () => {
     db.site_ai_providers = [await siteRow({ priority: 1 })]
     db.ai_provider_configs = [await ownRow()]
     dailyAllowed = false
@@ -453,7 +466,7 @@ describe('Stracker AI (Default)', () => {
     expect((await readSiteProviders(adminClient as never)).length).toBe(3)
   })
 
-  it('students cannot reorder the owner’s models', async () => {
+  it('students cannot reorder the owner\u2019s models', async () => {
     db.site_ai_providers = [await siteRow({ priority: 1 })]
     const res = await call(await providers(), 'PATCH', { id: db.site_ai_providers[0]!.id, action: 'move_up' })
     expect(res.status).toBe(400)
