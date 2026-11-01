@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { ArrowUp } from 'lucide-react'
 import { PublicBrand } from './PublicHeader'
 import { useSiteText } from '../../contexts/SiteContentContext'
+import { ContactLink } from './ContactLink'
 
 /**
  * Public footer. Every entry points at a route or an anchor that exists in this
@@ -10,6 +11,8 @@ import { useSiteText } from '../../contexts/SiteContentContext'
 export function PublicFooter() {
   const year = new Date().getFullYear()
   const t = useSiteText
+  // Shown only when the owner has published a contact address; none is built in.
+  const contactSet = useSiteText('public.footer.contact.href').trim() !== ''
   return <footer className="pub-footer">
     <div className="pub-footer-inner">
       <div className="pub-footer-brand">
@@ -38,6 +41,7 @@ export function PublicFooter() {
           <ul>
             <li><a href="#privacy">{t('public.footer.privacy.label')}</a></li>
             <li><a href="#why-stracker">{t('public.footer.study.label')}</a></li>
+            {contactSet && <li><ContactLink /></li>}
           </ul>
         </div>
         <div className="pub-footer-group">

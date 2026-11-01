@@ -210,3 +210,10 @@
 .not-found-mark { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; color: var(--accent); background: var(--accent-light); }
 .not-found-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
 .not-found-actions .button { text-decoration: none; }
+
+/* Export: how many records each download contains. */
+.export-record-count { display: block; margin-top: 8px; color: var(--ink-soft); font-size: max(.8125rem, calc(11px * var(--body-scale))); font-variant-numeric: tabular-nums; }
+.report-record-count { margin: 8px 0 0; }
+
+/* Optional Contact link in the notebook footer (only rendered when the owner set an address). */
+.app-footer .footer-contact { color: var(--ink-soft); text-decoration: underline; text-underline-offset: 3px; }

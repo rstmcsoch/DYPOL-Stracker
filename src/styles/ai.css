@@ -335,3 +335,7 @@ html[data-app-font] .ai-composer textarea, .app-shell .ai-composer textarea, htm
   font-size: calc(max(var(--type-input-size), calc(var(--type-input-size) * var(--body-scale))) * .8) !important; /* owner-shrunk-composer */
 }
 html[data-app-font] .ai-composer textarea::placeholder, .app-shell .ai-composer textarea::placeholder, .ai-composer textarea::placeholder { font-size: inherit !important; }
+
+/* Live progress: elapsed time in the progress strip and the step text beside the typing dots. */
+.ai-task-progress > .ai-task-elapsed { flex:none; color:var(--muted); font-variant-numeric:tabular-nums; }
+.ai-typing-indicator .ai-typing-progress { margin-left:6px; color:var(--muted); font-size: max(.8125rem, calc(10px * var(--body-scale))); }

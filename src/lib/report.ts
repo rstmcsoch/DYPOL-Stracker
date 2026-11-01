@@ -2,12 +2,13 @@ import { format, parseISO } from 'date-fns'
 import { Document, Footer, HeadingLevel, ImageRun, PageBreak, PageNumber, Paragraph, Packer, Table, TableCell, TableRow, TextRun, WidthType, BorderStyle, AlignmentType } from 'docx'
 import { jsPDF } from 'jspdf'
 import { getChapterPerformance, getMeanTestPercentage, getMistakeCounts, getNegativeMarkImpact, getOverallTestPercentage, getOverallTestScore, getSmartTip, getStudyStreak, getSubjectPerformance } from './analytics'
-import { indiaDate, indiaToday, prettyDate } from './date'
+import { indiaToday, prettyDate } from './date'
 import { makeStudyBars } from './study-aggregation'
 import { fmtDuration, fmtNumber } from './format'
 import type { AppData, TestRecord } from '../types'
 import { subjectsFor } from './exams/subjects'
 import { triggerDownload } from './backup'
+import { reportFileName, scopedReportData } from './export-counts'
 import { chosenExamTitle, isJeeSettings } from './jee/exam'
 
 export interface ReportSections {
@@ -21,19 +22,7 @@ export interface ReportSections {
 }
 export interface ReportOptions { from: string; to: string; sections: ReportSections; ownerName: string }
 
-function scopedData(data: AppData, from: string, to: string): AppData {
-  const between = (date: string) => (!from || date >= from) && (!to || date <= to)
-  const tests = data.tests.filter(test => between(test.test_date))
-  const testIds = new Set(tests.map(test => test.id))
-  const mistakeIds = new Set(data.mistakes.filter(mistake => between(indiaDate(mistake.created_at))).map(mistake => mistake.id))
-  const sessions = data.sessions.filter(session => between(indiaDate(session.started_at)))
-  return {
-    ...data, tests, testSubjectScores: data.testSubjectScores.filter(item => testIds.has(item.test_id)),
-    testChapterLinks: data.testChapterLinks.filter(item => testIds.has(item.test_id)),
-    mistakes: data.mistakes.filter(item => mistakeIds.has(item.id)), sessions,
-    revisions: data.revisions.filter(item => (item.completed_at && between(indiaDate(item.completed_at))) || between(item.due_on))
-  }
-}
+const scopedData = scopedReportData
 
 
 function overallTestPercent(test: TestRecord, data: AppData): number | null {
@@ -297,7 +286,7 @@ export async function createPdfReport(data: AppData, options: ReportOptions): Pr
     }
     pdfFooter(doc, 'STUDY NOTES')
   }
-  doc.save('stracker-study-report.pdf')
+  doc.save(reportFileName('pdf'))
 }
 
 const docParagraph = (text: string, options: { bold?: boolean; size?: number; color?: string; font?: string; heading?: (typeof HeadingLevel)[keyof typeof HeadingLevel]; alignment?: (typeof AlignmentType)[keyof typeof AlignmentType]; spacing?: number } = {}) => new Paragraph({
@@ -404,5 +393,5 @@ export async function createDocxReport(data: AppData, options: ReportOptions): P
     sections: [{ properties: { page: { margin: { top: 850, right: 800, bottom: 850, left: 800 } } }, footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Stracker by DYPOL LABS  ·  ', color: '77806D', size: 17 }), new TextRun({ children: [PageNumber.CURRENT], color: '77806D', size: 17 })] })] }) }, children: content }]
   })
   const blob = await Packer.toBlob(doc)
-  triggerDownload(blob, 'stracker-study-report.docx')
+  triggerDownload(blob, reportFileName('docx'))
 }
