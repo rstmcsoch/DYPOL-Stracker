@@ -77,7 +77,7 @@ describe('Planner QA round 2', () => {
     const dialog = screen.getByRole('dialog')
     const chapterSelect = within(dialog).getByLabelText(/^Chapter/) as HTMLSelectElement
     const groups = [...chapterSelect.querySelectorAll('optgroup')].map(group => [group.label, [...group.querySelectorAll('option')].map(option => option.textContent)])
-    expect(groups).toEqual([['Physics', ['Electrostatics']], ['Chemistry', ['Mole Concept']]])
+    expect(groups).toEqual([['Physics', ['Physics · Electrostatics']], ['Chemistry', ['Chemistry · Mole Concept']]])
   })
 })
 

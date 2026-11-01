@@ -177,3 +177,36 @@
 @media (prefers-reduced-motion: reduce) {
   .ai-launcher, .ai-launcher-label { transition: none; }
 }
+
+/* Home: reserve room under the last card for the stacked floating buttons (lightning + Ask Stracker),
+   so "One thing to notice" can always scroll clear of them. Uses the same --fab-* variables (which
+   already include the safe-area inset on phones), so it holds at every breakpoint. */
+.dashboard-page { padding-bottom: calc(var(--fab-bottom) + (2 * var(--fab-size)) + var(--fab-gap) + 16px); }
+
+/* Planner topic: live character counter. */
+.char-counter { display: block; margin-top: 4px; color: var(--muted); font-size: max(.8125rem, calc(11px * var(--body-scale))); font-variant-numeric: tabular-nums; }
+.char-counter.is-near { color: var(--orange); }
+.char-counter.is-full { color: var(--red); font-weight: 600; }
+
+/* Revisions: the real interval of each round (R1 · 1d, R2 · 7d, R3 · 30d). */
+.revision-interval { display: inline-flex; align-items: center; min-height: 20px; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-soft); background: var(--paper-soft); font-size: max(.8125rem, calc(11px * var(--body-scale))); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Syllabus deep link from Weak areas: highlight the target chapter. */
+.chapter-row.chapter-highlight { border-radius: 8px; outline: 2px solid var(--accent); outline-offset: 2px; background: var(--accent-light); scroll-margin-block: 96px; }
+
+/* Analytics trend legend: each entry toggles its line. */
+.chart-legend-note .legend-toggle { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 2px 8px; border: 1px solid transparent; border-radius: 999px; color: var(--ink-soft); background: transparent; cursor: pointer; font: inherit; }
+.chart-legend-note .legend-toggle:hover { border-color: var(--line); background: var(--paper-soft); }
+.chart-legend-note .legend-toggle.is-off { color: var(--muted); text-decoration: line-through; }
+.chart-legend-note .legend-toggle.is-off i { opacity: .35; }
+
+/* In-app 404. */
+.not-found-page { place-items: start center; }
+.not-found-public { display: grid; place-items: center; min-height: 100dvh; padding: 24px 16px; background: var(--paper); }
+.not-found-card { display: grid; justify-items: start; gap: 10px; width: min(100%, 560px); padding: 28px; }
+.not-found-card h1 { margin: 0; color: var(--ink); font-size: clamp(26px, 3vw, 34px); }
+.not-found-card p { margin: 0; color: var(--ink-soft); }
+.not-found-card code { overflow-wrap: anywhere; }
+.not-found-mark { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; color: var(--accent); background: var(--accent-light); }
+.not-found-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.not-found-actions .button { text-decoration: none; }

@@ -8,7 +8,7 @@ import { indiaToday } from '../lib/date'
 import type { StudyActivity, Subject } from '../types'
 import { STUDY_ACTIVITIES } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
-import { formatClock, isFocusMode, loggableMinutes } from '../lib/focus-timer'
+import { formatClock, formatStudiedDuration, isFocusMode, loggableMinutes } from '../lib/focus-timer'
 
 const MODES: { name: FocusMode; minutes: number; label: string; icon: React.ReactNode }[] = [
   { name: 'Pomodoro', minutes: 25, label: 'Focus', icon: <Focus size={15} /> },
@@ -193,10 +193,11 @@ function TaskLinkPicker({ tasks, linkedId, onClose, onChoose }: {
  */
 function EndBlockDialog({ seconds, onSave, onDiscard, onKeep, exiting }: { seconds: number; onSave: () => void; onDiscard: () => void; onKeep: () => void; exiting: boolean }) {
   const minutes = loggableMinutes(seconds)
-  const title = minutes >= 1 ? `Save ${minutes} min of study time?` : 'Less than a minute studied'
+  const studied = formatStudiedDuration(seconds)
+  const title = minutes >= 1 ? `Save ${studied} of study time?` : `Only ${studied} studied`
   return <Dialog title={title} onClose={onKeep} className="dialog-narrow focus-end-dialog">
     <div className="focus-end-body">
-      <p>{minutes >= 1 ? `You studied ${formatClock(seconds)} in this block. Save it to your study time, or discard it.` : 'Blocks under a minute are not recorded. You can discard it or keep studying.'}</p>
+      <p>{minutes >= 1 ? `You studied ${studied} in this block. ${Math.floor(seconds) % 60 === 0 ? 'Save it to your study time, or discard it.' : `Study time is logged in whole minutes, so saving adds ${minutes} min.`}` : 'Blocks under 30 seconds are not recorded. You can discard it or keep studying.'}</p>
       <div className="focus-end-actions">
         <Button variant="marker" onClick={onSave} disabled={minutes < 1}><Check size={15} /> {exiting ? 'Save & exit' : 'Save & end'}</Button>
         <Button variant="secondary" onClick={onDiscard}><X size={15} /> {exiting ? 'Discard & exit' : 'Discard & end'}</Button>

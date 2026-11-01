@@ -81,3 +81,11 @@ export function subjectColor(subject: string): string {
   for (const char of subject) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
   return PALETTE[hash % PALETTE.length] ?? PALETTE[0]!
 }
+
+/**
+ * Subjects for the mistake form: every subject of the student's exam (Biology, English…),
+ * then any other subject that already has chapters, so older records stay editable.
+ */
+export function mistakeSubjectOptions(examList: readonly string[], chapters: readonly { subject: string }[]): string[] {
+  return [...new Set([...examList, ...chapters.map(chapter => chapter.subject)])]
+}

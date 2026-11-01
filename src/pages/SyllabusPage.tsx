@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ArrowDown, ArrowUp, Check, ChevronDown, CircleDot, Edit3, Filter, GripVertical, Plus, Search, Trash2, X } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, EmptyState, Field, NotebookCard, OverflowMenu, PageHeader, ProgressBar, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
@@ -10,6 +11,7 @@ import type { Chapter, ChapterImportance, ChapterStatus, Priority, Subject } fro
 import { ChapterStageEditor } from '../components/jee/ChapterStageEditor'
 import { useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
 import { subjectColor, subjectSlug } from '../lib/exams/subjects'
+import { stableChapterOrder } from '../lib/syllabus-order'
 
 const STATUSES: ChapterStatus[] = ['Not Started', 'Studying', 'Done', 'Revised']
 const PRIORITIES: Priority[] = ['High', 'Medium', 'Low']
@@ -21,7 +23,11 @@ export default function SyllabusPage() {
   const examSubjectList = useExamSubjects()
   const { data, upsert, upsertMany, remove } = useData()
   const { notify } = useToast()
-  const performance = useMemo(() => getChapterPerformance(data), [data])
+  // Stable order: subject (exam order), then the student's own position, then name. A status
+  // change or save never moves a row into another subject's block.
+  const performance = useMemo(() => stableChapterOrder(getChapterPerformance(data), subjectList), [data, subjectList])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [highlightId, setHighlightId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [subjectFilter, setSubjectFilter] = useState<'all' | Subject>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | ChapterStatus>('all')
@@ -47,6 +53,25 @@ export default function SyllabusPage() {
   }, [dropTargetId])
 
   useEffect(() => () => { if (autoScrollRef.current !== null) cancelAnimationFrame(autoScrollRef.current) }, [])
+
+  // Deep link from Weak areas and elsewhere: /syllabus?chapter=<id> clears filters, scrolls to
+  // that chapter and highlights it. The param stays until the chapter has loaded.
+  useEffect(() => {
+    const chapterParam = searchParams.get('chapter')
+    if (!chapterParam) return
+    const target = data.chapters.find(chapter => chapter.id === chapterParam)
+    if (!target) return
+    setSearch(''); setSubjectFilter('all'); setStatusFilter('all'); setPriorityFilter('all'); setStrengthFilter('all'); setTestedFilter('all')
+    setHighlightId(target.id)
+    const params = new URLSearchParams(searchParams); params.delete('chapter'); setSearchParams(params, { replace: true })
+  }, [searchParams, setSearchParams, data.chapters])
+  useEffect(() => {
+    if (!highlightId) return
+    const row = document.getElementById(`chapter-row-${highlightId}`)
+    if (!row) return
+    row.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    row.focus({ preventScroll: true })
+  }, [highlightId])
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -247,6 +272,7 @@ export default function SyllabusPage() {
           return <ChapterRow
             key={item.chapter.id}
             item={item}
+            highlighted={highlightId === item.chapter.id}
             dragged={dragActiveId === item.chapter.id}
             dropTarget={dropTargetId === item.chapter.id}
             busy={busy === item.chapter.id}
@@ -272,15 +298,18 @@ export default function SyllabusPage() {
   </div>
 }
 
-function ChapterRow({ item, dragged, dropTarget, busy, canMoveUp, canMoveDown, onEdit, onDelete, onStatus, onMove, onDragBegin, onDragMove, onDragEnd, onDragCancel }: {
-  item: ReturnType<typeof getChapterPerformance>[number]; dragged: boolean; dropTarget: boolean; busy: boolean; canMoveUp: boolean; canMoveDown: boolean;
+function ChapterRow({ item, highlighted = false, dragged, dropTarget, busy, canMoveUp, canMoveDown, onEdit, onDelete, onStatus, onMove, onDragBegin, onDragMove, onDragEnd, onDragCancel }: {
+  item: ReturnType<typeof getChapterPerformance>[number]; highlighted?: boolean; dragged: boolean; dropTarget: boolean; busy: boolean; canMoveUp: boolean; canMoveDown: boolean;
   onEdit: () => void; onDelete: () => void; onStatus: (status: ChapterStatus) => void; onMove: (direction: -1 | 1) => void;
   onDragBegin: (event: React.PointerEvent) => void; onDragMove: (event: React.PointerEvent) => void; onDragEnd: (event: React.PointerEvent) => void; onDragCancel: () => void
 }) {
   const { chapter, classification, results, dropping, average } = item
   return <article
     data-chapter-row={chapter.id}
-    className={`chapter-row ${dragged ? 'chapter-dragging' : ''} ${dropTarget ? 'chapter-drop-target' : ''} subject-row-${chapter.subject.toLowerCase()}`}
+    id={`chapter-row-${chapter.id}`}
+    tabIndex={-1}
+    aria-current={highlighted ? 'true' : undefined}
+    className={`chapter-row ${dragged ? 'chapter-dragging' : ''} ${dropTarget ? 'chapter-drop-target' : ''} ${highlighted ? 'chapter-highlight' : ''} subject-row-${chapter.subject.toLowerCase()}`}
   >
     <div className="chapter-main">
       <span

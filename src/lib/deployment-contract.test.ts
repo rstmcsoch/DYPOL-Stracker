@@ -31,8 +31,11 @@ describe('production deployment freshness contract', () => {
     expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/)
     expect(csp).toContain('https://*.supabase.co')
     // SA-2610-02: known SPA routes rewrite to the shell; there is deliberately no catch-all,
-    // so unknown paths fall through to the platform's real 404 instead of index.html.
+    // so unknown paths fall through to the platform's real 404 instead of index.html. The 404's
+    // body is dist/404.html (a build-time copy of the shell) so the app renders its own
+    // "Page not found" view, while the HTTP status stays 404.
     expect(vercel.rewrites.some(rule => rule.source === '/(.*)')).toBe(false)
+    expect(viteConfig).toContain("fileName: '404.html'")
     const spaRules = vercel.rewrites.filter(rule => rule.destination === '/index.html')
     expect(spaRules.length).toBeGreaterThanOrEqual(20)
     expect(spaRules).toContainEqual({ source: '/login', destination: '/index.html' })

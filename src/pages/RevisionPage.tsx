@@ -5,6 +5,7 @@ import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { indiaDate, indiaToday, plusDays, prettyDate } from '../lib/date'
 import { completeRevision as completeRevisionAction } from '../lib/revision-actions'
+import { revisionIntervalDays, revisionIntervalLabel } from '../lib/revision-labels'
 import type { Revision } from '../types'
 
 export default function RevisionPage() {
@@ -55,7 +56,7 @@ function RevisionSection({ title, note, tone, icon, revisions, data, onComplete,
   const visible = limit ? revisions.slice(0, limit) : revisions
   return <section className={`revision-section revision-section-${tone}`}><div className="revision-section-head"><div className="revision-section-icon">{icon}</div><div><h2>{title}<span>{revisions.length}</span></h2>{note && <p>{note}</p>}</div></div>
     <NotebookCard className="revision-section-card">
-      {!visible.length ? <div className="revision-section-empty"><span aria-hidden="true">✳</span><p>{title === 'Due today' ? 'Nothing due today.' : title === 'Tomorrow' ? 'No revision due tomorrow.' : title === 'Overdue' ? 'You’re all caught up.' : 'No upcoming revisions scheduled.'}</p></div> : <div className="revision-list">{visible.map(revision => <div key={revision.id} className="revision-list-row"><RevisionRow revision={revision} data={data} overdue={tone === 'overdue'} /><div className="revision-row-buttons"><button className="revision-snooze" onClick={() => onSnooze(revision)} aria-label="Move revision to tomorrow" title="Move to tomorrow">+1d</button><Button size="sm" onClick={() => onComplete(revision)}><Check size={14} /> Revised</Button></div></div>)}</div>}
+      {!visible.length ? <div className="revision-section-empty"><span aria-hidden="true">✳</span><p>{title === 'Due today' ? 'Nothing due today.' : title === 'Tomorrow' ? 'No revision due tomorrow.' : title === 'Overdue' ? 'You’re all caught up.' : 'No upcoming revisions scheduled.'}</p></div> : <div className="revision-list">{visible.map(revision => <div key={revision.id} className="revision-list-row"><RevisionRow revision={revision} data={data} overdue={tone === 'overdue'} /><div className="revision-row-buttons"><button className="revision-snooze" onClick={() => onSnooze(revision)} aria-label={`Snooze R${revision.revision_number} by one day, to tomorrow`} title="Snooze: move this revision to tomorrow">Snooze +1d</button><Button size="sm" onClick={() => onComplete(revision)}><Check size={14} /> Revised</Button></div></div>)}</div>}
       {limit && revisions.length > limit && <p className="revision-more-note">And {revisions.length - limit} more scheduled.</p>}
     </NotebookCard>
   </section>
@@ -64,7 +65,8 @@ function RevisionSection({ title, note, tone, icon, revisions, data, onComplete,
 function RevisionRow({ revision, data, overdue = false, completed = false }: { revision: Revision; data: ReturnType<typeof useData>['data']; overdue?: boolean; completed?: boolean }) {
   const chapter = data.chapters.find(item => item.id === revision.chapter_id)
   if (!chapter) return null
+  const interval = revisionIntervalDays(revision.revision_number, data.settings.revision_gaps)
   return <div className={`revision-row-main ${overdue ? 'is-overdue' : ''} ${completed ? 'is-completed' : ''}`}>
-    <div className="revision-number-mark">{completed ? <Check size={16} /> : `R${revision.revision_number}`}</div><div className="revision-chapter-copy"><strong>{chapter.name}</strong><div><SubjectBadge subject={chapter.subject} /><span>{completed ? `Completed ${prettyDate(revision.completed_at ? indiaDate(revision.completed_at) : '')}` : `Due ${prettyDate(revision.due_on)}`}</span>{overdue && <StatusBadge tone="weak">Overdue</StatusBadge>}</div></div>
+    <div className="revision-number-mark">{completed ? <Check size={16} /> : `R${revision.revision_number}`}</div><div className="revision-chapter-copy"><strong>{chapter.name}</strong><div><SubjectBadge subject={chapter.subject} />{interval !== null && <span className="revision-interval" title={`Revision ${revision.revision_number}: the ${interval}-day step in your revision schedule`}>{revisionIntervalLabel(revision.revision_number, data.settings.revision_gaps)}</span>}<span>{completed ? `Completed ${prettyDate(revision.completed_at ? indiaDate(revision.completed_at) : '')}` : `Due ${prettyDate(revision.due_on)}`}</span>{overdue && <StatusBadge tone="weak">Overdue</StatusBadge>}</div></div>
   </div>
 }
