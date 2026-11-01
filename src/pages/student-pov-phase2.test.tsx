@@ -46,9 +46,10 @@ describe('item 15 + 16: Planner task form', () => {
     fireEvent.click(screen.getByRole('button', { name: /Add task/ }))
     const dialog = screen.getByRole('dialog')
     const chapterSelect = within(dialog).getByLabelText(/^Chapter/) as HTMLSelectElement
-    const groups = [...chapterSelect.querySelectorAll('optgroup')].map(group => group.label)
-    expect(groups).toEqual(expect.arrayContaining(['Physics', 'Chemistry', 'Maths']))
-    expect(chapterSelect.querySelector('optgroup[label="Chemistry"] option')?.textContent).toBe('Chemistry · Mole Concept')
+    const headings = [...chapterSelect.querySelectorAll('option:disabled')].map(option => option.textContent)
+    expect(headings).toEqual(expect.arrayContaining(['── Physics ──', '── Chemistry ──', '── Maths ──']))
+    const texts = [...chapterSelect.querySelectorAll('option')].map(option => option.textContent)
+    expect(texts[texts.indexOf('── Chemistry ──') + 1]).toBe('Chemistry · Mole Concept')
     const counter = within(dialog).getByTestId('topic-counter')
     expect(counter.textContent).toBe('0/120 characters')
     expect(counter.getAttribute('aria-live')).toBe('polite')

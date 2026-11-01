@@ -91,7 +91,7 @@ function field(
     ...(options.options ? { options: options.options } : {}),
     ...(type === 'order' ? { itemCount: options.itemCount, minItems: options.minItems ?? 1, itemLabelKey: options.itemLabelKey } : {}),
     ...(type === 'media' ? { mediaKind: options.mediaKind ?? 'image', ...(options.optional ? { optional: true } : {}) } : {}),
-    ...(type === 'link' && options.optional ? { optional: true } : {})
+    ...((type === 'link' || type === 'multiline') && options.optional ? { optional: true } : {})
   })
 }
 
@@ -439,6 +439,24 @@ field('public', 'Footer', 'Links', 'public.footer.contact.label', 'Link label: C
 field('public', 'Footer', 'Links', 'public.footer.contact.href', 'Contact address (optional)', 'link', '', {
   optional: true, maxLength: 200,
   help: 'Leave empty to hide the Contact link. Use mailto: followed by one email address, or a full https:// contact page.'
+})
+// Information pages (/about, /terms, /privacy). No page text is built in: About and Terms stay
+// hidden (link and page) until the owner writes them here. Privacy falls back to the homepage
+// Privacy section above, which is existing owner-editable copy.
+const INFO_PAGE_MAX = 12000
+field('public', 'Footer', 'Information pages', 'public.footer.about.label', 'Link label: About', 'text', 'About', { maxLength: 40 })
+field('public', 'Footer', 'Information pages', 'public.footer.about.body', 'About page text (optional)', 'multiline', '', {
+  optional: true, maxLength: INFO_PAGE_MAX,
+  help: 'Shown at /about. Leave empty to hide the About link and page. A blank line starts a new paragraph.'
+})
+field('public', 'Footer', 'Information pages', 'public.footer.terms.label', 'Link label: Terms', 'text', 'Terms', { maxLength: 40 })
+field('public', 'Footer', 'Information pages', 'public.footer.terms.body', 'Terms page text (optional)', 'multiline', '', {
+  optional: true, maxLength: INFO_PAGE_MAX,
+  help: 'Shown at /terms. Leave empty to hide the Terms link and page. A blank line starts a new paragraph.'
+})
+field('public', 'Footer', 'Information pages', 'public.footer.privacy.body', 'Privacy page text (optional)', 'multiline', '', {
+  optional: true, maxLength: INFO_PAGE_MAX,
+  help: 'Shown at /privacy. Leave empty to show the homepage Privacy section there instead. A blank line starts a new paragraph.'
 })
 
 /* ------------------------------------------------------------- user panel */

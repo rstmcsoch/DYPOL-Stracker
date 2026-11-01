@@ -58,15 +58,20 @@ export async function fetchPublishedOverrides(): Promise<SiteOverrides | null> {
 }
 
 const SiteContentContext = createContext<SiteValues>(SITE_CONTENT_DEFAULTS)
+/** True once the published copy has been read (or could not be), so pages can tell "not set" from "not loaded yet". */
+const SiteContentSettledContext = createContext<boolean>(true)
 
 export function SiteContentProvider({ children, overrides }: { children: ReactNode; overrides?: SiteOverrides }) {
   const [published, setPublished] = useState<SiteOverrides>(() => (overrides ? {} : readCache()))
+  const [settled, setSettled] = useState(Boolean(overrides))
 
   useEffect(() => {
     if (overrides) return undefined
     let cancelled = false
     void fetchPublishedOverrides().then(result => {
-      if (cancelled || result === null) return
+      if (cancelled) return
+      setSettled(true)
+      if (result === null) return
       setPublished(result)
       writeCache(result)
     })
@@ -74,7 +79,7 @@ export function SiteContentProvider({ children, overrides }: { children: ReactNo
   }, [overrides])
 
   const values = useMemo(() => resolveSiteValues(overrides ?? published), [overrides, published])
-  return <SiteContentContext.Provider value={values}>{children}</SiteContentContext.Provider>
+  return <SiteContentSettledContext.Provider value={settled || Boolean(overrides)}><SiteContentContext.Provider value={values}>{children}</SiteContentContext.Provider></SiteContentSettledContext.Provider>
 }
 
 /** Display text for a registered key. Unknown keys render as an empty string, never as the key. */
@@ -85,4 +90,9 @@ export function useSiteText(key: string): string {
 
 export function useSiteValues(): SiteValues {
   return useContext(SiteContentContext)
+}
+
+/** Whether the published copy has finished loading (always true for previews with explicit overrides). */
+export function useSiteContentSettled(): boolean {
+  return useContext(SiteContentSettledContext)
 }

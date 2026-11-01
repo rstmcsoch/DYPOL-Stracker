@@ -3,6 +3,7 @@ import { ArrowUp } from 'lucide-react'
 import { PublicBrand } from './PublicHeader'
 import { useSiteText } from '../../contexts/SiteContentContext'
 import { ContactLink } from './ContactLink'
+import { InfoLinks } from './InfoLinks'
 
 /**
  * Public footer. Every entry points at a route or an anchor that exists in this
@@ -39,7 +40,7 @@ export function PublicFooter() {
         <div className="pub-footer-group">
           <h2>{t('public.footer.group_information.title')}</h2>
           <ul>
-            <li><a href="#privacy">{t('public.footer.privacy.label')}</a></li>
+            <InfoLinks homepageAnchor wrap={(node, kind) => <li key={kind}>{node}</li>} />
             <li><a href="#why-stracker">{t('public.footer.study.label')}</a></li>
             {contactSet && <li><ContactLink /></li>}
           </ul>
