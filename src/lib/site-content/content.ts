@@ -41,7 +41,13 @@ function hasControlCharacter(value: string): boolean {
   return false
 }
 
-function validateLink(value: string): string | null {
+/** One plain email address after mailto: (no extra recipients, subject, body or other parameters). */
+const MAILTO_LINK = /^mailto:[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/
+
+function validateLink(value: string, allowMailto = false): string | null {
+  if (allowMailto && /^mailto:/i.test(value)) {
+    return MAILTO_LINK.test(value) ? null : 'Use mailto: followed by one email address, with nothing after it.'
+  }
   if (value.startsWith('/')) {
     return (INTERNAL_ROUTE_TARGETS as readonly string[]).includes(value) ? null : 'Choose one of the public pages listed in the menu.'
   }
@@ -83,12 +89,13 @@ export function validateFieldValue(definition: FieldDefinition, raw: unknown): F
   // Normalise line endings and trim the outer whitespace; inner line breaks survive for multiline.
   let value = raw.replace(/\r\n?/g, '\n').trim()
   if (!multiline) value = value.replace(/\s*\n\s*/g, ' ')
-  if (value.length === 0) return { ok: false, message: 'This field cannot be empty.' }
+  // Optional links may be cleared, which hides them.
+  if (value.length === 0) return definition.type === 'link' && definition.optional ? { ok: true, value } : { ok: false, message: 'This field cannot be empty.' }
   if (value.length > definition.maxLength) return { ok: false, message: `Use ${definition.maxLength} characters or fewer (currently ${value.length}).` }
   if (hasControlCharacter(value)) return { ok: false, message: 'Remove hidden control characters.' }
   if (MARKUP.test(value)) return { ok: false, message: 'Angle brackets (< >) are not allowed. Write plain text.' }
   if (definition.type === 'link') {
-    const problem = validateLink(value)
+    const problem = validateLink(value, definition.optional === true)
     if (problem) return { ok: false, message: problem }
   }
   return { ok: true, value }

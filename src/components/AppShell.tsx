@@ -1,4 +1,4 @@
-import { plannerTaskHref, shouldIgnoreShortcut } from '../lib/shortcuts'
+import { plannerTaskHref, shouldIgnoreShortcut, wrapIndex } from '../lib/shortcuts'
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -24,6 +24,7 @@ import { useExamSubjects } from '../lib/exams/useExamSubjects'
 import { chosenExamTitle, isJeeSettings } from '../lib/jee/exam'
 import { OnboardingDialog } from './OnboardingDialog'
 import { needsOnboarding, shouldShowOnboarding } from '../lib/defaults'
+import { ContactLink } from './public/ContactLink'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
 interface NavigationGroup { caption: string; items: NavigationItem[] }
@@ -200,7 +201,7 @@ export function AppFrame() {
         <span>{syncError}</span><button onClick={() => void refresh()}>{syncState === 'offline' ? 'Retry when online' : 'Retry sync'}</button>
       </div>}
       <div className="page-wrap"><Suspense fallback={<PageLoading />}><Outlet /></Suspense></div>
-      <footer className="app-footer"><span className="footer-spark" aria-hidden="true">✳</span><span className="footer-credit">Stracker <i>by</i> DYPOL LABS</span><span className="footer-tagline">A little more prepared, every day.</span></footer>
+      <footer className="app-footer"><span className="footer-spark" aria-hidden="true">✳</span><span className="footer-credit">Stracker <i>by</i> DYPOL LABS</span><span className="footer-tagline">A little more prepared, every day.</span><ContactLink className="footer-contact" addressOnly /></footer>
     </main>
 
     <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -321,7 +322,7 @@ function QuickTaskDialog({ data, onClose }: { data: AppData; onClose: () => void
   </Dialog>
 }
 
-function GlobalSearch({ data, onClose }: { data: AppData; onClose: () => void }) {
+export function GlobalSearch({ data, onClose }: { data: AppData; onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
   const navigate = useNavigate()
@@ -336,14 +337,17 @@ function GlobalSearch({ data, onClose }: { data: AppData; onClose: () => void })
     return found.slice(0, 12)
   }, [data, trimmed])
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'ArrowDown') { event.preventDefault(); setSelected(index => Math.min(index + 1, results.length - 1)) }
-    if (event.key === 'ArrowUp') { event.preventDefault(); setSelected(index => Math.max(index - 1, 0)) }
+    // Wraps at both ends (Down on the last result returns to the first, Up on the first goes to the last).
+    if (event.key === 'ArrowDown') { event.preventDefault(); setSelected(index => wrapIndex(index, 1, results.length)) }
+    if (event.key === 'ArrowUp') { event.preventDefault(); setSelected(index => wrapIndex(index, -1, results.length)) }
     if (event.key === 'Enter' && results[selected]) { navigate(results[selected].to); onClose() }
   }
+  // Keep the highlighted result visible when wrapping past the end of a scrolled list.
+  useEffect(() => { document.getElementById(`search-result-${selected}`)?.scrollIntoView?.({ block: 'nearest' }) }, [selected])
   return <Dialog title="Search your notebook" subtitle="Find chapters, tests, mistakes and tasks." onClose={onClose} className="search-dialog">
     <div className="global-search-input"><Search size={19} /><input autoFocus value={query} onChange={event => { setQuery(event.target.value); setSelected(0) }} onKeyDown={onKeyDown} placeholder="Try ‘Current Electricity’…" aria-label="Search notebook" /><kbd>ESC</kbd></div>
     <div className="search-results">
-      {!trimmed ? <div className="search-hint"><Sparkles size={17} /> Your notes stay private to your account.</div> : results.length ? results.map((result, index) => <button className={`search-result ${selected === index ? 'selected' : ''}`} key={`${result.type}-${result.label}-${index}`} onClick={() => { navigate(result.to); onClose() }}>
+      {!trimmed ? <div className="search-hint"><Sparkles size={17} /> Your notes stay private to your account.</div> : results.length ? results.map((result, index) => <button id={`search-result-${index}`} aria-current={selected === index ? 'true' : undefined} className={`search-result ${selected === index ? 'selected' : ''}`} key={`${result.type}-${result.label}-${index}`} onClick={() => { navigate(result.to); onClose() }}>
         <span className="search-result-icon">{result.type === 'Chapter' ? <BookOpen size={16} /> : result.type === 'Test' ? <ListChecks size={16} /> : result.type === 'Mistake' ? <NotebookPen size={16} /> : <Check size={16} />}</span>
         <span className="search-result-text"><strong>{result.label}</strong><small>{result.context}</small></span><span className="search-result-type">{result.type}</span>
       </button>) : <div className="search-empty">No matches yet. Try another word.</div>}

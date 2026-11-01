@@ -9,6 +9,7 @@ import { Button, Dialog, IconButton, StatusBadge } from '../ui'
 import { AIProviderMark } from './AIProviderMark'
 import { STRACKER_AI_NAME, StrackerUnavailableNotice } from './StrackerAIRow'
 import { CopyButton } from './markdown/CopyButton'
+import { AITaskElapsed } from './AITaskElapsed'
 
 // The Markdown/GFM renderer is its own chunk (KaTeX is a further chunk loaded only for math),
 // so neither the public site nor the notebook's first load grows.
@@ -98,7 +99,7 @@ function ActionConfirmationCard({ action,messageId }: { action:AIActionConfirmat
 }
 
 function AssistantMessage({ message }: { message:AIMessage }) {
-  const { providers,retryLast } = useAI()
+  const { providers,retryLast,activeTask } = useAI()
   const ownAdded = hasOwnModel(providers)
   const navigate = useNavigate()
   const resultRoute = typeof message.result?.route === 'string' && isSafeAppPath(message.result.route) ? message.result.route : null
@@ -109,7 +110,7 @@ function AssistantMessage({ message }: { message:AIMessage }) {
     <div className="ai-message-avatar"><AIProviderMark provider={providerId || 'custom'} small /></div>
     <div className="ai-message-main">
       {message.content && <MessageBody content={message.content} streaming={message.status === 'running'} />}
-      {message.status === 'running' && !message.content && <div className="ai-typing-indicator" aria-label="Assistant is responding"><i /><i /><i /></div>}
+      {message.status === 'running' && !message.content && <div className="ai-typing-indicator" aria-label="Assistant is responding"><i /><i /><i />{activeTask?.progress && <span className="ai-typing-progress" aria-hidden="true">{activeTask.progress}</span>}</div>}
       {message.confirmation && <ActionConfirmationCard action={message.confirmation} messageId={message.id} />}
       {message.fallbackFrom && message.status === 'completed' && <div className="ai-fallback-note"><ArrowUpRight size={13} /><span>Switched from {fallbackName} to {providerName}; this answer came from the displayed model.</span></div>}
       {message.result && message.status === 'completed' && <div className="ai-result-proof"><span><Check size={14} /> Saved and verified in Stracker</span>{resultRoute && <button onClick={() => navigate(resultRoute)}>View in Stracker <ArrowUpRight size={13} /></button>}</div>}
@@ -152,7 +153,7 @@ function ConversationMessages({ compact=false }: { compact?:boolean }) {
         </>}
         {configured && <div className="ai-suggestion-grid">{SUGGESTIONS.map((suggestion,index) => <button key={suggestion} onClick={() => prompt(suggestion)} disabled={isBusy}><span>{index === 0 ? '01' : index === 1 ? '02' : index === 2 ? '03' : '04'}</span>{suggestion}<ArrowUpRight size={14} /></button>)}</div>}
       </div> : <div className="ai-messages-list">{messages.map(message => message.role === 'user' ? <UserMessage key={message.id} message={message} /> : <AssistantMessage key={message.id} message={message} />)}</div>}
-      {activeTask && isBusy && <div className="ai-task-progress" role="status"><LoaderCircle size={14} className="spin" /><span>{activeTask.progress}</span>{activeTask.providerId && <small>{activeProviderLabel(activeTask.providerId,providers)}{activeTask.modelId ? ` · ${activeTask.modelId}` : ''}</small>}</div>}
+      {activeTask && isBusy && <div className="ai-task-progress" role="status"><LoaderCircle size={14} className="spin" /><span>{activeTask.progress}</span><AITaskElapsed startedAt={activeTask.startedAt} />{activeTask.providerId && <small>{activeProviderLabel(activeTask.providerId,providers)}{activeTask.modelId ? ` · ${activeTask.modelId}` : ''}</small>}</div>}
       <div ref={bottomRef} />
     </div>
     {!autoScroll && <button className="ai-scroll-bottom" onClick={() => { bottomRef.current?.scrollIntoView({behavior:'smooth',block:'end'}); setAutoScroll(true) }}><ArrowDown size={14} /> Latest</button>}

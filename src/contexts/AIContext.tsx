@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { useProviderManager, type AIPreference, type AIProviderDraft, type DiscoverResult, type ProviderManager, type StrackerAIStatus } from '../components/ai/useProviderManager'
 import { useData } from './DataContext'
+import { progressAfterDelta, RESTART_PROGRESS } from '../lib/ai/task-progress'
 
 export interface AIConversationSummary { id:string; title:string; created_at:string; updated_at:string }
 export interface AIRecentTask { id:string; conversation_id:string; provider_id:string|null; model_id:string|null; task_type:string; status:AITaskState['status']; progress:string; started_at:string; completed_at:string|null }
@@ -386,8 +387,17 @@ export function AIProvider({ children }: { children:ReactNode }) {
       } else if (name === 'status') {
         setActiveTask(current => current ? { ...current,status:(payload.status as AITaskState['status']) ?? current.status,progress:typeof payload.progress === 'string' ? payload.progress : current.progress,providerId:typeof payload.providerId === 'string' ? payload.providerId : current.providerId,modelId:typeof payload.modelId === 'string' ? payload.modelId : current.modelId } : current)
       } else if (name === 'delta') {
-        if (typeof payload.text === 'string') appendDelta(payload.text)
+        if (typeof payload.text === 'string') {
+          appendDelta(payload.text)
+          // Live progress: once answer text is streaming, say so instead of staying on "Thinking…".
+          setActiveTask(current => {
+            if (!current) return current
+            const progress = progressAfterDelta(current.status, current.progress)
+            return progress === current.progress ? current : { ...current, progress }
+          })
+        }
       } else if (name === 'reset') {
+        setActiveTask(current => current ? { ...current, progress:RESTART_PROGRESS } : current)
         pendingDelta = ''; responseText = ''
         if (flushTimer) clearTimeout(flushTimer)
         flushTimer = null

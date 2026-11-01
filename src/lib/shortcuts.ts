@@ -43,3 +43,12 @@ export function plannerTaskHref(task: { id: string; task_date: string }): string
 export function anyDialogOpen(doc: Document | null = typeof document === 'undefined' ? null : document): boolean {
   return Boolean(doc?.querySelector(OVERLAY_SELECTOR))
 }
+
+/**
+ * Arrow-key movement in a result list. It wraps: Down on the last result goes to the first and
+ * Up on the first goes to the last, the same way at both ends. An empty list stays at 0.
+ */
+export function wrapIndex(index: number, delta: number, length: number): number {
+  if (length <= 0) return 0
+  return (((index + delta) % length) + length) % length
+}

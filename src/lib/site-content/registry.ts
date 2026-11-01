@@ -49,7 +49,10 @@ export interface FieldDefinition {
   itemLabelKey?: string
   /** `media` fields: the built-in file (default) or an upload of this kind from the homepage-media bucket. */
   mediaKind?: 'image' | 'video'
-  /** `media` image fields whose default is empty: the image is optional and can be removed. */
+  /**
+   * `media` image fields whose default is empty: the image is optional and can be removed.
+   * `link` fields whose default is empty: the link stays hidden until the owner sets an address.
+   */
   optional?: boolean
 }
 
@@ -87,7 +90,8 @@ function field(
     key, area, page, section, label, type, defaultValue, maxLength, help: options.help,
     ...(options.options ? { options: options.options } : {}),
     ...(type === 'order' ? { itemCount: options.itemCount, minItems: options.minItems ?? 1, itemLabelKey: options.itemLabelKey } : {}),
-    ...(type === 'media' ? { mediaKind: options.mediaKind ?? 'image', ...(options.optional ? { optional: true } : {}) } : {})
+    ...(type === 'media' ? { mediaKind: options.mediaKind ?? 'image', ...(options.optional ? { optional: true } : {}) } : {}),
+    ...(type === 'link' && options.optional ? { optional: true } : {})
   })
 }
 
@@ -429,6 +433,13 @@ field('public', 'Footer', 'Links', 'public.footer.privacy.label', 'Link label: P
 field('public', 'Footer', 'Links', 'public.footer.study.label', 'Link label: Study system', 'text', 'Study system', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.dypol.label', 'Link label: DYPOL LABS', 'text', 'DYPOL LABS', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.top.label', 'Link label: Back to top', 'text', 'Back to top', { maxLength: 40 })
+// Contact: there is no published contact address, so none is invented. The link is hidden until the
+// owner enters a real one (an email as mailto:name@example.com, or an https:// contact page).
+field('public', 'Footer', 'Links', 'public.footer.contact.label', 'Link label: Contact', 'text', 'Contact', { maxLength: 40 })
+field('public', 'Footer', 'Links', 'public.footer.contact.href', 'Contact address (optional)', 'link', '', {
+  optional: true, maxLength: 200,
+  help: 'Leave empty to hide the Contact link. Use mailto: followed by one email address, or a full https:// contact page.'
+})
 
 /* ------------------------------------------------------------- user panel */
 
