@@ -9,7 +9,8 @@ import { useToast } from '../contexts/ToastContext'
 import { indiaDate, prettyDate } from '../lib/date'
 import { createId } from '../lib/id'
 import type { Mistake, MistakeType, Subject } from '../types'
-import { useReportSubjects } from '../lib/exams/useExamSubjects'
+import { useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
+import { mistakeSubjectOptions } from '../lib/exams/subjects'
 
 const MISTAKE_TYPES: MistakeType[] = ['Concept', 'Silly', 'Calculation', 'Time', 'Guess']
 const mistakeSchema = z.object({ chapter_id: z.string().uuid(), mistake_type: z.enum(['Concept','Silly','Calculation','Time','Guess']), question_note: z.string().trim().min(1).max(10000), solution_note: z.string().max(10000) })
@@ -104,9 +105,11 @@ function MistakeDialog({ initial, data, onClose, onSave }: { initial: Mistake | 
   const initialImagePreview = initial?.image_preview ?? initialImageData
   const [entryId] = useState(() => initial?.id ?? createId())
   const [chapterId, setChapterId] = useState(initial?.chapter_id ?? '')
-  const reportSubjects = useReportSubjects()
-  const subjectOptions = [...reportSubjects, ...data.chapters.map(chapter => chapter.subject)].filter((item, index, all) => all.indexOf(item) === index && data.chapters.some(chapter => chapter.subject === item))
-  const [subject, setSubject] = useState<string>(() => data.chapters.find(chapter => chapter.id === initial?.chapter_id)?.subject ?? '')
+  const initialSubject = data.chapters.find(chapter => chapter.id === initial?.chapter_id)?.subject ?? ''
+  // Every subject of the student's exam (same source as the other pickers), then any other subject that already has chapters.
+  const examSubjectList = useExamSubjects(initialSubject || null)
+  const subjectOptions = mistakeSubjectOptions(examSubjectList, data.chapters)
+  const [subject, setSubject] = useState<string>(initialSubject)
   const [testId, setTestId] = useState(initial?.test_id ?? '')
   const [mistakeType, setMistakeType] = useState<MistakeType>(initial?.mistake_type ?? 'Concept')
   const [question, setQuestion] = useState(initial?.question_note ?? '')
@@ -165,7 +168,7 @@ function MistakeDialog({ initial, data, onClose, onSave }: { initial: Mistake | 
 
   return <Dialog title={initial ? 'Edit mistake note' : 'Save a learning moment'} onClose={onClose} className="mistake-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
-      <div className="form-grid three"><Field label="Subject" required error={errors.subject}><select required value={subject} onChange={event => { setSubject(event.target.value); setChapterId(''); clearFieldError('subject'); clearFieldError('chapter_id') }}><option value="">Choose a subject</option>{subjectOptions.map(item => <option key={item} value={item}>{item}</option>)}</select></Field><Field label="Chapter" required error={errors.chapter_id}><select required value={chapterId} disabled={!subject} onChange={event => { setChapterId(event.target.value); clearFieldError('chapter_id') }}><option value="">{subject ? 'Choose a chapter' : 'Pick a subject first'}</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field><Field label="Mistake type"><select value={mistakeType} onChange={event => setMistakeType(event.target.value as MistakeType)}>{MISTAKE_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field></div>
+      <div className="form-grid three"><Field label="Subject" required error={errors.subject}><select required value={subject} onChange={event => { setSubject(event.target.value); setChapterId(''); clearFieldError('subject'); clearFieldError('chapter_id') }}><option value="">Choose a subject</option>{subjectOptions.map(item => <option key={item} value={item}>{item}</option>)}</select></Field><Field label="Chapter" required error={errors.chapter_id}><select required value={chapterId} disabled={!subject} onChange={event => { setChapterId(event.target.value); clearFieldError('chapter_id') }}><option value="">{!subject ? 'Pick a subject first' : chapters.length ? 'Choose a chapter' : `No ${subject} chapters yet`}</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select>{subject && chapters.length === 0 && <span className="field-hint">Add {subject} chapters in Syllabus first, then log this mistake against one.</span>}</Field><Field label="Mistake type"><select value={mistakeType} onChange={event => setMistakeType(event.target.value as MistakeType)}>{MISTAKE_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field></div>
       <Field label="What was the question or mistake?" required error={errors.question_note}><textarea autoFocus required maxLength={10000} rows={4} value={question} onChange={event => { setQuestion(event.target.value); setErrors(current => { const next = { ...current }; delete next.question_note; return next }) }} placeholder="Write enough to recognize the question next time…" /></Field>
       <Field label="Solution / what I’ll remember" error={errors.solution_note}><textarea maxLength={10000} rows={3} value={solution} onChange={event => { setSolution(event.target.value); setErrors(current => { const next = { ...current }; delete next.solution_note; return next }) }} placeholder="The key idea, missed condition, or check to use next time…" /></Field>
       <div className="form-grid two"><Field label="Related test"><select value={testId} onChange={event => setTestId(event.target.value)}><option value="">No linked test</option>{data.tests.map(test => <option key={test.id} value={test.id}>{test.title} · {prettyDate(test.test_date)}</option>)}</select></Field><label className="retry-toggle"><input type="checkbox" checked={retryLater} onChange={event => setRetryLater(event.target.checked)} /><span className="toggle-visual" /><span><strong>Put this on my retry list</strong><small>Bring it back for another attempt.</small></span></label></div>

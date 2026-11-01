@@ -11,6 +11,8 @@ import { ToastProvider } from './contexts/ToastContext'
 import { AppFrame } from './components/AppShell'
 import { LoaderCircle } from 'lucide-react'
 import { TelemetryTracker } from './components/TelemetryTracker'
+import NotFoundPage from './pages/NotFoundPage'
+import { isKnownAppPath } from './lib/app-routes'
 
 const LandingPage = lazy(() => import('./pages/LandingPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
@@ -80,7 +82,10 @@ function ProtectedApp() {
  */
 function RootRoute() {
   const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return <AppLoading label="Opening Stracker…" />
+  // Unknown addresses get an in-app 404 for visitors too, instead of silently showing the homepage.
+  if (!user && !isKnownAppPath(location.pathname)) return <NotFoundPage signedIn={false} />
   // Published website and notebook copy is loaded once here, for both the homepage and the notebook.
   if (!user) return <SiteContentProvider><LandingPage /></SiteContentProvider>
   return <SiteContentProvider><Outlet /></SiteContentProvider>
@@ -119,7 +124,7 @@ function AppRoutes() {
           <Route path="mock-analysis" element={<MockAnalysisPage />} />
           <Route path="decks" element={<DecksPage />} />
           <Route path="study-now" element={<StudyNowPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>
       {/* Private console: not linked from any public or notebook navigation. Access is enforced by the server. */}
@@ -129,7 +134,7 @@ function AppRoutes() {
       {/* Password recovery stays on its original public route: the emailed link
           authenticates a short-lived session, so it must not be redirected away. */}
       <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage signedIn={false} />} />
     </Routes>
   </Suspense>
 }

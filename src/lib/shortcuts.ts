@@ -38,3 +38,8 @@ export function shouldIgnoreShortcut(event: ShortcutEventLike, overlayOpen: bool
 export function plannerTaskHref(task: { id: string; task_date: string }): string {
   return `/planner?date=${encodeURIComponent(task.task_date)}&task=${encodeURIComponent(task.id)}`
 }
+
+/** True when any dialog, palette or modal panel is open on the page. */
+export function anyDialogOpen(doc: Document | null = typeof document === 'undefined' ? null : document): boolean {
+  return Boolean(doc?.querySelector(OVERLAY_SELECTOR))
+}

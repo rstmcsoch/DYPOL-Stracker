@@ -93,6 +93,16 @@ export function liveElapsedSeconds(state: TimerState, now = Date.now()): number 
   return Math.min(MAX_TIMER_MINUTES * 60, Math.max(0, state.elapsedSeconds + tail))
 }
 
+/** Exact studied duration for headlines: "33s", "2m 14s", "18m", "1h 5m 3s". Never rounded up. */
+export function formatStudiedDuration(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds))
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  if (total < 60) return `${s}s`
+  return [h ? `${h}h` : '', m ? `${m}m` : '', s ? `${s}s` : ''].filter(Boolean).join(' ')
+}
+
 /** Whole minutes that a save would record (the integer-minute study_sessions format). */
 export function loggableMinutes(seconds: number): number {
   return Math.max(0, Math.min(MAX_TIMER_MINUTES, Math.round(seconds / 60)))

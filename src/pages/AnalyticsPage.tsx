@@ -66,6 +66,21 @@ function savePinned(userId: string, pinned: ChartId[]) {
   try { localStorage.setItem(pinnedStorageKey(userId), JSON.stringify(pinned)) } catch { /* a blocked store does not stop pinning in-session */ }
 }
 
+const TREND_RANGES = ['30', '90', '180', 'all'] as const
+function trendRangeKey(userId: string) { return `stracker-analytics-range:${userId}` }
+
+/** The marks-trend range is a device-level UI preference, stored beside pinned charts. */
+function loadTrendRange(userId: string): string {
+  try {
+    const raw = localStorage.getItem(trendRangeKey(userId))
+    return raw && (TREND_RANGES as readonly string[]).includes(raw) ? raw : '90'
+  } catch { return '90' }
+}
+
+function saveTrendRange(userId: string, range: string) {
+  try { localStorage.setItem(trendRangeKey(userId), range) } catch { /* a blocked store keeps the range for this visit only */ }
+}
+
 export default function AnalyticsPage() {
   const { data } = useData()
   const { user } = useAuth()
@@ -244,7 +259,17 @@ function SamplePreviewCard({ onAddTest }: { onAddTest: () => void }) {
 /* ------------------------------------------------------------ chart cards */
 
 function PerformanceCard({ data, subjects, hasTestScore, hasSubjectScores, pinned, onPin }: ChartCardProps) {
-  const [range, setRange] = useState('90')
+  const { user } = useAuth()
+  const rangeOwner = user?.id ?? 'session'
+  // The chosen range is remembered on this device (like pinned charts), so a reload keeps it.
+  const [range, setRangeState] = useState(() => loadTrendRange(rangeOwner))
+  const setRange = (value: string) => { setRangeState(value); saveTrendRange(rangeOwner, value) }
+  // Legend entries toggle their line on the chart; at least one series always stays visible.
+  const [hiddenSeries, setHiddenSeries] = useState<string[]>([])
+  const seriesKeys = ['overall', ...subjects.map(item => item.subject)]
+  const toggleSeries = (key: string) => setHiddenSeries(current => current.includes(key)
+    ? current.filter(item => item !== key)
+    : seriesKeys.filter(item => item !== key && !current.includes(item)).length === 0 ? current : [...current, key])
   const rangedTrends = useMemo(() => getMarksTrend(data, range === 'all' ? 5000 : Number(range)), [data, range])
   // The X-axis is a real time scale: each row carries its epoch so a 13-day gap
   // occupies 13 days of space and a 2-day gap occupies two.
@@ -260,8 +285,8 @@ function PerformanceCard({ data, subjects, hasTestScore, hasSubjectScores, pinne
     </div>
     {nothingAtAll ? <NoDataLine label="Marks & subjects" hint="Log a test with marks and a total to start the trend." /> : <>
       {hasTestScore ? <>
-        <div className="chart-frame trend-chart"><ResponsiveContainer width="100%" height={280}><LineChart data={timeTrends} margin={{ top: 10, right: 16, left: 0, bottom: 4 }}><CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" /><XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={value => chartDate(Number(value))} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} minTickGap={34} tickMargin={8} padding={{ left: 14, right: 8 }} /><YAxis domain={[0, 100]} width={44} tickMargin={6} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} tickFormatter={value => `${value}%`} /><Tooltip content={<NotebookTooltip />} labelFormatter={value => chartDateLong(Number(value))} /><Line type="monotone" dataKey="overall" name="Overall" stroke={chartColors.overall} strokeWidth={2.5} strokeDasharray="7 5" dot={{ r: 3.5, fill: chartColors.overall, strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />{subjects.map(({ subject }) => <Line key={subject} type="monotone" dataKey={subject} name={subject} stroke={subjectColor(subject)} strokeWidth={2} dot={{ r: 3, fill: subjectColor(subject), strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />)}</LineChart></ResponsiveContainer></div>
-        <div className="chart-legend-note" role="list" aria-label="Trend series"><span role="listitem"><i className="swatch-dashed" style={{ background: `repeating-linear-gradient(90deg, ${chartColors.overall} 0 6px, transparent 6px 9px)` }} /> Overall</span>{subjects.map(({ subject }) => <span key={subject} role="listitem"><i style={{ background: subjectColor(subject) }} />{subject}</span>)}</div>
+        <div className="chart-frame trend-chart"><ResponsiveContainer width="100%" height={280}><LineChart data={timeTrends} margin={{ top: 10, right: 16, left: 0, bottom: 4 }}><CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" /><XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={value => chartDate(Number(value))} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} minTickGap={34} tickMargin={8} padding={{ left: 14, right: 8 }} /><YAxis domain={[0, 100]} width={44} tickMargin={6} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} tickFormatter={value => `${value}%`} /><Tooltip content={<NotebookTooltip />} labelFormatter={value => chartDateLong(Number(value))} /><Line type="monotone" dataKey="overall" name="Overall" hide={hiddenSeries.includes('overall')} stroke={chartColors.overall} strokeWidth={2.5} strokeDasharray="7 5" dot={{ r: 3.5, fill: chartColors.overall, strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />{subjects.map(({ subject }) => <Line key={subject} type="monotone" dataKey={subject} name={subject} hide={hiddenSeries.includes(subject)} stroke={subjectColor(subject)} strokeWidth={2} dot={{ r: 3, fill: subjectColor(subject), strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />)}</LineChart></ResponsiveContainer></div>
+        <div className="chart-legend-note chart-legend-toggles" role="group" aria-label="Show or hide trend series"><button type="button" className={`legend-toggle ${hiddenSeries.includes('overall') ? 'is-off' : ''}`} aria-pressed={!hiddenSeries.includes('overall')} onClick={() => toggleSeries('overall')} title={hiddenSeries.includes('overall') ? 'Show Overall' : 'Hide Overall'}><i className="swatch-dashed" style={{ background: `repeating-linear-gradient(90deg, ${chartColors.overall} 0 6px, transparent 6px 9px)` }} /> Overall</button>{subjects.map(({ subject }) => <button type="button" key={subject} className={`legend-toggle ${hiddenSeries.includes(subject) ? 'is-off' : ''}`} aria-pressed={!hiddenSeries.includes(subject)} onClick={() => toggleSeries(subject)} title={hiddenSeries.includes(subject) ? `Show ${subject}` : `Hide ${subject}`}><i style={{ background: subjectColor(subject) }} />{subject}</button>)}</div>
       </> : <NoDataLine label="Marks trend" hint="No comparable test result in this range yet." />}
       <div className="performance-subjects">
         {hasSubjectScores ? <>

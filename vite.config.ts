@@ -1,10 +1,28 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+
+/**
+ * Unknown paths keep a real HTTP 404 (vercel.json has no catch-all rewrite), but Vercel serves
+ * dist/404.html as that 404's body. Making it a copy of the app shell lets the router render the
+ * styled in-app "Page not found" view with a Home link instead of the raw platform page.
+ */
+function spaNotFoundPage(): Plugin {
+  return {
+    name: 'stracker-spa-404',
+    apply: 'build',
+    enforce: 'post',
+    generateBundle(_options, bundle) {
+      const shell = bundle['index.html']
+      if (shell?.type === 'asset') this.emitFile({ type: 'asset', fileName: '404.html', source: shell.source })
+    }
+  }
+}
 
 export default defineConfig({
   plugins: [
     react(),
+    spaNotFoundPage(),
     VitePWA({
       // New workers activate immediately. The client registration intentionally does not
       // reload an open session; online page navigations are handled by NetworkFirst below.
@@ -33,6 +51,7 @@ export default defineConfig({
         navigateFallback: null,
         directoryIndex: null,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globIgnores: ['404.html'],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.mode === 'navigate',

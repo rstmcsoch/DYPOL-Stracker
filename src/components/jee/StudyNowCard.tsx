@@ -1,11 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, ChevronDown, ChevronUp, Compass, Flame } from 'lucide-react'
 import { Button, NotebookCard, StatusBadge } from '../ui'
 import { useData } from '../../contexts/DataContext'
 import { indiaToday } from '../../lib/date'
 import { recommendStudyNow, type Recommendation, type StudyNowResult } from '../../lib/jee/recommend'
+import { anyDialogOpen } from '../../lib/shortcuts'
 
 export function useStudyNow(): StudyNowResult {
   const { data } = useData()
@@ -18,7 +19,19 @@ export function StudyNowCard({ compact = false }: { compact?: boolean }) {
   const result = useStudyNow()
   const navigate = useNavigate()
   const [showWhy, setShowWhy] = useState(false)
+  const whyButtonId = `study-now-why-${useId().replaceAll(':', '')}`
   const primary = result.primary
+  // Esc collapses "Why this?" like a dialog would, unless a real dialog is open (it owns Esc then).
+  useEffect(() => {
+    if (!showWhy) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || anyDialogOpen(document)) return
+      setShowWhy(false)
+      document.getElementById(whyButtonId)?.focus()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [showWhy, whyButtonId])
   return <NotebookCard className="study-now-card accent-blue" aria-labelledby="study-now-heading">
     <div className="study-now-top">
       <span className="study-now-kicker"><Compass size={15} aria-hidden="true" /> PLANNING</span>
@@ -29,7 +42,7 @@ export function StudyNowCard({ compact = false }: { compact?: boolean }) {
       <p className="study-now-summary">{primary.summary}</p>
       <div className="study-now-actions">
         <Button onClick={() => navigate(primary.to)}>{primary.actionLabel} <ArrowRight size={15} /></Button>
-        <Button variant="quiet" size="sm" onClick={() => setShowWhy(value => !value)} aria-expanded={showWhy}>{showWhy ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Why this?</Button>
+        <Button id={whyButtonId} variant="quiet" size="sm" onClick={() => setShowWhy(value => !value)} aria-expanded={showWhy}>{showWhy ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Why this?</Button>
       </div>
       {showWhy && <WhyList primary={primary} alternatives={result.alternatives} />}
       {!compact && result.alternatives.length > 0 && !showWhy && <p className="study-now-alt">Next up: {result.alternatives.slice(0, 2).map(item => item.title).join(' · ')}</p>}
