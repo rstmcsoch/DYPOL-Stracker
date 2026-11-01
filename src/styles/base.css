@@ -631,7 +631,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 @media (max-width: 640px) { .checkpoint-actions { flex-direction: column; align-items: stretch; } }
 
 /* Keep the last cards clear of the fixed Ask Stracker + quick-action buttons (desktop and phone). */
-.main-area::after { content: ''; display: block; flex: none; height: calc(96px + var(--safe-bottom)); }
+.main-area::after { content: ''; display: block; flex: none; height: var(--page-bottom-clearance); }
 .focus-app-shell .main-area::after { display: none; }
 .home-focus-clock { font-variant-numeric: tabular-nums; }
 
