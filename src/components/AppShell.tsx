@@ -1,3 +1,4 @@
+import { plannerTaskHref, shouldIgnoreShortcut } from '../lib/shortcuts'
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -121,15 +122,15 @@ export function AppFrame() {
     const timer = window.setInterval(check, 60_000)
     return () => window.clearInterval(timer)
   }, [data])
+  const overlayOpenRef = useRef(false)
+  overlayOpenRef.current = searchOpen || shortcutsOpen || quickTaskOpen
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
       if (onboardingRef.current) return
-      const isTyping = target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault(); setSearchOpen(true); return
       }
-      if (isTyping || event.metaKey || event.ctrlKey || event.altKey) return
+      if (shouldIgnoreShortcut(event, overlayOpenRef.current)) return
       if (event.key.toLowerCase() === 'n') { event.preventDefault(); setQuickTaskOpen(true) }
       if (event.key.toLowerCase() === 't') { event.preventDefault(); navigate('/tests?add=1') }
       if (event.key.toLowerCase() === 'r') { event.preventDefault(); navigate('/revision') }
@@ -331,7 +332,7 @@ function GlobalSearch({ data, onClose }: { data: AppData; onClose: () => void })
     data.chapters.filter(chapter => `${chapter.name} ${chapter.subject} ${chapter.notes} ${chapter.formula_notes}`.toLowerCase().includes(trimmed)).slice(0, 6).forEach(chapter => found.push({ label: chapter.name, type: 'Chapter', to: '/syllabus', context: `${chapter.subject} · ${chapter.status}` }))
     data.tests.filter(test => `${test.title} ${test.test_type} ${test.notes}`.toLowerCase().includes(trimmed)).slice(0, 5).forEach(test => found.push({ label: test.title, type: 'Test', to: '/tests', context: `${test.test_date} · ${test.test_type}` }))
     data.mistakes.filter(mistake => `${mistake.question_note} ${mistake.solution_note} ${mistake.mistake_type}`.toLowerCase().includes(trimmed)).slice(0, 5).forEach(mistake => found.push({ label: mistake.question_note, type: 'Mistake', to: '/mistakes', context: mistake.mistake_type }))
-    data.tasks.filter(task => task.title.toLowerCase().includes(trimmed)).slice(0, 5).forEach(task => found.push({ label: task.title, type: 'Task', to: '/planner', context: task.task_date }))
+    data.tasks.filter(task => task.title.toLowerCase().includes(trimmed)).slice(0, 5).forEach(task => found.push({ label: task.title, type: 'Task', to: plannerTaskHref(task), context: task.task_date }))
     return found.slice(0, 12)
   }, [data, trimmed])
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {

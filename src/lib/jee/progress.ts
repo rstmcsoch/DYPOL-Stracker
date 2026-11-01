@@ -3,6 +3,7 @@ import type {
 } from '../../types/index.js'
 import { CHAPTER_STAGE_KEYS } from '../../types/index.js'
 import { examSubjects } from '../exams/subjects.js'
+import { isJeeExam } from '../exams/catalog.js'
 
 /* ------------------------------------------------------------------ */
 /* Importance weights — configurable in Settings, never hardcoded here */
@@ -137,6 +138,32 @@ export function pyqCompletion(records: PyqRecord[], chapterId: string | null, ex
   }
 }
 
+/** PYQ columns the student actually tracks: JEE has Main and Advanced, other exams one column. */
+export function pyqExamsFor(settings: Pick<AppSettings, 'exam_id'>): PYQExam[] {
+  return isJeeExam(settings.exam_id ?? null) ? ['Main', 'Advanced'] : ['Main']
+}
+
+/**
+ * Every chapter-year marked done in the tracked PYQ window. One year marked done counts
+ * here immediately, even before a whole chapter's PYQ stage is complete.
+ */
+export function pyqProgressCounts(data: AppData): { doneYears: number; startedChapters: number; completeChapters: number } {
+  const years = new Set(pyqYears(data.settings))
+  const exams = new Set(pyqExamsFor(data.settings))
+  const chapterIds = new Set(data.chapters.map(chapter => chapter.id))
+  const seen = new Set<string>()
+  const started = new Set<string>()
+  for (const record of data.pyqRecords) {
+    if (record.status !== 'done' || !years.has(record.year) || !exams.has(record.exam) || !chapterIds.has(record.chapter_id)) continue
+    const key = `${record.chapter_id}|${record.exam}|${record.year}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    started.add(record.chapter_id)
+  }
+  const completeChapters = data.chapters.filter(chapter => chapterStages(data, chapter).find(stage => stage.key === 'pyqs')?.done).length
+  return { doneYears: seen.size, startedChapters: started.size, completeChapters }
+}
+
 /* ------------------------------------------------------------------ */
 /* Chapter stages — Theory → Notes → PYQs → Revised → Tested            */
 /* ------------------------------------------------------------------ */
@@ -162,10 +189,10 @@ const STAGE_LABELS: Record<ChapterStageKey, string> = {
  */
 export function chapterStages(data: AppData, chapter: Chapter): StageState[] {
   const manual = new Map(data.chapterStages.filter(row => row.chapter_id === chapter.id).map(row => [row.stage, row.done]))
-  const pyq = pyqCompletion(data.pyqRecords, chapter.id, 'Main', data.settings)
-  const pyqAdv = pyqCompletion(data.pyqRecords, chapter.id, 'Advanced', data.settings)
-  const pyqTotal = pyq.total + pyqAdv.total
-  const pyqDone = pyq.done + pyqAdv.done
+  // Non-JEE exams keep their PYQ years in the single (Main) column, so only that column counts.
+  const pyqTotals = pyqExamsFor(data.settings).map(exam => pyqCompletion(data.pyqRecords, chapter.id, exam, data.settings))
+  const pyqTotal = pyqTotals.reduce((sum, row) => sum + row.total, 0)
+  const pyqDone = pyqTotals.reduce((sum, row) => sum + row.done, 0)
   const hasRevision = data.revisions.some(revision => revision.chapter_id === chapter.id && revision.completed_at)
   const hasTest = data.tests.some(test => test.chapter_id === chapter.id) || data.testChapterLinks.some(link => link.chapter_id === chapter.id)
 

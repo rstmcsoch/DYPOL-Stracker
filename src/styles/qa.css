@@ -39,3 +39,20 @@
   .settings-account-actions > .button { flex: 1 1 145px; }
   .mock-score-grid { grid-template-columns: 1fr; }
 }
+
+/* Student-POV phase 1: date/time inputs, extra exams, planner jump + highlight, PYQ and range notes. */
+.date-input-wrap { display: grid; gap: 4px; min-width: 0; }
+.date-input-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.date-input-row > input { flex: 1; min-width: 0; }
+.date-input-clear { flex: none; min-height: 36px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink-soft); background: var(--paper-soft); cursor: pointer; font-size: max(.8125rem, calc(12px * var(--body-scale))); }
+.date-input-clear:hover:not(:disabled) { color: var(--ink); background: var(--paper-muted); }
+.date-input-clear:disabled { opacity: .5; cursor: not-allowed; }
+.settings-extra-exams { display: grid; gap: 8px; margin-top: 12px; }
+.settings-extra-exam-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+@media (max-width: 640px) { .settings-extra-exam-row { grid-template-columns: 1fr; } }
+.planner-jump-date { min-height: 34px; max-width: 150px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink-soft); background: var(--paper-soft); font-size: max(.8125rem, calc(12px * var(--body-scale))); }
+.planner-task-row.task-highlight { border-radius: 8px; outline: 2px solid var(--accent); outline-offset: 2px; background: var(--paper-soft); }
+.jee-pipeline-note { display: block; margin-top: 4px; }
+.report-range-count, .backup-range-skip { display: block; margin: 6px 0 0; color: var(--muted); }
+.settings-extra-exam-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.goal-progress-actions { position: relative; z-index: 1; }

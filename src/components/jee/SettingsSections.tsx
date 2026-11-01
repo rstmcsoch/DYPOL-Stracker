@@ -7,6 +7,8 @@ import { defaultExamTracks } from '../../lib/defaults'
 import { isJeeSettings, trackLabels } from '../../lib/jee/exam'
 import { REMINDER_LABEL } from '../../lib/jee/reminders'
 import { stableId } from '../../lib/id'
+import { isValidInputDate } from '../../lib/date-input'
+import { DateInput, TimeInput } from '../DateTimeInputs'
 import { REMINDER_KINDS, type AppSettings, type ReminderKind, type TrackId, type UserExamTrack } from '../../types'
 
 /** Session 2 and Boards keep their own dates; Main S1 and Advanced use the existing Settings dates above. */
@@ -38,7 +40,7 @@ export function ExamTracksSection() {
       const draft = drafts[track]
       const base = rows.find(row => row.track === track)
       if (!draft || !base) continue
-      if (draft.exam_date && !/^\d{4}-\d{2}-\d{2}$/.test(draft.exam_date)) { setError(`Choose a valid date for ${TRACK_LABEL[track]} or leave it blank.`); return }
+      if (draft.exam_date && !isValidInputDate(draft.exam_date)) { setError(`Choose a valid date for ${TRACK_LABEL[track]} or leave it blank.`); return }
       const target = draft.target_score.trim() === '' ? null : Number(draft.target_score)
       if (target !== null && (!Number.isFinite(target) || target < 0 || target > 999999.99)) { setError(`Target for ${TRACK_LABEL[track]} must be between 0 and 999,999.99.`); return }
       if (draft.exam_date !== (base.exam_date ?? '') || target !== base.target_score) {
@@ -63,7 +65,7 @@ export function ExamTracksSection() {
         {editable.map(track => <div key={track} className="jee-track-setting">
           <span>{TRACK_LABEL[track]}</span>
           <div className="form-grid two">
-            <Field label="Exam date"><input type="date" value={drafts[track]?.exam_date ?? ''} onChange={event => setDrafts(current => ({ ...current, [track]: { target_score: current[track]?.target_score ?? '', exam_date: event.target.value } }))} /></Field>
+            <Field label="Exam date"><DateInput label={`${TRACK_LABEL[track]} exam date`} value={drafts[track]?.exam_date ?? ''} onChange={value => setDrafts(current => ({ ...current, [track]: { target_score: current[track]?.target_score ?? '', exam_date: value } }))} /></Field>
             <Field label="Target score (optional)"><input type="number" min="0" max="999999.99" step="0.01" value={drafts[track]?.target_score ?? ''} onChange={event => setDrafts(current => ({ ...current, [track]: { exam_date: current[track]?.exam_date ?? '', target_score: event.target.value } }))} /></Field>
           </div>
         </div>)}
@@ -96,7 +98,7 @@ export function ReminderSettingsSection({ draft, patch, errors }: {
     <div className="settings-section-content">
       <label className="jee-toggle-row"><input type="checkbox" checked={draft.reminders_enabled} onChange={event => patch('reminders_enabled', event.target.checked)} /><span>Remind me once a day</span></label>
       <div className="form-grid two">
-        <Field label="Time" error={errors.reminder_time}><input type="time" value={draft.reminder_time} disabled={!draft.reminders_enabled} onChange={event => patch('reminder_time', event.target.value)} /></Field>
+        <Field label="Time" hint="Type or paste a time, e.g. 8:30 pm. Arrow keys step 5 minutes."><TimeInput label="Reminder time" value={draft.reminder_time} disabled={!draft.reminders_enabled} error={errors.reminder_time} onChange={value => patch('reminder_time', value)} /></Field>
         <div className="jee-notif-permission">
           <span className="field-label">Device notifications</span>
           {permission === 'unsupported' ? <small className="jee-muted">This browser does not support notifications. In-app reminders still appear on Home.</small>

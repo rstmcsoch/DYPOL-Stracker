@@ -46,7 +46,9 @@ const JEE_SUBJECTS: readonly string[] = SUBJECTS
  * exams aggregate whatever distinct subject rows were saved for them.
  */
 function fullMockSubjectRows(testId: string, scores: TestSubjectScore[]): Map<Subject, TestSubjectScore> | null {
-  const rows = scores.filter(score => score.test_id === testId)
+  // A subject row with a total but no marks (a prefilled pattern total the student never filled)
+  // means "not recorded", so it neither counts nor blocks the aggregate of the subjects recorded.
+  const rows = scores.filter(score => score.test_id === testId && score.marks_obtained != null)
   if (!rows.length) return null
   const bySubject = new Map<Subject, TestSubjectScore>()
   for (const row of rows) {

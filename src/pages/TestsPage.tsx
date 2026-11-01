@@ -4,7 +4,7 @@ import { ArrowDownWideNarrow, ArrowUpWideNarrow, BookOpen, CalendarDays, ChartNo
 import { Button, ConfirmDialog, Dialog, EmptyState, Field, NotebookCard, PageHeader, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
-import { getAccuracy, getAttemptRate, getMeanTestPercentage, getOverallTestPercentage, getOverallTestScore, validPercentage } from '../lib/analytics'
+import { getAccuracy, getAttemptRate, getFullMockAggregate, getMeanTestPercentage, getOverallTestPercentage, getOverallTestScore, validPercentage } from '../lib/analytics'
 import { fmtNumber } from '../lib/format'
 import { prettyDate, indiaToday } from '../lib/date'
 import { createId } from '../lib/id'
@@ -133,6 +133,8 @@ export default function TestsPage() {
     if (!isFullMock && values.chapter_id && (!selectedChapter || (values.subject && selectedChapter.subject !== values.subject))) {
       errors.chapter_id = 'Choose a chapter that belongs to the selected subject.'
     }
+    // A Chapter Test is about one chapter: without it the result cannot reach chapter analytics.
+    if (values.test_type === 'Chapter Test' && !values.chapter_id) errors.chapter_id = 'Choose the chapter this test covered.'
 
     const now = new Date().toISOString()
     const testId = current?.id ?? stableId
@@ -154,7 +156,10 @@ export default function TestsPage() {
           continue
         }
         const { marks_obtained, total_marks } = result.data
-        if (marks_obtained !== null || total_marks !== null) {
+        // Totals arrive prefilled from the exam pattern. A subject with no marks typed is one the
+        // student did not take or record, so it is skipped rather than saved as a blank "—" row
+        // that would leave the overall result incomplete.
+        if (marks_obtained !== null) {
           const existing = oldScores.find(score => score.subject === subject)
           subjectScores.push({
             id: existing?.id ?? createId(), test_id: testId, subject, marks_obtained, total_marks,
@@ -165,10 +170,8 @@ export default function TestsPage() {
     }
     if (Object.keys(errors).length || !parsed.success) return errors
 
-    const completeMock = values.test_type === 'Full Mock' && Object.keys(values.mockScores).every(subject => {
-      const score = subjectScores.find(item => item.subject === subject)
-      return score?.marks_obtained != null && score.total_marks != null
-    })
+    // Complete when every recorded subject has marks and a total (JEE P/C/M mocks still need all three).
+    const completeMock = isFullMock && getFullMockAggregate(testId, subjectScores) !== null
     const retainLegacyMockScore = values.test_type === 'Full Mock' && existingTest?.test_type === 'Full Mock' && oldScores.length === 0 && (existingTest.marks_obtained !== null || existingTest.total_marks !== null)
     const mockMarks = completeMock ? subjectScores.reduce((sum, score) => sum + (score.marks_obtained ?? 0), 0) : null
     const mockTotal = completeMock ? subjectScores.reduce((sum, score) => sum + (score.total_marks ?? 0), 0) : null
@@ -371,7 +374,7 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
       <div className="form-grid two"><Field label="Test title" required error={errors.title} hint={values.title.length >= 120 ? `${values.title.length}/160 characters — long titles are trimmed with an ellipsis in lists` : undefined}><input autoFocus required maxLength={160} value={values.title} onChange={event => patch('title', event.target.value)} placeholder="e.g. Electrostatics weekly test" /></Field><Field label="Date" required error={errors.test_date}><input type="date" required value={values.test_date} onChange={event => patch('test_date', event.target.value)} /></Field></div>
       <div className="form-grid two"><Field label="Test type"><select value={values.test_type} onChange={event => changeTestType(event.target.value as TestType)}>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field>{!fullMock && <Field label="Subject"><select value={values.subject} onChange={event => changeSubject(event.target.value as Subject | '')}><option value="">— choose subject —</option>{formSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field>}</div>
       {presetChapter && !fullMock && <div className="preset-chapter-note" role="status"><BookOpen size={15} aria-hidden="true" /><span>Chapter preselected from Weak areas: <strong>{presetChapter.name}</strong><SubjectBadge subject={presetChapter.subject} /></span></div>}
-      {!fullMock && <Field label="Chapter (optional)" error={errors.chapter_id}><select value={values.chapter_id} onChange={event => patch('chapter_id', event.target.value)}><option value="">— choose chapter —</option>{chapterOptions.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field>}
+      {!fullMock && <Field label={values.test_type === 'Chapter Test' ? 'Chapter' : 'Chapter (optional)'} required={values.test_type === 'Chapter Test'} error={errors.chapter_id} hint={values.test_type === 'Chapter Test' && chapterOptions.length === 0 ? 'No chapters for this subject yet. Add one in Syllabus, or pick another test type.' : undefined}><select value={values.chapter_id} onChange={event => patch('chapter_id', event.target.value)}><option value="">— choose chapter —</option>{chapterOptions.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field>}
       {isJee && values.test_type === 'Full Mock' && <Field label="JEE paper pattern"><select value={values.jeePattern} onChange={event => changeJeePattern(event.target.value as JeeFullPattern)} aria-label="JEE paper pattern"><option value="main">JEE Main — 300 total</option><option value="advanced-paper-1">JEE Advanced — Paper 1 only (180)</option><option value="advanced-both">JEE Advanced — Both papers (360 combined)</option></select></Field>}
       {schemeValue && values.test_type === 'Full Mock' && <p className="field-hint">Marking defaults: {schemeValue.source}. Totals are pre-filled and can be edited.{schemeValue.notes ? ` ${schemeValue.notes}` : ''}</p>}
       {values.test_type === 'Full Mock' ? <div className="mock-score-section"><div><span className="field-label">Subject scores <small>(enter each result that you have)</small></span><span className="field-hint mock-scope-hint">{FULL_MOCK_SCOPE_HINT}</span><span className="field-hint">The overall result sums every subject. Each subject score is checked against its own total; leave unknown scores blank.</span></div><div className="mock-score-grid">{Object.entries(values.mockScores).map(([subject, part]) => {

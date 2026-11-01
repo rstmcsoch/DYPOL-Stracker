@@ -1,6 +1,6 @@
 import { getChapterPerformance, subjectPercentage, testPercentage } from '../analytics.js'
 import { indiaDate } from '../date.js'
-import { studyMinutesByActivity, previousWeekRange, weekRange, type ActivityMinutes } from './study-time.js'
+import { activeDaysThisWeek, studyMinutesByActivity, previousWeekRange, weekRange, type ActivityMinutes } from './study-time.js'
 import { aggregatePractice } from './progress.js'
 import type { AppData, Subject } from '../../types/index.js'
 import { subjectsFor } from '../exams/subjects.js'
@@ -61,11 +61,8 @@ export function buildWeeklyReport(data: AppData, today: string): WeeklyReport {
   const activity = studyMinutesByActivity(data, range.start, range.end)
   const practice = aggregatePractice(data.practiceSessions.filter(item => item.practice_date >= range.start && item.practice_date <= range.end))
   const tests = data.tests.filter(test => test.test_date >= range.start && test.test_date <= range.end)
-  const activeDays = new Set<string>([
-    ...data.sessions.map(session => indiaDate(session.started_at)).filter(day => day >= range.start && day <= range.end),
-    ...data.practiceSessions.filter(item => item.attempted > 0 && item.practice_date >= range.start && item.practice_date <= range.end).map(item => item.practice_date),
-    ...tests.map(test => test.test_date)
-  ]).size
+  // Same rule and window as Home's rhythm card, so both always show the same number.
+  const activeDays = activeDaysThisWeek(data, today)
 
   const current = subjectSignals(data, range.start, range.end)
   const prior = subjectSignals(data, previous.start, previous.end)

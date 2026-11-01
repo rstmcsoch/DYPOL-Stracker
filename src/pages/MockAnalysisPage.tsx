@@ -7,7 +7,7 @@ import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { createId, stableId } from '../lib/id'
 import { prettyDate } from '../lib/date'
-import { categoryTotals, mockInsights, mockSummary, subjectTimeRows } from '../lib/jee/mock-analysis'
+import { categoryTotals, checkLostMarks, mockInsights, mockSummary, subjectTimeRows } from '../lib/jee/mock-analysis'
 import { validateErrorLog, type ErrorLogFormInput, type ErrorLogValue } from '../lib/jee/forms'
 import { ERROR_CATEGORIES, type AppData, type ErrorCategory, type Subject, type TestErrorLog, type TestRecord, type TestTimeEntry } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
@@ -125,7 +125,7 @@ export default function MockAnalysisPage() {
       </div>
     </section>
 
-    {classifying && <ClassifyDialog test={selected} existing={classifying === 'new' ? undefined : classifying} onClose={() => setClassifying(null)} onSave={async value => {
+    {classifying && <ClassifyDialog data={data} test={selected} existing={classifying === 'new' ? undefined : classifying} onClose={() => setClassifying(null)} onSave={async value => {
       const now = new Date().toISOString()
       const existing = classifying === 'new' ? undefined : classifying
       await upsert('test_error_logs', {
@@ -141,8 +141,8 @@ export default function MockAnalysisPage() {
   </div>
 }
 
-function ClassifyDialog({ test, existing, onClose, onSave }: {
-  test: TestRecord; existing?: TestErrorLog; onClose: () => void; onSave: (value: ErrorLogValue) => Promise<void>
+function ClassifyDialog({ data, test, existing, onClose, onSave }: {
+  data: AppData; test: TestRecord; existing?: TestErrorLog; onClose: () => void; onSave: (value: ErrorLogValue) => Promise<void>
 }) {
   const classifySubjects = useExamSubjects(existing?.subject)
   const [form, setForm] = useState<ErrorLogFormInput>({
@@ -157,11 +157,16 @@ function ClassifyDialog({ test, existing, onClose, onSave }: {
     setForm(current => ({ ...current, [key]: value }))
     setErrors(current => { const next = { ...current }; delete next[key]; return next })
   }
+  const lostRemaining = checkLostMarks(test, data, form.subject || null, Number.MAX_SAFE_INTEGER, existing?.id).remaining
+  const typedLost = form.marksLost.trim() === '' ? null : Number(form.marksLost)
+  const liveLostError = typedLost !== null && Number.isFinite(typedLost) ? checkLostMarks(test, data, form.subject || null, typedLost, existing?.id).message : null
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (saving) return
     const result = validateErrorLog(form)
     if (!result.ok) { setErrors(result.errors); notify('Check the highlighted fields.', 'error'); return }
+    const budget = checkLostMarks(test, data, result.value.subject, result.value.marks_lost, existing?.id)
+    if (!budget.ok) { setErrors({ marksLost: budget.message ?? 'Marks lost cannot exceed the marks actually lost.' }); notify('Check the highlighted fields.', 'error'); return }
     setSaving(true)
     try { await onSave(result.value); onClose() }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save the classification.', 'error') }
@@ -175,7 +180,7 @@ function ClassifyDialog({ test, existing, onClose, onSave }: {
       </div>
       <div className="form-grid two">
         <Field label="Questions" error={errors.questions}><input inputMode="numeric" value={form.questions} onChange={event => set('questions', event.target.value)} placeholder="4" /></Field>
-        <Field label="Marks lost" error={errors.marksLost}><input inputMode="decimal" value={form.marksLost} onChange={event => set('marksLost', event.target.value)} placeholder="16" /></Field>
+        <Field label="Marks lost" error={errors.marksLost ?? liveLostError ?? undefined} hint={lostRemaining !== null ? `${lostRemaining} mark${lostRemaining === 1 ? '' : 's'} left to classify${form.subject ? ` in ${form.subject}` : ''}.` : undefined}><input inputMode="decimal" value={form.marksLost} onChange={event => set('marksLost', event.target.value)} placeholder="16" /></Field>
       </div>
       <Field label="Note (optional)" error={errors.note}><textarea rows={2} maxLength={5000} value={form.note} onChange={event => set('note', event.target.value)} placeholder="e.g. sign error in Q12 after long substitution" /></Field>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>{existing ? 'Save' : 'Add classification'} <Check size={16} /></Button></div>
