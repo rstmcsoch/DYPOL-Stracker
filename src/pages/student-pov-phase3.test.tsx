@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
@@ -184,5 +186,37 @@ describe('item 28: optional footer Contact link', () => {
     renderAt(<SiteContentProvider overrides={{ 'public.footer.contact.href': 'https://example.com/contact' }}><ContactLink addressOnly /></SiteContentProvider>)
     const link = screen.getByRole('link', { name: 'Contact' })
     expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+  })
+})
+
+describe('item 27 (text): Cmd+K result text wraps like the page lists', () => {
+  const css = readFileSync(resolve(process.cwd(), 'src/styles/base.css'), 'utf8')
+  const rule = (selector: string) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return css.match(new RegExp(`${escaped} \\{([^}]*)\\}`))?.[1] ?? ''
+  }
+
+  it('titles wrap over up to three lines instead of a one-line ellipsis', () => {
+    const strong = rule('.search-result-text strong')
+    expect(strong).not.toMatch(/nowrap/)
+    expect(strong).not.toMatch(/text-overflow:\s*ellipsis/)
+    expect(strong).toMatch(/white-space:\s*normal/)
+    expect(strong).toMatch(/overflow-wrap:\s*anywhere/)
+    expect(strong).toMatch(/-webkit-line-clamp:\s*3/)
+    expect(rule('.search-result-text small')).toMatch(/overflow-wrap:\s*anywhere/)
+    // The text column may shrink and the type label keeps its width, so the row layout holds on phones.
+    expect(rule('.search-result-text')).toMatch(/min-width:\s*0/)
+    expect(rule('.search-result-type')).toMatch(/flex:\s*none/)
+  })
+
+  it('a long title is rendered in full and also available as a tooltip', async () => {
+    const long = 'A very long mistake note about the sign convention for spherical mirrors when the object sits between the focus and the pole and the image is virtual'
+    const data = baseData({ chapters: [chapter('a', long)] })
+    const { GlobalSearch } = await import('../components/AppShell')
+    renderAt(<GlobalSearch data={data} onClose={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('Search notebook'), { target: { value: 'spherical' } })
+    const title = document.querySelector('.search-result-text strong')!
+    expect(title.textContent).toBe(long)
+    expect(title.getAttribute('title')).toBe(long)
   })
 })
