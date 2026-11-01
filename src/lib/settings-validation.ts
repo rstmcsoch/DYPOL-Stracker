@@ -5,6 +5,14 @@ const dateValue = z.iso.date()
 const timestampValue = z.iso.datetime({ offset: true })
 const POSTGRES_INTEGER_MAX = 2_147_483_647
 
+export const MAX_EXTRA_EXAMS = 6
+
+export const extraExamSchema = z.object({
+  id: z.string().min(1).max(64),
+  label: z.string().trim().min(1, 'Name each extra exam.').max(60, 'Exam names must be 60 characters or fewer.'),
+  exam_date: z.union([z.literal(''), dateValue.refine(value => value >= '1900-01-01' && value <= '2100-12-31', 'Use a year between 1900 and 2100.')])
+})
+
 export const settingsSchema = z.object({
   owner_name: z.string().trim().max(100),
   main_exam_date: z.union([z.literal(''), dateValue]),
@@ -39,13 +47,28 @@ export const settingsSchema = z.object({
   exam_session: z.string().trim().max(40).nullable().default(null),
   exam_board: z.string().trim().max(40).nullable().default(null),
   boards_addon: z.boolean().default(false),
-  onboarding_completed: z.boolean().default(false)
+  onboarding_completed: z.boolean().default(false),
+  // Extra exams a student adds in Settings (e.g. a state CET beside their main exam). Additive:
+  // older rows and backups without the column default to none.
+  extra_exams: z.array(extraExamSchema).max(MAX_EXTRA_EXAMS, `Add up to ${MAX_EXTRA_EXAMS} extra exams.`).default([])
 }).refine(value => value.weak_threshold < value.strong_threshold, {
   path: ['strong_threshold'],
   message: 'Strong above must be greater than Weak below.'
 }).refine(value => value.pyq_from_year <= value.pyq_to_year, {
   path: ['pyq_to_year'],
   message: 'The PYQ year range must start before it ends.'
+})
+
+/**
+ * What the Settings form accepts. Stricter than the stored-row schema (which backups and
+ * imports also use) so legacy rows stay valid: a display name is required and the daily goal
+ * is at least one minute.
+ */
+export const settingsFormSchema = settingsSchema.superRefine((value, context) => {
+  if (value.owner_name.trim() === '') context.addIssue({ code: 'custom', path: ['owner_name'], message: 'Enter a display name.' })
+  if (Number.isFinite(value.daily_study_goal_minutes) && value.daily_study_goal_minutes < 1) {
+    context.addIssue({ code: 'custom', path: ['daily_study_goal_minutes'], message: 'Set a daily goal of at least 1 minute.' })
+  }
 })
 
 export type SettingsFieldErrors = Record<string, string>
@@ -65,8 +88,9 @@ export function settingsFieldErrors(error: z.ZodError): SettingsFieldErrors {
       case 'dropping_threshold': fieldErrors[field] = 'Must be between 0 and 100, using up to two decimal places.'; break
       case 'revision_gaps': fieldErrors[field] = 'Enter 1–12 positive whole days, e.g. 1, 7, 30.'; break
       case 'interface_font': fieldErrors[field] = 'Choose Lexend, Poppins, Sora, or Open Sans.'; break
-      case 'daily_study_goal_minutes': fieldErrors[field] = 'Enter a daily goal from 0 to 24 hours.'; break
-      case 'owner_name': fieldErrors[field] = 'Name must be 100 characters or fewer.'; break
+      case 'daily_study_goal_minutes': fieldErrors[field] = issue.code === 'custom' ? issue.message : 'Enter a daily goal from 1 minute to 24 hours.'; break
+      case 'owner_name': fieldErrors[field] = issue.code === 'custom' ? issue.message : 'Name must be 100 characters or fewer.'; break
+      case 'extra_exams': fieldErrors[field] = issue.message.startsWith('Invalid') ? 'Check each extra exam: a name and a valid date (or blank).' : issue.message; break
       case 'main_exam_date': fieldErrors[field] = 'Choose a valid calendar date or leave it blank.'; break
       case 'advanced_exam_date': fieldErrors[field] = 'Choose a valid calendar date or leave it blank.'; break
       case 'weight_high': case 'weight_medium': case 'weight_low': fieldErrors[field] = 'Use a weight from 0.1 to 10 (up to two decimal places).'; break

@@ -11,13 +11,15 @@ import { clearLocalUserData } from '../lib/database'
 import { supabase } from '../lib/supabase'
 import { readingFontOption, READING_FONT_OPTIONS } from '../lib/fonts'
 import { COLOR_THEME_OPTIONS } from '../lib/themes'
-import { settingsFieldErrors, settingsSchema } from '../lib/settings-validation'
+import { MAX_EXTRA_EXAMS, settingsFieldErrors, settingsFormSchema } from '../lib/settings-validation'
+import { DateInput } from '../components/DateTimeInputs'
+import { createId } from '../lib/id'
 import { passwordLengthError } from '../lib/auth-rules'
 import { AISettingsSection } from '../components/ai/AISettingsSection'
 import { ExamTracksSection, ReminderSettingsSection } from '../components/jee/SettingsSections'
 import { ExamSelectionSection } from '../components/jee/ExamSelectionSection'
 import { ListChecks } from 'lucide-react'
-import type { AppSettings, Profile, ThemeMode } from '../types'
+import type { AppSettings, ExtraExam, Profile, ThemeMode } from '../types'
 import { availableTracks, chosenExamTitle, isJeeSettings, trackLabels } from '../lib/jee/exam'
 
 type SettingsTab = 'account' | 'exam' | 'appearance' | 'rhythm' | 'data'
@@ -33,7 +35,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
 /** Which persisted settings each tab owns. Saving a tab writes only its own fields. */
 const TAB_FIELDS: Record<Exclude<SettingsTab, 'data'>, (keyof AppSettings)[]> = {
   account: ['owner_name'],
-  exam: ['main_exam_date', 'advanced_exam_date', 'target_score', 'active_track', 'exam_mode', 'weight_high', 'weight_medium', 'weight_low', 'pyq_from_year', 'pyq_to_year'],
+  exam: ['main_exam_date', 'advanced_exam_date', 'target_score', 'active_track', 'exam_mode', 'weight_high', 'weight_medium', 'weight_low', 'pyq_from_year', 'pyq_to_year', 'extra_exams'],
   appearance: ['theme', 'interface_font', 'color_theme'],
   rhythm: ['weak_threshold', 'strong_threshold', 'dropping_threshold', 'revision_gaps', 'daily_study_goal_minutes', 'sound_enabled', 'reminders_enabled', 'reminder_time', 'reminder_types']
 }
@@ -117,8 +119,8 @@ export default function SettingsPage() {
 
   const isTabDirty = (tab: SettingsTab): boolean => {
     if (tab === 'data') return false
-    if (tab === 'rhythm') return TAB_FIELDS.rhythm.some(key => draft[key] !== data.settings[key]) || rhythmTextsDirty()
-    return TAB_FIELDS[tab].some(key => draft[key] !== data.settings[key])
+    if (tab === 'rhythm') return TAB_FIELDS.rhythm.some(key => !sameSettingValue(draft[key], data.settings[key])) || rhythmTextsDirty()
+    return TAB_FIELDS[tab].some(key => !sameSettingValue(draft[key], data.settings[key]))
   }
 
   const anyDirty = TABS.some(tab => isTabDirty(tab.id))
@@ -167,7 +169,7 @@ export default function SettingsPage() {
     setSavingTab(tab)
 
     const candidate = tabCandidate(tab)
-    const validated = settingsSchema.safeParse(candidate)
+    const validated = settingsFormSchema.safeParse(candidate)
     if (!validated.success) {
       const allErrors = settingsFieldErrors(validated.error)
       // Only this tab's fields can be at fault: every other value comes from saved settings.
@@ -323,7 +325,7 @@ export default function SettingsPage() {
         <form className="settings-form" noValidate onSubmit={event => void saveTab('account', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'account'}>
             <NotebookCard className="settings-section"><SectionLabel icon={<UserRound size={18} />} title="Owner" /><div className="settings-section-content">
-              <div className="settings-owner-row"><div className="settings-avatar">{(draft.owner_name.trim()[0] ?? 'S').toUpperCase()}</div><div className="settings-owner-fields"><Field label="Display name" error={errors.owner_name}><input maxLength={100} value={draft.owner_name} onChange={event => patch('owner_name', event.target.value)} placeholder="What should Stracker call you?" /></Field><Field label="Account email"><input type="email" value={user?.email ?? ''} readOnly aria-readonly="true" /><span className="field-hint">Email and password are managed by secure Supabase authentication.</span></Field></div></div>
+              <div className="settings-owner-row"><div className="settings-avatar">{(draft.owner_name.trim()[0] ?? 'S').toUpperCase()}</div><div className="settings-owner-fields"><Field label="Display name" required error={errors.owner_name}><input required maxLength={100} value={draft.owner_name} onChange={event => patch('owner_name', event.target.value)} placeholder="What should Stracker call you?" /></Field><Field label="Account email"><input type="email" value={user?.email ?? ''} readOnly aria-readonly="true" /><span className="field-hint">Email and password are managed by secure Supabase authentication.</span></Field></div></div>
               <div className="settings-note-line"><Shield size={15} /> Your records stay private to this account — only you can read or change them. New accounts are created from the sign-up page whenever your Supabase project allows sign-ups.</div>
               <div className="settings-account-actions"><Button type="button" variant="secondary" onClick={() => setPasswordDialogOpen(true)} disabled={!user || user.isLocal}><KeyRound size={15} /> Change password</Button></div>
               {user?.isLocal && <small className="settings-account-note">Password changes are available for a cloud-authenticated owner account.</small>}
@@ -339,10 +341,12 @@ export default function SettingsPage() {
         <form className="settings-form" noValidate onSubmit={event => void saveTab('exam', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'exam'}>
             <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Exam dates & target" /><div className="settings-section-content"><div className="form-grid three">
-              <Field label={jeeExam ? 'JEE Main date' : `${examTitle} date`} error={errors.main_exam_date}><input type="date" value={draft.main_exam_date} onChange={event => patch('main_exam_date', event.target.value)} /></Field>
-              {jeeExam && <Field label="JEE Advanced date" error={errors.advanced_exam_date}><input type="date" value={draft.advanced_exam_date} onChange={event => patch('advanced_exam_date', event.target.value)} /></Field>}
+              <Field label={jeeExam ? 'JEE Main date' : `${examTitle} date`} error={errors.main_exam_date}><DateInput label={jeeExam ? 'JEE Main date' : `${examTitle} date`} value={draft.main_exam_date} invalid={Boolean(errors.main_exam_date)} onChange={value => patch('main_exam_date', value)} /></Field>
+              {jeeExam && <Field label="JEE Advanced date" error={errors.advanced_exam_date}><DateInput label="JEE Advanced date" value={draft.advanced_exam_date} invalid={Boolean(errors.advanced_exam_date)} onChange={value => patch('advanced_exam_date', value)} /></Field>}
               <Field label="Target score" error={errors.target_score}><input type="number" min="0" max="999999.99" step="0.01" value={Number.isFinite(draft.target_score) ? draft.target_score : ''} onChange={event => patch('target_score', event.target.value === '' ? Number.NaN : Number(event.target.value))} /><span className="field-hint">{jeeExam ? 'Compared to a mock with all three subject totals.' : 'Compared to a full mock with every subject total.'}</span></Field>
-            </div><div className="settings-note-line"><Target size={15} /> Leave dates blank until the official dates are confirmed.</div></div></NotebookCard>
+            </div>
+            <ExtraExamRows exams={draft.extra_exams ?? []} error={errors.extra_exams} onChange={next => patch('extra_exams', next)} />
+            <div className="settings-note-line"><Target size={15} /> Leave dates blank until the official dates are confirmed.</div></div></NotebookCard>
 
             <NotebookCard className="settings-section"><SectionLabel icon={<CalendarDays size={18} />} title="Active track & Exam Mode" note="The active track sets the countdown and Exam Mode." /><div className="settings-section-content"><div className="form-grid three">
               <Field label="Active track" error={errors.active_track}><select value={draft.active_track} onChange={event => patch('active_track', event.target.value as AppSettings['active_track'])}>{availableTracks(data.settings).map(track => <option key={track} value={track}>{examTrackLabels[track]}</option>)}{!availableTracks(data.settings).includes(draft.active_track) && <option value={draft.active_track}>{examTrackLabels.main1}</option>}</select></Field>
@@ -407,7 +411,7 @@ export default function SettingsPage() {
           <fieldset className="settings-form-fields" disabled={savingTab === 'rhythm'}>
             <NotebookCard className="settings-section"><SectionLabel icon={<RotateCcw size={18} />} title="Revision rhythm" note="Gaps after a chapter is first marked Done." /><div className="settings-section-content"><Field label="Days between revisions" error={errors.revision_gaps}><input value={gapsText} onChange={event => { setGapsText(event.target.value); setErrors(current => { const next = { ...current }; delete next.revision_gaps; return next }) }} placeholder="1, 7, 30" /><span className="field-hint">Comma-separated positive days, sorted automatically. Existing revisions are not moved.</span></Field><div className="revision-gap-preview">{gapsText.split(',').map(value => Number(value.trim())).filter(value => Number.isFinite(value) && value > 0).map((value, index) => <span key={`${value}-${index}`}>R{index + 1}<strong>{value}d</strong></span>)}</div></div></NotebookCard>
 
-            <NotebookCard className="settings-section"><SectionLabel icon={<Timer size={18} />} title="Daily goal & focus" /><div className="settings-section-content"><div className="form-grid two"><Field label="Daily study goal (hours)" error={errors.daily_study_goal_minutes}><input type="number" min="0" max="24" step="any" value={dailyGoalText} onChange={event => { setDailyGoalText(event.target.value); setErrors(current => { const next = { ...current }; delete next.daily_study_goal_minutes; return next }) }} /><span className="field-hint">Use whole-minute increments (for example, 1.5 hours).</span></Field><label className="sound-toggle"><input type="checkbox" checked={draft.sound_enabled} onChange={event => patch('sound_enabled', event.target.checked)} /><span className="toggle-visual" /><span><strong>Focus timer sound</strong><small>Play a soft tone when a focus session ends.</small></span></label></div><div className="settings-note-line"><Bell size={15} /> Sound is generated locally in your browser; no audio is sent to a service.{draft.sound_enabled && <button className="text-button" type="button" onClick={playTestTone}>{soundTested ? 'Test tone played' : 'Try a tone'}</button>}</div></div></NotebookCard>
+            <NotebookCard className="settings-section"><SectionLabel icon={<Timer size={18} />} title="Daily goal & focus" /><div className="settings-section-content"><div className="form-grid two"><Field label="Daily study goal (hours)" error={errors.daily_study_goal_minutes}><input type="number" min={1 / 60} max="24" step="any" value={dailyGoalText} onChange={event => { setDailyGoalText(event.target.value); setErrors(current => { const next = { ...current }; delete next.daily_study_goal_minutes; return next }) }} /><span className="field-hint">Use whole-minute increments (for example, 1.5 hours).</span></Field><label className="sound-toggle"><input type="checkbox" checked={draft.sound_enabled} onChange={event => patch('sound_enabled', event.target.checked)} /><span className="toggle-visual" /><span><strong>Focus timer sound</strong><small>Play a soft tone when a focus session ends.</small></span></label></div><div className="settings-note-line"><Bell size={15} /> Sound is generated locally in your browser; no audio is sent to a service.{draft.sound_enabled && <button className="text-button" type="button" onClick={playTestTone}>{soundTested ? 'Test tone played' : 'Try a tone'}</button>}</div></div></NotebookCard>
 
             <ReminderSettingsSection draft={draft} patch={patch} errors={errors} />
 
@@ -491,4 +495,21 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
 
 function SectionLabel({ icon, title, note }: { icon: React.ReactNode; title: string; note?: string }) {
   return <div className="settings-section-heading"><span className="settings-section-icon">{icon}</span><div><h2>{title}{note && <InfoTip text={note} />}</h2></div></div>
+}
+
+/** "Add exam" rows: extra exams (name + optional date) kept beside the main exam. */
+function ExtraExamRows({ exams, error, onChange }: { exams: ExtraExam[]; error?: string; onChange: (next: ExtraExam[]) => void }) {
+  const update = (id: string, change: Partial<ExtraExam>) => onChange(exams.map(item => item.id === id ? { ...item, ...change } : item))
+  return <div className="settings-extra-exams">
+    {exams.length > 0 && <ul className="settings-extra-exam-list" aria-label="Extra exams">
+      {exams.map((exam, index) => <li key={exam.id} className="settings-extra-exam-row">
+        <Field label={`Exam ${index + 2} name`}><input maxLength={60} value={exam.label} placeholder="e.g. BITSAT" onChange={event => update(exam.id, { label: event.target.value })} /></Field>
+        <Field label={`Exam ${index + 2} date`}><DateInput label={`${exam.label.trim() || `Exam ${index + 2}`} date`} value={exam.exam_date} onChange={value => update(exam.id, { exam_date: value })} /></Field>
+        <Button type="button" variant="secondary" size="sm" onClick={() => onChange(exams.filter(item => item.id !== exam.id))} aria-label={`Remove ${exam.label.trim() || `exam ${index + 2}`}`}>Remove</Button>
+      </li>)}
+    </ul>}
+    {error && <p className="field-error" role="alert">{error}</p>}
+    <Button type="button" variant="secondary" size="sm" disabled={exams.length >= MAX_EXTRA_EXAMS} onClick={() => onChange([...exams, { id: createId(), label: '', exam_date: '' }])}>+ Add exam</Button>
+    {exams.length >= MAX_EXTRA_EXAMS && <small className="field-hint">Up to {MAX_EXTRA_EXAMS} extra exams.</small>}
+  </div>
 }

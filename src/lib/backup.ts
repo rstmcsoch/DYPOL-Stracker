@@ -210,6 +210,29 @@ export function validateBackupText(text: string, current: AppData): ValidatedImp
   return { backup: valid, invalid, counts, warnings }
 }
 
+export interface TestRangeCounts { total: number; included: number; before: number; after: number }
+
+/** How many tests a From/To window keeps, and how many it skips on each side (same rule as the CSV and report). */
+export function testRangeCounts(tests: readonly { test_date: string }[], from = '', to = ''): TestRangeCounts {
+  let before = 0
+  let after = 0
+  for (const test of tests) {
+    if (from && test.test_date < from) before += 1
+    else if (to && test.test_date > to) after += 1
+  }
+  return { total: tests.length, included: tests.length - before - after, before, after }
+}
+
+/** Plain sentence for the Backup page: why exports may hold fewer tests than the Tests page. */
+export function testRangeSummary(counts: TestRangeCounts, from = '', to = ''): string {
+  const plural = (n: number) => `${n} test${n === 1 ? '' : 's'}`
+  if (counts.before === 0 && counts.after === 0) return `All ${plural(counts.total)} fall in this range.`
+  const skipped: string[] = []
+  if (counts.after) skipped.push(`${counts.after} dated after ${to} ${counts.after === 1 ? 'is' : 'are'} skipped`)
+  if (counts.before) skipped.push(`${counts.before} dated before ${from} ${counts.before === 1 ? 'is' : 'are'} skipped`)
+  return `${counts.included} of ${plural(counts.total)} fall in this range · ${skipped.join(' · ')}.`
+}
+
 export function testsToCsv(data: AppData, from = '', to = ''): string {
   const escape = (value: unknown) => {
     let text = value == null ? '' : String(value)

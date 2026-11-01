@@ -45,6 +45,7 @@ export function defaultSettings(userId: string, ownerName = ''): AppSettings {
     exam_board: null,
     boards_addon: false,
     onboarding_completed: false,
+    extra_exams: [],
     created_at: now,
     updated_at: now
   }
@@ -106,6 +107,7 @@ export function normalizeSettings(row: Record<string, unknown>, userId: string):
     exam_board: typeof row.exam_board === 'string' && row.exam_board.length <= 40 ? row.exam_board : null,
     boards_addon: row.boards_addon === true,
     onboarding_completed: row.onboarding_completed === true,
+    extra_exams: normalizeExtraExams(row.extra_exams),
     created_at: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : new Date().toISOString()
   }
@@ -181,4 +183,16 @@ export function shouldShowOnboarding(input: { needed: boolean; loading: boolean;
   if (!input.needed) return false
   if (input.alreadyShown) return true
   return !input.loading && input.profileLoaded && input.syncState !== 'loading' && input.syncState !== 'syncing'
+}
+
+/** Keep only well-formed extra-exam rows; anything malformed in an old row is dropped, never thrown. */
+export function normalizeExtraExams(value: unknown): AppSettings['extra_exams'] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    if (!item || typeof item !== 'object') return []
+    const row = item as Record<string, unknown>
+    if (typeof row.id !== 'string' || typeof row.label !== 'string') return []
+    const date = typeof row.exam_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.exam_date) ? row.exam_date : ''
+    return [{ id: row.id.slice(0, 64), label: row.label.slice(0, 60), exam_date: date }]
+  }).slice(0, 6)
 }

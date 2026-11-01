@@ -369,6 +369,15 @@ export interface AppSettings extends BaseRecord {
   boards_addon: boolean
   /** Set once the first-run setup (name, exam, light/dark) has been completed. */
   onboarding_completed: boolean
+  /** Extra exams added in Settings beside the main exam (label + optional date). */
+  extra_exams: ExtraExam[]
+}
+
+export interface ExtraExam {
+  id: string
+  label: string
+  /** YYYY-MM-DD, or '' until the date is confirmed. */
+  exam_date: string
 }
 
 export interface Profile extends BaseRecord {

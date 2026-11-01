@@ -9,6 +9,7 @@ import { createId } from '../lib/id'
 import { goalSchema, MAX_COUNT_GOAL, MAX_WEEKLY_STUDY_HOURS } from '../lib/goal-validation'
 import { taskInputSchema } from '../lib/task-validation'
 import { indiaDate, indiaToday, prettyDate } from '../lib/date'
+import { MAX_INPUT_DATE, MIN_INPUT_DATE, isValidInputDate } from '../lib/date-input'
 import { fmtDuration, fmtNumber } from '../lib/format'
 import type { DailyTask, GoalType, Priority, Subject, WeeklyGoal } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
@@ -39,6 +40,34 @@ export default function PlannerPage() {
   const days = useMemo(() => weekDays(weekStart), [weekStart])
   const tasks = data.tasks.filter(task => task.task_date === selectedDate).sort((a, b) => a.position - b.position)
   const goals = data.goals.filter(goal => goal.week_start === weekStart)
+
+  // Deep links from search (Cmd+K) or elsewhere: /planner?date=YYYY-MM-DD&task=<id> opens that
+  // task's week and day, then scrolls to and highlights the task so it can be edited or deleted.
+  const [focusTaskId, setFocusTaskId] = useState<string | null>(null)
+  useEffect(() => {
+    const dateParam = searchParams.get('date')
+    const taskParam = searchParams.get('task')
+    if (!dateParam && !taskParam) return
+    const target = taskParam ? data.tasks.find(task => task.id === taskParam) : undefined
+    const day = target?.task_date ?? (dateParam && isValidInputDate(dateParam) ? dateParam : null)
+    if (day) { setWeekStart(monday(day)); setSelectedDate(day) }
+    if (target) setFocusTaskId(target.id)
+    // Keep the params until the task has loaded, so a cold load still lands on it.
+    if (!taskParam || target) {
+      const params = new URLSearchParams(searchParams); params.delete('date'); params.delete('task'); setSearchParams(params, { replace: true })
+    }
+  }, [searchParams, setSearchParams, data.tasks])
+  useEffect(() => {
+    if (!focusTaskId) return
+    const row = document.getElementById(`planner-task-${focusTaskId}`)
+    if (!row) return
+    row.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    row.focus({ preventScroll: true })
+  }, [focusTaskId, selectedDate])
+  const jumpToDate = (value: string) => {
+    if (!isValidInputDate(value)) return
+    setWeekStart(monday(value)); setSelectedDate(value); setFocusTaskId(null)
+  }
 
   useEffect(() => {
     if (searchParams.get('add') === '1') {
@@ -110,7 +139,7 @@ export default function PlannerPage() {
     <div className="planner-main-grid">
       <div className="planner-primary">
         <NotebookCard className="week-card">
-          <div className="week-card-head"><div><span className="handwriting-label">This week, on paper</span><p>{prettyDate(weekStart, { day: 'numeric', month: 'short' })} – {prettyDate(format(endOfWeek(parseISO(`${weekStart}T12:00:00`), { weekStartsOn: 1 }), 'yyyy-MM-dd'), { day: 'numeric', month: 'short', year: 'numeric' })}</p></div><div className="week-arrows"><button onClick={() => moveWeek(-1)} aria-label="Previous week"><ArrowLeft size={17} /></button><button onClick={() => selectWeek(monday(indiaToday()))}>This week</button><button onClick={() => moveWeek(1)} aria-label="Next week"><ArrowRight size={17} /></button></div></div>
+          <div className="week-card-head"><div><span className="handwriting-label">This week, on paper</span><p>{prettyDate(weekStart, { day: 'numeric', month: 'short' })} – {prettyDate(format(endOfWeek(parseISO(`${weekStart}T12:00:00`), { weekStartsOn: 1 }), 'yyyy-MM-dd'), { day: 'numeric', month: 'short', year: 'numeric' })}</p></div><div className="week-arrows"><button onClick={() => moveWeek(-1)} aria-label="Previous week"><ArrowLeft size={17} /></button><button onClick={() => selectWeek(monday(indiaToday()))}>This week</button><button onClick={() => moveWeek(1)} aria-label="Next week"><ArrowRight size={17} /></button><input type="date" className="planner-jump-date" aria-label="Jump to date" title="Jump to any date" min={MIN_INPUT_DATE} max={MAX_INPUT_DATE} value={selectedDate} onChange={event => jumpToDate(event.target.value)} /></div></div>
           <div className="week-day-strip">{days.map(day => {
             const dayTasks = data.tasks.filter(task => task.task_date === day)
             const done = dayTasks.filter(task => task.is_completed).length
@@ -121,7 +150,7 @@ export default function PlannerPage() {
           })}</div>
           <div className="selected-day-head"><div><span className="eyebrow">{selectedDate === indiaToday() ? 'TODAY' : new Intl.DateTimeFormat('en-IN', { weekday: 'long' }).format(parseISO(`${selectedDate}T12:00:00`)).toUpperCase()}</span><h2>{prettyDate(selectedDate, { day: 'numeric', month: 'long' })}</h2></div><span className="task-count-label">{doneTotal} / {todayTotal} complete</span></div>
           <div className="planner-task-list" onDragOver={event => event.preventDefault()}>
-            {tasks.length === 0 ? <EmptyState icon={<CalendarDays size={24} />} title="Nothing planned for this day." action={<Button variant="secondary" size="sm" onClick={() => { setEditingTask(null); setTaskDialog(true) }}><Plus size={15} /> Plan a task</Button>} /> : tasks.map((task, index) => <PlannerTaskRow key={task.id} task={task} chapter={data.chapters.find(chapter => chapter.id === task.chapter_id)} dragged={draggedId === task.id} onToggle={() => void toggleTask(task)} onEdit={() => { setEditingTask(task); setTaskDialog(true) }} onDuplicate={() => void duplicateTask(task)} onDelete={() => setDeleteTarget(task)} onDragStart={() => setDraggedId(task.id)} onDragEnd={() => setDraggedId(null)} onDrop={() => { const dragged = tasks.find(item => item.id === draggedId); if (dragged) void reorderTask(dragged, task); setDraggedId(null) }} onMove={direction => { const dest = tasks[index + direction]; if (dest) void reorderTask(task, dest) }} />)}
+            {tasks.length === 0 ? <EmptyState icon={<CalendarDays size={24} />} title="Nothing planned for this day." action={<Button variant="secondary" size="sm" onClick={() => { setEditingTask(null); setTaskDialog(true) }}><Plus size={15} /> Plan a task</Button>} /> : tasks.map((task, index) => <PlannerTaskRow key={task.id} task={task} highlighted={focusTaskId === task.id} chapter={data.chapters.find(chapter => chapter.id === task.chapter_id)} dragged={draggedId === task.id} onToggle={() => void toggleTask(task)} onEdit={() => { setEditingTask(task); setTaskDialog(true) }} onDuplicate={() => void duplicateTask(task)} onDelete={() => setDeleteTarget(task)} onDragStart={() => setDraggedId(task.id)} onDragEnd={() => setDraggedId(null)} onDrop={() => { const dragged = tasks.find(item => item.id === draggedId); if (dragged) void reorderTask(dragged, task); setDraggedId(null) }} onMove={direction => { const dest = tasks[index + direction]; if (dest) void reorderTask(task, dest) }} />)}
           </div>
           <div className="planner-card-footer"><span><GripVertical size={15} /> Drag to reorder. Edit a task to move dates.</span><span>{fmtDuration(tasks.reduce((sum, task) => sum + (task.is_completed ? task.estimated_minutes : 0), 0))} complete</span></div>
         </NotebookCard>
@@ -144,11 +173,11 @@ export default function PlannerPage() {
   </div>
 }
 
-function PlannerTaskRow({ task, chapter, dragged, onToggle, onEdit, onDuplicate, onDelete, onDragStart, onDragEnd, onDrop, onMove }: {
-  task: DailyTask; chapter?: ReturnType<typeof useData>['data']['chapters'][number]; dragged: boolean;
+function PlannerTaskRow({ task, highlighted = false, chapter, dragged, onToggle, onEdit, onDuplicate, onDelete, onDragStart, onDragEnd, onDrop, onMove }: {
+  task: DailyTask; highlighted?: boolean; chapter?: ReturnType<typeof useData>['data']['chapters'][number]; dragged: boolean;
   onToggle: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void; onDragStart: () => void; onDragEnd: () => void; onDrop: () => void; onMove: (direction: -1 | 1) => void
 }) {
-  return <article className={`planner-task-row ${task.is_completed ? 'task-done' : ''} ${dragged ? 'task-dragging' : ''}`} draggable onDragStart={onDragStart} onDragEnd={onDragEnd} onDrop={event => { event.preventDefault(); onDrop() }} onDragOver={event => event.preventDefault()}>
+  return <article id={`planner-task-${task.id}`} tabIndex={-1} aria-current={highlighted ? 'true' : undefined} className={`planner-task-row ${task.is_completed ? 'task-done' : ''} ${dragged ? 'task-dragging' : ''} ${highlighted ? 'task-highlight' : ''}`} draggable onDragStart={onDragStart} onDragEnd={onDragEnd} onDrop={event => { event.preventDefault(); onDrop() }} onDragOver={event => event.preventDefault()}>
     <span className="planner-task-grip"><GripVertical size={16} /></span><button className="task-check" onClick={onToggle} aria-label={task.is_completed ? `Mark ${task.title} incomplete` : `Complete ${task.title}`} aria-pressed={task.is_completed}><Check size={14} /></button>
     <div className="planner-task-copy"><strong>{task.title}</strong><div className="planner-task-meta">{task.subject && <SubjectBadge subject={task.subject} />}{chapter && <span>{chapter.name}</span>}{task.topic && <span className="planner-task-topic">{task.topic}</span>}<span><Clock3 size={12} /> {fmtDuration(task.estimated_minutes)}</span><span className={`priority-label label-${task.priority.toLowerCase()}`}>{task.priority}</span></div></div>
     <div className="planner-task-tools"><button onClick={() => onMove(-1)} aria-label="Move task up" title="Move up"><ArrowUp size={14} /></button><button onClick={() => onMove(1)} aria-label="Move task down" title="Move down"><ArrowDown size={14} /></button><button onClick={onDuplicate} aria-label="Duplicate task" title="Duplicate"><Copy size={14} /></button><button onClick={onEdit} aria-label="Edit or reschedule task" title="Edit"><ChevronDown size={14} /></button><button onClick={onDelete} aria-label="Delete task" title="Delete"><Trash2 size={14} /></button></div>

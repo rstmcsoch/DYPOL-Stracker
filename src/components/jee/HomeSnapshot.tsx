@@ -5,7 +5,7 @@ import { NotebookCard } from '../ui'
 import { Meter, Pct, minutesLabel } from './shared'
 import { useData } from '../../contexts/DataContext'
 import { indiaToday } from '../../lib/date'
-import { aggregatePractice, pyqCompletion, syllabusProgress } from '../../lib/jee/progress'
+import { aggregatePractice, pyqCompletion, pyqProgressCounts, syllabusProgress } from '../../lib/jee/progress'
 import { currentExamMode, effectiveTrack, isJeeSettings, trackLabels, trackReadiness } from '../../lib/jee/exam'
 import { PRIMARY_ACTIVITIES, studyMinutesByActivity, weekRange } from '../../lib/jee/study-time'
 import { backlogDueCounts, computeReminders } from '../../lib/jee/reminders'
@@ -26,6 +26,7 @@ export function HomeSnapshot() {
   const practice = useMemo(() => aggregatePractice(data.practiceSessions), [data.practiceSessions])
   const pyqMain = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Main', data.settings), [data.pyqRecords, data.settings])
   const pyqAdv = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Advanced', data.settings), [data.pyqRecords, data.settings])
+  const pyqCounts = useMemo(() => pyqProgressCounts(data), [data])
   const backlog = useMemo(() => backlogDueCounts(data.backlogItems, today), [data.backlogItems, today])
   const mode = currentExamMode(data, today)
   const activeTrack = effectiveTrack(data.settings)
@@ -57,6 +58,8 @@ export function HomeSnapshot() {
         <div><strong><Pct value={practice.accuracy} /></strong><span>accuracy</span></div>
         {jee && <div><strong><Pct value={pyqMain.percent} /></strong><span>JEE Main PYQs</span></div>}
         {jee && <div><strong><Pct value={pyqAdv.percent} /></strong><span>Advanced PYQs</span></div>}
+        {!jee && <div><strong><Pct value={pyqMain.percent} /></strong><span>PYQ years covered</span></div>}
+        <div><strong>{pyqCounts.doneYears.toLocaleString('en-IN')}</strong><span>PYQ chapter-years done</span></div>
       </div>
       <div className="jee-backlog-due-links">
         <button type="button" className="jee-link" onClick={() => navigate('/backlog')}>Backlog due now: <strong>{backlog.dueNow}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
@@ -67,7 +70,7 @@ export function HomeSnapshot() {
     <NotebookCard className="jee-snap-card jee-snap-exam">
       <div className="jee-snap-head"><span className="eyebrow">{trackLabels(data.settings)[activeTrack].toUpperCase()}</span><button type="button" className="jee-link" onClick={() => navigate('/settings')}>Exam dates <ArrowUpRight size={13} aria-hidden="true" /></button></div>
       <p className="jee-small">{mode.active ? mode.reason : 'Exam Mode turns on automatically in the final 30 days. The big countdown lives at the top of Home.'}</p>
-      <ProgressLine label="Track readiness" value={track.percent} detail={jee ? 'weighted syllabus, PYQs and recent tests' : 'weighted syllabus and recent tests'} />
+      <ProgressLine label="Track readiness" value={track.percent} detail="weighted syllabus, PYQs and recent tests" />
     </NotebookCard>
 
     {reminders.length > 0 && <NotebookCard className="jee-snap-card jee-snap-reminders">

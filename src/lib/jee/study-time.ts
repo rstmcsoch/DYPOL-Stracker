@@ -77,10 +77,21 @@ export function qualifyingDays(data: AppData): Set<string> {
   return days
 }
 
+/**
+ * The one "active days this week" number used everywhere (Home rhythm, Profile, Analytics
+ * weekly report): qualifying days (the streak rule above) from Monday through today, IST.
+ */
+export function activeDaysThisWeek(data: AppData, today: string, days: Set<string> = qualifyingDays(data)): number {
+  const range = weekRange(today)
+  let count = 0
+  for (const day of days) if (day >= range.start && day <= range.end) count += 1
+  return count
+}
+
 export interface StreakSummary {
   current: number
   longest: number
-  /** Days with qualifying activity in the last 7 IST days, including today. */
+  /** Qualifying days this IST week (Monday through today); see activeDaysThisWeek. */
   weeklyConsistency: number
   qualifyingToday: boolean
   rule: string
@@ -107,10 +118,6 @@ export function computeStreaks(data: AppData, today: string): StreakSummary {
     current += 1
     cursor = format(addDays(parseISO(`${cursor}T12:00:00`), -1), 'yyyy-MM-dd')
   }
-  let weeklyConsistency = 0
-  for (let offset = 0; offset < 7; offset += 1) {
-    const day = format(addDays(parseISO(`${today}T12:00:00`), -offset), 'yyyy-MM-dd')
-    if (days.has(day)) weeklyConsistency += 1
-  }
+  const weeklyConsistency = activeDaysThisWeek(data, today, days)
   return { current, longest, weeklyConsistency, qualifyingToday: days.has(today), rule: STREAK_RULE_TEXT }
 }
