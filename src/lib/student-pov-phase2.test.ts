@@ -10,13 +10,12 @@ import { APP_SECTION_PATHS, isKnownAppPath } from './app-routes'
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')
 
 describe('item 14: Home clears the floating buttons', () => {
-  it('pads the dashboard by the full FAB stack height using the safe-area-aware variables', () => {
+  it('every page (Home included) ends with the shared clearance that clears the floating buttons', () => {
     const css = read('src/styles/layout.css')
-    const rule = css.match(/\.dashboard-page\s*\{[^}]*padding-bottom:\s*([^;]+);/)
-    expect(rule?.[1]).toContain('var(--fab-bottom)')
-    expect(rule?.[1]).toMatch(/2 \* var\(--fab-size\)/)
-    expect(rule?.[1]).toContain('var(--fab-gap)')
-    // The phone breakpoints fold the safe-area inset into --fab-bottom, so the padding follows it.
+    // Home no longer adds its own extra padding; the shared shell clearance covers every page.
+    expect(css).toContain('.dashboard-page { padding-bottom: 0; }')
+    expect(css).toContain('--page-bottom-clearance: calc(var(--fab-bottom) + var(--fab-size) + var(--fab-gap))')
+    // The phone breakpoints fold the safe-area inset into --fab-bottom, so the clearance follows it.
     expect(css).toMatch(/max-width: 700px\)[^}]*--fab-bottom: calc\([^)]*var\(--safe-bottom\)/)
   })
 })

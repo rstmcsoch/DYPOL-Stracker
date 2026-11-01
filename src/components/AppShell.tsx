@@ -25,6 +25,7 @@ import { chosenExamTitle, isJeeSettings } from '../lib/jee/exam'
 import { OnboardingDialog } from './OnboardingDialog'
 import { needsOnboarding, shouldShowOnboarding } from '../lib/defaults'
 import { ContactLink } from './public/ContactLink'
+import { showsBrandFooter } from '../lib/brand-footer'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
 interface NavigationGroup { caption: string; items: NavigationItem[] }
@@ -201,7 +202,7 @@ export function AppFrame() {
         <span>{syncError}</span><button onClick={() => void refresh()}>{syncState === 'offline' ? 'Retry when online' : 'Retry sync'}</button>
       </div>}
       <div className="page-wrap"><Suspense fallback={<PageLoading />}><Outlet /></Suspense></div>
-      <footer className="app-footer"><span className="footer-spark" aria-hidden="true">✳</span><span className="footer-credit">Stracker <i>by</i> DYPOL LABS</span><span className="footer-tagline">A little more prepared, every day.</span><ContactLink className="footer-contact" addressOnly /></footer>
+      {showsBrandFooter(location.pathname) && <footer className="app-footer"><span className="footer-spark" aria-hidden="true">✳</span><span className="footer-credit">Stracker <i>by</i> DYPOL LABS</span><span className="footer-tagline">A little more prepared, every day.</span><ContactLink className="footer-contact" addressOnly /></footer>}
     </main>
 
     <nav className="mobile-nav" aria-label="Mobile navigation">

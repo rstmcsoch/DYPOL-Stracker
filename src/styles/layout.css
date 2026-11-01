@@ -181,7 +181,7 @@
 /* Home: reserve room under the last card for the stacked floating buttons (lightning + Ask Stracker),
    so "One thing to notice" can always scroll clear of them. Uses the same --fab-* variables (which
    already include the safe-area inset on phones), so it holds at every breakpoint. */
-.dashboard-page { padding-bottom: calc(var(--fab-bottom) + (2 * var(--fab-size)) + var(--fab-gap) + 16px); }
+.dashboard-page { padding-bottom: 0; }
 
 /* Planner topic: live character counter. */
 .char-counter { display: block; margin-top: 4px; color: var(--muted); font-size: max(.8125rem, calc(11px * var(--body-scale))); font-variant-numeric: tabular-nums; }
@@ -217,3 +217,14 @@
 
 /* Optional Contact link in the notebook footer (only rendered when the owner set an address). */
 .app-footer .footer-contact { color: var(--ink-soft); text-decoration: underline; text-underline-offset: 3px; }
+
+/* Page-end spacing: ONE shared rhythm for every student page at every breakpoint.
+   --page-end-gap      space between a page's last card and the footer (or the page end)
+   --page-bottom-clearance  space after everything, just enough to clear the lowest floating
+                       button (which on phones already sits above the bottom nav + safe area).
+   Replaces the stacked page-wrap padding, Home-only padding, footer margin-bottom and
+   ::after spacer that previously added up differently per page and per device. */
+:root { --page-end-gap: 24px; --page-bottom-clearance: calc(var(--fab-bottom) + var(--fab-size) + var(--fab-gap)); }
+@media (max-width: 700px) { :root { --page-end-gap: 18px; } }
+.app-shell:not(.focus-app-shell) .page-wrap { flex: 0 0 auto; padding-bottom: var(--page-end-gap); }
+.app-shell:not(.focus-app-shell) .app-footer { margin-top: 0; margin-bottom: 0; min-height: 56px; }
