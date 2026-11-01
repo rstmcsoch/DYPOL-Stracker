@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { loadHiddenSeries, saveHiddenSeries } from '../lib/analytics-legend'
 import { useNavigate } from 'react-router-dom'
 import {
   Activity, BarChart3, BookOpen, CircleHelp, Clock3, Pin, PinOff, Plus, Sparkles, Target
@@ -265,8 +266,16 @@ function PerformanceCard({ data, subjects, hasTestScore, hasSubjectScores, pinne
   const [range, setRangeState] = useState(() => loadTrendRange(rangeOwner))
   const setRange = (value: string) => { setRangeState(value); saveTrendRange(rangeOwner, value) }
   // Legend entries toggle their line on the chart; at least one series always stays visible.
-  const [hiddenSeries, setHiddenSeries] = useState<string[]>([])
+  const [storedHidden, setStoredHidden] = useState<string[]>(() => loadHiddenSeries(rangeOwner))
   const seriesKeys = ['overall', ...subjects.map(item => item.subject)]
+  // Unknown keys are ignored, and if a stored choice would hide every line, all lines show.
+  const knownHidden = storedHidden.filter(item => seriesKeys.includes(item))
+  const hiddenSeries = knownHidden.length >= seriesKeys.length ? [] : knownHidden
+  const setHiddenSeries = (update: (current: string[]) => string[]) => {
+    const next = update(hiddenSeries)
+    setStoredHidden(next)
+    saveHiddenSeries(rangeOwner, next)
+  }
   const toggleSeries = (key: string) => setHiddenSeries(current => current.includes(key)
     ? current.filter(item => item !== key)
     : seriesKeys.filter(item => item !== key && !current.includes(item)).length === 0 ? current : [...current, key])

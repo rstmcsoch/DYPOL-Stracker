@@ -25,6 +25,8 @@ import { chosenExamTitle, isJeeSettings } from '../lib/jee/exam'
 import { OnboardingDialog } from './OnboardingDialog'
 import { needsOnboarding, shouldShowOnboarding } from '../lib/defaults'
 import { ContactLink } from './public/ContactLink'
+import { InfoLinks } from './public/InfoLinks'
+import { GroupedChapterOptions } from './GroupedChapterOptions'
 import { showsBrandFooter } from '../lib/brand-footer'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
@@ -202,7 +204,7 @@ export function AppFrame() {
         <span>{syncError}</span><button onClick={() => void refresh()}>{syncState === 'offline' ? 'Retry when online' : 'Retry sync'}</button>
       </div>}
       <div className="page-wrap"><Suspense fallback={<PageLoading />}><Outlet /></Suspense></div>
-      {showsBrandFooter(location.pathname) && <footer className="app-footer"><span className="footer-spark" aria-hidden="true">✳</span><span className="footer-credit">Stracker <i>by</i> DYPOL LABS</span><span className="footer-tagline">A little more prepared, every day.</span><ContactLink className="footer-contact" addressOnly /></footer>}
+      {showsBrandFooter(location.pathname) && <footer className="app-footer"><span className="footer-spark" aria-hidden="true">✳</span><span className="footer-credit">Stracker <i>by</i> DYPOL LABS</span><span className="footer-tagline">A little more prepared, every day.</span><span className="footer-links"><InfoLinks /><ContactLink className="footer-contact" addressOnly /></span></footer>}
     </main>
 
     <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -315,7 +317,7 @@ function QuickTaskDialog({ data, onClose }: { data: AppData; onClose: () => void
     <form className="form-stack" noValidate onSubmit={save}>
       <Field label="What do you want to do?" required error={fieldErrors.title}><input autoFocus required maxLength={200} placeholder="e.g. Revise Kirchhoff's laws" value={title} onChange={event => { setTitle(event.target.value); setFieldErrors(current => { const next = { ...current }; delete next.title; return next }) }} /></Field>
       <div className="form-grid two"><Field label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{quickSubjects.map(item => <option key={item}>{item}</option>)}</select></Field>
-        <Field label="Chapter"><select value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="">Choose chapter</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field></div>
+        <Field label="Chapter"><select value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="">Choose chapter</option>{subject ? chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>) : <GroupedChapterOptions chapters={chapters} subjectOrder={quickSubjects} />}</select></Field></div>
       <div className="form-grid two"><Field label="Estimated time (min)" error={fieldErrors.estimated_minutes}><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => { setMinutes(event.target.value); setFieldErrors(current => { const next = { ...current }; delete next.estimated_minutes; return next }) }} /></Field>
         <Field label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={loading}>Add to today <Check size={16} /></Button></div>
@@ -332,7 +334,7 @@ export function GlobalSearch({ data, onClose }: { data: AppData; onClose: () => 
     if (!trimmed) return []
     const found: { label: string; type: string; to: string; context: string }[] = []
     data.chapters.filter(chapter => `${chapter.name} ${chapter.subject} ${chapter.notes} ${chapter.formula_notes}`.toLowerCase().includes(trimmed)).slice(0, 6).forEach(chapter => found.push({ label: chapter.name, type: 'Chapter', to: '/syllabus', context: `${chapter.subject} · ${chapter.status}` }))
-    data.tests.filter(test => `${test.title} ${test.test_type} ${test.notes}`.toLowerCase().includes(trimmed)).slice(0, 5).forEach(test => found.push({ label: test.title, type: 'Test', to: '/tests', context: `${test.test_date} · ${test.test_type}` }))
+    data.tests.filter(test => `${test.title} ${test.test_type} ${test.notes}`.toLowerCase().includes(trimmed)).slice(0, 5).forEach(test => found.push({ label: test.title, type: 'Test', to: `/tests?view=${encodeURIComponent(test.id)}`, context: `${test.test_date} · ${test.test_type}` }))
     data.mistakes.filter(mistake => `${mistake.question_note} ${mistake.solution_note} ${mistake.mistake_type}`.toLowerCase().includes(trimmed)).slice(0, 5).forEach(mistake => found.push({ label: mistake.question_note, type: 'Mistake', to: '/mistakes', context: mistake.mistake_type }))
     data.tasks.filter(task => task.title.toLowerCase().includes(trimmed)).slice(0, 5).forEach(task => found.push({ label: task.title, type: 'Task', to: plannerTaskHref(task), context: task.task_date }))
     return found.slice(0, 12)

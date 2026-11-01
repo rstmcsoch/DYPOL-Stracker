@@ -18,3 +18,15 @@ export function chapterGroups<T extends { subject: string; position?: number; na
     chapters: chapters.filter(chapter => chapter.subject === subject).sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.name.localeCompare(b.name))
   })).filter(group => group.chapters.length > 0)
 }
+
+/**
+ * Flat option list for a General-subject chapter picker: a disabled heading row per subject
+ * followed by that subject's chapters. Disabled heading rows show as group headers in every
+ * native picker (some Android pickers flatten <optgroup> and drop its label).
+ */
+export function groupedChapterOptions<T extends { id: string; subject: string; position?: number; name: string }>(chapters: T[], subjectOrder: readonly string[]): Array<{ kind: 'heading'; subject: string } | { kind: 'chapter'; id: string; label: string }> {
+  return chapterGroups(chapters, subjectOrder).flatMap(group => [
+    { kind: 'heading' as const, subject: group.subject },
+    ...group.chapters.map(chapter => ({ kind: 'chapter' as const, id: chapter.id, label: `${group.subject} · ${chapter.name}` }))
+  ])
+}

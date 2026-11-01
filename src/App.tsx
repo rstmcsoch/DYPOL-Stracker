@@ -36,6 +36,7 @@ const BacklogPage = lazy(() => import('./pages/BacklogPage'))
 const MockAnalysisPage = lazy(() => import('./pages/MockAnalysisPage'))
 const DecksPage = lazy(() => import('./pages/DecksPage'))
 const StudyNowPage = lazy(() => import('./pages/StudyNowPage'))
+const InfoPage = lazy(() => import('./pages/InfoPage'))
 // Private operations console: lazy-loaded so its code and styles never reach the public or notebook bundles.
 const ControlPanelApp = lazy(() => import('./control/ControlPanelApp'))
 
@@ -134,6 +135,10 @@ function AppRoutes() {
       {/* Password recovery stays on its original public route: the emailed link
           authenticates a short-lived session, so it must not be redirected away. */}
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      {/* Owner-written information pages, open to visitors and students alike. About and Terms are a 404 until written. */}
+      <Route path="/privacy" element={<SiteContentProvider><InfoPage kind="privacy" /></SiteContentProvider>} />
+      <Route path="/terms" element={<SiteContentProvider><InfoPage kind="terms" /></SiteContentProvider>} />
+      <Route path="/about" element={<SiteContentProvider><InfoPage kind="about" /></SiteContentProvider>} />
       <Route path="*" element={<NotFoundPage signedIn={false} />} />
     </Routes>
   </Suspense>

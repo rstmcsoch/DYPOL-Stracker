@@ -76,8 +76,9 @@ describe('Planner QA round 2', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Add task/ })[0]!)
     const dialog = screen.getByRole('dialog')
     const chapterSelect = within(dialog).getByLabelText(/^Chapter/) as HTMLSelectElement
-    const groups = [...chapterSelect.querySelectorAll('optgroup')].map(group => [group.label, [...group.querySelectorAll('option')].map(option => option.textContent)])
-    expect(groups).toEqual([['Physics', ['Physics · Electrostatics']], ['Chemistry', ['Chemistry · Mole Concept']]])
+    // A disabled heading row per subject, then that subject's chapters (visible in every native picker).
+    const rows = [...chapterSelect.querySelectorAll('option')].slice(1).map(option => [option.textContent, option.disabled])
+    expect(rows).toEqual([['── Physics ──', true], ['Physics · Electrostatics', false], ['── Chemistry ──', true], ['Chemistry · Mole Concept', false]])
   })
 })
 

@@ -90,7 +90,7 @@ export function validateFieldValue(definition: FieldDefinition, raw: unknown): F
   let value = raw.replace(/\r\n?/g, '\n').trim()
   if (!multiline) value = value.replace(/\s*\n\s*/g, ' ')
   // Optional links may be cleared, which hides them.
-  if (value.length === 0) return definition.type === 'link' && definition.optional ? { ok: true, value } : { ok: false, message: 'This field cannot be empty.' }
+  if (value.length === 0) return (definition.type === 'link' || definition.type === 'multiline') && definition.optional ? { ok: true, value } : { ok: false, message: 'This field cannot be empty.' }
   if (value.length > definition.maxLength) return { ok: false, message: `Use ${definition.maxLength} characters or fewer (currently ${value.length}).` }
   if (hasControlCharacter(value)) return { ok: false, message: 'Remove hidden control characters.' }
   if (MARKUP.test(value)) return { ok: false, message: 'Angle brackets (< >) are not allowed. Write plain text.' }
