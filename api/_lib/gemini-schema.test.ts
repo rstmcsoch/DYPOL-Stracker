@@ -52,7 +52,7 @@ describe('model tiers and tool intent', () => {
     expect(modelTier('gemini-3.1-pro-preview')).toBe('rich')
     expect(modelTier('o3')).toBe('rich')
   })
-  it('only attaches tools when a message needs Stracker data', () => {
+  it('detects when a message needs Stracker data', () => {
     expect(requiresTools('Hello')).toBe(false)
     expect(requiresTools('What is my average?')).toBe(true)
     expect(requiresTools('What you know about me, tell my analytics')).toBe(true)
