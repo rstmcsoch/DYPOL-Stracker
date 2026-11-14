@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Check, Eye, EyeOff, LockKeyhole, Mail, NotebookPen, UserRound } from 'lucide-react'
 import { Button, Field } from '../components/ui'
@@ -23,12 +23,16 @@ const PERKS = [
  * auth client — no local-only or pretend accounts — and then follows whatever the
  * project is configured to require: straight into the notebook when email
  * confirmation is off, or a confirmation step when it is on.
+ *
+ * Registration is a two-step form on this same page: name and email first, then
+ * password and confirmation. Login stays a single step.
  */
 export default function SignupPage() {
   usePageMeta('Create your Stracker account', 'Create a Stracker account to organize exam preparation: syllabus, tests, mistakes, revision, planning and focus sessions.')
   const { signUp, resendConfirmation, error, clearError, loading: authLoading } = useAuth()
   const { notify } = useToast()
   const navigate = useNavigate()
+  const [step, setStep] = useState<1 | 2>(1)
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -38,6 +42,8 @@ export default function SignupPage() {
   const [resending, setResending] = useState(false)
   const [sentTo, setSentTo] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const nameInput = useRef<HTMLInputElement>(null)
+  const passwordInput = useRef<HTMLInputElement>(null)
 
   const clearFieldError = (key: string) => setFieldErrors(current => {
     if (!current[key]) return current
@@ -45,6 +51,16 @@ export default function SignupPage() {
     delete next[key]
     return next
   })
+
+  const validateStep1 = () => {
+    const next: Record<string, string> = {}
+    if (!displayName.trim()) next.displayName = 'Tell Stracker what to call you.'
+    if (displayName.trim().length > 100) next.displayName = 'Keep the name under 100 characters.'
+    if (!email.trim()) next.email = 'Enter the email address you want to sign in with.'
+    else if (!EMAIL_PATTERN.test(email.trim())) next.email = 'That email address does not look complete.'
+    setFieldErrors(next)
+    return Object.keys(next).length === 0
+  }
 
   const validate = () => {
     const next: Record<string, string> = {}
@@ -58,10 +74,29 @@ export default function SignupPage() {
     return Object.keys(next).length === 0
   }
 
+  const goBack = () => {
+    clearError()
+    setFieldErrors(current => {
+      if (!current.password && !current.confirmPassword) return current
+      const next = { ...current }
+      delete next.password
+      delete next.confirmPassword
+      return next
+    })
+    setStep(1)
+    requestAnimationFrame(() => nameInput.current?.focus())
+  }
+
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (loading) return
     clearError()
+    if (step === 1) {
+      if (!validateStep1()) return
+      setStep(2)
+      requestAnimationFrame(() => passwordInput.current?.focus())
+      return
+    }
     if (!validate()) return
     setLoading(true)
     try {
@@ -105,67 +140,82 @@ export default function SignupPage() {
           <Link className="button button-primary" to="/login">Go to log in <ArrowRight size={16} aria-hidden="true" /></Link>
         </div>
         {error && <div className="form-error" role="alert">{error}</div>}
-        <p className="auth-success-note">Wrong address? <button type="button" className="text-button" onClick={() => { setSentTo(null); clearError() }}>Use a different email</button></p>
+        <p className="auth-success-note">Wrong address? <button type="button" className="text-button" onClick={() => { setSentTo(null); setStep(1); clearError() }}>Use a different email</button></p>
       </div> : <>
         <div className="auth-card-head">
           <div className="auth-card-icon" aria-hidden="true"><UserRound size={21} /></div>
           <div><span className="eyebrow">NEW ACCOUNT</span><h2 id="signup-title">Create your Stracker account</h2></div>
         </div>
 
-        {supabaseConfigured && <GoogleAuthButton intent="signup" next="/" disabled={loading} dividerLabel="or sign up with email" />}
+        {step === 1 && supabaseConfigured && <GoogleAuthButton intent="signup" next="/" disabled={loading} dividerLabel="or sign up with email" />}
 
         <form className="form-stack auth-form" onSubmit={submit} noValidate>
-          <Field label="What should Stracker call you?" required error={fieldErrors.displayName}>
-            <span className="input-with-icon">
-              <UserRound size={17} aria-hidden="true" />
-              <input
-                type="text" autoComplete="name" required maxLength={100} value={displayName}
-                onChange={event => { setDisplayName(event.target.value); clearFieldError('displayName') }}
-                placeholder="Your name" aria-label="Your name"
-              />
-            </span>
-          </Field>
-          <Field label="Email" required error={fieldErrors.email}>
-            <span className="input-with-icon">
-              <Mail size={17} aria-hidden="true" />
-              <input
-                type="email" autoComplete="email" required maxLength={320} value={email}
-                onChange={event => { setEmail(event.target.value); clearFieldError('email') }}
-                placeholder="you@example.com" aria-label="Email"
-              />
-            </span>
-          </Field>
-          <Field label="Password" required hint={`At least ${MIN_PASSWORD_LENGTH} characters.`} error={fieldErrors.password}>
-            <span className="input-with-icon">
-              <LockKeyhole size={17} aria-hidden="true" />
-              <input
-                type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} value={password}
-                onChange={event => { setPassword(event.target.value); clearFieldError('password') }}
-                placeholder="Create a strong password" aria-label="Password"
-              />
-              <button className="password-toggle" type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
-                {showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
-              </button>
-            </span>
-          </Field>
-          <Field label="Confirm password" required error={fieldErrors.confirmPassword}>
-            <span className="input-with-icon">
-              <LockKeyhole size={17} aria-hidden="true" />
-              <input
-                type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} value={confirmPassword}
-                onChange={event => { setConfirmPassword(event.target.value); clearFieldError('confirmPassword') }}
-                placeholder="Type it once more" aria-label="Confirm password"
-              />
-            </span>
-          </Field>
+          <div className="auth-step-indicator" aria-live="polite">Step {step} of 2</div>
+          {step === 1 ? <>
+            <Field label="What should Stracker call you?" required error={fieldErrors.displayName}>
+              <span className="input-with-icon">
+                <UserRound size={17} aria-hidden="true" />
+                <input
+                  ref={nameInput}
+                  type="text" autoComplete="name" required maxLength={100} value={displayName}
+                  onChange={event => { setDisplayName(event.target.value); clearFieldError('displayName') }}
+                  placeholder="Your name" aria-label="Your name"
+                />
+              </span>
+            </Field>
+            <Field label="Email" required error={fieldErrors.email}>
+              <span className="input-with-icon">
+                <Mail size={17} aria-hidden="true" />
+                <input
+                  type="email" autoComplete="email" required maxLength={320} value={email}
+                  onChange={event => { setEmail(event.target.value); clearFieldError('email') }}
+                  placeholder="you@example.com" aria-label="Email"
+                />
+              </span>
+            </Field>
+          </> : <>
+            <Field label="Password" required hint={`At least ${MIN_PASSWORD_LENGTH} characters.`} error={fieldErrors.password}>
+              <span className="input-with-icon">
+                <LockKeyhole size={17} aria-hidden="true" />
+                <input
+                  ref={passwordInput}
+                  type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} value={password}
+                  onChange={event => { setPassword(event.target.value); clearFieldError('password') }}
+                  placeholder="Create a strong password" aria-label="Password"
+                />
+                <button className="password-toggle" type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                  {showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+                </button>
+              </span>
+            </Field>
+            <Field label="Confirm password" required error={fieldErrors.confirmPassword}>
+              <span className="input-with-icon">
+                <LockKeyhole size={17} aria-hidden="true" />
+                <input
+                  type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} value={confirmPassword}
+                  onChange={event => { setConfirmPassword(event.target.value); clearFieldError('confirmPassword') }}
+                  placeholder="Type it once more" aria-label="Confirm password"
+                />
+              </span>
+            </Field>
+          </>}
           <ul className="auth-perks">
             {PERKS.map(perk => <li key={perk}><Check size={13} strokeWidth={3} aria-hidden="true" /> <span>{perk}</span></li>)}
           </ul>
           {error && <div className="form-error" role="alert">{error}</div>}
           {!supabaseConfigured && !localPreviewEnabled && <div className="form-error" role="status">Supabase is not configured, so accounts cannot be created yet. Add the public project URL and anon key to the deployment environment, then redeploy.</div>}
-          <Button type="submit" className="auth-submit" size="lg" loading={loading || authLoading} disabled={!supabaseConfigured}>
-            Create my Stracker account <ArrowRight size={17} aria-hidden="true" />
-          </Button>
+          {step === 1 ? (
+            <Button type="submit" className="auth-submit" size="lg">
+              Next <ArrowRight size={17} aria-hidden="true" />
+            </Button>
+          ) : (
+            <div className="auth-step-actions">
+              <button type="button" className="text-button auth-step-back" onClick={goBack}>Back</button>
+              <Button type="submit" className="auth-submit" size="lg" loading={loading || authLoading} disabled={!supabaseConfigured}>
+                Create my Stracker account <ArrowRight size={17} aria-hidden="true" />
+              </Button>
+            </div>
+          )}
         </form>
 
         <div className="auth-card-foot auth-switch">

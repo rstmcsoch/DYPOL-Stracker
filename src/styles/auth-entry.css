@@ -1,0 +1,263 @@
+/* Public login / signup / reset card refinements.
+   Loaded last so these rules win over typography.css and touch.css without fighting
+   their global input:focus-visible and "every public <p> is 1rem" rules.
+   Sizes are scaled with variables, not transform, so text stays sharp. */
+
+.auth-page-public .auth-card {
+  --auth-compact: .9;
+  /* Typography roles inside the card shrink 10% via the shared size variables. */
+  --type-h2-size: calc(1.38rem * var(--auth-compact));
+  --type-h3-size: calc(1.1875rem * var(--auth-compact));
+  --type-body-size: calc(1rem * var(--auth-compact));
+  --type-button-size: calc(.9375rem * var(--auth-compact));
+  --type-input-size: calc(1rem * var(--auth-compact));
+  --type-caption-size: calc(.875rem * var(--auth-compact));
+  --type-overline-size: calc(.75rem * var(--auth-compact));
+  --type-alert-size: calc(.9375rem * var(--auth-compact));
+  --type-badge-size: calc(.75rem * var(--auth-compact));
+  width: 100%;
+  max-width: calc(520px * var(--auth-compact));
+  padding: calc(24px * var(--auth-compact)) calc(24px * var(--auth-compact)) calc(18px * var(--auth-compact));
+}
+
+.auth-page-public .auth-card-sticker {
+  top: calc(-13px * var(--auth-compact));
+  right: calc(20px * var(--auth-compact));
+  gap: calc(5px * var(--auth-compact));
+  padding: calc(5px * var(--auth-compact)) calc(9px * var(--auth-compact));
+}
+
+.auth-page-public .auth-card-head {
+  gap: calc(10px * var(--auth-compact));
+  margin: calc(12px * var(--auth-compact)) 0 calc(20px * var(--auth-compact));
+}
+
+.auth-page-public .auth-card-icon {
+  width: calc(39px * var(--auth-compact));
+  height: calc(39px * var(--auth-compact));
+}
+
+.auth-page-public .auth-card .eyebrow {
+  font-size: calc(max(.8125rem, calc(9px * var(--body-scale))) * var(--auth-compact));
+}
+
+.auth-page-public .auth-form { gap: calc(14px * var(--auth-compact)); }
+
+.auth-page-public .auth-card .field { gap: calc(7px * var(--auth-compact)); }
+
+.auth-page-public .auth-card .field-label {
+  font-size: calc(13.5px * var(--auth-compact));
+}
+
+.auth-page-public .input-with-icon {
+  gap: calc(8px * var(--auth-compact));
+  min-height: calc(46px * var(--auth-compact));
+  padding: 0 calc(10px * var(--auth-compact));
+  border-radius: calc(9px * var(--auth-compact));
+}
+
+.auth-page-public .input-with-icon input {
+  min-height: calc(42px * var(--auth-compact));
+  padding: calc(8px * var(--auth-compact)) 0;
+  font-size: calc(var(--type-input-size));
+}
+
+.auth-page-public .input-with-icon svg {
+  width: calc(17px * var(--auth-compact));
+  height: calc(17px * var(--auth-compact));
+}
+
+.auth-page-public .password-toggle {
+  width: calc(34px * var(--auth-compact));
+  height: calc(36px * var(--auth-compact));
+}
+
+.auth-page-public .auth-card .button-lg {
+  min-height: calc(48px * var(--auth-compact));
+  padding: calc(10px * var(--auth-compact)) calc(19px * var(--auth-compact));
+}
+
+.auth-page-public .auth-submit { margin-top: calc(3px * var(--auth-compact)); }
+
+.auth-page-public .auth-form-links .text-button {
+  min-height: calc(40px * var(--auth-compact));
+  font-size: calc(13.5px * var(--auth-compact));
+}
+
+.auth-page-public .auth-perks {
+  gap: calc(6px * var(--auth-compact));
+  padding-top: calc(11px * var(--auth-compact));
+}
+
+.auth-page-public .auth-perks li {
+  gap: calc(7px * var(--auth-compact));
+  font-size: calc(12.5px * var(--auth-compact));
+}
+
+.auth-page-public .auth-card-foot {
+  gap: calc(6px * var(--auth-compact));
+  margin-top: calc(14px * var(--auth-compact));
+  padding-top: calc(12px * var(--auth-compact));
+  font-size: calc(max(.75rem, calc(10.5px * var(--body-scale))) * var(--auth-compact));
+}
+
+.auth-page-public .auth-card-foot.auth-switch {
+  font-size: calc(13px * var(--auth-compact));
+}
+
+.auth-page-public .auth-card .form-error,
+.auth-page-public .auth-card .form-notice {
+  padding: calc(8px * var(--auth-compact)) calc(10px * var(--auth-compact));
+  font-size: calc(13px * var(--auth-compact));
+}
+
+.auth-page-public .auth-card .local-preview-box {
+  margin-top: calc(16px * var(--auth-compact));
+  padding: calc(10px * var(--auth-compact)) calc(11px * var(--auth-compact));
+}
+
+.auth-page-public .google-auth {
+  gap: calc(12px * var(--auth-compact));
+  margin: calc(2px * var(--auth-compact)) 0 calc(14px * var(--auth-compact));
+}
+
+.auth-page-public .google-button {
+  gap: calc(10px * var(--auth-compact));
+  min-height: calc(48px * var(--auth-compact));
+  padding: 0 calc(12px * var(--auth-compact));
+  font-size: calc(15px * var(--auth-compact));
+  line-height: calc(20px * var(--auth-compact));
+}
+
+.auth-page-public .google-button__icon,
+.auth-page-public .google-button__icon .google-g {
+  width: calc(20px * var(--auth-compact));
+  height: calc(20px * var(--auth-compact));
+}
+
+:root[data-theme='dark'] .auth-page-public .google-auth--public .google-button:not([aria-busy='true']) .google-button__icon {
+  width: calc(28px * var(--auth-compact));
+  height: calc(28px * var(--auth-compact));
+}
+
+.auth-page-public .auth-divider {
+  gap: calc(12px * var(--auth-compact));
+  font-size: calc(12px * var(--auth-compact));
+}
+
+/* The typography layer forces every public auth <p> to 1rem (16px), which made this
+   note three tall lines. "60% smaller" of that 16px is 6.4px and is not readable on a
+   tablet, so the size is floored at 10px (0.625rem) — about 62% of the visible size —
+   with tighter leading and margins so it takes far less vertical space. */
+.auth-page-public p.google-auth__legal {
+  margin: 0;
+  font-size: .625rem !important;
+  font-weight: 400 !important;
+  line-height: 1.3 !important;
+  text-align: center;
+}
+
+.auth-page-public .google-auth__legal a {
+  text-underline-offset: 1px;
+}
+
+.auth-page-public .auth-card p:not(.google-auth__legal) {
+  font-size: calc(1rem * var(--auth-compact)) !important;
+  line-height: 1.5 !important;
+}
+
+/* One focus indication only: the outer field wrapper changes border colour.
+   The inner blue/rectangular ring was the global input:focus-visible outline
+   (accent #526c9a) sitting inside .input-with-icon, sometimes plus autofill fill. */
+.auth-page-public .input-with-icon:focus-within {
+  border-color: var(--ink-soft);
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .auth-page-public .input-with-icon:focus-within {
+  border-color: var(--ink);
+}
+
+.auth-page-public .input-with-icon input:focus,
+.auth-page-public .input-with-icon input:focus-visible,
+.auth-page-public .input-with-icon .password-toggle:focus,
+.auth-page-public .input-with-icon .password-toggle:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  background-color: transparent;
+}
+
+.auth-page-public .input-with-icon .password-toggle:focus-visible {
+  color: var(--ink);
+}
+
+.auth-page-public .input-with-icon input:-webkit-autofill,
+.auth-page-public .input-with-icon input:-webkit-autofill:hover,
+.auth-page-public .input-with-icon input:-webkit-autofill:focus,
+.auth-page-public .input-with-icon input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  border: 0;
+  box-shadow: inset 0 0 0 1000px var(--paper-soft);
+  transition: background-color 99999s ease-out;
+}
+
+.auth-step-indicator {
+  margin: -4px 0 2px;
+  color: var(--pub-muted, var(--muted));
+  font: 700 max(.75rem, calc(10px * var(--body-scale))) / 1.3 var(--font-body);
+  letter-spacing: .8px;
+  text-transform: uppercase;
+}
+
+.auth-page-public .auth-step-indicator {
+  font-size: calc(max(.75rem, calc(10px * var(--body-scale))) * var(--auth-compact));
+}
+
+.auth-step-actions {
+  display: grid;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.auth-step-actions .auth-submit { width: 100%; margin-top: 0; }
+
+.auth-step-back {
+  order: -1;
+  justify-self: start;
+  min-height: 40px;
+  padding: 4px 2px;
+}
+
+@media (max-width: 700px) {
+  .auth-page-public .auth-card {
+    padding: calc(17px * var(--auth-compact)) calc(16px * var(--auth-compact)) calc(13px * var(--auth-compact));
+  }
+  .auth-page-public .auth-card-sticker {
+    top: calc(-11px * var(--auth-compact));
+    right: calc(12px * var(--auth-compact));
+  }
+  .auth-page-public .auth-card-head { margin: calc(7px * var(--auth-compact)) 0 calc(13px * var(--auth-compact)); }
+  .auth-page-public .auth-card-icon {
+    width: calc(34px * var(--auth-compact));
+    height: calc(34px * var(--auth-compact));
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-page-public .auth-card h2 { font-size: calc(1.265rem * var(--auth-compact)) !important; }
+  .auth-page-public .auth-card h3 { font-size: calc(1.06875rem * var(--auth-compact)) !important; }
+}
+
+@media (max-width: 420px) {
+  .auth-page-public .google-button {
+    min-height: calc(46px * var(--auth-compact));
+    font-size: calc(14px * var(--auth-compact));
+  }
+}
+
+@media (pointer: coarse) {
+  .auth-page-public .auth-form-links .text-button,
+  .auth-page-public .auth-card-foot .text-button,
+  .auth-page-public .auth-step-back { min-height: 44px; }
+}
