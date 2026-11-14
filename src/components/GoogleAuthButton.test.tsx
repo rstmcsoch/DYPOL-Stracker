@@ -41,6 +41,8 @@ describe('GoogleAuthButton visibility', () => {
     expect(await screen.findByRole('button', { name: 'Continue with Google' })).toBeTruthy()
     expect(screen.getByRole('separator', { name: 'or use your email' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Privacy Policy' }).getAttribute('href')).toBe('/privacy')
+    const legal = screen.getByRole('link', { name: 'Terms' }).closest('p')
+    expect(legal?.textContent).toBe('By continuing with Google, you agree to Stracker’s Terms and Privacy Policy.')
   })
 
   it('uses "Sign up with Google" on the registration page', async () => {
