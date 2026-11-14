@@ -2,7 +2,7 @@
 -- stricter variants that include legitimate alias/forwarding providers):
 --   * disposable-email-domains/disposable-email-domains  disposable_email_blocklist.conf (~10k)
 --   * disposable/disposable-email-domains               domains.txt                    (~108k)
---   * 7c/fakefilter                                       txt/data.txt                   (~11k)
+--   * 7c/fakefilter                                       txt/data.txt                   (~4.8k)
 -- Built-in always-allowed providers and the owner's "always allow" rules stay authoritative
 -- (is_disposable_email checks them first). Additive and forward-only.
 

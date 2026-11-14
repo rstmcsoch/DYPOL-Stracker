@@ -42,7 +42,7 @@ To undo, switch CAPTCHA protection off in the same screen.
   * [disposable/disposable-email-domains](https://github.com/disposable/disposable-email-domains)
     `domains.txt` (~108k, aggregated and updated daily; added after `pcgamecard.com`, a temp-mail
     domain missing from the first list, got through on 14 Nov 2026);
-  * [7c/fakefilter](https://github.com/7c/fakefilter) `txt/data.txt` (~11k, scraped daily from temp-mail sites).
+  * [7c/fakefilter](https://github.com/7c/fakefilter) `txt/data.txt` (~4.8k unique, scraped daily from temp-mail sites).
   Also evaluated and not used (Nov 2026): wesbos/burner-email-providers (last update Jul 2026,
   lists duck.com and anonaddy.com), FGRibreau/mailchecker (lists relay services such as
   simplelogin.com and duck.com), amieiro/disposable-email-domains (no licence, lists
