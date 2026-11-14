@@ -56,3 +56,10 @@ export function normalizeDomainInput(value: string): string | null {
 }
 
 export const GITHUB_BLOCKLIST_URL = 'https://github.com/disposable-email-domains/disposable-email-domains/blob/main/disposable_email_blocklist.conf'
+
+/** The free, open disposable-domain lists merged into the server block list (normal lists only, never "strict" ones). */
+export const DISPOSABLE_LIST_SOURCES: ReadonlyArray<{ name: string; url: string }> = [
+  { name: 'disposable-email-domains', url: GITHUB_BLOCKLIST_URL },
+  { name: 'disposable/disposable-email-domains', url: 'https://github.com/disposable/disposable-email-domains' },
+  { name: '7c/fakefilter', url: 'https://github.com/7c/fakefilter' }
+]

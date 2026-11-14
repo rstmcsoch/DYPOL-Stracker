@@ -36,10 +36,21 @@ To undo, switch CAPTCHA protection off in the same screen.
   fresh step-up).
 * Sign-up step 1 checks quietly in the background ~400 ms after a complete address is typed (or on
   blur); nothing is shown until Next, and Next waits at most 0.6 s for an unfinished check.
-* Source: [disposable-email-domains/disposable-email-domains](https://github.com/disposable-email-domains/disposable-email-domains),
-  normal `disposable_email_blocklist.conf` (not strict lists). The repository currently has no
-  separate allowlist file; mainstream and relay providers (Gmail, Outlook/Hotmail, iCloud,
-  Apple Hide My Email, Yahoo, Proton, …) are hard-coded as never blocked.
+* Sources (merged, ~108k domains; normal lists only, never the stricter variants):
+  * [disposable-email-domains/disposable-email-domains](https://github.com/disposable-email-domains/disposable-email-domains)
+    `disposable_email_blocklist.conf` (~10k, conservative, hand-reviewed);
+  * [disposable/disposable-email-domains](https://github.com/disposable/disposable-email-domains)
+    `domains.txt` (~108k, aggregated and updated daily; added after `pcgamecard.com`, a temp-mail
+    domain missing from the first list, got through on 14 Nov 2026);
+  * [7c/fakefilter](https://github.com/7c/fakefilter) `txt/data.txt` (~11k, scraped daily from temp-mail sites).
+  Also evaluated and not used (Nov 2026): wesbos/burner-email-providers (last update Jul 2026,
+  lists duck.com and anonaddy.com), FGRibreau/mailchecker (lists relay services such as
+  simplelogin.com and duck.com), amieiro/disposable-email-domains (no licence, lists
+  privaterelay.appleid.com and simplelogin.com), groundcat/disposable-email-domain-list (weekly,
+  ~19k, mostly covered by the chosen lists), ivolo/disposable-email-domains (stale since 2025).
+  Mainstream and relay providers (Gmail, Outlook/Hotmail, iCloud, Apple Hide My Email, Yahoo,
+  Proton, …) are hard-coded as never blocked, and the owner's "Always allowed" rules win over
+  every list.
 * Stored in the private table `public.disposable_email_domains` (RLS on, no API access).
 * Enforced by the `site_block_disposable_email` BEFORE INSERT trigger on `auth.users` (email and
   Google sign-ups; existing accounts are never touched). The domain and its parent domains are
@@ -49,8 +60,19 @@ To undo, switch CAPTCHA protection off in the same screen.
   already enforces the rule, so this is cosmetic.
 * Sign-up step 1 asks `rpc('is_disposable_email')` for instant feedback (fails open; the database
   decides).
-* Refresh: `pg_cron` downloads the list every Sunday 03:17 UTC (08:47 IST) with `pg_net` and an
-  hourly job applies it. A download with fewer than 1,000 valid domains is ignored. History is in
-  `public.disposable_email_domain_refreshes`. Manual refresh (SQL editor):
-  `select public.disposable_domains_refresh_request();` then, a few seconds later,
+* Refresh: `pg_cron` downloads all three lists daily at 03:17 UTC (08:47 IST) with `pg_net`
+  and an hourly job applies the batch once every source has answered. Each source must pass a
+  floor (1,000 valid domains; 20,000 for `domains.txt`). If every source passes, the table is fully
+  synced; if any fails, new domains are only added (nothing removed); if all fail, nothing changes.
+  History (one row per source) is in `public.disposable_email_domain_refreshes`. Manual refresh:
+`select public.disposable_domains_refresh_request();` then, a few seconds later,
   `select public.disposable_domains_refresh_apply();`
+
+### Why there is no MX check
+
+An MX lookup cannot run inside the database insert (Postgres has no synchronous DNS; `pg_net` is
+asynchronous), so it would need an extra Vercel function (the Hobby plan is at its 12-function
+limit) and would add latency to every sign-up. It also would not have helped: temp-mail domains
+such as `pcgamecard.com` publish real MX records, while legitimate domains often share mail hosts
+(Google Workspace, ImprovMX, registrar forwarding), so MX-host matching gives false positives.
+Email confirmation and the merged lists cover this better.
