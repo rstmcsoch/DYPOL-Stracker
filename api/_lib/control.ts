@@ -189,7 +189,7 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
 
   if (!token) {
     await takeControlRate(admin, `anon:${clientKeyHash(req)}`, ANONYMOUS_LIMIT, 'anonymous')
-    throw new ApiError(401, 'unauthenticated', 'Sign in to open the Stracker Control Center.')
+    throw new ApiError(401, 'unauthenticated', 'Sign in to continue.')
   }
 
   // getClaims verifies the token with the Auth server (or the project's JWKS). A forged,

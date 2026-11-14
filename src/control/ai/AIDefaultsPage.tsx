@@ -13,7 +13,7 @@ const siteAIFetch:ApiFetch = async <T,>(path:string,init:RequestInit = {}):Promi
   if (!supabase) throw new Error('Cloud sign-in is not configured for this deployment.')
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
-  if (!token) throw new Error('Sign in to open the Stracker Control Center.')
+  if (!token) throw new Error('Sign in to continue.')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(),REQUEST_TIMEOUT_MS)
   let response:Response

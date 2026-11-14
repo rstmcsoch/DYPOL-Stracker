@@ -22,7 +22,7 @@ async function accessToken(): Promise<string> {
   if (!supabase) throw new ControlApiError(503, 'not_configured', 'Cloud sign-in is not configured for this deployment.')
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
-  if (!token) throw new ControlApiError(401, 'unauthenticated', 'Sign in to open the Stracker Control Center.')
+  if (!token) throw new ControlApiError(401, 'unauthenticated', 'Sign in to continue.')
   return token
 }
 
