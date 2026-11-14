@@ -261,3 +261,20 @@
   .auth-page-public .auth-card-foot .text-button,
   .auth-page-public .auth-step-back { min-height: 44px; }
 }
+
+/*
+ * Auth intro (eyebrow, heading, paragraph) on every page that uses AuthScaffold: 20% smaller than
+ * the base sizes on every breakpoint. `zoom` scales font size, line height, letter spacing and
+ * margins together, so each breakpoint's own values shrink by exactly the same ratio.
+ */
+.auth-page-public .auth-intro > :is(.auth-kicker, h1, p) { zoom: .8; }
+
+/*
+ * Links styled as text buttons in the card's link rows are flex items with a minimum height; as
+ * plain blocks their text sat at the top, above the neighbouring text and buttons. Centre it.
+ */
+.auth-page-public :is(.auth-card-foot, .auth-form-links) a.text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
