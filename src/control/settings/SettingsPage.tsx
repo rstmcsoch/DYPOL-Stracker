@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCurrentTabInView } from '../useCurrentTabInView'
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fingerprint, KeyRound, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
@@ -100,8 +101,10 @@ export default function SettingsPage() {
 function SettingsTabs({ data }: { data: SettingsResponse }) {
   const tabs = SETTINGS_TABS.filter(tab => tab.visible(data.me))
   const first = tabs[0]?.id ?? 'security'
+  const navRef = useRef<HTMLElement>(null)
+  useCurrentTabInView(navRef)
   return <>
-    <nav className="cc-tabs" aria-label="Settings sections">
+    <nav className="cc-tabs" aria-label="Settings sections" ref={navRef}>
       {tabs.map(tab => <NavLink key={tab.id} to={`${BASE}/${tab.id}`} className={({ isActive }) => `cc-tabs__link${isActive ? ' is-active' : ''}`}>{tab.label}</NavLink>)}
     </nav>
     <Routes>

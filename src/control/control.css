@@ -534,10 +534,17 @@ textarea.cc-input { resize: vertical; min-height: 84px; }
 .cc-coverage { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
 .cc-coverage h3 { font-size: 14px; font-weight: 650; margin-bottom: 8px; }
 .cc-bullets { padding-left: 18px; display: grid; gap: 6px; font-size: 13.5px; color: var(--cc-text-2); }
-.cc-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--cc-border); margin-bottom: 18px; }
-.cc-tabs__link { padding: 10px 12px; color: var(--cc-muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; font-size: 14px; font-weight: 600; margin-bottom: -1px; }
-.cc-tabs__link:hover { color: var(--cc-text); }
-.cc-tabs__link.is-active { color: var(--cc-text); border-bottom-color: var(--cc-accent); }
+/* Horizontal section tabs (Settings, Appearance). Links with aria-current="page" on the route
+   that is open: accent bar + soft accent background + full ink, like the sidebar's active item. */
+.cc-tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--cc-border); margin-bottom: 18px; scrollbar-width: thin; }
+.cc-tabs__link { position: relative; flex: none; display: inline-flex; align-items: center; padding: 10px 14px; color: var(--cc-muted); text-decoration: none; white-space: nowrap; font-size: 14px; font-weight: 600; border-radius: 6px 6px 0 0; transition: color .12s ease, background-color .12s ease; }
+.cc-tabs__link::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: transparent; transition: background-color .12s ease; }
+.cc-tabs__link:hover { color: var(--cc-text); background: var(--cc-surface-2); }
+.cc-tabs__link:hover::after { background: var(--cc-border-strong); }
+.cc-tabs__link:focus-visible { outline: 2px solid var(--cc-accent); outline-offset: -2px; color: var(--cc-text); }
+.cc-tabs__link.is-active, .cc-tabs__link[aria-current="page"] { color: var(--cc-text); background: var(--cc-accent-soft); text-shadow: 0 0 .65px currentColor; }
+.cc-tabs__link.is-active::after, .cc-tabs__link[aria-current="page"]::after { background: var(--cc-accent); }
+@media (prefers-reduced-motion: reduce) { .cc-tabs__link, .cc-tabs__link::after { transition: none; } }
 .cc-editor-search { margin-bottom: 8px; }
 .cc-editor-count { font-size: 13px; margin-bottom: 14px; }
 .cc-copy-section { border: 1px solid var(--cc-border-soft); border-radius: 8px; padding: 0 12px; background: var(--cc-surface); }
@@ -731,3 +738,9 @@ textarea.cc-input { resize: vertical; min-height: 84px; }
 .cc-switch:disabled { opacity: .5; cursor: not-allowed; }
 .cc-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 @media (prefers-reduced-motion: reduce) { .cc-switch, .cc-switch__thumb { transition: none; } }
+
+/* Sidebar header: logo 20% larger (36→43, compact 28→34) and "Control Centre" 30% larger (14→18.2px). */
+.cc-sidebar__brand .cc-brand img { width: 43px; height: 43px; }
+.cc-sidebar__brand .cc-brand--compact img { width: 34px; height: 34px; }
+.cc-sidebar__brand .cc-brand strong { font-size: 18.2px; line-height: 1.2; letter-spacing: -.01em; }
+@media (max-width: 767px) { .cc-sidebar__brand .cc-brand--compact img { width: 43px; height: 43px; } }
