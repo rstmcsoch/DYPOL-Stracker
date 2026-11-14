@@ -312,7 +312,9 @@ changes are thrown away for good, even after the ban ends:
 - **Server** (`account_sync_cutoffs`, kept in step with `account_bans` by a trigger): the cutoff
   is the ban's end (`infinity` for permanent); lifting a ban early moves it to the moment it was
   lifted. A `BEFORE` trigger `account_sync_cutoff` on the 19 student tables skips (returns NULL)
-  any `authenticated` write whose operation time is before the cutoff. The operation time is the
+  any `authenticated` write whose operation time is before the cutoff. While the ban is still
+  active it refuses the write instead (`42501`, as row-level security would), so an open
+  dashboard learns at once that it is banned and shows the popup. The operation time is the
   moment the change was made, sent by the sync queue as the `x-stracker-op-at` header (older
   bundles without it fall back to the row's `updated_at` with five minutes' grace). Skipped
   writes succeed silently, so the queue drains and the next refresh replaces the browser copy with
