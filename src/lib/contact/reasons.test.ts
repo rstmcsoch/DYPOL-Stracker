@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ATTACHMENT_RULES, CONTACT_REASONS, REASON_FIELDS, attachmentMime, attachmentProblem, cleanContactDetails, cleanContactLinks,
+  ATTACHMENT_RULES, CONTACT_REASONS, DEFAULT_CONTACT_REASON, REASON_FIELDS, REASON_FORMS, contactSubject, messageRows, attachmentMime, attachmentProblem, cleanContactDetails, cleanContactLinks,
   magicBytesMatch, normaliseContactUrl, safeFileName, validateContactDraft, type ContactDraft
 } from './reasons'
 
@@ -11,7 +11,8 @@ const draft = (overrides: Partial<ContactDraft> = {}): ContactDraft => ({
 
 describe('contact reasons', () => {
   it('offers exactly the six reasons Rustam asked for', () => {
-    expect(CONTACT_REASONS.map(reason => reason.label)).toEqual(['Feature request', 'Bug report', 'Complaint', 'Copyright', 'Sponsorship', 'General query'])
+    expect(CONTACT_REASONS.map(reason => reason.label)).toEqual(['General query', 'Feature request', 'Bug report', 'Complaint', 'Copyright', 'Sponsorship'])
+    expect(DEFAULT_CONTACT_REASON).toBe('general_query')
   })
 
   it('general query needs only name, email, message (subject optional)', () => {
@@ -37,6 +38,36 @@ describe('contact reasons', () => {
     expect(validateContactDraft(draft({ reason: 'copyright', details: { original_work: 'My notes', content_location: '/about', good_faith: true } }))).toEqual({})
     expect(validateContactDraft(draft({ reason: 'sponsorship', details: { organisation: 'Acme', website: 'javascript:alert(1)' } }))['details.website']).toBeTruthy()
     expect(validateContactDraft(draft({ reason: 'sponsorship', details: { organisation: 'Acme', website: 'x'.repeat(301) } }))['details.website']).toBeTruthy()
+  })
+
+  it('uses a subject only where the form asks for one, and requires the feature idea line', () => {
+    expect(validateContactDraft(draft({ reason: 'bug_report', subject: 'Planner', details: { area: 'Planner' } })).subject).toMatch(/does not use a subject/)
+    expect(validateContactDraft(draft({ reason: 'feature_request' })).subject).toMatch(/one line/)
+    expect(validateContactDraft(draft({ reason: 'feature_request', subject: 'Pin the planner' }))).toEqual({})
+    expect(contactSubject('general_query', '  ', {})).toBeNull()
+    expect(contactSubject('general_query', 'Export', {})).toBe('Export')
+    expect(contactSubject('bug_report', '', { area: 'Tests  →  Log a mock' })).toBe('Bug: Tests → Log a mock')
+    expect(contactSubject('sponsorship', '', { organisation: 'Acme' })).toBe('Sponsorship: Acme')
+    expect(contactSubject('copyright', '', { original_work: 'x'.repeat(200) })!.length).toBe(120)
+  })
+
+  it('gives every reason exactly one main description and never two fields for the same thing', () => {
+    for (const [reason, form] of Object.entries(REASON_FORMS)) {
+      expect(form.filter(field => field.target === 'message'), reason).toHaveLength(1)
+      expect(form.filter(field => field.target === 'subject').length, reason).toBeLessThanOrEqual(1)
+      const labels = form.map(field => field.label.toLowerCase())
+      expect(new Set(labels).size, reason).toBe(labels.length)
+      expect(new Set(form.map(field => field.key)).size, reason).toBe(form.length)
+    }
+    expect(REASON_FIELDS.general_query).toEqual([])
+    expect(REASON_FIELDS.bug_report.map(field => field.key)).toEqual(['area', 'steps', 'expected', 'device'])
+  })
+
+  it('renders stored messages in form order, including fields from older versions of the form', () => {
+    expect(messageRows('bug_report', 'It crashed.', { device: 'Pixel', area: 'Planner' }).map(row => row.label)).toEqual(['Where it happened', 'What went wrong', 'Device and browser'])
+    expect(messageRows('bug_report', 'Old text', { area: 'Tests', actual: 'Blank page' }).map(row => [row.label, row.value])).toEqual([['Where it happened', 'Tests'], ['What went wrong', 'Old text'], ['What actually happened', 'Blank page']])
+    expect(messageRows('copyright', 'Remove it please', { good_faith: true }).at(-1)).toMatchObject({ label: 'Good-faith statement', value: true })
+    expect(messageRows('something_else', 'Hi there', {})).toEqual([{ key: 'message', label: 'Message', type: 'multiline', value: 'Hi there' }])
   })
 
   it('keeps only whitelisted, non-empty detail values', () => {

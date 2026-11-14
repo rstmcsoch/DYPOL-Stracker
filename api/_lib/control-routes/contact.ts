@@ -11,6 +11,7 @@ import {
   attachmentMime,
   attachmentProblem,
   cleanContactDetails,
+  contactSubject,
   cleanContactLinks,
   isContactReason,
   magicBytesMatch,
@@ -92,7 +93,7 @@ export function parseStart(raw: unknown): ValidStart {
       name: draft.name,
       email: draft.email,
       reason: draft.reason,
-      subject: draft.subject || null,
+      subject: contactSubject(draft.reason, draft.subject, cleanContactDetails(draft.reason, draft.details)),
       message: draft.message,
       details: cleanContactDetails(draft.reason, draft.details),
       links: cleanContactLinks(draft.links).slice(0, CONTACT_LIMITS.links.max)

@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import { Link } from 'react-router-dom'
-import { LoaderCircle } from 'lucide-react'
+import { ArrowRight, LoaderCircle } from 'lucide-react'
 import { useSiteContentSettled, useSiteValues } from '../contexts/SiteContentContext'
 import { CONTACT_PAGE_PATH, INFO_PAGE_PATHS, infoBlocks, infoPageAvailable, infoPageBody, type InfoBlock, type InfoPageKind } from '../lib/site-content/info-pages'
 import { PublicPageShell } from '../components/public/PublicPageShell'
@@ -28,8 +28,8 @@ function SiblingLinks({ current }: { current: InfoPageKind }) {
   const values = useSiteValues()
   const kinds = (['privacy', 'terms', 'about'] as InfoPageKind[]).filter(kind => kind !== current && infoPageAvailable(values, kind))
   return <nav className="pub-doc-siblings" aria-label="More about Stracker">
-    {kinds.map(kind => <Link key={kind} to={INFO_PAGE_PATHS[kind]}>{values[`public.footer.${kind}.label`]}</Link>)}
-    <Link to={CONTACT_PAGE_PATH}>{values['public.footer.contact.label'] || 'Contact'}</Link>
+    {kinds.map(kind => <Link key={kind} to={INFO_PAGE_PATHS[kind]}>{values[`public.footer.${kind}.label`]}<ArrowRight size={15} aria-hidden="true" /></Link>)}
+    <Link to={CONTACT_PAGE_PATH}>{values['public.footer.contact.label'] || 'Contact'}<ArrowRight size={15} aria-hidden="true" /></Link>
   </nav>
 }
 
