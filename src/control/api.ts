@@ -182,6 +182,22 @@ export interface UserDetailResponse {
   }
   activity: { chapters: number; tests: number; mistakes: number; studySessions: number; lastTestDate: string | null }
   audit: AuditRow[]
+  /** Active ban, or null. `until` null = permanent. */
+  ban?: { until: string | null; permanent: boolean; reason: string; since: string } | null
+  sanctions?: SanctionRow[]
+  /** What the signed-in operator may do to this account (the server re-checks every action). */
+  can?: { warn: boolean; ban: boolean; delete: boolean }
+}
+
+export interface SanctionRow {
+  id: string
+  kind: 'warning' | 'ban' | 'unban' | 'ban_ended'
+  reason: string | null
+  until: string | null
+  permanent: boolean
+  byRole: string | null
+  createdAt: string
+  seenAt: string | null
 }
 
 export interface HealthResponse {

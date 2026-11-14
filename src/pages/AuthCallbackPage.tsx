@@ -6,6 +6,8 @@ import { supabase } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
 import { parseOAuthCallbackError, takeOAuthNext, type OAuthCallbackProblem } from '../lib/google-auth'
 import { track } from '../lib/telemetry/client'
+import { banNoticeForDevice } from '../lib/account-notices-client'
+import { signInRefusal } from '../lib/account-notices'
 
 /**
  * Landing page for the Google (OAuth, PKCE) round trip.
@@ -19,12 +21,21 @@ import { track } from '../lib/telemetry/client'
 export default function AuthCallbackPage() {
   usePageMeta('Signing you in — Stracker', 'Finishing sign-in to Stracker.')
   const navigate = useNavigate()
-  const [problem, setProblem] = useState<OAuthCallbackProblem | null>(() => typeof window === 'undefined' ? null : parseOAuthCallbackError(window.location.search, window.location.hash))
+  const [problem, setProblem] = useState<(OAuthCallbackProblem & { detailed?: boolean }) | null>(() => typeof window === 'undefined' ? null : parseOAuthCallbackError(window.location.search, window.location.hash))
 
   useEffect(() => {
     if (problem) {
       // Drop the error parameters so a reload does not repeat the message.
       window.history.replaceState(null, '', window.location.pathname)
+      if (problem.kind === 'suspended' && !problem.detailed) {
+        // Google returns no identity for a banned account. If this device last held the
+        // account (signed token from the dashboard), the details can be shown safely.
+        let active = true
+        void banNoticeForDevice().then(notice => {
+          if (active && notice) setProblem({ kind: 'suspended', message: signInRefusal(notice), detailed: true })
+        }).catch(() => undefined)
+        return () => { active = false }
+      }
       return
     }
     let active = true
@@ -70,7 +81,7 @@ export default function AuthCallbackPage() {
       {problem ? <>
         <div className="auth-card-head">
           <div className="auth-card-icon" aria-hidden="true"><AlertCircle size={21} /></div>
-          <div><span className="eyebrow">{problem.kind === 'cancelled' ? 'SIGN-IN CANCELLED' : 'SIGN-IN NOT FINISHED'}</span><h2 id="callback-title">Google sign-in didn’t complete</h2></div>
+          <div><span className="eyebrow">{problem.kind === 'cancelled' ? 'SIGN-IN CANCELLED' : problem.kind === 'suspended' ? 'ACCOUNT SUSPENDED' : 'SIGN-IN NOT FINISHED'}</span><h2 id="callback-title">{problem.kind === 'suspended' ? 'This account can’t sign in' : 'Google sign-in didn’t complete'}</h2></div>
         </div>
         <div className="form-error" role="alert">{problem.message}</div>
         <div className="auth-success-actions auth-callback-actions">

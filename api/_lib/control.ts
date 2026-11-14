@@ -203,14 +203,20 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
   }
   const userId = claims.sub
 
-  const { data: roleRow, error: roleError } = await admin
-    .from('control_roles')
-    .select('role, revoked_at')
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (roleError) {
-    logAIEvent('error', 'control_role_lookup_failed', { code: roleError.code ?? '' })
+  // The ban lookup runs alongside the role lookup (same round trip): a banned role holder's
+  // still-unexpired access token must not keep the console open.
+  const [{ data: roleRow, error: roleError }, { data: banRow, error: banError }] = await Promise.all([
+    admin.from('control_roles').select('role, revoked_at').eq('user_id', userId).maybeSingle(),
+    admin.from('account_bans').select('banned_until').eq('user_id', userId).maybeSingle()
+  ])
+  if (roleError || banError) {
+    const failure = roleError ?? banError
+    logAIEvent('error', 'control_role_lookup_failed', { code: failure?.code ?? '' })
     throw new ApiError(503, 'control_unavailable', 'Access could not be verified right now. Try again in a moment.')
+  }
+  if (banRow && (banRow.banned_until === null || Date.parse(String(banRow.banned_until)) > Date.now())) {
+    await recordDeniedAccess(admin, userId, requestId, 'account_banned')
+    throw new ApiError(403, 'access_not_granted', 'Access not granted.')
   }
   const role = roleRow?.role
   if (!roleGrantsConsole(role, roleRow?.revoked_at)) {

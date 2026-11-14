@@ -2,6 +2,7 @@ import type { ApiRequest, ApiResponse } from '../http.js'
 import { ApiError, sendJson } from '../http.js'
 import { controlHandler, recordAuditEvent } from '../control.js'
 import { isUuid } from '../control-policy.js'
+import { isControlRole, sanctionRefusal } from '../../../src/lib/control-permissions.js'
 
 /**
  * GET /api/control/user?id=<uuid>
@@ -18,7 +19,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     if (authError || !authData?.user) throw new ApiError(404, 'user_not_found', 'That account could not be found.')
     const target = authData.user
 
-    const [profile, role, chapters, tests, mistakes, sessions, lastTest, audit] = await Promise.all([
+    const [profile, role, chapters, tests, mistakes, sessions, lastTest, audit, ban, sanctions] = await Promise.all([
       admin.from('profiles').select('display_name, created_at').eq('user_id', id).maybeSingle(),
       admin.from('control_roles').select('role, revoked_at, granted_at').eq('user_id', id).maybeSingle(),
       admin.from('chapters').select('id', { count: 'exact', head: true }).eq('user_id', id),
@@ -26,9 +27,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       admin.from('mistakes').select('id', { count: 'exact', head: true }).eq('user_id', id),
       admin.from('study_sessions').select('id', { count: 'exact', head: true }).eq('user_id', id),
       admin.from('tests').select('test_date').eq('user_id', id).order('test_date', { ascending: false }).limit(1).maybeSingle(),
-      admin.from('control_audit_events').select('id, created_at, action, result, actor_role, error_category, reason, before_summary, after_summary').eq('target_id', id).order('created_at', { ascending: false }).limit(25)
+      admin.from('control_audit_events').select('id, created_at, action, result, actor_role, error_category, reason, before_summary, after_summary').eq('target_id', id).order('created_at', { ascending: false }).limit(25),
+      admin.from('account_bans').select('banned_until, reason, created_at').eq('user_id', id).maybeSingle(),
+      admin.from('account_sanctions').select('id, kind, reason, banned_until, permanent, created_by_role, created_at, acknowledged_at').eq('user_id', id).order('created_at', { ascending: false }).limit(50)
     ])
-    const failures = [profile, role, chapters, tests, mistakes, sessions, lastTest, audit].filter(result => result.error)
+    const failures = [profile, role, chapters, tests, mistakes, sessions, lastTest, audit, ban, sanctions].filter(result => result.error)
     if (failures.length) throw new ApiError(503, 'user_detail_unavailable', 'Part of this account could not be loaded. Try again shortly.')
 
     // Viewing an account is itself a privileged read, so it is recorded.
@@ -47,6 +50,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     const suspended = Boolean(bannedUntil && Date.parse(bannedUntil) > Date.now())
     const provider = typeof target.app_metadata?.provider === 'string' ? target.app_metadata.provider : null
     const roleActive = Boolean(role.data && !role.data.revoked_at)
+    const targetRole = roleActive && isControlRole(role.data?.role) ? role.data.role : null
+    const banData = ban.data as { banned_until: string | null; reason: string; created_at: string } | null
+    const banActive = Boolean(banData && (banData.banned_until === null || Date.parse(banData.banned_until) > Date.now()))
+    // What the signed-in operator may do here (the action route re-checks all of this).
+    const allowedOnTarget = sanctionRefusal({ id: context.userId, role: context.role }, { id, role: targetRole }) === null
 
     sendJson(res, 200, {
       user: {
@@ -60,6 +68,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         suspended,
         bannedUntil: suspended ? bannedUntil : null,
         adminRole: roleActive ? role.data?.role ?? null : null
+      },
+      ban: banActive && banData ? { until: banData.banned_until, permanent: banData.banned_until === null, reason: banData.reason, since: banData.created_at } : null,
+      sanctions: ((sanctions.data ?? []) as Array<Record<string, unknown>>).map(row => ({
+        id: row.id,
+        kind: row.kind,
+        reason: row.reason ?? null,
+        until: row.banned_until ?? null,
+        permanent: row.permanent === true,
+        byRole: row.created_by_role ?? null,
+        createdAt: row.created_at,
+        seenAt: row.acknowledged_at ?? null
+      })),
+      can: {
+        warn: allowedOnTarget && context.permissions.has('users.warn'),
+        ban: allowedOnTarget && context.permissions.has('users.ban'),
+        delete: allowedOnTarget && context.permissions.has('users.delete')
       },
       activity: {
         chapters: chapters.count ?? 0,

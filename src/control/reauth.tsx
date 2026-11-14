@@ -38,7 +38,7 @@ export function ReauthProvider({ children, passkey = false }: { children: ReactN
         <Dialog
           title={open === 'step-up' ? (passkey ? 'Confirm with your passkey or authenticator' : 'Confirm with your authenticator') : 'Verify again to continue'}
           description={open === 'step-up'
-            ? (passkey ? 'Settings are only saved after a fresh confirmation: your passkey, or a code from your authenticator app. Nothing is saved until you confirm.' : 'Settings are only saved after a fresh code from your own authenticator app. Nothing is saved until you confirm.')
+            ? (passkey ? 'This change is only applied after a fresh confirmation: your passkey, or a code from your authenticator app. Nothing changes until you confirm.' : 'This change is only applied after a fresh code from your own authenticator app. Nothing changes until you confirm.')
             : 'This change needs a fresh confirmation from the last 15 minutes. Nothing has been changed yet.'}
           onClose={() => finish(false)}
           footer={<Button variant="ghost" onClick={() => finish(false)}>Cancel</Button>}

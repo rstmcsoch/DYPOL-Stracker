@@ -1,3 +1,4 @@
+import { GENERIC_SUSPENDED_MESSAGE } from './account-notices'
 import { useEffect, useState } from 'react'
 import { safeAppPath } from './safe-path'
 
@@ -119,7 +120,7 @@ export function takeOAuthNext(): string {
 }
 
 export interface OAuthCallbackProblem {
-  kind: 'cancelled' | 'unavailable' | 'failed'
+  kind: 'cancelled' | 'unavailable' | 'failed' | 'suspended'
   message: string
 }
 
@@ -139,6 +140,11 @@ export function parseOAuthCallbackError(search: string, hash: string): OAuthCall
 
 export function describeOAuthError(raw: string): OAuthCallbackProblem {
   const text = raw.toLowerCase()
+  // Supabase Auth refuses a banned account with error_code=user_banned (often alongside
+  // error=access_denied), so this is checked before the cancellation pattern.
+  if (/user_banned|user is banned|banned/.test(text)) {
+    return { kind: 'suspended', message: GENERIC_SUSPENDED_MESSAGE }
+  }
   if (/access_denied|cancel|denied|user_cancelled/.test(text)) {
     return { kind: 'cancelled', message: 'Google sign-in was cancelled. You can try again, or use your email and password.' }
   }

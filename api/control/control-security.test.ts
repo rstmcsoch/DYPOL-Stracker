@@ -502,7 +502,7 @@ describe('every console route is enforced on the server, not only by the browser
     { file: 'operations', routes: ['audit', 'user-access', 'state', 'draft', 'discard', 'publish', 'restore', 'media', 'exams', 'analytics', 'messages'] },
     { file: 'security', routes: ['session', 'roles', 'settings'] },
     { file: 'system', routes: ['overview', 'health'] },
-    { file: 'accounts', routes: ['users', 'user'] }
+    { file: 'accounts', routes: ['users', 'user', 'user-sanction'] }
   ]
   const methods = ['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
 

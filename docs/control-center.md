@@ -231,6 +231,81 @@ Roles: Owner, Admin (`administrator`), Moderator (`moderator`), Viewer (`viewer`
 - **Add / remove:** Settings → Security → Passkeys (owner). Adding is preceded by a step-up; removing goes through the server.
 - **Supabase setting:** Authentication → Passkeys → *Enable Passkey authentication* (Beta), Relying Party ID `dypol-stracker.vercel.app`, origin `https://dypol-stracker.vercel.app`. When it is off, the console hides the option and explains the toggle.
 
+## Warnings, bans and account deletion
+
+Open **Users → (name)**. Depending on your permissions you see **Warn**, **Ban** / **Lift ban** and
+**Delete account**, plus a **Warnings and bans** tab with the full history (who, when, until, and
+whether the student has seen it).
+
+| Permission | Owner | Admin | Moderator | Viewer |
+| --- | --- | --- | --- | --- |
+| `users.warn` | yes | yes | yes | no |
+| `users.ban` (ban and lift) | yes | yes | no | no |
+| `users.delete` | yes | no (owner can grant) | no | no |
+
+Rules enforced by the server (`api/_lib/control-routes/user-sanction.ts`) on every request,
+whatever the browser shows:
+
+- Nobody can act on the owner or on themselves. Otherwise the actor needs a **strictly higher**
+  role than the target (owner > admin > moderator > viewer > student). Rank is checked before
+  the step-up, so a refused attempt consumes nothing; refusals are audited (bounded).
+- Every action needs a fresh, single-use step-up (owner: passkey or authenticator code; others:
+  authenticator code; at most 2 minutes old).
+- Warnings and bans need a reason (5–500 characters) that the student will see. Deleting needs
+  the account email typed exactly.
+- Audit rows carry the action, actor role, target account ID, reason and counts — never study
+  data or the target's email.
+
+### How a ban is enforced
+
+1. **Supabase Auth native ban** (`updateUserById` with `ban_duration`: `876000h` for permanent,
+   the exact number of seconds until the chosen end for temporary; `none` lifts it). Auth then
+   refuses password sign-in, Google sign-in and every refresh-token exchange with `user_banned`.
+2. **All sessions revoked** at once (`control_revoke_user_sessions`), so no refresh token survives.
+3. **Row-level security defence in depth.** Access tokens are stateless JWTs and stay valid for up
+   to an hour. A `RESTRICTIVE` policy `account not banned` on every student table and on
+   `storage.objects` (`authenticated` role only) calls `public.current_account_banned()`: one
+   primary-key lookup on `account_bans`, evaluated once per statement. A banned account's old
+   token reads nothing and can write nothing. Public read tables (site content, exam catalog,
+   site settings) are left alone. Student AI routes already verify tokens with Auth
+   (`getUser`), which refuses banned users; console routes check `account_bans` in the same
+   round trip as the role lookup.
+4. **Temporary bans expire by themselves**: Auth lifts its ban at `banned_until`, and the RLS check
+   compares `banned_until > now()`. The ban row is cleaned up and a "your suspension has ended"
+   notice is queued the next time the student opens the dashboard.
+
+If writing the ban record fails after Auth accepted the ban, the route lifts the Auth ban again, so
+the two never disagree.
+
+### What the student sees
+
+- **Dashboard (one RPC on open, `my_account_notice`)**: the oldest unacknowledged notice as a
+  themed popup — warning (reason; dashboard keeps working), ban (reason and end time in IST;
+  signs out automatically after "Sign out" or 30 seconds), lifted or ended ban. Acknowledgement
+  is stored server-side (`acknowledge_account_notice`). The check repeats at most every 5 minutes
+  when the tab becomes visible again. The same RPC returns a signed device token (below).
+- **Email + password sign-in**: Supabase Auth answers `user_banned` *before* it checks the
+  password (it says "banned" even for a wrong password — a Supabase behaviour we cannot change).
+  Stracker therefore reveals nothing itself until `account_ban_notice_for_credentials` proves the
+  password in the database (bcrypt via `extensions.crypt`, constant work with a dummy hash for
+  unknown emails, rate limited to 5 per email per 15 minutes and 600 per minute overall, email
+  stored only as a SHA-256 hash in the limiter). Proven: "This account is suspended until … IST
+  (or permanently). Reason: …". Not proven: the usual "Email or password is incorrect".
+- **Google sign-in**: Supabase returns `error_code=user_banned` with no identity. If this device
+  last held the account, its HMAC-signed device token (`<uid>.<expiry>.<hmac>`, 180 days, key in
+  the non-exposed `private.account_notice_keys`) lets `account_ban_notice_for_token` show the
+  details. Otherwise the page shows a generic "This account is suspended … sign in with email and
+  password to see the details, or contact us". Limitation: a Google-only account on a new device
+  sees only the generic message.
+
+### Deleting an account
+
+Files first (while the account still exists, so a failure can be retried): everything under
+`mistake-images/<uid>/`, and the attachments of the account's contact messages; then those
+contact messages (their foreign key is `ON DELETE SET NULL`); then `auth.admin.deleteUser`, which
+removes every study, AI, role, sanction and notice row through `ON DELETE CASCADE`. The audit row
+keeps only counts.
+
 ## Not implemented yet
 
 Administrator, Support and Analyst permission sets; feature flags; announcements; exam, subject
