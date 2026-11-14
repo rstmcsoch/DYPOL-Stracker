@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ApiRequest, ApiResponse } from '../http.js'
 import { ApiError, readJson, sendJson } from '../http.js'
 import { controlHandler, recordAuditEvent, recordBoundedDenial, requireStepUp, type ControlContext } from '../control.js'
+import { deleteAllPasskeys } from '../control-passkeys.js'
 import { cleanText, isUuid } from '../control-policy.js'
 import {
   CONTROL_ROLES,
@@ -77,22 +78,6 @@ export async function deleteAllFactors(admin: SupabaseClient, userId: string): P
     else removed += 1
   }
   return { removed, ok }
-}
-
-/** Removes every passkey of an account. Passkeys may be switched off for the project: treated as none. */
-async function deleteAllPasskeys(admin: SupabaseClient, userId: string): Promise<number> {
-  try {
-    const { data, error } = await admin.auth.admin.passkey.listPasskeys({ userId })
-    if (error || !data) return 0
-    let removed = 0
-    for (const passkey of data) {
-      const { error: deleteError } = await admin.auth.admin.passkey.deletePasskey({ userId, passkeyId: passkey.id })
-      if (!deleteError) removed += 1
-    }
-    return removed
-  } catch {
-    return 0
-  }
 }
 
 async function emailOf(admin: SupabaseClient, userId: string): Promise<string> {
@@ -255,16 +240,18 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
         mfaReset = reset.removed
         await admin.from('control_member_permissions').delete().eq('user_id', targetId)
       }
+      // Passkeys are the owner's alone: anyone given a non-owner role keeps none.
+      const passkeysRemoved = body.role === 'owner' ? 0 : await deleteAllPasskeys(admin, targetId)
       const now = new Date().toISOString()
       const write = existing
         ? admin.from('control_roles').update({ role: body.role, revoked_at: null, granted_by: context.userId, grant_source: 'console', updated_at: now, ...(wasActive ? {} : { granted_at: now }) }).eq('user_id', targetId)
-        : admin.from('control_roles').insert({ user_id: targetId, role: body.role, revoked_at: null, granted_by: context.userId, grant_source: 'console', reason: 'Given in Control Center → Settings' })
+        : admin.from('control_roles').insert({ user_id: targetId, role: body.role, revoked_at: null, granted_by: context.userId, grant_source: 'console', reason: 'Given in Control Centre → Settings' })
       const { error } = await write
       if (error) {
         if (/last_owner/.test(error.message ?? '')) await refuse(context, 'role.assign', 'last_owner', 409, 'Stracker must always keep at least one owner.', targetId)
         throw new ApiError(502, 'save_failed', 'The role could not be saved. Nothing changed.')
       }
-      await audit(context, 'role.assign', 'user', targetId, { before: previousRole ?? 'none', after: body.role, mfa_reset: mfaReset }, undefined, 'warning')
+      await audit(context, 'role.assign', 'user', targetId, { before: previousRole ?? 'none', after: body.role, mfa_reset: mfaReset, passkeys_removed: passkeysRemoved }, undefined, 'warning')
       sendJson(res, 200, { ok: true, userId: targetId, role: body.role, mfaSetupRequired: !wasActive })
       return
     }

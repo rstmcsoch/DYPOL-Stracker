@@ -14,24 +14,25 @@ vi.mock('../api', async () => {
 vi.mock('../MfaPanels', () => ({ MfaChallengeForm: ({ onVerified }: { onVerified: () => void }) => <button type="button" onClick={onVerified}>Mock verify code</button> }))
 vi.mock('../ControlSession', () => ({ useControlSession: () => ({ phase: { kind: 'granted', session: { userId: 'owner-id' } } }) }))
 vi.mock('../../lib/supabase', () => ({ supabase: { auth: { getUser: async () => ({ data: { user: { identities: [{ provider: 'email' }, { provider: 'google' }] } } }) } } }))
+vi.mock('../passkey', () => ({ verifyWithOwnerPasskey: vi.fn(async () => ({ ok: true })) }))
 const { ReauthProvider } = await import('../reauth')
 const { TimeZoneProvider } = await import('../time')
 const { default: SettingsPage } = await import('./SettingsPage')
 
 function base(role: 'owner' | 'administrator', permissions: string[]): SettingsResponse {
   return {
-    me: { userId: 'owner-id', role, permissions: permissions as never, assignableRoles: role === 'owner' ? ['owner', 'administrator', 'manager', 'support', 'analyst'] : [] },
+    me: { userId: 'owner-id', role, permissions: permissions as never, assignableRoles: role === 'owner' ? ['owner', 'administrator', 'moderator', 'viewer'] : [] },
     site: { maintenanceEnabled: false, maintenanceMessage: '', siteDown: false, signupEnabled: true, signinEnabled: true, updatedAt: null },
-    members: role === 'owner' ? [{ userId: 'owner-id', email: 'owner@example.org', role: 'owner', grantedAt: '2026-10-01T00:00:00Z', revokedAt: null, active: true, mfaEnrolled: true, overrides: {} }, { userId: 'm1', email: 'helper@example.org', role: 'support', grantedAt: '2026-11-01T00:00:00Z', revokedAt: null, active: true, mfaEnrolled: false, overrides: {} }] : null,
-    matrix: role === 'owner' ? { administrator: {}, manager: {}, support: {}, analyst: {} } as never : null,
+    members: role === 'owner' ? [{ userId: 'owner-id', email: 'owner@example.org', role: 'owner', grantedAt: '2026-10-01T00:00:00Z', revokedAt: null, active: true, mfaEnrolled: true, overrides: {} }, { userId: 'm1', email: 'helper@example.org', role: 'viewer', grantedAt: '2026-11-01T00:00:00Z', revokedAt: null, active: true, mfaEnrolled: false, overrides: {} }] : null,
+    matrix: role === 'owner' ? { administrator: {}, moderator: {}, viewer: {} } as never : null,
     activity: role === 'owner' ? [] : null,
     passkeys: role === 'owner' ? { available: true, items: [] } : null
   }
 }
 
-function renderAt(path: string) {
+function renderAt(path: string, passkey = false) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <MemoryRouter initialEntries={[path]}><TimeZoneProvider><ReauthProvider>
+    <MemoryRouter initialEntries={[path]}><TimeZoneProvider><ReauthProvider passkey={passkey}>
       <Routes><Route path="/control-panel/settings/*" element={<SettingsPage />} /></Routes>
     </ReauthProvider></TimeZoneProvider></MemoryRouter>
   </QueryClientProvider>)
@@ -92,5 +93,38 @@ describe('Settings', () => {
     renderAt('/control-panel/settings/security')
     expect(await screen.findByText('Change your password')).toBeTruthy()
     expect(screen.queryByText('Passkeys (owner)')).toBeNull()
+  })
+
+  it('permissions use toggle switches (role="switch"), and a toggle change is what gets saved', async () => {
+    settings = base('owner', ['roles.manage'])
+    settings.matrix = { administrator: { 'users.view': true }, moderator: {}, viewer: {} } as never
+    renderAt('/control-panel/settings/permissions')
+    const toggle = await screen.findByRole('switch', { name: 'Admin: View users' })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(document.querySelector('input[type="checkbox"]')).toBeNull()
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: /Save Admin permissions/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock verify code' }))
+    await waitFor(() => expect(calls.find(call => call.init?.method === 'POST')?.init?.body).toEqual({ action: 'permissions.role', role: 'administrator', permissions: { 'users.view': false } }))
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Admin', 'Moderator', 'Viewer'])
+  })
+
+  it('owner with a passkey can confirm a save with it; others only see the code', async () => {
+    settings = base('owner', ['settings.site', 'settings.access', 'roles.manage', 'audit.view'])
+    renderAt('/control-panel/settings/access', true)
+    fireEvent.click(await screen.findByLabelText(/Allow new sign-ups/))
+    fireEvent.click(screen.getByRole('button', { name: /Save switches/ }))
+    expect(await screen.findByText('Confirm with your passkey or authenticator')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm with passkey' }))
+    await waitFor(() => expect(calls.filter(call => call.init?.method === 'POST')).toHaveLength(1))
+    cleanup()
+    calls.length = 0
+    settings = base('administrator', ['settings.access'])
+    renderAt('/control-panel/settings/access', false)
+    fireEvent.click(await screen.findByLabelText(/Allow new sign-ups/))
+    fireEvent.click(screen.getByRole('button', { name: /Save switches/ }))
+    expect(await screen.findByText('Confirm with your authenticator')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /passkey/i })).toBeNull()
   })
 })

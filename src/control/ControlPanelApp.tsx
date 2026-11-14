@@ -121,7 +121,7 @@ function ControlRouter() {
 
   // Granted: the server has confirmed an active owner with aal2.
   return (
-    <ReauthProvider>
+    <ReauthProvider passkey={phase.session.role === 'owner' && phase.session.passkey === true}>
       <ControlLayout>
         <Suspense fallback={<div className="cc-page-skeleton"><Skeleton rows={6} height={18} /></div>}>
           <Routes location={location}>

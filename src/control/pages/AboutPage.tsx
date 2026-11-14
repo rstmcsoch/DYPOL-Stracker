@@ -19,11 +19,11 @@ export default function AboutPage() {
       <PageHeader title="Help & About" description="What this console is, how access works, and how to get help." />
       <div className="cc-stack">
         <div className="cc-grid cc-grid--main">
-          <Panel title="Stracker Control Center">
+          <Panel title="Control Centre">
             <div className="cc-stack cc-stack--tight">
               <BrandMark />
-              <p className="cc-muted">A private operations console for DYPOL Stracker. It is separate from the public homepage and from the student notebook, and it is never linked from either. The address stays <code>/control-panel/</code> for compatibility with existing bookmarks.</p>
-              <p className="cc-muted">Stracker by DYPOL LABS · Control Center</p>
+              <p className="cc-muted">It is separate from the public homepage and from the student notebook, and it is never linked from either. The address stays <code>/control-panel/</code> for compatibility with existing bookmarks.</p>
+              <p className="cc-muted">Control Centre</p>
             </div>
           </Panel>
           <Panel title="Your session">

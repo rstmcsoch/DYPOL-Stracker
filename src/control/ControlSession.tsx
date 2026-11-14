@@ -11,7 +11,7 @@ import { IDLE_TIMEOUT_MS, idleState } from './policy'
 export type ControlPhase =
   | { kind: 'loading' }
   | { kind: 'signed_out'; notice?: string }
-  | { kind: 'mfa' }
+  | { kind: 'mfa'; passkey?: boolean; owner?: boolean }
   | { kind: 'denied' }
   | { kind: 'error'; message: string }
   | { kind: 'granted'; session: SessionResponse }
@@ -40,7 +40,7 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!supabase) {
-      setPhase({ kind: 'error', message: 'Cloud sign-in is not configured for this deployment, so the Control Center cannot open.' })
+      setPhase({ kind: 'error', message: 'Cloud sign-in is not configured for this deployment, so the Control Centre cannot open.' })
       return
     }
     const { data } = await supabase.auth.getSession()
@@ -52,7 +52,7 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
     try {
       const session = await controlFetch<SessionResponse>('session')
       if (!mounted.current) return
-      setPhase(session.status === 'granted' ? { kind: 'granted', session } : { kind: 'mfa' })
+      setPhase(session.status === 'granted' ? { kind: 'granted', session } : { kind: 'mfa', passkey: session.role === 'owner' && session.passkey === true, owner: session.role === 'owner' })
     } catch (error) {
       if (!mounted.current) return
       if (error instanceof ControlApiError) {
@@ -69,7 +69,7 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
           return
         }
       }
-      setPhase({ kind: 'error', message: error instanceof Error ? error.message : 'The Control Center could not be reached.' })
+      setPhase({ kind: 'error', message: error instanceof Error ? error.message : 'The Control Centre could not be reached.' })
     }
   }, [])
 

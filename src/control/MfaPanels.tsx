@@ -111,7 +111,7 @@ export function MfaEnrollment({ onVerified }: { onVerified: () => void | Promise
         for (const stale of (list?.all ?? []).filter(factor => factor.factor_type === 'totp' && factor.status === 'unverified')) {
           await client.auth.mfa.unenroll({ factorId: stale.id })
         }
-        const { data, error: enrollError } = await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Stracker Control Center' })
+        const { data, error: enrollError } = await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Control Centre' })
         if (enrollError || !data?.totp) throw new Error('The authenticator could not be set up. Try again.')
         const qr = data.totp.qr_code.startsWith('data:') ? data.totp.qr_code : `data:image/svg+xml;utf8,${encodeURIComponent(data.totp.qr_code)}`
         setState({ status: 'ready', factorId: data.id, qr, secret: data.totp.secret })
@@ -154,7 +154,7 @@ export function MfaEnrollment({ onVerified }: { onVerified: () => void | Promise
   return (
     <div className="cc-enroll">
       <div className="cc-enroll__qr">
-        <img src={state.qr} alt="QR code to add Stracker Control Center to an authenticator app" width={184} height={184} />
+        <img src={state.qr} alt="QR code to add Control Centre to an authenticator app" width={184} height={184} />
         <QrCode size={14} aria-hidden="true" /> <span>Scan with Google Authenticator, 1Password, Authy or another TOTP app.</span>
       </div>
       <div className="cc-enroll__steps">

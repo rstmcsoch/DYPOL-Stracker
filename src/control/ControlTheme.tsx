@@ -29,7 +29,7 @@ function useSystemPrefersDark(): boolean {
 }
 
 /**
- * Owns the Control Center's own light/dark/system preference. The preference is read
+ * Owns the Control Centre's own light/dark/system preference. The preference is read
  * synchronously on the first render, so the console never paints in the wrong mode. The
  * wrapper element carries `data-cc-theme`, which the stylesheet uses for every token; the
  * public site and the notebook never receive this attribute.
@@ -94,7 +94,7 @@ export function ControlThemeSwitch() {
     document.getElementById(`cc-theme-${option.value}`)?.focus()
   }
 
-  return <div className="cc-theme-switch" role="radiogroup" aria-label="Control Center appearance">
+  return <div className="cc-theme-switch" role="radiogroup" aria-label="Control Centre appearance">
     {CONTROL_THEME_OPTIONS.map((option, index) => {
       const Icon = ICONS[option.value]
       const checked = preference === option.value

@@ -30,7 +30,7 @@ function renderPage() {
   return render(<QueryClientProvider client={client}><ToastProvider><TimeZoneProvider><MessagesPage /></TimeZoneProvider></ToastProvider></QueryClientProvider>)
 }
 
-describe('Control Center → Messages', () => {
+describe('Control Centre → Messages', () => {
   it('lists messages, opens one, marks it read and renders details, safe links and files', async () => {
     renderPage()
     const row = await screen.findByRole('button', { name: /Asha/ })
@@ -74,7 +74,7 @@ describe('Control Center → Messages', () => {
 })
 
 describe('Messages tab wiring', () => {
-  it('the Control Center sidebar has a Messages tab at /control-panel/messages', () => {
+  it('the Control Centre sidebar has a Messages tab at /control-panel/messages', () => {
     const items = NAV_GROUPS.flatMap(group => group.items)
     expect(items.find(item => item.label === 'Messages')).toMatchObject({ to: 'messages', icon: 'messages' })
     expect(activeNavItem('/control-panel/messages')?.label).toBe('Messages')

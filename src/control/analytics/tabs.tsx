@@ -143,7 +143,7 @@ export function Audience() {
     <div className="cc-grid cc-grid--main">
       <SectionPanel title="Devices" tip="By viewport width: mobile < 640px, tablet < 1024px." section={r.sections.main} timeZone={tz(r)}><DataTable caption="Devices" rows={r.data.devices ?? []} columns={[{ key: 'device', label: 'Device' }, { key: 'events', label: 'Events' }, { key: 'visitors', label: 'Visitors' }]} /></SectionPanel>
       <SectionPanel title="Browsers" section={r.sections.main} timeZone={tz(r)}><DataTable caption="Browsers" rows={r.data.browsers ?? []} columns={rankedColumns('Browser family')} /></SectionPanel>
-      <SectionPanel title="Areas" tip="Public site, login/signup, notebook or Control Center." section={r.sections.main} timeZone={tz(r)}><DataTable caption="Areas" rows={r.data.sources ?? []} columns={rankedColumns('Area')} /></SectionPanel>
+      <SectionPanel title="Areas" tip="Public site, login/signup, notebook or Control Centre." section={r.sections.main} timeZone={tz(r)}><DataTable caption="Areas" rows={r.data.sources ?? []} columns={rankedColumns('Area')} /></SectionPanel>
     </div>
   </>}</QueryFrame>
 }
@@ -444,7 +444,7 @@ export function Health() {
 // ---------------------------------------------------------------- Admin audit (read-only view of the existing trail)
 export function AdminAudit() {
   const query = useQuery({ queryKey: ['control', 'audit', 'analytics-tab'], queryFn: () => controlFetch<AuditResponse>('audit?page=1&pageSize=25&tz=Asia/Kolkata') })
-  return <QueryFrame query={query}>{data => <Panel title="Admin audit" description="Read-only: the 25 most recent privileged Control Center actions, from the existing audit trail (kept separate from product analytics)." actions={<><Badge tone="info">Historical</Badge><Link className="cc-link" to={`${CONSOLE_BASE}/audit`}>Open the full audit log</Link></>}>
+  return <QueryFrame query={query}>{data => <Panel title="Admin audit" description="Read-only: the 25 most recent privileged Control Centre actions, from the existing audit trail (kept separate from product analytics)." actions={<><Badge tone="info">Historical</Badge><Link className="cc-link" to={`${CONSOLE_BASE}/audit`}>Open the full audit log</Link></>}>
     <DataTable caption="Recent admin actions" rows={data.events.map(event => { const d = describeAuditEvent(event); return { when: event.occurred_at, what: d.title, who: d.actor, outcome: event.outcome } })} empty="No audit events yet." columns={[
       { key: 'when', label: 'When (IST)', render: row => formatTime(String(row.when)) }, { key: 'what', label: 'Action' }, { key: 'who', label: 'By' },
       { key: 'outcome', label: 'Outcome', render: row => <Badge tone={row.outcome === 'success' ? 'ok' : row.outcome === 'denied' ? 'warn' : 'crit'}>{String(row.outcome)}</Badge> }

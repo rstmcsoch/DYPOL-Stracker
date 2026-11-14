@@ -9,10 +9,9 @@ import {
   ANONYMOUS_LIMIT,
   CONTROL_API_LIMIT,
   DENIED_AUDIT_LIMIT,
-  isAal2,
+  consoleAssurance,
   isRecentMfa,
   isUuid,
-  latestMfaTimestamp,
   roleGrantsConsole,
   sanitizeAuditSummary,
   cleanText,
@@ -32,7 +31,9 @@ export interface ControlContext {
   /** Effective permissions (owner: all; others: role matrix + per-person overrides). */
   permissions: ReadonlySet<Permission>
   aal: string
-  /** Unix seconds of the newest TOTP/phone verification in this session, or null. */
+  /** How this session completed the console's second step: authenticator code, owner passkey, or not yet. */
+  assurance: 'totp' | 'passkey' | null
+  /** Unix seconds of the newest accepted second-step proof (TOTP; or passkey for the owner), or null. */
   mfaAt: number | null
   /** Supabase Auth session identifier from the JWT (an opaque id, not a credential), or null. */
   sessionId: string | null
@@ -220,7 +221,14 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
   await takeControlRate(admin, `api:${userId}`, CONTROL_API_LIMIT)
 
   const aal = typeof claims.aal === 'string' ? claims.aal : 'aal1'
-  if (options.requireAal2 && !isAal2(aal)) {
+  const assurance = consoleAssurance(role, aal, claims.amr)
+  if (assurance.passkeyRefused) {
+    // Passkeys are the owner's alone. Any other role holder whose session involved a passkey
+    // is refused (the database also refuses to store non-owner passkeys).
+    await recordDeniedAccess(admin, userId, requestId, 'passkey_owner_only', role)
+    throw new ApiError(403, 'access_not_granted', 'Access not granted.')
+  }
+  if (options.requireAal2 && !assurance.granted) {
     // A data request from an owner session that never completed two-step verification is a
     // security-relevant denial (the normal pre-MFA flow only calls /session, which allows aal1).
     await recordDeniedAccess(admin, userId, requestId, 'mfa_required', role)
@@ -239,7 +247,8 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
     role,
     permissions,
     aal,
-    mfaAt: latestMfaTimestamp(claims.amr),
+    assurance: assurance.method,
+    mfaAt: assurance.verifiedAt,
     sessionId: typeof claims.session_id === 'string' && claims.session_id.length <= 80 ? claims.session_id : null,
     requestId,
     admin
@@ -281,11 +290,11 @@ export async function requireStepUp(context: ControlContext, attempted: { action
     throw new ApiError(403, 'step_up_required', message, { reason })
   }
   if (!context.sessionId || context.mfaAt === null || !isFreshStepUp(context.mfaAt, nowSeconds)) {
-    await refuse('step_up_stale', 'Enter a fresh authenticator code to save this change.')
+    await refuse('step_up_stale', context.role === 'owner' ? 'Confirm with your passkey or a fresh authenticator code to save this change.' : 'Enter a fresh authenticator code to save this change.')
   }
   const { error } = await context.admin.from('control_step_up_uses').insert({ user_id: context.userId, session_id: context.sessionId, mfa_at: context.mfaAt, action: attempted.action.slice(0, 80) })
   if (error) {
-    if (error.code === '23505') await refuse('step_up_used', 'That authenticator code was already used for a save. Enter a new code.')
+    if (error.code === '23505') await refuse('step_up_used', 'That confirmation was already used for a save. Confirm again.')
     logAIEvent('error', 'control_step_up_unavailable', { code: error.code ?? '' })
     throw new ApiError(503, 'control_unavailable', 'The change could not be verified right now. Nothing was saved.')
   }

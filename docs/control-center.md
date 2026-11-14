@@ -207,9 +207,9 @@ Sidebar → **Settings** (`/control-panel/settings/*`) has horizontal tabs. Each
 | Permissions | owner only | Role × permission matrix and per-person allow/deny overrides. |
 | Activity | `audit.view` | Last 50 settings and role changes. |
 
-Roles: Owner, Admin (`administrator`), Manager, Support, Viewer (`analyst`). Defaults live in `control_role_permissions` (seeded by migration `20261114120000_control_settings_rbac`) and follow least privilege: Viewer reads, Support handles messages and reads users, Manager adds user/content work, Admin everything except permission editing. **The owner always has every permission** and cannot be changed, demoted or removed by anyone; only the owner can grant Owner/Admin or edit the matrix and overrides.
+Roles: Owner, Admin (`administrator`), Moderator (`moderator`), Viewer (`viewer`). Migration `20261114160000` renamed Manager to Moderator and moved the retired Support and old `analyst` keys to Viewer (0 holders were affected in production). Defaults live in `control_role_permissions` (seeded by migration `20261114120000_control_settings_rbac`) and follow least privilege: Viewer reads, Moderator handles messages, account lookup, content drafts and exams, Admin everything except permission editing. **The owner always has every permission** and cannot be changed, demoted or removed by anyone; only the owner can grant Owner/Admin or edit the matrix and overrides.
 
-**Every save needs a fresh authenticator code.** The client prompts for a TOTP before each save; the server (`requireStepUp`) accepts the write only if the session's TOTP verification is ≤ 120 s old and that verification has not been used before (`control_step_up_uses`, unique per user/session/verification time). Replays get `step_up_used`.
+**Every save needs a fresh confirmation.** The client prompts before each save: an authenticator code for everyone, or (owner only) a passkey. The server (`requireStepUp`) accepts the write only if the session's newest accepted proof (TOTP; or passkey for the owner) is ≤ 120 s old and that verification has not been used before (`control_step_up_uses`, unique per user/session/verification time). Replays get `step_up_used`.
 
 **Granting** a role deletes any existing MFA factors and overrides, so the person must enroll a new authenticator on first console visit. **Removing** a role revokes it at once: overrides, MFA factors and passkeys are deleted and all their sessions are revoked (`control_revoke_user_sessions`). A re-grant needs a fresh enrollment.
 
@@ -223,9 +223,13 @@ Roles: Owner, Admin (`administrator`), Manager, Support, Viewer (`analyst`). Def
 | Sign-ins off | trigger on `auth.sessions` (`signins_paused`), role holders exempt; existing sessions are kept | log-in page notice |
 | Site down | AI chat and contact APIs refuse (`site_down`) | maintenance page. Student data reads through Supabase/RLS are **not** blocked by site-down. |
 
-### Passkeys (owner)
+### Passkeys (owner only)
 
-Uses Supabase passkeys (`supabase.auth.registerPasskey`). The Settings → Security panel reads `passkeys_enabled` from the project; while it is off it explains how to turn it on (Supabase → Authentication → Passkeys, relying party ID `dypol-stracker.vercel.app`, origin `https://dypol-stracker.vercel.app`). Adding is preceded by a step-up (`passkey.authorize`, audited); removing goes through the server. A passkey only proves the account — the console still needs the TOTP (aal2).
+- **Who:** only the active owner. A database trigger (`control_enforce_owner_only_passkeys`, on `auth.webauthn_credentials` and WebAuthn rows of `auth.mfa_factors`) refuses to store a passkey for anyone else, whatever client is used. Giving someone a non-owner role deletes their passkeys; removing a role deletes them too.
+- **Two-step screen:** the owner with a registered passkey sees **Use passkey** next to the six-digit code. It runs Supabase's passkey ceremony (`signInWithPasskey`), which issues a fresh session whose `amr` records `passkey`; the previous session is then signed out. The server (`consoleAssurance`) accepts a passkey as the second step for the owner only. Any other role whose session involved a passkey is refused (`access_not_granted`, audited as `passkey_owner_only`).
+- **Step-up:** the owner can confirm a save with the passkey or a code; it must be ≤ 120 s old and single-use (same table, keyed per user and session).
+- **Add / remove:** Settings → Security → Passkeys (owner). Adding is preceded by a step-up; removing goes through the server.
+- **Supabase setting:** Authentication → Passkeys → *Enable Passkey authentication* (Beta), Relying Party ID `dypol-stracker.vercel.app`, origin `https://dypol-stracker.vercel.app`. When it is off, the console hides the option and explains the toggle.
 
 ## Not implemented yet
 

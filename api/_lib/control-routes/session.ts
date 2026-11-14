@@ -1,7 +1,8 @@
 import type { ApiRequest, ApiResponse } from '../http.js'
 import { sendJson } from '../http.js'
 import { controlHandler, recordSessionGranted } from '../control.js'
-import { CONTROL_IDLE_TIMEOUT_SECONDS, isAal2, isRecentMfa } from '../control-policy.js'
+import { CONTROL_IDLE_TIMEOUT_SECONDS, isRecentMfa } from '../control-policy.js'
+import { ownerHasPasskey } from '../control-passkeys.js'
 
 /**
  * GET /api/control/session
@@ -14,8 +15,10 @@ import { CONTROL_IDLE_TIMEOUT_SECONDS, isAal2, isRecentMfa } from '../control-po
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   await controlHandler(req, res, ['GET'], { requireAal2: false, permission: null }, async context => {
     const nowSeconds = Math.floor(Date.now() / 1000)
-    const granted = isAal2(context.aal)
+    const granted = context.assurance !== null
     if (granted) await recordSessionGranted(context)
+    // Only the owner is ever told whether a passkey can be used for the second step.
+    const passkey = context.role === 'owner' ? await ownerHasPasskey(context.admin, context.userId) : false
     sendJson(res, 200, {
       status: granted ? 'granted' : 'mfa_required',
       userId: context.userId,
@@ -23,6 +26,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       // Only after aal2: what this role holder may open. Before MFA the browser learns nothing more.
       permissions: granted ? [...context.permissions] : [],
       aal: context.aal,
+      method: context.assurance,
+      passkey,
       recentMfa: isRecentMfa(context.mfaAt, nowSeconds),
       idleTimeoutSeconds: CONTROL_IDLE_TIMEOUT_SECONDS
     })

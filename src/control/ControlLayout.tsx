@@ -101,7 +101,7 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
     <div className={`cc-shell${collapsed ? ' cc-shell--collapsed' : ''}`}>
       <a className="cc-skip" href="#cc-main">Skip to content</a>
       {drawerOpen && <button type="button" className="cc-backdrop" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} />}
-      <aside className={sidebarClass} aria-label="Control Center navigation" id="cc-sidebar">
+      <aside className={sidebarClass} aria-label="Control Centre navigation" id="cc-sidebar">
         <div className="cc-sidebar__brand">
           <BrandMark compact={collapsed} />
         </div>
@@ -131,7 +131,7 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
           <button type="button" className="cc-icon-btn cc-collapse" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} aria-controls="cc-sidebar" title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={() => setCollapsed(value => !value)}>
             <ChevronsLeft size={18} aria-hidden="true" className={collapsed ? 'is-flipped' : ''} />
           </button>
-          <span className="cc-sidebar__credit">{collapsed ? 'DYPOL' : 'Stracker by DYPOL LABS'}</span>
+          <span className="cc-sidebar__credit">{collapsed ? 'CC' : 'Control Centre'}</span>
         </div>
       </aside>
 
@@ -153,7 +153,7 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
             </button>
             <ControlThemeSwitch />
             <span className="cc-pill cc-pill--ok" title={session ? `Assurance ${session.aal}; ${session.recentMfa ? 'verified recently' : 'verification older than 15 minutes'}` : undefined}>
-              <ShieldCheck size={14} aria-hidden="true" /> {session?.recentMfa ? 'MFA verified' : 'MFA session'}
+              <ShieldCheck size={14} aria-hidden="true" /> {session?.method === 'passkey' ? 'Passkey verified' : session?.recentMfa ? 'MFA verified' : 'MFA session'}
             </span>
             <AccountMenu idleWarning={idle === 'warning'} role={session?.role ?? 'owner'} canSecurity={permissions.includes('security.view')} onSignOut={() => void signOut('local')} />
           </div>
@@ -170,7 +170,7 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
         </main>
 
         <footer className="cc-footer">
-          <span>Stracker by DYPOL LABS · Control Center</span>
+          <span>Control Centre</span>
           <span>Times shown in {longLabel} · stored in UTC</span>
         </footer>
       </div>
@@ -234,7 +234,9 @@ function AccountMenu({ idleWarning, onSignOut, role, canSecurity }: { idleWarnin
         aria-label={`Account menu: ${ROLE_LABELS[role]} session, settings, help and sign out`}
         title="Account menu · sign out"
       >
-        <span className="cc-avatar__initials" aria-hidden="true">{ROLE_LABELS[role].slice(0, 2).toUpperCase()}</span>
+        {role === 'owner'
+          ? <img className="cc-avatar__img" src="/control/owner-avatar-64.webp" srcSet="/control/owner-avatar-64.webp 1x, /control/owner-avatar-128.webp 2x" width={24} height={24} alt="" decoding="async" />
+          : <span className="cc-avatar__initials" aria-hidden="true">{ROLE_LABELS[role].slice(0, 2).toUpperCase()}</span>}
         <ChevronDown size={14} aria-hidden="true" className="cc-avatar__chevron" />
       </button>
       {open && (
@@ -261,7 +263,7 @@ function IdleWarning({ onSignOut }: { onSignOut: () => void }) {
   return (
     <Dialog
       title="Still there?"
-      description="There has been no activity for a while. You will be signed out of the Control Center when the timer reaches zero."
+      description="There has been no activity for a while. You will be signed out of the Control Centre when the timer reaches zero."
       onClose={markActive}
       footer={<><Button variant="ghost" onClick={onSignOut}>Sign out now</Button><Button variant="primary" onClick={markActive}>Stay signed in</Button></>}
     >
