@@ -9,6 +9,7 @@ import { createId } from '../lib/id'
 import { relatedRowsForRemoval } from '../lib/data-relations'
 import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
 import { supabase, supabaseConfigured } from '../lib/supabase'
+import { OP_AT_HEADER, queuedOperationTime, SYNC_REFUSED_EVENT } from '../lib/account-notices'
 import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 import { trackStudentWrite } from '../lib/telemetry/client'
@@ -157,6 +158,15 @@ function isNetworkError(error: unknown): boolean {
   return message.includes('failed to fetch') || message.includes('network') || message.includes('load failed') || message.includes('timeout')
 }
 
+/**
+ * A cloud write was refused for a reason other than the network (RLS, an expired or revoked
+ * session). The account notice gate listens and checks at once whether the account was banned.
+ */
+function reportSyncRefused(error: unknown): void {
+  if (isNetworkError(error) || typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(SYNC_REFUSED_EVENT))
+}
+
 async function clearQueuedChange(userId: string, table: TableName, id: string): Promise<void> {
   await localDb.sync_queue.where('[user_id+table+id]').equals([userId, table, id]).delete()
 }
@@ -266,7 +276,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const changes = await localDb.sync_queue.where('user_id').equals(userId).sortBy('queued_at')
       for (const change of changes) {
         if (change.operation === 'delete') {
-          const { error } = await supabase.from(change.table).delete().eq('id', change.id).eq('user_id', userId)
+          const { error } = await supabase.from(change.table).delete().eq('id', change.id).eq('user_id', userId).setHeader(OP_AT_HEADER, queuedOperationTime(change))
           if (error) throw error
           if (change.table === 'mistakes') {
             const paths = [change.record?.image_path, change.record?.image_previous_path].filter((path): path is string => typeof path === 'string' && isOwnedStoragePath(userId, path))
@@ -293,7 +303,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
               if (change.queueId !== undefined) await localDb.sync_queue.put(change)
               setData(current => updateOne(current, change.table, prepared))
             }
-            const { error } = await supabase.from(change.table).upsert(cleanForCloud(prepared))
+            const { error } = await supabase.from(change.table).upsert(cleanForCloud(prepared)).setHeader(OP_AT_HEADER, queuedOperationTime(change))
             if (error) throw error
             if (change.table === 'mistakes' && 'image_previous_path' in prepared) {
               const cleaned = await retirePreviousMistakeImage(prepared)
@@ -309,6 +319,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return true
     } catch (error) {
       const offline = isNetworkError(error)
+      reportSyncRefused(error)
       setSyncState(offline ? 'offline' : 'error')
       setSyncError(offline ? 'Offline — your changes are safely queued on this device.' : 'Some changes could not sync. Your local copy is safe; retry when ready.')
       return false
@@ -388,6 +399,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setSyncState('synced'); setSyncError(null); setLoadedFor(userId)
     } catch (error) {
       const offline = isNetworkError(error)
+      reportSyncRefused(error)
       setSyncState(offline ? 'offline' : 'error'); setLoadedFor(userId)
       setSyncError(offline ? 'Offline — your changes are safely stored on this device and will sync when you reconnect.' : 'Could not sync with the cloud. Check your Supabase setup and retry.')
     }
@@ -520,6 +532,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           // Keep the latest prepared copy (uploaded image path) queued for retry.
           await queueChanges(records.map(record => ({ user_id: userId, table, operation: 'upsert', id: String(record.id), record, queued_at: new Date().toISOString() })))
           const offline = isNetworkError(error)
+          reportSyncRefused(error)
           trackWrite('failed', table, records, offline ? 'offline' : 'server')
           setSyncState(offline ? 'offline' : 'error')
           setSyncError(offline ? 'Offline — the edit is saved here and will sync automatically.' : 'The edit is saved locally but could not reach the cloud. Retry sync when ready.')

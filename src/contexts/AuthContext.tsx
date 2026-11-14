@@ -5,7 +5,7 @@ import { localPreviewEnabled, supabase } from '../lib/supabase'
 import { loginFailureReason, track } from '../lib/telemetry/client'
 import { displayNameFromMetadata, userAuthProviders } from '../lib/google-auth'
 import { banNoticeForCredentials } from '../lib/account-notices-client'
-import { signInRefusal } from '../lib/account-notices'
+import { signInRefusal, type AccountNotice } from '../lib/account-notices'
 
 export interface AppUser {
   id: string
@@ -35,6 +35,9 @@ interface AuthContextValue {
   signUp: (email: string, password: string, displayName: string) => Promise<SignUpResult>
   resendConfirmation: (email: string) => Promise<void>
   signOut: () => Promise<void>
+  /** Set when a password sign-in was refused because the (password-proven) account is banned. */
+  suspension: AccountNotice | null
+  clearSuspension: () => void
   startLocalPreview: () => void
   sendPasswordReset: (email: string) => Promise<void>
   updatePassword: (password: string) => Promise<void>
@@ -88,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [suspension, setSuspension] = useState<AccountNotice | null>(null)
 
   useEffect(() => {
     if (!supabase) {
@@ -129,8 +133,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     error,
     clearError: () => setError(null),
+    suspension,
+    clearSuspension: () => setSuspension(null),
     signIn: async (email, password) => {
       setError(null)
+      setSuspension(null)
       if (!supabase) {
         setError('Cloud authentication is not configured. Use the local preview in development or add Supabase environment variables.')
         return
@@ -141,10 +148,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // shown once the database has proven the password itself. Otherwise: a normal refusal.
         track('login_failed', { reason: 'other' })
         const check = await banNoticeForCredentials(email, password)
-        const message = check.kind === 'banned' ? signInRefusal(check.notice)
-          : check.kind === 'limited' ? 'Too many attempts. Wait a few minutes, then try again.'
-            : check.kind === 'unproven' ? 'Email or password is incorrect. Please try again.'
-              : 'We could not complete that sign-in. Please try again.'
+        if (check.kind === 'banned') {
+          // Shown as the ban popup and the block under the password field, not as an error line.
+          setSuspension(check.notice)
+          throw new Error(signInRefusal(check.notice))
+        }
+        const message = check.kind === 'limited' ? 'Too many attempts. Wait a few minutes, then try again.'
+          : check.kind === 'unproven' ? 'Email or password is incorrect. Please try again.'
+            : 'We could not complete that sign-in. Please try again.'
         setError(message)
         throw new Error(message)
       }
@@ -240,7 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(message)
       }
     }
-  }), [user, loading, error])
+  }), [user, loading, error, suspension])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -79,7 +79,7 @@ function ProtectedApp() {
         </FocusProvider>
       </AppearanceProvider>
     </AIProvider>
-  </DataProvider>{/* After the app in the DOM so its popup sits above any other dialog. */}{!user.isLocal && <AccountNoticeGate key={user.id} />}</SiteGate>
+  </DataProvider>{/* After the app in the DOM so its popup sits above any other dialog. */}{!user.isLocal && <AccountNoticeGate key={user.id} userId={user.id} />}</SiteGate>
 }
 
 /**

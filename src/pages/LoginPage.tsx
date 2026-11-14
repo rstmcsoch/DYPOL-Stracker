@@ -9,8 +9,9 @@ import { useSiteStatus } from '../components/site/SiteStatusContext'
 import { localPreviewEnabled, supabaseConfigured } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
 import { safeAppPath } from '../lib/safe-path'
-import { readNoticeToken, signInRefusal } from '../lib/account-notices'
-import { banNoticeForDevice } from '../lib/account-notices-client'
+import { noticeTokenUserId, readNoticeToken, type AccountNotice } from '../lib/account-notices'
+import { banNoticeForDevice, discardLocalAccountData } from '../lib/account-notices-client'
+import { AccountNoticeDialog, BannedSignInBlock } from '../components/AccountNoticeDialog'
 
 /**
  * Dedicated log-in page. Registration lives on /signup and password recovery on
@@ -18,7 +19,7 @@ import { banNoticeForDevice } from '../lib/account-notices-client'
  */
 export default function LoginPage() {
   usePageMeta('Log in — Stracker', 'Log in to your private Stracker notebook.')
-  const { signIn, startLocalPreview, error, clearError, loading: authLoading } = useAuth()
+  const { signIn, startLocalPreview, error, clearError, loading: authLoading, suspension, clearSuspension } = useAuth()
   const { status: siteStatus } = useSiteStatus()
   const navigate = useNavigate()
   const location = useLocation()
@@ -35,21 +36,42 @@ export default function LoginPage() {
   const safeTarget = safeAppPath(requested)
   const destination = safeTarget.startsWith('/login') || safeTarget.startsWith('/signup') || safeTarget.startsWith('/reset-password') ? '/' : safeTarget
 
-  // Sent here after a suspension sign-out, or because a session ended: if this device last held
-  // a now-banned account, explain why (one small check, only when a device token exists).
-  const [suspended, setSuspended] = useState<string | null>(null)
-  const cameFromApp = typeof location.state === 'object' && location.state !== null && ('suspended' in location.state || 'from' in location.state)
+  // A banned account: the popup once per refusal, and the block under the password field.
+  // `banned.notice` null = refused by Google for a ban we cannot explain to this device.
+  const [banned, setBanned] = useState<{ notice: AccountNotice | null } | null>(null)
+  const [popup, setPopup] = useState(false)
+  const arrival = typeof location.state === 'object' && location.state !== null ? location.state as { suspended?: unknown; from?: unknown } : {}
+  const arrivedFrom = arrival.suspended === 'google' ? 'google' : arrival.suspended === 'app' || arrival.suspended === true ? 'app' : 'from' in arrival ? 'session' : null
   useEffect(() => {
-    if (!cameFromApp || !readNoticeToken()) return
+    // Google refused a banned account, the dashboard just signed a banned account out, or a session
+    // ended (a ban stops token refresh). The signed device token explains the ban if this device
+    // last held the account; one small check, and only on these arrivals.
+    if (!arrivedFrom) return
+    const token = readNoticeToken()
+    if (!token && arrivedFrom !== 'google') return
     let active = true
-    void banNoticeForDevice().then(notice => { if (active && notice) setSuspended(signInRefusal(notice)) }).catch(() => undefined)
+    void banNoticeForDevice().then(async notice => {
+      if (!active) return
+      if (!notice && arrivedFrom !== 'google') return
+      if (notice) await discardLocalAccountData(noticeTokenUserId(token))
+      setBanned({ notice })
+      // The dashboard already showed the popup before signing out; every other arrival gets it here.
+      if (arrivedFrom !== 'app') setPopup(true)
+    }).catch(() => undefined)
     return () => { active = false }
-  }, [cameFromApp])
+  }, [arrivedFrom])
+  useEffect(() => {
+    if (!suspension) return
+    setBanned({ notice: suspension })
+    setPopup(true)
+  }, [suspension])
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (loading) return
     clearError()
+    clearSuspension()
+    setBanned(null)
     setLoading(true)
     try {
       await signIn(email, password)
@@ -75,7 +97,6 @@ export default function LoginPage() {
       </div>
 
  {!siteStatus.signinEnabled && <div className="form-notice" role="status">Sign-in is paused right now. Please try again later.</div>}
-      {suspended && <div className="form-error account-suspended" role="alert"><strong>Account suspended.</strong> {suspended}</div>}
       {supabaseConfigured && <GoogleAuthButton intent="signin" next={destination} disabled={loading} />}
 
       <form className="form-stack auth-form" onSubmit={submit} noValidate>
@@ -100,7 +121,8 @@ export default function LoginPage() {
             </button>
           </span>
         </Field>
-        {error && <div className="form-error" role="alert">{error}</div>}
+        {banned && <BannedSignInBlock notice={banned.notice} />}
+        {error && !banned && <div className="form-error" role="alert">{error}</div>}
         {!supabaseConfigured && !localPreviewEnabled && <div className="form-error" role="status">Supabase is not configured. Add the public project URL and anon key to the deployment environment, then redeploy.</div>}
         <Button type="submit" className="auth-submit" size="lg" loading={loading || authLoading} disabled={!supabaseConfigured && !localPreviewEnabled}>
           Open my notebook <ArrowRight size={17} aria-hidden="true" />
@@ -116,6 +138,8 @@ export default function LoginPage() {
         <p>Open a private, on-device preview. Nothing syncs to the cloud.</p>
         <Button variant="secondary" onClick={() => { startLocalPreview(); navigate('/', { replace: true }) }}>Continue on this device</Button>
       </div>}
+
+      {popup && banned && <AccountNoticeDialog notice={banned.notice} context="signin" onClose={() => setPopup(false)} />}
 
       <div className="auth-card-foot">
         <LockKeyhole size={13} aria-hidden="true" />

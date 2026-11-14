@@ -1,17 +1,22 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { SYNC_REFUSED_EVENT } from '../lib/account-notices'
 
 const state = vi.hoisted(() => ({
   notice: null as unknown,
+  fetches: 0,
   acks: [] as string[],
-  signOuts: [] as unknown[]
+  signOuts: [] as unknown[],
+  discarded: [] as string[]
 }))
 vi.mock('../lib/supabase', () => ({ supabase: { auth: { signOut: async (opts: unknown) => { state.signOuts.push(opts); return { error: null } } } } }))
 vi.mock('../lib/account-notices-client', () => ({
-  fetchMyNotice: async () => state.notice,
-  acknowledgeNotice: async (id: string) => { state.acks.push(id) }
+  fetchMyNotice: async () => { state.fetches += 1; return state.notice },
+  acknowledgeNotice: async (id: string) => { state.acks.push(id) },
+  discardLocalAccountData: async (id: string) => { state.discarded.push(id) }
 }))
 
 const { AccountNoticeGate } = await import('./AccountNoticeGate')
@@ -22,19 +27,19 @@ function LoginProbe() {
 }
 
 function renderGate() {
-  return render(<MemoryRouter initialEntries={['/']}><Routes>
-    <Route path="/" element={<><AccountNoticeGate /><p>dashboard</p></>} />
+  return render(<QueryClientProvider client={new QueryClient()}><MemoryRouter initialEntries={['/']}><Routes>
+    <Route path="/" element={<><AccountNoticeGate userId="u-1" /><p>dashboard</p></>} />
     <Route path="/login" element={<LoginProbe />} />
-  </Routes></MemoryRouter>)
+  </Routes></MemoryRouter></QueryClientProvider>)
 }
 
-beforeEach(() => { state.notice = null; state.acks = []; state.signOuts = [] })
+beforeEach(() => { state.notice = null; state.fetches = 0; state.acks = []; state.signOuts = []; state.discarded = [] })
 afterEach(() => cleanup())
 
-describe('one-time account notices', () => {
+describe('account notices on the dashboard', () => {
   it('shows nothing when there is no pending notice', async () => {
     renderGate()
-    await new Promise(resolve => setTimeout(resolve, 20))
+    await waitFor(() => expect(state.fetches).toBe(1))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByText('dashboard')).toBeTruthy()
   })
@@ -47,19 +52,36 @@ describe('one-time account notices', () => {
     fireEvent.click(screen.getByText('I understand'))
     await waitFor(() => expect(state.acks).toEqual(['n-1']))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(screen.getByText('dashboard')).toBeTruthy()
     expect(state.signOuts).toEqual([])
+    expect(state.discarded).toEqual([])
   })
 
-  it('shows a ban with its IST end time, then signs out locally and opens the sign-in page', async () => {
-    state.notice = { id: 'n-2', kind: 'ban', reason: 'Spam', until: '2026-11-20T10:30:00Z', permanent: false }
+  it('a ban while already signed in: a refused sync triggers the check, the popup shows, local data is discarded and the user is signed out', async () => {
     renderGate()
-    expect(await screen.findByText('Your account is suspended')).toBeTruthy()
+    await waitFor(() => expect(state.fetches).toBe(1))
+    // The account is banned after the dashboard opened; the next cloud write is refused.
+    state.notice = { id: 'n-2', kind: 'ban', reason: 'Spam', until: '2026-11-20T10:30:00Z', permanent: false }
+    await act(async () => { window.dispatchEvent(new CustomEvent(SYNC_REFUSED_EVENT)) })
+    expect(await screen.findByText('Your account is banned')).toBeTruthy()
     expect(screen.getByText(/until 20 Nov 2026, 4:00 pm IST/)).toBeTruthy()
+    expect(screen.getByText(/discarded and will not be synced/)).toBeTruthy()
     fireEvent.click(screen.getByText('Sign out'))
     expect(await screen.findByText(/login page/)).toBeTruthy()
-    expect(screen.getByText(/"suspended":true/)).toBeTruthy()
+    expect(screen.getByText(/"suspended":"app"/)).toBeTruthy()
     expect(state.acks).toEqual(['n-2'])
+    expect(state.discarded).toEqual(['u-1'])
     expect(state.signOuts).toEqual([{ scope: 'local' }])
+  })
+
+  it('checks once per burst of refused syncs', async () => {
+    renderGate()
+    await waitFor(() => expect(state.fetches).toBe(1))
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(SYNC_REFUSED_EVENT))
+      window.dispatchEvent(new CustomEvent(SYNC_REFUSED_EVENT))
+    })
+    await waitFor(() => expect(state.fetches).toBe(2))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(state.fetches).toBe(2)
   })
 })

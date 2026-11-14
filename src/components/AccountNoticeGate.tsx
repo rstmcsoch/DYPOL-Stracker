@@ -1,54 +1,80 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Ban, PartyPopper, ShieldCheck } from 'lucide-react'
-import { Button, Dialog } from './ui'
+import { useQueryClient } from '@tanstack/react-query'
+import { AccountNoticeDialog } from './AccountNoticeDialog'
 import { supabase } from '../lib/supabase'
-import { acknowledgeNotice, fetchMyNotice } from '../lib/account-notices-client'
-import { banLengthText, noticeSummary, noticeTitle, type AccountNotice } from '../lib/account-notices'
+import { acknowledgeNotice, discardLocalAccountData, fetchMyNotice } from '../lib/account-notices-client'
+import { SYNC_REFUSED_EVENT, type AccountNotice } from '../lib/account-notices'
 
-/** Re-check when the tab comes back into view, at most this often. */
-const RECHECK_MS = 5 * 60 * 1000
+/** Light background check while the tab is visible (one tiny RPC). */
+const POLL_MS = 3 * 60 * 1000
+/** Focus / visibility re-checks at most this often. */
+const FOCUS_MS = 30 * 1000
+/** A refused sync triggers a check at once, then at most this often. */
+const REFUSED_MS = 10 * 1000
 
 /**
- * One-time account notices (warning, ban, lifted or ended ban) on dashboard open: a single small
- * RPC that also refreshes this device's notice token. Acknowledgement is stored server-side.
- * A ban notice ends in an automatic sign-out; the server has already revoked every session and
- * row-level security refuses the account's data, so this popup is information, not enforcement.
+ * One-time account notices (warning, ban, lifted or ended ban). Checks on dashboard open, when
+ * a cloud write is refused (a ban makes the database refuse writes), on focus, and every few
+ * minutes while visible. If the session itself is already dead, the signed device token is
+ * used instead. A ban discards this device's local copy and unsynced edits, then signs out; the
+ * server has already revoked every session and refuses the data, so this is information and
+ * cleanup, not enforcement.
  */
-export function AccountNoticeGate() {
+export function AccountNoticeGate({ userId }: { userId: string }) {
   const [notice, setNotice] = useState<AccountNotice | null>(null)
   const lastCheck = useRef(0)
+  const lastRefused = useRef(0)
+  const busy = useRef(false)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
-  const check = useCallback(async () => {
+  const check = useCallback(async (minGapMs = 0) => {
+    if (busy.current || Date.now() - lastCheck.current < minGapMs) return
+    busy.current = true
     lastCheck.current = Date.now()
     try {
       const next = await fetchMyNotice()
       if (next) setNotice(current => current ?? next)
     } catch {
       // Notices are best effort; the server enforces bans regardless.
+    } finally {
+      busy.current = false
     }
   }, [])
 
   useEffect(() => {
     if (!supabase) return
     void check()
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && Date.now() - lastCheck.current > RECHECK_MS) void check()
+    const onVisible = () => { if (document.visibilityState === 'visible') void check(FOCUS_MS) }
+    const onRefused = () => {
+      // Measured from the last refusal-triggered check, so a refusal right after opening still checks.
+      if (Date.now() - lastRefused.current < REFUSED_MS) return
+      lastRefused.current = Date.now()
+      void check()
     }
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void check(POLL_MS - 5_000) }, POLL_MS)
     document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    window.addEventListener(SYNC_REFUSED_EVENT, onRefused)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+      window.removeEventListener(SYNC_REFUSED_EVENT, onRefused)
+    }
   }, [check])
 
-  const isBan = notice?.kind === 'ban'
-
   const signOutBanned = useCallback(async (current: AccountNotice) => {
+    setNotice(null)
     await acknowledgeNotice(current.id).catch(() => undefined)
+    // Forget everything made while banned: local rows, the unsynced outbox and cached images.
+    await discardLocalAccountData(userId)
+    queryClient.removeQueries({ queryKey: ['stracker-data', userId] })
     // Local sign-out: the server already revoked every session at ban time.
     await supabase?.auth.signOut({ scope: 'local' }).catch(() => undefined)
-    setNotice(null)
-    navigate('/login', { replace: true, state: { suspended: true } })
-  }, [navigate])
+    navigate('/login', { replace: true, state: { suspended: 'app' } })
+  }, [navigate, queryClient, userId])
 
   useEffect(() => {
     if (!notice || notice.kind !== 'ban') return
@@ -59,21 +85,10 @@ export function AccountNoticeGate() {
   if (!notice) return null
 
   const close = () => {
-    if (isBan) { void signOutBanned(notice); return }
+    if (notice.kind === 'ban') { void signOutBanned(notice); return }
     void acknowledgeNotice(notice.id).catch(() => undefined)
     setNotice(null)
   }
 
-  const Icon = notice.kind === 'ban' ? Ban : notice.kind === 'warning' ? AlertTriangle : notice.kind === 'unban' ? ShieldCheck : PartyPopper
-  return <Dialog title={noticeTitle(notice.kind)} onClose={close} className={`dialog-narrow account-notice account-notice--${notice.kind}`} labelledBy="account-notice-title">
-    <div className="account-notice-body">
-      <div className="account-notice-icon" aria-hidden="true"><Icon size={22} /></div>
-      <p className="type-body">{noticeSummary(notice)}</p>
-    </div>
-    {notice.reason && <div className="account-notice-reason"><span className="eyebrow">REASON</span><p>{notice.reason}</p></div>}
-    {isBan && <p className="account-notice-meta type-caption">Sign-in stays blocked {banLengthText(notice) === 'permanently' ? 'unless the team lifts it' : 'until then'}. Signing you out automatically in 30 seconds.</p>}
-    <div className="dialog-actions">
-      <Button variant={isBan ? 'danger' : 'primary'} onClick={close}>{isBan ? 'Sign out' : 'I understand'}</Button>
-    </div>
-  </Dialog>
+  return <AccountNoticeDialog notice={notice} context="app" onClose={close} autoSignOut />
 }

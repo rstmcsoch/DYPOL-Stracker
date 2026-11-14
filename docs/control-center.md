@@ -279,11 +279,17 @@ the two never disagree.
 
 ### What the student sees
 
-- **Dashboard (one RPC on open, `my_account_notice`)**: the oldest unacknowledged notice as a
-  themed popup — warning (reason; dashboard keeps working), ban (reason and end time in IST;
-  signs out automatically after "Sign out" or 30 seconds), lifted or ended ban. Acknowledgement
-  is stored server-side (`acknowledge_account_notice`). The check repeats at most every 5 minutes
-  when the tab becomes visible again. The same RPC returns a signed device token (below).
+- **Dashboard (`my_account_notice`)**: the oldest unacknowledged notice as a themed popup —
+  warning (reason; dashboard keeps working), ban (reason and end time in IST, plus "anything you
+  add or change while banned is discarded"; signs out automatically after "Sign out" or 30
+  seconds), lifted or ended ban. Acknowledgement is stored server-side
+  (`acknowledge_account_notice`). The check runs on open, right after any sync is refused by the
+  server (at most every 10 seconds), on window focus or tab return (at most every 30 seconds) and
+  every 3 minutes while the tab is visible — one small RPC each time. If the session is already
+  dead (Auth refused the refresh with `user_banned`), the notice is fetched with the device token
+  instead. On a ban the browser's copy of the account (study data and the unsynced queue) is
+  discarded before signing out, and the sign-in page then shows the banned block. The same RPC
+  returns a signed device token (below).
 - **Email + password sign-in**: Supabase Auth answers `user_banned` *before* it checks the
   password (it says "banned" even for a wrong password — a Supabase behaviour we cannot change).
   Stracker therefore reveals nothing itself until `account_ban_notice_for_credentials` proves the
@@ -297,6 +303,34 @@ the two never disagree.
   details. Otherwise the page shows a generic "This account is suspended … sign in with email and
   password to see the details, or contact us". Limitation: a Google-only account on a new device
   sees only the generic message.
+
+### Changes made while banned are never synced
+
+Stracker is offline-first, so a banned student can keep editing in an open tab or offline. Those
+changes are thrown away for good, even after the ban ends:
+
+- **Server** (`account_sync_cutoffs`, kept in step with `account_bans` by a trigger): the cutoff
+  is the ban's end (`infinity` for permanent); lifting a ban early moves it to the moment it was
+  lifted. A `BEFORE` trigger `account_sync_cutoff` on the 19 student tables skips (returns NULL)
+  any `authenticated` write whose operation time is before the cutoff. The operation time is the
+  moment the change was made, sent by the sync queue as the `x-stracker-op-at` header (older
+  bundles without it fall back to the row's `updated_at` with five minutes' grace). Skipped
+  writes succeed silently, so the queue drains and the next refresh replaces the browser copy with
+  the server's. Service-role and console writes are unaffected; accounts that were never banned
+  have no cutoff row.
+- **Client**: when the ban is detected, the local tables and the outbox for that account are
+  cleared; after the ban, the next sign-in loads the server copy.
+- Only changes made after the ban ended reach the database. Edits made before the ban that had
+  not synced by the time of the ban are dropped too.
+
+### Sign-in page for a banned account
+
+A refused sign-in shows the ban popup (reason, permanent or "until … IST") and, after it is
+dismissed, a themed "Account banned" block directly below the password field with the same
+details. Password sign-in reveals the details only when the password is proven correct (rate
+limited, see above); a wrong password shows the usual error. Google sign-in shows them on return
+to the login page when this device holds the account's token, otherwise a generic banned popup
+and block.
 
 ### Deleting an account
 
