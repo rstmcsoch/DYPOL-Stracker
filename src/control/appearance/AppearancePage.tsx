@@ -1,4 +1,6 @@
+import { useRef } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { useCurrentTabInView } from '../useCurrentTabInView'
 import { CONSOLE_BASE } from '../policy'
 import { PageHeader } from '../pageParts'
 import { ContentEditorProvider } from './ContentEditor'
@@ -19,11 +21,13 @@ const TABS = [
 ]
 
 export default function AppearancePage() {
+  const navRef = useRef<HTMLElement>(null)
+  useCurrentTabInView(navRef)
   return (
     <>
       <PageHeader title="Appearance" description="Edit the words visitors and members see, preview them, then publish. Drafts stay private until you publish." />
       <ContentEditorProvider>
-        <nav className="cc-tabs" aria-label="Appearance sections">
+        <nav className="cc-tabs" aria-label="Appearance sections" ref={navRef}>
           {TABS.map(tab => (
             <NavLink key={tab.label} to={tab.to ? `${CONSOLE_BASE}/appearance/${tab.to}` : `${CONSOLE_BASE}/appearance`} end={tab.end} className={({ isActive }) => `cc-tabs__link${isActive ? ' is-active' : ''}`}>
               {tab.label}

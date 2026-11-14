@@ -127,4 +127,27 @@ describe('Settings', () => {
     expect(await screen.findByText('Confirm with your authenticator')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /passkey/i })).toBeNull()
   })
+
+  it.each([
+    ['site', 'Site status'], ['access', 'Sign-up & sign-in'], ['security', 'Security'],
+    ['roles', 'Roles & members'], ['permissions', 'Permissions'], ['activity', 'Activity']
+  ])('marks exactly one tab as current for /control-panel/settings/%s (deep link or reload)', async (path, label) => {
+    settings = base('owner', ['settings.site', 'settings.access', 'roles.manage', 'audit.view'])
+    renderAt(`/control-panel/settings/${path}`)
+    const nav = await screen.findByRole('navigation', { name: 'Settings sections' })
+    const current = [...nav.querySelectorAll('a[aria-current="page"]')]
+    expect(current.map(a => a.textContent)).toEqual([label])
+    expect(current[0]!.className).toContain('is-active')
+    expect(nav.querySelectorAll('a.is-active')).toHaveLength(1)
+  })
+
+  it('moves the current-tab mark when another tab is clicked, and the bare /settings URL opens the first tab marked', async () => {
+    settings = base('owner', ['settings.site', 'settings.access', 'roles.manage', 'audit.view'])
+    renderAt('/control-panel/settings')
+    const nav = await screen.findByRole('navigation', { name: 'Settings sections' })
+    await waitFor(() => expect(nav.querySelector('a[aria-current="page"]')?.textContent).toBe('Site status'))
+    fireEvent.click(screen.getByRole('link', { name: 'Permissions' }))
+    await waitFor(() => expect(nav.querySelector('a[aria-current="page"]')?.textContent).toBe('Permissions'))
+    expect(screen.getByRole('link', { name: 'Site status' }).getAttribute('aria-current')).toBeNull()
+  })
 })
