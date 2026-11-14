@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Check, Eye, EyeOff, LockKeyhole, Mail, NotebookPen, UserRound } from 'lucide-react'
 import { Button, Field } from '../components/ui'
@@ -10,7 +10,7 @@ import { useToast } from '../contexts/ToastContext'
 import { localPreviewEnabled, supabaseConfigured } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
 import { TurnstileWidget, type TurnstileHandle } from '../components/TurnstileWidget'
-import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from '../lib/disposable-email'
+import { DISPOSABLE_EMAIL_MESSAGE, createDisposableEmailPrecheck } from '../lib/disposable-email'
 
 import { MIN_PASSWORD_LENGTH } from '../lib/auth-rules'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -51,6 +51,15 @@ export default function SignupPage() {
   const captcha = useRef<TurnstileHandle>(null)
   const resendCaptcha = useRef<TurnstileHandle>(null)
   const [checkingEmail, setCheckingEmail] = useState(false)
+  const precheck = useRef<ReturnType<typeof createDisposableEmailPrecheck> | null>(null)
+  if (!precheck.current) precheck.current = createDisposableEmailPrecheck()
+
+  // Quietly check the domain ~400 ms after a complete address is typed; nothing is shown until Next.
+  useEffect(() => {
+    if (!EMAIL_PATTERN.test(email.trim())) return
+    const timer = window.setTimeout(() => precheck.current?.prefetch(email), 400)
+    return () => window.clearTimeout(timer)
+  }, [email])
 
   const clearFieldError = (key: string) => setFieldErrors(current => {
     if (!current[key]) return current
@@ -101,7 +110,7 @@ export default function SignupPage() {
     if (step === 1) {
       if (checkingEmail || !validateStep1()) return
       setCheckingEmail(true)
-      const disposable = await isDisposableEmail(email).finally(() => setCheckingEmail(false))
+      const disposable = await precheck.current!.resolve(email).finally(() => setCheckingEmail(false))
       if (disposable) {
         setFieldErrors(current => ({ ...current, email: DISPOSABLE_EMAIL_MESSAGE }))
         return
@@ -201,6 +210,7 @@ export default function SignupPage() {
                 <input
                   type="email" autoComplete="email" required maxLength={320} value={email}
                   onChange={event => { setEmail(event.target.value); clearFieldError('email') }}
+                  onBlur={() => { if (EMAIL_PATTERN.test(email.trim())) precheck.current?.prefetch(email) }}
                   placeholder="you@example.com" aria-label="Email"
                 />
               </span>

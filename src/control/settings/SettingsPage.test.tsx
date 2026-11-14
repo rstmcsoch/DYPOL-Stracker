@@ -150,4 +150,45 @@ describe('Settings', () => {
     await waitFor(() => expect(nav.querySelector('a[aria-current="page"]')?.textContent).toBe('Permissions'))
     expect(screen.getByRole('link', { name: 'Site status' }).getAttribute('aria-current')).toBeNull()
   })
+
+  it('Email domains: built-in and custom lists, GitHub link (not the full list), validated input, step-up save', async () => {
+    settings = base('owner', ['settings.site', 'settings.access', 'settings.domains', 'roles.manage', 'audit.view'])
+    settings.emailDomains = {
+      builtIn: ['gmail.com', 'outlook.com'],
+      allowed: [{ domain: 'college.edu.in', createdAt: '2026-11-14T10:00:00Z' }],
+      blocked: [{ domain: 'spam-mail.example', createdAt: '2026-11-14T10:00:00Z' }],
+      list: { count: 10181, refreshedAt: '2026-11-14T14:15:00Z' }
+    }
+    renderAt('/control-panel/settings/domains')
+    const nav = await screen.findByRole('navigation', { name: 'Settings sections' })
+    expect([...nav.querySelectorAll('a')].map(a => a.textContent)).toContain('Email domains')
+    expect(await screen.findByText('Always allowed')).toBeTruthy()
+    expect(screen.getByText('gmail.com')).toBeTruthy()
+    expect(screen.getByText('college.edu.in')).toBeTruthy()
+    expect(screen.getByText('spam-mail.example')).toBeTruthy()
+    expect(screen.getByText(/10,181 domains/)).toBeTruthy()
+    const link = screen.getByRole('link', { name: /View the list on GitHub/ })
+    expect(link.getAttribute('href')).toBe('https://github.com/disposable-email-domains/disposable-email-domains/blob/main/disposable_email_blocklist.conf')
+
+    fireEvent.change(screen.getByLabelText(/Block a domain/), { target: { value: 'user@bad.example' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Block$/ }))
+    expect(await screen.findByText(/without @/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/Block a domain/), { target: { value: 'gmail.com' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Block$/ }))
+    expect(await screen.findByText(/cannot be blocked/)).toBeTruthy()
+    expect(calls.filter(call => call.init?.method === 'POST')).toHaveLength(0)
+
+    fireEvent.change(screen.getByLabelText(/Block a domain/), { target: { value: ' Temp-Inbox.Example. ' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Block$/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock verify code' }))
+    await waitFor(() => expect(calls.find(call => call.init?.method === 'POST')?.init?.body).toEqual({ action: 'domains.add', domain: 'temp-inbox.example', kind: 'block' }))
+  })
+
+  it('Email domains tab is hidden without the settings.domains permission', async () => {
+    settings = base('administrator', ['settings.site'])
+    renderAt('/control-panel/settings')
+    const nav = await screen.findByRole('navigation', { name: 'Settings sections' })
+    expect([...nav.querySelectorAll('a')].map(a => a.textContent)).not.toContain('Email domains')
+  })
 })
+
