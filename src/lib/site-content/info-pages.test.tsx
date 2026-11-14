@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { SiteContentProvider } from '../../contexts/SiteContentContext'
 import InfoPage from '../../pages/InfoPage'
 import { infoBlocks } from './info-pages'
@@ -56,12 +56,41 @@ describe('built-in page text is specific to Stracker and invents nothing', () =>
 })
 
 describe('public page navigation', () => {
-  it('opens the next page at its top after a footer or sibling link click', () => {
+  const pages = <MemoryRouter initialEntries={['/privacy']}><SiteContentProvider overrides={{}}><Routes>
+    <Route path="/privacy" element={<InfoPage kind="privacy" />} />
+    <Route path="/terms" element={<InfoPage kind="terms" />} />
+  </Routes></SiteContentProvider></MemoryRouter>
+  const top = { top: 0, left: 0, behavior: 'instant' }
+
+  it('opens the next page at its top, instantly, with focus on its heading', () => {
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
-    render(<MemoryRouter initialEntries={["/privacy"]}><SiteContentProvider overrides={{}}><InfoPage kind="privacy" /></SiteContentProvider></MemoryRouter>)
+    render(pages)
+    expect(scrollTo).toHaveBeenCalledWith(top)
+    expect(document.activeElement?.tagName).not.toBe('H1')
     scrollTo.mockClear()
     fireEvent.click(screen.getByRole('navigation', { name: /more about stracker/i }).querySelector('a[href="/terms"]')!)
-    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'instant' })
+    expect(screen.getByRole('heading', { level: 1, name: 'Terms & Conditions' })).toBe(document.activeElement)
+    expect(scrollTo).toHaveBeenCalledWith(top)
+    expect(document.documentElement.style.scrollBehavior).toBe('')
+    scrollTo.mockRestore()
+  })
+
+  it('also returns to the top when the link of the page already open is clicked', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    render(pages)
+    scrollTo.mockClear()
+    fireEvent.click(screen.getByRole('contentinfo').querySelector('a[href="/privacy"]')!)
+    expect(scrollTo).toHaveBeenCalledWith(top)
+    scrollTo.mockRestore()
+  })
+
+  it('keeps manual scroll restoration only while a public page is open', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    window.history.scrollRestoration = 'auto'
+    const view = render(pages)
+    expect(window.history.scrollRestoration).toBe('manual')
+    view.unmount()
+    expect(window.history.scrollRestoration).toBe('auto')
     scrollTo.mockRestore()
   })
 })
