@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { ControlSessionProvider, useControlSession } from './ControlSession'
 import { ControlLayout } from './ControlLayout'
-import { AccessDenied, GateError, MfaGate, SignInGate } from './gates'
+import { GateError, MfaGate } from './gates'
 import { ReauthProvider } from './reauth'
 import { TimeZoneProvider } from './time'
 import { ControlThemeRoot } from './ControlTheme'
@@ -45,8 +45,22 @@ export default function ControlPanelApp() {
   )
 }
 
-function useRobotsDirective() {
+/**
+ * noindex for the whole console, and the console title / browser colour only once the server
+ * has confirmed a role holder (mfa or granted). A visitor who is redirected away never sees
+ * the console's name, even in the tab title.
+ */
+function useRobotsDirective(revealed: boolean) {
   useEffect(() => {
+    const tag = document.createElement('meta')
+    tag.name = 'robots'
+    tag.content = 'noindex, nofollow, noarchive'
+    tag.dataset.controlCenter = 'true'
+    document.head.appendChild(tag)
+    return () => { tag.remove() }
+  }, [])
+  useEffect(() => {
+    if (!revealed) return
     const previousTitle = document.title
     const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
     const previousThemeColor = themeColor?.content
@@ -59,40 +73,35 @@ function useRobotsDirective() {
     // Match the browser chrome to the console's current light or dark surface.
     activeThemeColor.content = resolveControlTheme(readControlThemePreference(), systemPrefersDark()) === 'light' ? '#f6f5f1' : '#0d0e11'
 
-    const tag = document.createElement('meta')
-    tag.name = 'robots'
-    tag.content = 'noindex, nofollow, noarchive'
-    tag.dataset.controlCenter = 'true'
-    document.head.appendChild(tag)
     document.title = CONSOLE_NAME
     return () => {
-      tag.remove()
       if (themeColor && previousThemeColor !== undefined) themeColor.content = previousThemeColor
       else if (createdThemeColor) activeThemeColor.remove()
       document.title = previousTitle
     }
-  }, [])
+  }, [revealed])
 }
 
 const GATE_TITLES: Record<string, string> = {
-  loading: `Loading · ${CONSOLE_NAME}`,
-  signed_out: `Sign in · ${CONSOLE_NAME}`,
   mfa: `Two-step verification · ${CONSOLE_NAME}`,
-  denied: `Access not granted · ${CONSOLE_NAME}`,
   error: `Unavailable · ${CONSOLE_NAME}`
 }
 
 function ControlRouter() {
   const { phase } = useControlSession()
   const location = useLocation()
-  useRobotsDirective()
+  const revealed = phase.kind === 'mfa' || phase.kind === 'granted' || phase.kind === 'error'
+  useRobotsDirective(revealed)
   // Gate screens set their own titles; the layout sets per-page titles once access is granted.
-  useEffect(() => { if (phase.kind !== 'granted') document.title = GATE_TITLES[phase.kind] ?? CONSOLE_NAME }, [phase.kind])
+  useEffect(() => { const title = GATE_TITLES[phase.kind]; if (title) document.title = title }, [phase.kind])
 
   if (phase.kind === 'loading') return <LoadingScreen />
-  if (phase.kind === 'signed_out') return <SignInGate notice={phase.notice} />
+  // No console login portal: no normal Stracker session (never signed in, signed out, idle
+  // sign-out, cleared storage, expired session) goes to the homepage to sign in as usual, and a
+  // signed-in account without an active role goes to its own dashboard (also "/"), with no hint
+  // that a console exists. The API refuses both independently of this redirect.
+  if (phase.kind === 'signed_out' || phase.kind === 'denied') return <Navigate to="/" replace />
   if (phase.kind === 'mfa') return <MfaGate />
-  if (phase.kind === 'denied') return <AccessDenied />
   if (phase.kind === 'error') return <GateError message={phase.message} />
 
   // Owner preview of the public homepage: rendered without the console chrome, for the
@@ -142,13 +151,10 @@ function NotInConsole() {
   )
 }
 
+/** Neutral, unbranded wait while the server decides; nothing here names the console. */
 function LoadingScreen() {
   return (
-    <main className="cc-gate" aria-busy="true">
-      <div className="cc-gate__card">
-        <Skeleton rows={3} height={16} />
-      </div>
-    </main>
+    <div className="route-loading" aria-busy="true"><span>Just a moment…</span></div>
   )
 }
 
