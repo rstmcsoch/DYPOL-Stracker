@@ -58,7 +58,7 @@ function LimitsPanel({ settings,onSave }: { settings:SiteAISettings|null; onSave
 /**
  * Owner-only page for Stracker AI (Default): the same add, Discover, test, enable/disable,
  * preferred and remove options students have, stored encrypted in an RLS-locked table and
- * guarded by the Control Center session (owner role + two-step verification on every call).
+ * guarded by the Control Centre session (owner role + two-step verification on every call).
  */
 export default function AIDefaultsPage() {
   const manager = useProviderManager(siteAIFetch,'site',true)

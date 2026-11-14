@@ -21,7 +21,7 @@ const EXPORTABLE = new Set<Tab>(['traffic', 'pages', 'audience', 'funnels', 'stu
 
 const ZONES = ['Asia/Kolkata', 'UTC', 'Asia/Dubai', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Asia/Singapore']
 
-/** Control Center › Analytics. Every filter lives in the URL, so it is kept across subtabs. */
+/** Control Centre › Analytics. Every filter lives in the URL, so it is kept across subtabs. */
 export default function AnalyticsPage() {
   const [params, setParams] = useSearchParams()
   const tab = (TABS.find(([id]) => id === params.get('tab'))?.[0] ?? 'overview') as Tab
@@ -85,7 +85,7 @@ export default function AnalyticsPage() {
       </label>
       <label>Area
         <select className="cc-input" value={params.get('source') ?? ''} onChange={event => set('source', event.target.value || null)}>
-          <option value="">All</option><option value="public">Public site</option><option value="auth">Login/signup</option><option value="app">Notebook</option><option value="control">Control Center</option>
+          <option value="">All</option><option value="public">Public site</option><option value="auth">Login/signup</option><option value="app">Notebook</option><option value="control">Control Centre</option>
         </select>
       </label>
       <label>Route

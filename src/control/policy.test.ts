@@ -49,13 +49,13 @@ describe('display helpers', () => {
 describe('document titles', () => {
   it('names the page first and the console second, and follows client-side navigation', async () => {
     const { documentTitleFor, CONSOLE_NAME } = await import('./policy')
-    expect(CONSOLE_NAME).toBe('Stracker Control Center')
-    expect(documentTitleFor('/control-panel')).toBe('Overview · Stracker Control Center')
-    expect(documentTitleFor('/control-panel/')).toBe('Overview · Stracker Control Center')
-    expect(documentTitleFor('/control-panel/audit')).toBe('Audit log · Stracker Control Center')
-    expect(documentTitleFor('/control-panel/about')).toBe('Help & About · Stracker Control Center')
-    expect(documentTitleFor('/control-panel/users/abc', 'Ada')).toBe('Ada · Users · Stracker Control Center')
-    expect(documentTitleFor('/control-panel/not-a-section')).toBe('Stracker Control Center')
+    expect(CONSOLE_NAME).toBe('Control Centre')
+    expect(documentTitleFor('/control-panel')).toBe('Overview · Control Centre')
+    expect(documentTitleFor('/control-panel/')).toBe('Overview · Control Centre')
+    expect(documentTitleFor('/control-panel/audit')).toBe('Audit log · Control Centre')
+    expect(documentTitleFor('/control-panel/about')).toBe('Help & About · Control Centre')
+    expect(documentTitleFor('/control-panel/users/abc', 'Ada')).toBe('Ada · Users · Control Centre')
+    expect(documentTitleFor('/control-panel/not-a-section')).toBe('Control Centre')
   })
 })
 

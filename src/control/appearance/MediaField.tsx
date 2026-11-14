@@ -10,7 +10,7 @@ type UploadTicket = { ok: true; bucket: string; path: string; token: string; pub
 
 /**
  * Upload control for `media` fields. The file goes straight from the owner's browser to
- * Supabase Storage through a single-use signed URL minted by the Control Center API; the
+ * Supabase Storage through a single-use signed URL minted by the Control Centre API; the
  * field then holds the public URL, which only goes live once the draft is published.
  */
 export function MediaField({ definition, value, disabled, onChange, describedBy, inputId }: {

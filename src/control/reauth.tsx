@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 import { ControlApiError } from './api'
 import { MfaChallengeForm } from './MfaPanels'
 import { Button, Dialog } from './ui'
+import { PasskeyOption } from './gates'
 
 interface ReauthValue {
   /** Opens the fresh-code dialog. Resolves true once a new TOTP verification has succeeded. */
@@ -11,7 +12,11 @@ interface ReauthValue {
 
 const ReauthContext = createContext<ReauthValue | null>(null)
 
-export function ReauthProvider({ children }: { children: ReactNode }) {
+/**
+ * `passkey` is true only for the owner with a registered passkey (from /session). Everyone else
+ * confirms with an authenticator code; the server refuses passkey step-up for non-owners anyway.
+ */
+export function ReauthProvider({ children, passkey = false }: { children: ReactNode; passkey?: boolean }) {
   const [open, setOpen] = useState<false | 'reauth' | 'step-up'>(false)
   const resolver = useRef<((ok: boolean) => void) | null>(null)
 
@@ -31,13 +36,14 @@ export function ReauthProvider({ children }: { children: ReactNode }) {
       {children}
       {open && (
         <Dialog
-          title={open === 'step-up' ? 'Confirm with your authenticator' : 'Verify again to continue'}
+          title={open === 'step-up' ? (passkey ? 'Confirm with your passkey or authenticator' : 'Confirm with your authenticator') : 'Verify again to continue'}
           description={open === 'step-up'
-            ? 'Settings are only saved after a fresh code from your own authenticator app. Nothing is saved until you confirm.'
-            : 'This change needs a fresh authenticator code from the last 15 minutes. Nothing has been changed yet.'}
+            ? (passkey ? 'Settings are only saved after a fresh confirmation: your passkey, or a code from your authenticator app. Nothing is saved until you confirm.' : 'Settings are only saved after a fresh code from your own authenticator app. Nothing is saved until you confirm.')
+            : 'This change needs a fresh confirmation from the last 15 minutes. Nothing has been changed yet.'}
           onClose={() => finish(false)}
           footer={<Button variant="ghost" onClick={() => finish(false)}>Cancel</Button>}
         >
+          {passkey && <PasskeyOption label={open === 'step-up' ? 'Confirm with passkey' : 'Use passkey'} onVerified={() => finish(true)} />}
           <MfaChallengeForm heading="Enter the 6-digit code" submitLabel={open === 'step-up' ? 'Confirm and save' : 'Verify and retry'} onVerified={() => finish(true)} />
         </Dialog>
       )}

@@ -5,7 +5,7 @@ import { Fingerprint, KeyRound, ShieldCheck, Trash2, UserPlus } from 'lucide-rea
 import { controlFetch } from '../api'
 import { useControlSession } from '../ControlSession'
 import { useStepUp } from '../reauth'
-import { Badge, Button, Dialog, EmptyState, Field, Panel } from '../ui'
+import { Badge, Button, Dialog, EmptyState, Field, Panel, Switch } from '../ui'
 import { PageHeader, QueryFrame } from '../pageParts'
 import { CONSOLE_BASE, formatDateTime } from '../policy'
 import { useTimeZone } from '../time'
@@ -79,18 +79,18 @@ function SaveStatus({ message, tone }: { message: string | null; tone: 'ok' | 'c
 }
 
 function Toggle({ id, label, hint, checked, onChange, disabled }: { id: string; label: string; hint: ReactNode; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
-  return <label className="cc-toggle-row" htmlFor={id}>
-    <input id={id} type="checkbox" role="switch" aria-checked={checked} checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} />
-    <span><strong>{label}</strong><small className="cc-muted"> {hint}</small></span>
-  </label>
+  return <div className="cc-toggle-row">
+    <Switch id={id} checked={checked} disabled={disabled} onChange={onChange} labelledBy={`${id}-label`} describedBy={`${id}-hint`} />
+    <span><label htmlFor={id} id={`${id}-label`}><strong>{label}</strong></label><small className="cc-muted" id={`${id}-hint`}> {hint}</small></span>
+  </div>
 }
 
-const STEP_UP_NOTE = 'Saving asks for a fresh code from your authenticator app.'
+const STEP_UP_NOTE = 'Saving asks you to confirm again: a fresh authenticator code (the owner can also use a passkey).'
 
 export default function SettingsPage() {
   const query = useQuery({ queryKey: QUERY_KEY, queryFn: () => controlFetch<SettingsResponse>('settings'), staleTime: 15_000 })
   return <>
-    <PageHeader title="Settings" description="Site status, sign-up and sign-in, your security, team roles and permissions. Every save is confirmed with your own authenticator code." />
+    <PageHeader title="Settings" description="Site status, sign-up and sign-in, your security, team roles and permissions. Every save is confirmed again before it is applied." />
     <QueryFrame query={query} errorLabel="Settings could not be loaded.">
       {data => <SettingsTabs data={data} />}
     </QueryFrame>
@@ -133,7 +133,7 @@ function SiteTab({ site }: { site: SiteSettings }) {
     event.preventDefault()
     void save.run({ action: 'site.update', maintenanceEnabled: maintenance, siteDown: down, maintenanceMessage: message }, down ? 'Saved. The site is now down for visitors and students.' : 'Saved.')
   }
-  return <Panel title="Site status" description="What visitors and students see. The Control Center and team sign-in keep working in every mode.">
+  return <Panel title="Site status" description="What visitors and students see. The Control Centre and team sign-in keep working in every mode.">
     <form className="cc-form" onSubmit={submit}>
       <p className="cc-inline-status">Now: {site.siteDown ? <Badge tone="crit">Site down</Badge> : site.maintenanceEnabled ? <Badge tone="warn">Maintenance notice</Badge> : <Badge tone="ok">Live</Badge>}</p>
       <Toggle id="set-maint" label="Maintenance notice" hint="A thin banner with your message on every public and student page. Everything keeps working." checked={maintenance} onChange={setMaintenance} disabled={save.busy} />
@@ -245,9 +245,9 @@ function PasskeysPanel({ data }: { data: SettingsResponse }) {
       const allowed = await stepUp(() => controlFetch('settings', { method: 'POST', body: { action: 'passkey.authorize' } }))
       if (allowed === null) { setStatus({ message: 'Cancelled.', tone: 'crit' }); return }
       const { error } = await supabase.auth.registerPasskey()
-      if (error) { setStatus({ message: 'The passkey was not added. Your device or browser cancelled it, or passkeys are off in Supabase.', tone: 'crit' }); return }
+      if (error) { setStatus({ message: 'The passkey was not added. Your device cancelled it, passkeys are off in Supabase, or Supabase wants this session confirmed with your authenticator code: confirm with the code and try again.', tone: 'crit' }); return }
       await client.invalidateQueries({ queryKey: QUERY_KEY })
-      setStatus({ message: 'Passkey added. You can use it on the Stracker log-in page; the Control Center still asks for your authenticator code.', tone: 'ok' })
+      setStatus({ message: 'Passkey added. Next time, choose “Use passkey” on the two-step screen or when confirming a save.', tone: 'ok' })
     } catch (error) {
       setStatus({ message: errorText(error), tone: 'crit' })
     } finally { setBusy(false) }
@@ -261,7 +261,7 @@ function PasskeysPanel({ data }: { data: SettingsResponse }) {
       setStatus({ message: errorText(error), tone: 'crit' })
     } finally { setBusy(false) }
   }
-  return <Panel title="Passkeys (owner)" description="Sign in to Stracker with your fingerprint, face or device PIN instead of a password. The Control Center still asks for your authenticator code after sign-in.">
+  return <Panel title="Passkeys (owner)" description="Only the owner can have passkeys. Use one (fingerprint, face or device PIN) instead of the authenticator code on the two-step screen and to confirm settings saves. Your authenticator code keeps working too.">
     {enabled === false && <p className="cc-note cc-note--warn">Passkeys are switched off for this Supabase project. Turn them on in Supabase → Authentication → Passkeys, with the site address dypol-stracker.vercel.app, then come back here.</p>}
     {items.length === 0 ? <p className="cc-muted">No passkeys yet.</p> : <ul className="cc-list">
       {items.map(item => <li key={item.id} className="cc-list__row">
@@ -279,7 +279,7 @@ function RolesTab({ data }: { data: SettingsResponse }) {
   const members = data.members ?? []
   const assignable = data.me.assignableRoles
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<ControlRole>(assignable.includes('manager') ? 'manager' : assignable[0] ?? 'support')
+  const [role, setRole] = useState<ControlRole>(assignable.includes('moderator') ? 'moderator' : assignable[0] ?? 'viewer')
   const [removing, setRemoving] = useState<Member | null>(null)
   const save = useSave()
   const active = members.filter(member => member.active)
@@ -287,10 +287,10 @@ function RolesTab({ data }: { data: SettingsResponse }) {
   const canTouch = (member: Member) => member.userId !== data.me.userId && isControlRole(member.role) && assignable.includes(member.role)
   const give = async (event: FormEvent) => {
     event.preventDefault()
-    if (await save.run({ action: 'role.assign', email: email.trim(), role }, `Role given. The next time they open the Control Center they must set up their own authenticator first.`)) setEmail('')
+    if (await save.run({ action: 'role.assign', email: email.trim(), role }, `Role given. The next time they open the Control Centre they must set up their own authenticator first.`)) setEmail('')
   }
   return <>
-    <Panel title="Give a role" description="The person must already have a Stracker account. They sign in to Stracker normally, then open the Control Center and set up their own authenticator before anything else.">
+    <Panel title="Give a role" description="The person must already have a Stracker account. They sign in to Stracker normally, then open the Control Centre and set up their own authenticator before anything else.">
       <form className="cc-form cc-form--inline" onSubmit={event => void give(event)}>
         <Field label="Their Stracker email" htmlFor="role-email"><input id="role-email" className="cc-input" type="email" autoComplete="off" value={email} onChange={event => setEmail(event.target.value)} disabled={save.busy} required /></Field>
         <Field label="Role" htmlFor="role-pick">
@@ -341,7 +341,7 @@ function PermissionsTab({ data }: { data: SettingsResponse }) {
         {EDITABLE_ROLES.map(item => <button key={item} type="button" role="tab" aria-selected={role === item} className={role === item ? 'is-active' : ''} onClick={() => setRole(item)}>{ROLE_LABELS[item]}</button>)}
       </div>
       <p className="cc-muted">{ROLE_DESCRIPTIONS[role]}</p>
-      <PermissionList render={definition => <input type="checkbox" role="switch" aria-label={`${ROLE_LABELS[role]}: ${definition.label}`} checked={draft[definition.id] === true} disabled={save.busy} onChange={event => setDraft(current => ({ ...current, [definition.id]: event.target.checked }))} />} />
+      <PermissionList render={definition => <Switch label={`${ROLE_LABELS[role]}: ${definition.label}`} checked={draft[definition.id] === true} disabled={save.busy} onChange={value => setDraft(current => ({ ...current, [definition.id]: value }))} />} />
       <div className="cc-form__actions"><Button variant="primary" disabled={save.busy || Object.keys(changed).length === 0} onClick={() => void save.run({ action: 'permissions.role', role, permissions: changed }, `${ROLE_LABELS[role]} permissions saved.`)}><ShieldCheck size={15} aria-hidden="true" /> Save {ROLE_LABELS[role]} permissions</Button></div>
       <p className="cc-muted">{STEP_UP_NOTE}</p>
       <SaveStatus message={save.message} tone={save.tone} />

@@ -13,7 +13,7 @@ function renderConsole() {
   return render(<ControlThemeRoot><ControlThemeSwitch /><Probe /></ControlThemeRoot>)
 }
 
-describe('Control Center theme', () => {
+describe('Control Centre theme', () => {
   beforeEach(() => window.localStorage.clear())
   afterEach(() => cleanup())
 

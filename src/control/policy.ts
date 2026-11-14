@@ -75,9 +75,9 @@ export const NAV_GROUPS: NavGroup[] = [
 ]
 
 /** User-facing name of the administrative area. The URL stays /control-panel for compatibility. */
-export const CONSOLE_NAME = 'Stracker Control Center'
+export const CONSOLE_NAME = 'Control Centre'
 
-/** Document title for a console path, e.g. "Audit log · Stracker Control Center". */
+/** Document title for a console path, e.g. "Audit log · Control Centre". */
 export function documentTitleFor(pathname: string, detailLabel?: string): string {
   const item = activeNavItem(pathname)
   if (!item) return CONSOLE_NAME
@@ -115,8 +115,8 @@ export interface Crumb { label: string; to?: string }
 export function breadcrumbsFor(pathname: string, detailLabel?: string): Crumb[] {
   const relative = pathname.replace(/\/+$/, '').replace(new RegExp(`^${CONSOLE_BASE}/?`), '')
   const parts = relative.split('/').filter(Boolean)
-  const crumbs: Crumb[] = [{ label: 'Control Center', to: '' }]
-  if (parts.length === 0) return [{ label: 'Control Center' }, { label: 'Overview' }]
+  const crumbs: Crumb[] = [{ label: 'Control Centre', to: '' }]
+  if (parts.length === 0) return [{ label: 'Control Centre' }, { label: 'Overview' }]
   const item = ALL_NAV_ITEMS.find(entry => entry.to === parts[0])
   if (item) crumbs.push({ label: item.label, to: parts.length > 1 ? item.to : undefined })
   if (parts.length > 1) crumbs.push({ label: detailLabel ?? 'Details' })

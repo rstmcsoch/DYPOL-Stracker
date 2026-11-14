@@ -43,11 +43,24 @@ export interface AmrEntry { method?: unknown; timestamp?: unknown }
  * factors count as a second factor here.
  */
 export function latestMfaTimestamp(amr: unknown): number | null {
+  return latestTimestampOf(amr, TOTP_METHODS)
+}
+
+const TOTP_METHODS: ReadonlySet<string> = new Set(['totp', 'mfa/totp', 'phone', 'mfa/phone'])
+/** Supabase records a passkey sign-in as "passkey" and a WebAuthn MFA verification as "mfa/webauthn". */
+const PASSKEY_METHODS: ReadonlySet<string> = new Set(['passkey', 'webauthn', 'mfa/webauthn'])
+
+/** Newest timestamp (Unix seconds) of a passkey ceremony in the JWT `amr` claim, or null. */
+export function latestPasskeyTimestamp(amr: unknown): number | null {
+  return latestTimestampOf(amr, PASSKEY_METHODS)
+}
+
+function latestTimestampOf(amr: unknown, methods: ReadonlySet<string>): number | null {
   if (!Array.isArray(amr)) return null
   let latest: number | null = null
   for (const entry of amr as AmrEntry[]) {
     if (!entry || typeof entry !== 'object') continue
-    if (entry.method !== 'totp' && entry.method !== 'phone') continue
+    if (typeof entry.method !== 'string' || !methods.has(entry.method)) continue
     if (typeof entry.timestamp !== 'number' || !Number.isFinite(entry.timestamp)) continue
     latest = latest === null ? entry.timestamp : Math.max(latest, entry.timestamp)
   }
@@ -232,4 +245,37 @@ export function toCsv(headers: string[], rows: Array<Record<string, unknown>>): 
 /** Shortens a commit SHA for display. Returns null for anything that is not hex. */
 export function shortCommit(sha: unknown): string | null {
   return typeof sha === 'string' && /^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7) : null
+}
+
+export interface ConsoleAssurance {
+  /** The console may open (the second step is done). */
+  granted: boolean
+  /** Which proof opened it, or null. */
+  method: 'totp' | 'passkey' | null
+  /** Time of the newest accepted proof: drives the 15-minute and step-up freshness checks. */
+  verifiedAt: number | null
+  /** A non-owner session carries a passkey ceremony: refused outright (passkeys are owner-only). */
+  passkeyRefused: boolean
+}
+
+/**
+ * Decides whether a session has completed the console's second step.
+ *  - Everyone: an aal2 session whose newest MFA proof is the authenticator (TOTP) code.
+ *  - Owner only: a passkey ceremony (Supabase passkey sign-in or WebAuthn MFA). A passkey is a
+ *    phishing-resistant, device-bound, user-verified credential (multi-factor on its own), and
+ *    only the owner can register one (database trigger). Its time counts as a fresh proof.
+ *  - Any other role whose session carries a passkey ceremony is refused, whatever else it has.
+ */
+export function consoleAssurance(role: ControlRole, aal: unknown, amr: unknown): ConsoleAssurance {
+  const totpAt = isAal2(aal) ? latestMfaTimestamp(amr) : null
+  const passkeyAt = latestPasskeyTimestamp(amr)
+  if (role !== 'owner') {
+    if (passkeyAt !== null) return { granted: false, method: null, verifiedAt: null, passkeyRefused: true }
+    return totpAt === null
+      ? { granted: false, method: null, verifiedAt: null, passkeyRefused: false }
+      : { granted: true, method: 'totp', verifiedAt: totpAt, passkeyRefused: false }
+  }
+  if (totpAt === null && passkeyAt === null) return { granted: false, method: null, verifiedAt: null, passkeyRefused: false }
+  if (passkeyAt !== null && (totpAt === null || passkeyAt >= totpAt)) return { granted: true, method: 'passkey', verifiedAt: passkeyAt, passkeyRefused: false }
+  return { granted: true, method: 'totp', verifiedAt: totpAt, passkeyRefused: false }
 }

@@ -26,7 +26,7 @@ function useDebounced<T>(value: T, delay = 300): T {
 }
 
 /**
- * Control Center → Messages: everything sent from the public Contact page. Opening an unread
+ * Control Centre → Messages: everything sent from the public Contact page. Opening an unread
  * message marks it read. Files open through 5-minute signed links from the owner-only API.
  */
 export default function MessagesPage() {

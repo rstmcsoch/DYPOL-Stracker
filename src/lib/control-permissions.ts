@@ -7,26 +7,24 @@
  * mapped onto the sections Stracker's console actually has.
  */
 
-export const CONTROL_ROLES = ['owner', 'administrator', 'manager', 'support', 'analyst'] as const
+export const CONTROL_ROLES = ['owner', 'administrator', 'moderator', 'viewer'] as const
 export type ControlRole = (typeof CONTROL_ROLES)[number]
 /** Roles whose permissions are stored in the matrix. The owner always has every permission. */
-export const EDITABLE_ROLES = ['administrator', 'manager', 'support', 'analyst'] as const
+export const EDITABLE_ROLES = ['administrator', 'moderator', 'viewer'] as const
 export type EditableRole = (typeof EDITABLE_ROLES)[number]
 
 export const ROLE_LABELS: Record<ControlRole, string> = {
   owner: 'Owner',
   administrator: 'Admin',
-  manager: 'Manager',
-  support: 'Support',
-  analyst: 'Viewer'
+  moderator: 'Moderator',
+  viewer: 'Viewer'
 }
 
 export const ROLE_DESCRIPTIONS: Record<ControlRole, string> = {
   owner: 'Supreme access to everything, including roles, permissions and passkeys. Cannot be restricted.',
   administrator: 'Runs the site day to day: settings, users, content and exports. No role management by default.',
-  manager: 'Content, exams, messages and reading the numbers. No publishing, exports or settings by default.',
-  support: 'Answers the Messages inbox and looks up accounts.',
-  analyst: 'Read-only: overview, analytics, health and the audit log.'
+  moderator: 'Messages, account lookup, content drafts and exams, and reading the numbers. No publishing, exports or settings by default.',
+  viewer: 'Read-only: overview, analytics, health and the audit log.'
 }
 
 export const PERMISSIONS = [
@@ -71,7 +69,7 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { id: 'ai.manage', area: 'Stracker AI', label: 'Manage Stracker AI', description: 'Default AI providers, models and limits for all students.' },
   { id: 'settings.site', area: 'Settings', label: 'Site status', description: 'Maintenance notice and full site-down mode.' },
   { id: 'settings.access', area: 'Settings', label: 'Sign-up and sign-in switches', description: 'Pause new sign-ups or student sign-ins.' },
-  { id: 'roles.manage', area: 'Settings', label: 'Manage team roles', description: 'Give and remove Manager, Support and Viewer roles. Only the owner can manage Admins and Owners and edit permissions.' }
+  { id: 'roles.manage', area: 'Settings', label: 'Manage team roles', description: 'Give and remove Moderator and Viewer roles. Only the owner can manage Admins and Owners and edit permissions.' }
 ]
 
 export function isPermission(value: unknown): value is Permission {
@@ -108,5 +106,5 @@ export function effectivePermissions(
 
 /** Roles an actor may give or remove. Only the owner manages Owner and Admin roles. */
 export function assignableRoles(actorRole: ControlRole): ControlRole[] {
-  return actorRole === 'owner' ? [...CONTROL_ROLES] : ['manager', 'support', 'analyst']
+  return actorRole === 'owner' ? [...CONTROL_ROLES] : ['moderator', 'viewer']
 }

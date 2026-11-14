@@ -185,3 +185,28 @@ export function Pager({ page, pageSize, total, onPage }: { page: number; pageSiz
     </nav>
   )
 }
+
+/**
+ * Accessible on/off switch: a real button with role="switch" and aria-checked, so Space and
+ * Enter toggle it, it is focusable, and screen readers announce "on"/"off". Themed in control.css.
+ */
+export function Switch({ checked, onChange, disabled, id, label, labelledBy, describedBy }: {
+  checked: boolean; onChange: (value: boolean) => void; disabled?: boolean; id?: string; label?: string; labelledBy?: string; describedBy?: string
+}) {
+  return (
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={labelledBy ? undefined : label}
+      aria-labelledby={labelledBy}
+      aria-describedby={describedBy}
+      disabled={disabled}
+      className="cc-switch"
+      onClick={() => onChange(!checked)}
+    >
+      <span className="cc-switch__thumb" aria-hidden="true" />
+    </button>
+  )
+}

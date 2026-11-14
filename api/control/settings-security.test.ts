@@ -113,7 +113,7 @@ vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-test-key')
 const OWNER = '11111111-1111-4111-8111-111111111111'
 const ADMIN = '22222222-2222-4222-8222-222222222222'
 const STUDENT = '33333333-3333-4333-8333-333333333333'
-const MANAGER = '44444444-4444-4444-8444-444444444444'
+const MANAGER = '44444444-4444-4444-8444-444444444444' // holds the Moderator role
 const now = () => Math.floor(Date.now() / 1000)
 
 function claims(sub: string, opts: { aal?: string; mfaAgo?: number | null; session?: string } = {}) {
@@ -155,14 +155,14 @@ beforeEach(() => {
     control_roles: [
       { user_id: OWNER, role: 'owner', revoked_at: null, granted_at: '2026-10-01T00:00:00Z' },
       { user_id: ADMIN, role: 'administrator', revoked_at: null, granted_at: '2026-11-01T00:00:00Z' },
-      { user_id: MANAGER, role: 'manager', revoked_at: null, granted_at: '2026-11-02T00:00:00Z' }
+      { user_id: MANAGER, role: 'moderator', revoked_at: null, granted_at: '2026-11-02T00:00:00Z' }
     ],
     control_role_permissions: [
       { role: 'administrator', permission: 'settings.site', allowed: true },
       { role: 'administrator', permission: 'users.view', allowed: true },
       { role: 'administrator', permission: 'overview.view', allowed: true },
-      { role: 'manager', permission: 'overview.view', allowed: true },
-      { role: 'manager', permission: 'users.view', allowed: true }
+      { role: 'moderator', permission: 'overview.view', allowed: true },
+      { role: 'moderator', permission: 'users.view', allowed: true }
     ],
     control_member_permissions: [],
     control_step_up_uses: [],
@@ -235,8 +235,8 @@ describe('step-up: every settings save needs a fresh, single-use authenticator v
     const bodies = [
       { action: 'access.update', signupEnabled: false, signinEnabled: true },
       { action: 'password.change', password: 'a-long-new-password' },
-      { action: 'permissions.role', role: 'manager', permissions: { 'audit.view': true } },
-      { action: 'role.assign', email: 'student@example.org', role: 'support' },
+      { action: 'permissions.role', role: 'moderator', permissions: { 'audit.view': true } },
+      { action: 'role.assign', email: 'student@example.org', role: 'viewer' },
       { action: 'role.remove', userId: MANAGER }
     ]
     for (const body of bodies) {
@@ -267,10 +267,10 @@ describe('step-up: every settings save needs a fresh, single-use authenticator v
 describe('roles: assign, remove, and owner protection', () => {
   it('gives a role to an existing account by email and clears their old authenticator so they enroll fresh', async () => {
     world.claims = claims(OWNER)
-    const res = await call('POST', { action: 'role.assign', email: 'Student@Example.org', role: 'support' })
+    const res = await call('POST', { action: 'role.assign', email: 'Student@Example.org', role: 'viewer' })
     expect(res.statusCode).toBe(200)
-    expect(res.body).toMatchObject({ role: 'support', mfaSetupRequired: true })
-    expect(world.db.control_roles?.find(r => r.user_id === STUDENT)).toMatchObject({ role: 'support', revoked_at: null })
+    expect(res.body).toMatchObject({ role: 'viewer', mfaSetupRequired: true })
+    expect(world.db.control_roles?.find(r => r.user_id === STUDENT)).toMatchObject({ role: 'viewer', revoked_at: null })
     expect(world.factors[STUDENT]).toEqual([])
   })
 
@@ -294,7 +294,7 @@ describe('roles: assign, remove, and owner protection', () => {
     await call('POST', { action: 'role.remove', userId: MANAGER })
     world.factors[MANAGER] = [{ id: 'f-new-attempt', status: 'verified' }]
     world.claims = claims(OWNER, { mfaAgo: 5 })
-    const res = await call('POST', { action: 'role.assign', email: 'manager@example.org', role: 'manager' })
+    const res = await call('POST', { action: 'role.assign', email: 'manager@example.org', role: 'moderator' })
     expect(res.body).toMatchObject({ mfaSetupRequired: true })
     expect(world.factors[MANAGER]).toEqual([])
   })
@@ -305,7 +305,7 @@ describe('roles: assign, remove, and owner protection', () => {
     expect((await call('POST', { action: 'role.remove', userId: OWNER })).body).toMatchObject({ error: 'owner_only' })
     expect((await call('POST', { action: 'role.remove', userId: ADMIN })).body).toMatchObject({ error: 'owner_only' })
     expect((await call('POST', { action: 'role.assign', email: 'student@example.org', role: 'administrator' })).body).toMatchObject({ error: 'owner_only' })
-    expect((await call('POST', { action: 'permissions.role', role: 'support', permissions: { 'users.manage': true } })).body).toMatchObject({ error: 'owner_only' })
+    expect((await call('POST', { action: 'permissions.role', role: 'viewer', permissions: { 'users.manage': true } })).body).toMatchObject({ error: 'owner_only' })
     expect(world.db.control_roles?.find(r => r.user_id === OWNER)?.revoked_at).toBeNull()
   })
 
@@ -321,16 +321,16 @@ describe('roles: assign, remove, and owner protection', () => {
 
   it('refuses an unknown email without revealing anything else', async () => {
     world.claims = claims(OWNER)
-    expect((await call('POST', { action: 'role.assign', email: 'nobody@example.org', role: 'support' })).body).toMatchObject({ error: 'user_not_found' })
+    expect((await call('POST', { action: 'role.assign', email: 'nobody@example.org', role: 'viewer' })).body).toMatchObject({ error: 'user_not_found' })
   })
 })
 
 describe('owner-only settings', () => {
   it('only the owner edits the permission matrix and personal overrides', async () => {
     world.claims = claims(OWNER)
-    const res = await call('POST', { action: 'permissions.role', role: 'manager', permissions: { 'audit.view': true, 'users.view': false } })
+    const res = await call('POST', { action: 'permissions.role', role: 'moderator', permissions: { 'audit.view': true, 'users.view': false } })
     expect(res.statusCode).toBe(200)
-    expect(world.db.control_role_permissions?.find(r => r.role === 'manager' && r.permission === 'users.view')?.allowed).toBe(false)
+    expect(world.db.control_role_permissions?.find(r => r.role === 'moderator' && r.permission === 'users.view')?.allowed).toBe(false)
     world.claims = claims(OWNER, { mfaAgo: 3 })
     expect((await call('POST', { action: 'permissions.member', userId: OWNER, overrides: { 'users.view': 'deny' } })).body).toMatchObject({ error: 'owner_protected' })
   })
@@ -352,5 +352,104 @@ describe('owner-only settings', () => {
     const ownerView = (await call('GET')).body as { members: Array<{ email: string; mfaEnrolled: boolean }> }
     expect(ownerView.members.map(m => m.email)).toContain('admin@example.org')
     expect(JSON.stringify(ownerView)).not.toMatch(/f-owner|f-admin/)
+  })
+})
+
+function passkeyClaims(sub: string, opts: { agoSeconds?: number; session?: string; withTotp?: boolean } = {}) {
+  const amr: Array<{ method: string; timestamp: number }> = [{ method: 'passkey', timestamp: now() - (opts.agoSeconds ?? 20) }]
+  if (opts.withTotp) amr.push({ method: 'totp', timestamp: now() - 600 })
+  // A Supabase passkey sign-in is aal1 on its own; with a TOTP verification it is aal2.
+  return { sub, role: 'authenticated', aal: opts.withTotp ? 'aal2' : 'aal1', session_id: opts.session ?? `pk-${sub.slice(0, 4)}`, amr }
+}
+
+describe('passkeys are the owner’s alone', () => {
+  it('the owner’s passkey completes the console’s second step, and the session says so', async () => {
+    world.passkeys[OWNER] = [{ id: 'pk-owner' }]
+    world.claims = passkeyClaims(OWNER)
+    const res = await call('GET', undefined, 'session')
+    expect(res.body).toMatchObject({ status: 'granted', role: 'owner', method: 'passkey', passkey: true })
+    expect((await call('GET', undefined, 'users', 'accounts')).statusCode).not.toBe(403)
+  })
+
+  it('tells the owner (only) at the two-step screen whether a passkey can be used', async () => {
+    world.claims = claims(OWNER, { aal: 'aal1', mfaAgo: null })
+    expect((await call('GET', undefined, 'session')).body).toMatchObject({ status: 'mfa_required', passkey: false })
+    world.passkeys[OWNER] = [{ id: 'pk-owner' }]
+    expect((await call('GET', undefined, 'session')).body).toMatchObject({ status: 'mfa_required', passkey: true })
+    world.claims = claims(ADMIN, { aal: 'aal1', mfaAgo: null }) // ADMIN has a stray passkey in the fixture
+    expect((await call('GET', undefined, 'session')).body).toMatchObject({ status: 'mfa_required', passkey: false })
+  })
+
+  it('refuses any non-owner whose session used a passkey, even with a TOTP code too', async () => {
+    for (const claimSet of [passkeyClaims(ADMIN), passkeyClaims(ADMIN, { withTotp: true }), passkeyClaims(MANAGER)]) {
+      world.claims = claimSet
+      for (const [route, file] of [['session', 'security'], ['users', 'accounts'], ['settings', 'security']] as const) {
+        const res = await call('GET', undefined, route, file)
+        expect(res.statusCode).toBe(403)
+        expect(res.body).toMatchObject({ error: 'access_not_granted' })
+      }
+    }
+    expect((world.db.control_audit_events ?? []).some(row => row.actor_id === ADMIN && row.error_category === 'passkey_owner_only')).toBe(true)
+  })
+
+  it('a WebAuthn MFA factor (mfa/webauthn at aal2) is refused for non-owners as well', async () => {
+    world.claims = { sub: ADMIN, role: 'authenticated', aal: 'aal2', session_id: 's-w', amr: [{ method: 'mfa/webauthn', timestamp: now() - 10 }] }
+    expect((await call('GET', undefined, 'session')).statusCode).toBe(403)
+  })
+
+  it('refuses passkey add/remove for a non-owner', async () => {
+    world.claims = claims(ADMIN)
+    expect((await call('POST', { action: 'passkey.authorize' })).body).toMatchObject({ error: 'owner_only' })
+    expect((await call('POST', { action: 'passkey.delete', passkeyId: 'pk-1' })).body).toMatchObject({ error: 'owner_only' })
+    expect(world.passkeys[ADMIN]).toEqual([{ id: 'pk-1' }])
+  })
+
+  it('removes passkeys from anyone given a non-owner role', async () => {
+    world.passkeys[STUDENT] = [{ id: 'pk-s' }]
+    world.claims = claims(OWNER, { mfaAgo: 5 })
+    expect((await call('POST', { action: 'role.assign', email: 'student@example.org', role: 'moderator' })).statusCode).toBe(200)
+    expect(world.passkeys[STUDENT]).toEqual([])
+    expect(audits('role.assign').at(-1)?.summary ?? audits('role.assign').at(-1)).toBeTruthy()
+  })
+})
+
+describe('step-up with either method', () => {
+  const siteBody = { action: 'site.update', maintenanceEnabled: true, maintenanceMessage: '', siteDown: false }
+
+  it('owner: a fresh passkey confirms one save; the same confirmation cannot be reused', async () => {
+    world.claims = passkeyClaims(OWNER, { agoSeconds: 15, session: 'pk-step-1' })
+    expect((await call('POST', siteBody)).statusCode).toBe(200)
+    const replay = await call('POST', { ...siteBody, maintenanceEnabled: false })
+    expect(replay.body).toMatchObject({ error: 'step_up_required', reason: 'step_up_used' })
+    world.claims = passkeyClaims(OWNER, { agoSeconds: 5, session: 'pk-step-2' })
+    expect((await call('POST', { ...siteBody, maintenanceEnabled: false })).statusCode).toBe(200)
+    expect(world.db.site_settings?.[0]?.maintenance_enabled).toBe(false)
+  })
+
+  it('owner: a stale passkey (over two minutes) is refused and nothing is written', async () => {
+    world.claims = passkeyClaims(OWNER, { agoSeconds: 300 })
+    const res = await call('POST', siteBody)
+    expect(res.body).toMatchObject({ error: 'step_up_required', reason: 'step_up_stale' })
+    expect(world.db.site_settings?.[0]?.maintenance_enabled).toBe(false)
+  })
+
+  it('owner: a fresh authenticator code still works', async () => {
+    world.claims = claims(OWNER, { mfaAgo: 5 })
+    expect((await call('POST', siteBody)).statusCode).toBe(200)
+  })
+
+  it('admin: only the authenticator code counts (fresh code ok, stale code refused)', async () => {
+    world.claims = claims(ADMIN, { mfaAgo: 5 })
+    expect((await call('POST', siteBody)).statusCode).toBe(200)
+    world.claims = claims(ADMIN, { mfaAgo: 400, session: 'other' })
+    expect((await call('POST', siteBody)).body).toMatchObject({ error: 'step_up_required', reason: 'step_up_stale' })
+  })
+
+  it('a step-up is bound to the user: another user’s identical verification does not collide or carry over', async () => {
+    world.claims = claims(OWNER, { mfaAgo: 5, session: 'shared' })
+    expect((await call('POST', siteBody)).statusCode).toBe(200)
+    world.claims = claims(ADMIN, { mfaAgo: 5, session: 'shared' })
+    expect((await call('POST', { ...siteBody, maintenanceEnabled: false })).statusCode).toBe(200)
+    expect(world.db.control_step_up_uses?.map(row => row.user_id)).toEqual([OWNER, ADMIN])
   })
 })
