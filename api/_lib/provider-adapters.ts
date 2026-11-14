@@ -83,7 +83,7 @@ async function readErrorBody(response: Response): Promise<string> {
  * 5xx from in front of it) repeat the same request directly, so the student still gets an answer.
  * This happens inside one provider attempt, before any text streams, so nothing is counted twice.
  */
-async function fetchViaThreeDev(config: ProviderCall, route: ThreeDevRoute, directUrl: string, init: RequestInit): Promise<Response> {
+async function fetchViaThreeDev(config: ProviderCall, route: ThreeDevRoute, directUrl: string, init: RequestInit, custom: boolean): Promise<Response> {
   let reason: string
   try {
     const proxied = await fetch(route.url, { ...init, headers: { ...(init.headers as Record<string, string>), ...route.headers }, redirect: 'error' })
@@ -95,14 +95,16 @@ async function fetchViaThreeDev(config: ProviderCall, route: ThreeDevRoute, dire
     reason = 'unreachable'
   }
   logAIEvent('warn', 'three_dev_fallback_direct', { provider: config.providerId, model: config.modelId, reason: reason.slice(0, 64) })
-  return fetch(directUrl, { ...init, redirect: 'error' })
+  return custom ? fetchCustomProvider(directUrl, init) : fetch(directUrl, { ...init, redirect: 'error' })
 }
 
 async function checkedFetch(config: ProviderCall, url: string, init: RequestInit, custom = false): Promise<Response> {
   let response: Response
   try {
-    const route = custom ? null : threeDevRoute(config, url, config.trace)
-    response = route ? await fetchViaThreeDev(config, route, url, init)
+    // The proxy is a fixed public host; a custom endpoint is only routed when it is exactly a
+    // provider three.dev documents (OpenRouter). Its direct fallback keeps the pinned custom fetch.
+    const route = threeDevRoute(config, url, config.trace)
+    response = route ? await fetchViaThreeDev(config, route, url, init, custom)
       : custom ? await fetchCustomProvider(url, init) : await fetch(url, { ...init, redirect: 'error' })
   } catch (error) {
     if (init.signal?.aborted) throw error
@@ -232,7 +234,8 @@ async function callOpenAICompatible(config: ProviderCall): Promise<ProviderCompl
   const url = endpointFor(base, 'chat/completions')
   // three.dev records tokens/cost for streamed Chat Completions only when usage is requested. The
   // extra final chunk has empty `choices`, which the reader below already skips.
-  if (config.providerId === 'openai' && threeDevRoute(config, url, config.trace)) body.stream_options = { include_usage: true }
+  const threeDev = threeDevRoute(config, url, config.trace)
+  if (threeDev && (threeDev.provider === 'openai' || threeDev.provider === 'openrouter')) body.stream_options = { include_usage: true }
   const response = await checkedFetch(config, url, {
     method: 'POST', headers: jsonHeaders(config), body: JSON.stringify(body), signal: config.signal
   }, config.providerId === 'custom')

@@ -12,7 +12,7 @@ import type { AIProtocol, AIProviderId } from './registry.js'
 export const THREE_DEV_GATE = 'https://gate.three.dev'
 export const THREE_DEV_USE_CASE = 'stracker-ai-assistant'
 
-export type ThreeDevProvider = 'openai' | 'anthropic' | 'gemini'
+export type ThreeDevProvider = 'openai' | 'anthropic' | 'gemini' | 'openrouter'
 
 /** Per-request context added only to calls that go through three.dev. Never PII or content. */
 export interface ThreeDevTrace {
@@ -40,6 +40,7 @@ type Env = Record<string, string | undefined>
 const OPENAI_DEFAULT = /^https:\/\/api\.openai\.com\/v1\/?$/
 const ANTHROPIC_DEFAULT = /^https:\/\/api\.anthropic\.com\/v1\/?$/
 const GEMINI_DEFAULT = /^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/?$/
+const OPENROUTER_DEFAULT = /^https:\/\/openrouter\.ai\/api\/v1\/?$/
 const TAG_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const TAG_VALUE = /^[A-Za-z0-9._:-]{1,64}$/
 
@@ -65,13 +66,16 @@ export function threeDevSessionId(conversationId: string): string {
 /**
  * Which three.dev provider (if any) this exact call can go through, per the three.dev docs:
  * OpenAI Chat Completions on api.openai.com, Anthropic Messages on api.anthropic.com, and Gemini's
- * native generateContent/streamGenerateContent (tool calls included). DeepSeek, Qwen and custom
- * endpoints are hosts three.dev does not forward to, so they always stay direct.
+ * native generateContent/streamGenerateContent (tool calls included), and OpenRouter (a fixed-address
+ * provider three.dev knows) when a custom OpenAI-compatible model points at openrouter.ai/api/v1.
+ * DeepSeek, Qwen, NVIDIA and every other custom endpoint are hosts three.dev does not forward to,
+ * so they always stay direct.
  */
 export function threeDevProviderFor(input: ThreeDevRouteInput): ThreeDevProvider | null {
   if (input.providerId === 'openai' && input.protocol === 'openai-compatible' && OPENAI_DEFAULT.test(input.baseUrl)) return 'openai'
   if (input.providerId === 'anthropic' && input.protocol === 'anthropic-compatible' && ANTHROPIC_DEFAULT.test(input.baseUrl)) return 'anthropic'
   if (input.providerId === 'gemini' && input.protocol === 'google' && GEMINI_DEFAULT.test(input.baseUrl)) return 'gemini'
+  if (input.providerId === 'custom' && input.protocol === 'openai-compatible' && OPENROUTER_DEFAULT.test(input.baseUrl)) return 'openrouter'
   return null
 }
 
@@ -104,7 +108,9 @@ export function threeDevRoute(input: ThreeDevRouteInput, directUrl: string, trac
   if (!provider) return null
   let direct: URL
   try { direct = new URL(directUrl) } catch { return null }
-  return { provider, url: `${THREE_DEV_GATE}${direct.pathname}${direct.search}`, headers: threeDevHeaders(key, provider, trace, env) }
+  // OpenRouter's client path on the proxy is /v1, not /api/v1: the proxy adds /api itself.
+  const path = provider === 'openrouter' ? direct.pathname.replace(/^\/api(?=\/v1\/)/, '') : direct.pathname
+  return { provider, url: `${THREE_DEV_GATE}${path}${direct.search}`, headers: threeDevHeaders(key, provider, trace, env) }
 }
 
 /**
