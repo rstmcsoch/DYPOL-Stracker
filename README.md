@@ -162,6 +162,17 @@ Application records are keyed to the signed-in Supabase user and protected by ro
 
 JSON, CSV, PDF, and DOCX exports are generated in the browser. Keep JSON backups somewhere private; Stracker does not upload exports to a third-party backup service. Resetting study data permanently deletes the signed-in account's Stracker rows and uploaded mistake images, but does not delete the Supabase login itself.
 
+## Continue with Google (Supabase OAuth)
+
+The log-in, sign-up and Control Center sign-in pages show **Continue with Google** / **Sign up with Google** only when the Supabase project reports the Google provider as enabled (`GET /auth/v1/settings` → `external.google`, cached for 5 minutes). Until the provider is switched on in Supabase, no button is shown. Turning it on needs no redeploy.
+
+- Flow: `supabase.auth.signInWithOAuth({ provider: 'google' })` with PKCE, returning to `/auth/callback`, which completes the code exchange and opens the page the student came from. Only the default `openid email profile` scopes are requested.
+- New Google accounts get their profile row from the existing `on_auth_user_created` trigger and still go through the mandatory first-time setup. The Google name is prefilled there and can be edited.
+- A Google account with the same verified email as an existing email account is linked to that account by Supabase, so the student opens the same notebook.
+- The Control Center still requires the owner role and the authenticator (aal2) step after a Google sign-in.
+- Supabase settings: Authentication → URL Configuration → Site URL `https://dypol-stracker.vercel.app`, Redirect URLs `https://dypol-stracker.vercel.app/**`. Google Cloud → OAuth client (Web) → redirect URI `https://tkggckwksoatbswrebpu.supabase.co/auth/v1/callback`.
+- `VITE_GOOGLE_AUTH_FORCE_VISIBLE=1` forces the button on for local design builds only. Never set it on Vercel.
+
 ## Deploy
 
 Both included deployment configs support client-side route fallback:

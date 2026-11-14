@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, Sparkles } from 'lucide-react'
 import { Button, Field } from '../components/ui'
 import { AuthScaffold } from '../components/public/AuthScaffold'
+import { GoogleAuthButton } from '../components/GoogleAuthButton'
 import { useAuth } from '../contexts/AuthContext'
 import { localPreviewEnabled, supabaseConfigured } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
@@ -57,6 +58,8 @@ export default function LoginPage() {
         <div className="auth-card-icon" aria-hidden="true"><ShieldCheck size={21} /></div>
         <div><span className="eyebrow">ACCOUNT ACCESS</span><h2 id="login-title">Log in to Stracker</h2></div>
       </div>
+
+      {supabaseConfigured && <GoogleAuthButton intent="signin" next={destination} disabled={loading} />}
 
       <form className="form-stack auth-form" onSubmit={submit} noValidate>
         <Field label="Email" required>
