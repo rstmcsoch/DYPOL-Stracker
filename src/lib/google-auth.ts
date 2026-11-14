@@ -151,6 +151,13 @@ export function describeOAuthError(raw: string): OAuthCallbackProblem {
   if (/provider is not enabled|unsupported provider|provider_disabled|validation_failed|not enabled/.test(text)) {
     return { kind: 'unavailable', message: GOOGLE_UNAVAILABLE_MESSAGE }
   }
+  if (/disposable/.test(text)) {
+    return { kind: 'failed', message: 'Temporary or disposable email addresses aren’t allowed. Please use your regular email.' }
+  }
+  if (/database error saving new user/.test(text)) {
+    // A new-account refusal by the database: a disposable email domain, or sign-ups paused.
+    return { kind: 'failed', message: 'We couldn’t create a Stracker account for this Google account. Temporary or disposable email addresses aren’t allowed, and new sign-ups may be paused.' }
+  }
   if (/signup.*(disabled|not allowed)|signups not allowed/.test(text)) {
     return { kind: 'failed', message: 'New Stracker accounts can’t be created right now. If you already have an account, log in with email.' }
   }

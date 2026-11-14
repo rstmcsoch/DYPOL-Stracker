@@ -111,3 +111,11 @@ describe('Google account metadata', () => {
     expect(userAuthProviders(null)).toEqual([])
   })
 })
+
+describe('OAuth refusal for disposable domains', () => {
+  it('explains a disposable-domain refusal without raw provider text', async () => {
+    const { describeOAuthError } = await import('./google-auth')
+    expect(describeOAuthError('server_error unexpected_failure Database error saving new user').message).toMatch(/disposable email addresses aren’t allowed/)
+    expect(describeOAuthError('Temporary or disposable email addresses aren\'t allowed').message).toBe('Temporary or disposable email addresses aren’t allowed. Please use your regular email.')
+  })
+})

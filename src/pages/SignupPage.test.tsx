@@ -19,6 +19,11 @@ vi.mock('../contexts/AuthContext', () => ({
 vi.mock('../contexts/ToastContext', () => ({
   useToast: () => ({ notify })
 }))
+const isDisposableEmail = vi.fn()
+vi.mock('../lib/disposable-email', () => ({
+  DISPOSABLE_EMAIL_MESSAGE: 'Temporary or disposable email addresses aren\'t allowed. Please use your regular email.',
+  isDisposableEmail: (email: string) => isDisposableEmail(email)
+}))
 vi.mock('../components/public/PublicHeader', () => ({ PublicBrand: () => <span>Stracker</span> }))
 
 const { default: SignupPage } = await import('./SignupPage')
@@ -44,6 +49,8 @@ beforeEach(() => {
   clearError.mockReset()
   notify.mockReset()
   signUp.mockResolvedValue({ needsEmailConfirmation: false })
+  isDisposableEmail.mockReset()
+  isDisposableEmail.mockResolvedValue(false)
   vi.stubEnv('VITE_SUPABASE_URL', 'https://example-ref.supabase.co')
   vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'public-anon-key')
   vi.stubEnv('VITE_GOOGLE_AUTH_FORCE_VISIBLE', '1')
@@ -82,11 +89,11 @@ describe('two-step sign-up', () => {
     expect(signUp).not.toHaveBeenCalled()
   })
 
-  it('advances to the password step when name and email are valid, including when Enter is pressed', () => {
+  it('advances to the password step when name and email are valid, including when Enter is pressed', async () => {
     visit()
     fillStep1()
     fireEvent.submit(screen.getByRole('button', { name: 'Next' }).closest('form')!)
-    expect(screen.getByText('Step 2 of 2')).toBeTruthy()
+    expect(await screen.findByText('Step 2 of 2')).toBeTruthy()
     expect(screen.getByLabelText('Password')).toBeTruthy()
     expect(screen.getByLabelText('Confirm password')).toBeTruthy()
     expect(screen.queryByLabelText('Your name')).toBeNull()
@@ -97,24 +104,24 @@ describe('two-step sign-up', () => {
     expect(signUp).not.toHaveBeenCalled()
   })
 
-  it('keeps the entered name and email when going back from step 2', () => {
+  it('keeps the entered name and email when going back from step 2', async () => {
     visit()
     fillStep1('Ada Lovelace', 'ada@example.com')
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secretword' } })
+    fireEvent.change(await screen.findByLabelText('Password'), { target: { value: 'secretword' } })
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(screen.getByText('Step 1 of 2')).toBeTruthy()
     expect((screen.getByLabelText('Your name') as HTMLInputElement).value).toBe('Ada Lovelace')
     expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe('ada@example.com')
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('secretword')
+    expect((await screen.findByLabelText('Password') as HTMLInputElement).value).toBe('secretword')
   })
 
-  it('does not create an account when the password is too short or the confirmation does not match', () => {
+  it('does not create an account when the password is too short or the confirmation does not match', async () => {
     visit()
     fillStep1()
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } })
+    fireEvent.change(await screen.findByLabelText('Password'), { target: { value: 'short' } })
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'different' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create my Stracker account' }))
     expect(screen.getByText('Use at least 8 characters.')).toBeTruthy()
@@ -127,11 +134,11 @@ describe('two-step sign-up', () => {
     visit()
     fillStep1('Ada Lovelace', 'ada@example.com')
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secretword' } })
+    fireEvent.change(await screen.findByLabelText('Password'), { target: { value: 'secretword' } })
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'secretword' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create my Stracker account' }))
     await waitFor(() => expect(signUp).toHaveBeenCalledTimes(1))
-    expect(signUp).toHaveBeenCalledWith('ada@example.com', 'secretword', 'Ada Lovelace')
+    expect(signUp).toHaveBeenCalledWith('ada@example.com', 'secretword', 'Ada Lovelace', undefined)
     expect(await screen.findByRole('heading', { name: 'Notebook home' })).toBeTruthy()
   })
 
@@ -140,10 +147,21 @@ describe('two-step sign-up', () => {
     visit()
     fillStep1('Ada', 'ada@example.com')
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secretword' } })
+    fireEvent.change(await screen.findByLabelText('Password'), { target: { value: 'secretword' } })
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'secretword' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create my Stracker account' }))
     expect(await screen.findByRole('heading', { name: 'Confirm your email' })).toBeTruthy()
     expect(screen.getByText(/ada@example.com/)).toBeTruthy()
+  })
+
+  it('stops on step 1 with a clear message for a disposable email address', async () => {
+    isDisposableEmail.mockResolvedValue(true)
+    visit()
+    fillStep1('Ada', 'ada@mailinator.com')
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByText('Temporary or disposable email addresses aren\'t allowed. Please use your regular email.')).toBeTruthy()
+    expect(screen.getByText('Step 1 of 2')).toBeTruthy()
+    expect(isDisposableEmail).toHaveBeenCalledWith('ada@mailinator.com')
+    expect(signUp).not.toHaveBeenCalled()
   })
 })
