@@ -37,10 +37,11 @@ const BacklogPage = lazy(() => import('./pages/BacklogPage'))
 const MockAnalysisPage = lazy(() => import('./pages/MockAnalysisPage'))
 const DecksPage = lazy(() => import('./pages/DecksPage'))
 const StudyNowPage = lazy(() => import('./pages/StudyNowPage'))
+// Private operations console: lazy-loaded so its code and styles never reach the public or
+// notebook bundles, and are not even downloaded by a visitor without a Stracker session.
+const ControlPanelApp = lazy(() => import('./control/ControlPanelApp'))
 const InfoPage = lazy(() => import('./pages/InfoPage'))
 const ContactPage = lazy(() => import('./pages/ContactPage'))
-// Private operations console: lazy-loaded so its code and styles never reach the public or notebook bundles.
-const ControlPanelApp = lazy(() => import('./control/ControlPanelApp'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -103,6 +104,20 @@ function PublicOnly({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+/**
+ * /control-panel has no login portal of its own. Without a normal Stracker session (never
+ * signed in, signed out, storage cleared, session expired) the visitor goes to the homepage to
+ * sign in like everyone else. With a session, the console asks the server whether this account
+ * holds an active role; if not, ControlRouter sends the account to its normal dashboard. Every
+ * console API route enforces session + role + permission + aal2 again on the server.
+ */
+export function ControlEntry() {
+  const { user, loading } = useAuth()
+  if (loading) return <RouteLoading />
+  if (!user) return <Navigate to="/" replace />
+  return <Suspense fallback={<RouteLoading />}><ControlPanelApp /></Suspense>
+}
+
 function AppRoutes() {
   return <Suspense fallback={<RouteLoading />}>
     <Routes>
@@ -131,7 +146,7 @@ function AppRoutes() {
         </Route>
       </Route>
       {/* Private console: not linked from any public or notebook navigation. Access is enforced by the server. */}
-      <Route path="/control-panel/*" element={<Suspense fallback={<RouteLoading />}><ControlPanelApp /></Suspense>} />
+      <Route path="/control-panel/*" element={<ControlEntry />} />
       <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
       <Route path="/signup" element={<PublicOnly><SignupPage /></PublicOnly>} />
       {/* Password recovery stays on its original public route: the emailed link

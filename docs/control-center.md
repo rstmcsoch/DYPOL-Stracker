@@ -11,7 +11,15 @@ deployment.
 
 ## Access model
 
-- **Authentication:** the existing Supabase Auth sign-in. The console does not create its own login.
+- **Authentication:** the existing Supabase Auth sign-in. The console has **no login portal of its
+  own**. Opening any `/control-panel/*` address without a normal Stracker session (never signed in,
+  signed out, idle sign-out, storage cleared, expired session) redirects to the homepage `/`, where
+  the person signs in like any student (password or Google). A signed-in account without an active
+  role is redirected to its normal dashboard (also `/`) with no message, title or hint that a console
+  exists. Only an active role holder reaches the authenticator step. The role is checked by Supabase
+  user id, so password and Google sign-ins of the same account (Supabase links identities that share
+  a verified email to the same user) are treated identically. These redirects are a convenience: every
+  console API route verifies the session, the role and `aal2` on the server regardless.
 - **Authorization:** a server-controlled `public.control_roles` row. Client metadata, profile fields,
   localStorage, and email matching alone never grant access. The table is readable and writable only
   by the `service_role` key; `anon` and `authenticated` have no grants and no policies.
@@ -92,7 +100,7 @@ cannot grant or revoke a role. Do not run a separate owner bootstrap script or a
 
 ## First sign-in and TOTP enrollment
 
-1. Open `/control-panel/` and sign in with the owner account through the normal Stracker sign-in.
+1. Sign in to Stracker normally (homepage → Log in, with password or Google), then open `/control-panel/`.
 2. The console shows the enrollment screen. Scan the QR code with an authenticator app, or enter
    the manual key. Confirm with a six-digit code.
 3. The console then requires a fresh code on each new sign-in (`aal2`).

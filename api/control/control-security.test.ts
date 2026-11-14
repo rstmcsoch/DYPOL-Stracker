@@ -495,3 +495,47 @@ describe('audit export and reads', () => {
     expect(res.statusCode).toBe(404)
   })
 })
+
+describe('every console route is enforced on the server, not only by the browser redirect', () => {
+  const PUBLIC_ROUTES = new Set(['contact', 'analytics-ingest'])
+  const dispatchers: Array<{ file: string; routes: string[] }> = [
+    { file: 'operations', routes: ['audit', 'user-access', 'state', 'draft', 'discard', 'publish', 'restore', 'media', 'exams', 'analytics', 'messages'] },
+    { file: 'security', routes: ['session', 'roles'] },
+    { file: 'system', routes: ['overview', 'health'] },
+    { file: 'accounts', routes: ['users', 'user'] }
+  ]
+  const methods = ['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
+
+  async function dispatch(file: string, route: string, method: string, token: string | null) {
+    const mod = (await import(`./${file}.ts`)) as { default: (req: never, res: never) => Promise<void> }
+    const res = fakeResponse()
+    await mod.default(request(method, `/api/control/${file}?route=${route}`, {}, token) as never, res as never)
+    return res
+  }
+
+  for (const { file, routes } of dispatchers) {
+    for (const route of routes) {
+      if (PUBLIC_ROUTES.has(route)) continue
+      it(`${file}?route=${route}: no session → 401, student → 403, owner without aal2 → no data`, async () => {
+        for (const method of methods) {
+          world.claims = null
+          const anon = await dispatch(file, route, method, null)
+          // 405 is acceptable for an unsupported method; it never reveals data.
+          expect([401, 405], `${route} ${method} anonymous`).toContain(anon.statusCode)
+
+          world.claims = claimsFor(STUDENT, 'aal2', 60)
+          world.roles = {}
+          const student = await dispatch(file, route, method, 'valid-token')
+          expect([403, 405], `${route} ${method} student`).toContain(student.statusCode)
+          if (student.statusCode === 403) expect(student.body).toMatchObject({ error: 'access_not_granted' })
+
+          world.roles = { [OWNER]: { role: 'owner', revoked_at: null } }
+          world.claims = claimsFor(OWNER, 'aal1', null)
+          const owner = await dispatch(file, route, method, 'valid-token')
+          if (route === 'session' && method === 'GET') expect(owner.body).toMatchObject({ status: 'mfa_required' })
+          else expect([403, 405], `${route} ${method} owner aal1`).toContain(owner.statusCode)
+        }
+      })
+    }
+  }
+})
