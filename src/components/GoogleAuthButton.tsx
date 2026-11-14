@@ -73,7 +73,7 @@ export function GoogleAuthButton({ intent, next = '/', surface = 'public', disab
       <span className="google-button__label">{busy ? 'Opening Google…' : label}</span>
     </button>
     {problem && <div className="form-error google-auth__error" role="alert">{problem}</div>}
-    {surface === 'public' && <p className="google-auth__legal">By continuing with Google, you agree to Stracker’s <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>. Google shares only your name, email and profile picture.</p>}
+    {surface === 'public' && <p className="google-auth__legal">By continuing with Google, you agree to Stracker’s <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>.</p>}
     <div className="auth-divider" role="separator" aria-label={dividerLabel}><span>{dividerLabel}</span></div>
   </div>
 }
