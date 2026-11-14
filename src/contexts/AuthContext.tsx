@@ -3,12 +3,15 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { User } from '@supabase/supabase-js'
 import { localPreviewEnabled, supabase } from '../lib/supabase'
 import { loginFailureReason, track } from '../lib/telemetry/client'
+import { displayNameFromMetadata, userAuthProviders } from '../lib/google-auth'
 
 export interface AppUser {
   id: string
   email: string
   displayName: string
   isLocal: boolean
+  /** Sign-in methods linked to the account, e.g. ['email'], ['google'] or ['email', 'google']. */
+  providers?: string[]
 }
 
 export interface SignUpResult {
@@ -43,8 +46,11 @@ function userFromSupabase(user: User): AppUser {
   return {
     id: user.id,
     email: user.email ?? '',
-    displayName: typeof user.user_metadata?.display_name === 'string' ? user.user_metadata.display_name : '',
-    isLocal: false
+    // Stracker's own display_name first; a Google account falls back to its profile name
+    // (full_name / name) so first-time setup can prefill it. It stays editable there.
+    displayName: displayNameFromMetadata(user.user_metadata),
+    isLocal: false,
+    providers: userAuthProviders(user.app_metadata)
   }
 }
 

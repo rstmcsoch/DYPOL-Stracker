@@ -26,6 +26,10 @@ This policy explains what Stracker by DYPOL LABS collects when you visit the Str
 
 To sign up you enter a display name, an email address and a password. Accounts are handled by Supabase Auth: your password is stored there only in hashed form and DYPOL LABS cannot read it. Your email address is used to confirm the account, to sign you in and to send password-reset links. Stracker does not send marketing email.
 
+## Signing in with Google
+
+If you choose Continue with Google or Sign up with Google, Google confirms who you are and shares only your basic profile with Stracker: your name, your email address and a link to your Google profile picture. Stracker asks only for the standard openid, email and profile permissions. It gets no access to your Gmail, Google Drive, contacts, calendar or any other Google data, and it never sees your Google password. Supabase Auth keeps that profile with your login. Stracker uses your email address to identify your account and your name only to fill in the first-time setup, where you can change it; it does not show or reuse your profile picture. If you already have a Stracker account with the same verified email address, Google sign-in opens that same notebook rather than creating a second one. You can remove Stracker's access at any time from your Google Account under Security, Third-party apps and services; you can then still log in with your email after setting a password through Forgot your password.
+
 ## What you record in your notebook
 
 When you first sign in you choose your exam and, if you want, your exam date, display theme and fonts. After that, Stracker stores what you choose to record:
@@ -75,6 +79,7 @@ Everything travels over HTTPS. The Stracker Control Center, where DYPOL LABS run
 ## Services Stracker relies on
 
 - Supabase: accounts and sign-in, the database and private file storage.
+- Google: only if you choose to sign in with Google, to confirm your identity as described above.
 - Vercel: hosting for the website and the server functions behind Stracker AI and the Contact form.
 - AI model providers, only when you use Stracker AI, as described above.
 - three.dev, for Stracker AI observability as described above.
@@ -116,6 +121,7 @@ The ready-made syllabus, chapter lists and marking defaults are a starting point
 ## Your account
 
 - Use an email address you can access and keep your password private.
+- If you sign in with Google, keep your Google account secure; anyone who can use it can open your Stracker notebook. Google's own terms apply to your Google account.
 - An account is for one person. You are responsible for what happens in your account.
 - If you think someone else has used your account, change your password and tell us through the Contact page.
 

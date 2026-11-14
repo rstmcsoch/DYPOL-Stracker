@@ -50,6 +50,9 @@ export default function SettingsPage() {
   const examTitle = chosenExamTitle(data.settings)
   const examTrackLabels = trackLabels(data.settings)
   const { user, signOut } = useAuth()
+  // Accounts created with Google have no Stracker password until the student sets one.
+  const signsInWithGoogle = Boolean(user?.providers?.includes('google'))
+  const googleOnly = signsInWithGoogle && !user?.providers?.includes('email')
   const { notify } = useToast()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -325,9 +328,10 @@ export default function SettingsPage() {
         <form className="settings-form" noValidate onSubmit={event => void saveTab('account', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'account'}>
             <NotebookCard className="settings-section"><SectionLabel icon={<UserRound size={18} />} title="Owner" /><div className="settings-section-content">
-              <div className="settings-owner-row"><div className="settings-avatar">{(draft.owner_name.trim()[0] ?? 'S').toUpperCase()}</div><div className="settings-owner-fields"><Field label="Display name" required error={errors.owner_name}><input required maxLength={100} value={draft.owner_name} onChange={event => patch('owner_name', event.target.value)} placeholder="What should Stracker call you?" /></Field><Field label="Account email"><input type="email" value={user?.email ?? ''} readOnly aria-readonly="true" /><span className="field-hint">Email and password are managed by secure Supabase authentication.</span></Field></div></div>
+              <div className="settings-owner-row"><div className="settings-avatar">{(draft.owner_name.trim()[0] ?? 'S').toUpperCase()}</div><div className="settings-owner-fields"><Field label="Display name" required error={errors.owner_name}><input required maxLength={100} value={draft.owner_name} onChange={event => patch('owner_name', event.target.value)} placeholder="What should Stracker call you?" /></Field><Field label="Account email"><input type="email" value={user?.email ?? ''} readOnly aria-readonly="true" /><span className="field-hint">{googleOnly ? 'You sign in with Google. Your email comes from your Google account.' : signsInWithGoogle ? 'You can sign in with Google or with your email and password.' : 'Email and password are managed by secure Supabase authentication.'}</span></Field></div></div>
               <div className="settings-note-line"><Shield size={15} /> Your records stay private to this account — only you can read or change them. New accounts are created from the sign-up page whenever your Supabase project allows sign-ups.</div>
-              <div className="settings-account-actions"><Button type="button" variant="secondary" onClick={() => setPasswordDialogOpen(true)} disabled={!user || user.isLocal}><KeyRound size={15} /> Change password</Button></div>
+              <div className="settings-account-actions"><Button type="button" variant="secondary" onClick={() => setPasswordDialogOpen(true)} disabled={!user || user.isLocal}><KeyRound size={15} /> {googleOnly ? 'Set a password' : 'Change password'}</Button></div>
+              {googleOnly && <small className="settings-account-note">Optional. A password lets you also log in with your email address; Google sign-in keeps working.</small>}
               {user?.isLocal && <small className="settings-account-note">Password changes are available for a cloud-authenticated owner account.</small>}
             </div></NotebookCard>
             <AISettingsSection />
@@ -439,7 +443,7 @@ export default function SettingsPage() {
     {anyDirty && <p className="settings-unsaved-note" role="status">Unsaved changes in the marked tab{anyDirty && TABS.filter(tab => isTabDirty(tab.id)).length > 1 ? 's' : ''}.</p>}
     <div className="settings-signout"><Button type="button" variant="quiet" onClick={() => void signOutFromSettings()} loading={signingOut}><LogOut size={15} /> Sign out</Button></div>
 
-    {passwordDialogOpen && <ChangePasswordDialog onClose={() => setPasswordDialogOpen(false)} />}
+    {passwordDialogOpen && <ChangePasswordDialog mode={googleOnly ? 'set' : 'change'} onClose={() => setPasswordDialogOpen(false)} />}
     {firstResetOpen && <Dialog title="This will erase your study history." subtitle="Chapters, tests, mistakes, revisions, tasks, goals, sessions and uploaded images will be permanently removed from the cloud and this device." onClose={() => setFirstResetOpen(false)} className="dialog-danger"><div className="reset-warning"><AlertOctagon size={22} /><p>Export a JSON backup first if you may want to restore your data later. This reset does not delete your Supabase login account.</p></div><div className="dialog-actions"><Button variant="secondary" onClick={() => setFirstResetOpen(false)}>Keep my data</Button><Button variant="danger" onClick={() => { setFirstResetOpen(false); setSecondResetOpen(true) }}>Continue to confirmation</Button></div></Dialog>}
     {secondResetOpen && <Dialog title="One last check." subtitle="To confirm, type RESET exactly. Your data will not be recoverable from Stracker after this." onClose={() => { setSecondResetOpen(false); setResetText('') }} className="dialog-danger"><Field label="Type RESET to confirm"><input autoFocus autoComplete="off" value={resetText} onChange={event => setResetText(event.target.value)} /></Field><div className="dialog-actions"><Button variant="secondary" onClick={() => { setSecondResetOpen(false); setResetText('') }} disabled={resetting}>Cancel</Button><Button variant="danger" loading={resetting} disabled={resetText !== 'RESET'} onClick={() => void resetAll()}><AlertOctagon size={15} /> {resetting ? 'Resetting…' : 'Permanently reset'}</Button></div></Dialog>}
   </div>
@@ -458,7 +462,7 @@ function TabActions({ tab, dirty, saving, savedTick, onDiscard }: { tab: Setting
   </div>
 }
 
-function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+function ChangePasswordDialog({ onClose, mode = 'change' }: { onClose: () => void; mode?: 'change' | 'set' }) {
   const { updatePassword } = useAuth()
   const { notify } = useToast()
   const [password, setPassword] = useState('')
@@ -480,16 +484,16 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
     try {
       // The password is passed directly to Supabase Auth and is never persisted in Stracker data.
       await updatePassword(password)
-      notify('Your password has been updated.')
+      notify(mode === 'set' ? 'Password set. You can now also log in with your email.' : 'Your password has been updated.')
       setPassword(''); setConfirmation(''); onClose()
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Could not update the password. Try again.', 'error')
     } finally { savingRef.current = false; setSaving(false) }
   }
-  return <Dialog title="Change password" onClose={onClose} className="dialog-narrow"><form className="form-stack" noValidate onSubmit={submit}>
+  return <Dialog title={mode === 'set' ? 'Set a password' : 'Change password'} onClose={onClose} className="dialog-narrow"><form className="form-stack" noValidate onSubmit={submit}>
     <Field label="New password" required hint="At least 8 characters." error={errors.password}><input type="password" autoComplete="new-password" value={password} onChange={event => { setPassword(event.target.value); setErrors(current => ({ ...current, password: undefined })) }} /></Field>
     <Field label="Confirm new password" required error={errors.confirmation}><input type="password" autoComplete="new-password" value={confirmation} onChange={event => { setConfirmation(event.target.value); setErrors(current => ({ ...current, confirmation: undefined })) }} /></Field>
-    <div className="dialog-actions"><Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button><Button type="submit" loading={saving}><KeyRound size={15} /> {saving ? 'Updating…' : 'Update password'}</Button></div>
+    <div className="dialog-actions"><Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button><Button type="submit" loading={saving}><KeyRound size={15} /> {saving ? 'Saving…' : mode === 'set' ? 'Set password' : 'Update password'}</Button></div>
   </form></Dialog>
 }
 

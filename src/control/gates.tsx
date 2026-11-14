@@ -6,6 +6,7 @@ import { Button, Field } from './ui'
 import { BrandMark } from './BrandMark'
 import { MfaChallengeForm, MfaEnrollment } from './MfaPanels'
 import { useControlSession } from './ControlSession'
+import { GoogleAuthButton } from '../components/GoogleAuthButton'
 
 /** Shared frame for pre-console states: no navigation, no admin data, dark identity. */
 export function GateFrame({ children, title, subtitle }: { children: React.ReactNode; title: string; subtitle?: string }) {
@@ -46,6 +47,9 @@ export function SignInGate({ notice }: { notice?: string }) {
   return (
     <GateFrame title="Sign in to the Control Center" subtitle="Restricted to DYPOL LABS operators. Two-step verification is required after sign-in.">
       {notice && <p className="cc-note cc-note--warn" role="status">{notice}</p>}
+      {/* Google is only another way to prove who you are: the owner role and the aal2
+          authenticator step that follow are exactly the same as after a password sign-in. */}
+      {supabase && <GoogleAuthButton intent="signin" next="/control-panel" surface="control" disabled={busy} dividerLabel="or use email and password" />}
       <form className="cc-form" onSubmit={submit} noValidate>
         <Field label="Email" htmlFor="cc-email" error={null}>
           <input id="cc-email" className="cc-input" type="email" autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} required disabled={busy} />
@@ -80,7 +84,7 @@ export function MfaGate() {
   return (
     <GateFrame title="Two-step verification" subtitle="Verify this session with your authenticator app before the console opens.">
       <ol className="cc-steps" aria-label="Sign-in progress">
-        <li className="is-done"><Check size={14} aria-hidden="true" /> Password</li>
+        <li className="is-done"><Check size={14} aria-hidden="true" /> Signed in</li>
         <li className="is-current"><ShieldCheck size={14} aria-hidden="true" /> Authenticator</li>
         <li>Console access</li>
       </ol>

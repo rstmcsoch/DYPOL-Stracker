@@ -18,6 +18,7 @@ const LandingPage = lazy(() => import('./pages/LandingPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const SignupPage = lazy(() => import('./pages/SignupPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
+const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
 const SyllabusPage = lazy(() => import('./pages/SyllabusPage'))
 const TestsPage = lazy(() => import('./pages/TestsPage'))
 const MistakesPage = lazy(() => import('./pages/MistakesPage'))
@@ -136,6 +137,8 @@ function AppRoutes() {
       {/* Password recovery stays on its original public route: the emailed link
           authenticates a short-lived session, so it must not be redirected away. */}
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      {/* Google (OAuth, PKCE) returns here; the page finishes the code exchange and moves on. */}
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
       {/* Information pages and Contact, open to visitors and students alike. Text ships built in and is owner-editable. */}
       <Route path="/privacy" element={<SiteContentProvider><InfoPage kind="privacy" /></SiteContentProvider>} />
       <Route path="/terms" element={<SiteContentProvider><InfoPage kind="terms" /></SiteContentProvider>} />

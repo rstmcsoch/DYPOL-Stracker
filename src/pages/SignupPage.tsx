@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Check, Eye, EyeOff, LockKeyhole, Mail, NotebookPen, UserRound } from 'lucide-react'
 import { Button, Field } from '../components/ui'
 import { AuthScaffold } from '../components/public/AuthScaffold'
+import { GoogleAuthButton } from '../components/GoogleAuthButton'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { localPreviewEnabled, supabaseConfigured } from '../lib/supabase'
@@ -110,6 +111,8 @@ export default function SignupPage() {
           <div className="auth-card-icon" aria-hidden="true"><UserRound size={21} /></div>
           <div><span className="eyebrow">NEW ACCOUNT</span><h2 id="signup-title">Create your Stracker account</h2></div>
         </div>
+
+        {supabaseConfigured && <GoogleAuthButton intent="signup" next="/" disabled={loading} dividerLabel="or sign up with email" />}
 
         <form className="form-stack auth-form" onSubmit={submit} noValidate>
           <Field label="What should Stracker call you?" required error={fieldErrors.displayName}>

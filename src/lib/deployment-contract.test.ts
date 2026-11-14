@@ -41,6 +41,8 @@ describe('production deployment freshness contract', () => {
     expect(spaRules).toContainEqual({ source: '/login', destination: '/index.html' })
     expect(spaRules).toContainEqual({ source: '/syllabus', destination: '/index.html' })
     expect(spaRules).toContainEqual({ source: '/control-panel(.*)', destination: '/index.html' })
+    // Google OAuth (PKCE) returns to this route; it must load the app shell, not a 404.
+    expect(spaRules).toContainEqual({ source: '/auth/callback', destination: '/index.html' })
   })
 
   it('gives only content-hashed Vite assets a long immutable cache lifetime', () => {

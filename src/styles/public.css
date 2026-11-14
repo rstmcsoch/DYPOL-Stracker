@@ -1835,3 +1835,78 @@ html[data-app-font='active'] .pub-page .pub-footer-wordmark {
   .contact-send:hover:not(:disabled) svg { transform: none; }
 }
 .pub-doc-main h1[tabindex="-1"]:focus { outline: none; }
+
+/* ------------------------------------------------ Continue with Google
+   Custom button built to Google's Sign in with Google branding rules: unaltered four-colour
+   "G" on a white/near-black field, 1px stroke, 12px side padding, 10px logo gap, medium 14–15px
+   label. Light: #FFFFFF / #747775 / #1F1F1F. Dark: #131314 / #8E918F / #E3E3E3. Height and
+   corners follow Stracker's own buttons so it sits naturally above the email form. */
+
+.google-auth { display: grid; gap: 12px; margin: 2px 0 14px; }
+.google-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid #747775;
+  border-radius: 9px 11px 10px 8px;
+  color: #1f1f1f;
+  background: #ffffff;
+  box-shadow: 0 2px 0 rgba(71, 70, 57, .08);
+  cursor: pointer;
+  font: 500 15px/20px 'Google Sans', Roboto, 'Segoe UI', Arial, var(--font-body), sans-serif;
+  letter-spacing: .1px;
+  transition: background-color .16s ease, box-shadow .16s ease, border-color .16s ease, transform .16s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.google-button__icon { display: inline-grid; flex: none; place-items: center; width: 20px; height: 20px; }
+.google-button__icon .google-g { display: block; width: 20px; height: 20px; }
+.google-button__label { min-width: 0; overflow-wrap: anywhere; }
+.google-button:hover:not(:disabled) { background: #f8f9fa; box-shadow: 0 1px 2px rgba(60, 64, 67, .3), 0 1px 3px 1px rgba(60, 64, 67, .15); }
+.google-button:active:not(:disabled) { background: #f1f3f4; transform: translateY(1px); }
+.google-button:focus-visible { outline: 3px solid var(--accent, #526c9a); outline-offset: 2px; }
+.google-button:disabled { cursor: default; opacity: .62; box-shadow: none; }
+.google-button[aria-busy='true'] { opacity: 1; cursor: progress; }
+.google-button[aria-busy='true'] .google-button__icon { color: #5f6368; }
+
+:root[data-theme='dark'] .google-auth--public .google-button,
+.google-auth--control .google-button {
+  border-color: #8e918f;
+  color: #e3e3e3;
+  background: #131314;
+  box-shadow: none;
+}
+:root[data-theme='dark'] .google-auth--public .google-button:hover:not(:disabled),
+.google-auth--control .google-button:hover:not(:disabled) { background: #1f1f20; box-shadow: 0 1px 3px rgba(0, 0, 0, .45); }
+:root[data-theme='dark'] .google-auth--public .google-button:active:not(:disabled),
+.google-auth--control .google-button:active:not(:disabled) { background: #28292a; }
+:root[data-theme='dark'] .google-auth--public .google-button[aria-busy='true'] .google-button__icon,
+.google-auth--control .google-button[aria-busy='true'] .google-button__icon { color: #c4c7c5; }
+/* Google requires the "G" to sit on white in dark mode: a small white disc behind it. */
+:root[data-theme='dark'] .google-auth--public .google-button:not([aria-busy='true']) .google-button__icon,
+.google-auth--control .google-button:not([aria-busy='true']) .google-button__icon {
+  width: 28px; height: 28px; margin: 0 -4px; border-radius: 50%; background: #ffffff;
+}
+
+.google-auth__error { margin: 0; }
+.google-auth__legal { margin: -2px 0 0; color: var(--pub-muted, var(--muted)); font-size: 12px; line-height: 1.5; text-align: center; }
+.google-auth__legal a { color: var(--ink-soft); text-decoration: underline; text-underline-offset: 2px; }
+.google-auth__legal a:hover { color: var(--ink); }
+
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 2px 0 0; color: var(--pub-muted, var(--muted)); font: 500 12px/1.2 var(--font-body); letter-spacing: .6px; text-transform: uppercase; }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.auth-divider span { flex: none; }
+.google-auth--control { margin: 0; }
+.google-auth--control .auth-divider { color: var(--cc-muted, #9aa0a6); }
+.google-auth--control .auth-divider::before, .google-auth--control .auth-divider::after { background: var(--cc-border, #3c4043); }
+
+.auth-callback-status { display: flex; align-items: center; gap: 9px; margin: 6px 0 0; color: var(--ink-soft); }
+.auth-callback-actions { justify-content: flex-start; margin-top: 14px; }
+
+@media (max-width: 420px) {
+  .google-button { min-height: 46px; font-size: 14px; }
+  .google-auth__legal { font-size: 12px; }
+}
