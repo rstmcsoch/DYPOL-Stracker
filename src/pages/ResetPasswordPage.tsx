@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Eye, EyeOff, KeyRound, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
 import { Button, Field } from '../components/ui'
@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { supabaseConfigured } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
+import { TurnstileWidget, type TurnstileHandle } from '../components/TurnstileWidget'
 
 import { MIN_PASSWORD_LENGTH } from '../lib/auth-rules'
 
@@ -28,6 +29,7 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const captcha = useRef<TurnstileHandle>(null)
 
   const recoveryLinkPending = typeof window !== 'undefined'
     && /(?:^|[?&#])(code=|access_token=|error_description=|type=recovery)/.test(`${window.location.search}${window.location.hash}`)
@@ -41,11 +43,13 @@ export default function ResetPasswordPage() {
     if (mode === 'request') {
       setLoading(true)
       try {
-        await sendPasswordReset(email)
+        const captchaToken = await captcha.current?.getToken()
+        await sendPasswordReset(email, captchaToken)
         setSent(true)
       } catch (submitError) {
         setMessage(submitError instanceof Error ? submitError.message : 'Could not send the reset link. Try again.')
       } finally {
+        captcha.current?.reset()
         setLoading(false)
       }
       return
@@ -132,6 +136,7 @@ export default function ResetPasswordPage() {
               </span>
             </Field>
           </>}
+          {mode === 'request' && supabaseConfigured && <TurnstileWidget ref={captcha} action="reset" />}
           {error && <div className="form-error" role="alert">{error}</div>}
           {message && <div className="form-notice" role="status">{message}</div>}
           {mode === 'update' && !user && <div className="form-notice" role="status">Open the secure reset link from your email to continue here.</div>}

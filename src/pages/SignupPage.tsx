@@ -9,6 +9,8 @@ import { useSiteStatus } from '../components/site/SiteStatusContext'
 import { useToast } from '../contexts/ToastContext'
 import { localPreviewEnabled, supabaseConfigured } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
+import { TurnstileWidget, type TurnstileHandle } from '../components/TurnstileWidget'
+import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from '../lib/disposable-email'
 
 import { MIN_PASSWORD_LENGTH } from '../lib/auth-rules'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -46,6 +48,9 @@ export default function SignupPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const nameInput = useRef<HTMLInputElement>(null)
   const passwordInput = useRef<HTMLInputElement>(null)
+  const captcha = useRef<TurnstileHandle>(null)
+  const resendCaptcha = useRef<TurnstileHandle>(null)
+  const [checkingEmail, setCheckingEmail] = useState(false)
 
   const clearFieldError = (key: string) => setFieldErrors(current => {
     if (!current[key]) return current
@@ -94,7 +99,13 @@ export default function SignupPage() {
     if (loading) return
     clearError()
     if (step === 1) {
-      if (!validateStep1()) return
+      if (checkingEmail || !validateStep1()) return
+      setCheckingEmail(true)
+      const disposable = await isDisposableEmail(email).finally(() => setCheckingEmail(false))
+      if (disposable) {
+        setFieldErrors(current => ({ ...current, email: DISPOSABLE_EMAIL_MESSAGE }))
+        return
+      }
       setStep(2)
       requestAnimationFrame(() => passwordInput.current?.focus())
       return
@@ -102,12 +113,21 @@ export default function SignupPage() {
     if (!validate()) return
     setLoading(true)
     try {
-      const result = await signUp(email, password, displayName)
+      const captchaToken = await captcha.current?.getToken()
+      const result = await signUp(email, password, displayName, captchaToken)
       if (result.needsEmailConfirmation) setSentTo(email.trim())
       else navigate('/', { replace: true })
     } catch (submitError) {
-      notify(submitError instanceof Error ? submitError.message : 'Could not create the account. Try again.', 'error')
+      const message = submitError instanceof Error ? submitError.message : 'Could not create the account. Try again.'
+      if (message === DISPOSABLE_EMAIL_MESSAGE) {
+        // Back to step 1 with the reason under the email field.
+        setStep(1)
+        clearError()
+        setFieldErrors(current => ({ ...current, email: DISPOSABLE_EMAIL_MESSAGE }))
+      }
+      notify(message, 'error')
     } finally {
+      captcha.current?.reset()
       setLoading(false)
     }
   }
@@ -116,11 +136,13 @@ export default function SignupPage() {
     if (!sentTo || resending) return
     setResending(true)
     try {
-      await resendConfirmation(sentTo)
+      const captchaToken = await resendCaptcha.current?.getToken()
+      await resendConfirmation(sentTo, captchaToken)
       notify('Confirmation email sent again. Check your inbox.')
     } catch (resendError) {
       notify(resendError instanceof Error ? resendError.message : 'Could not resend the email. Try again in a moment.', 'error')
     } finally {
+      resendCaptcha.current?.reset()
       setResending(false)
     }
   }
@@ -148,6 +170,7 @@ export default function SignupPage() {
           <Button variant="secondary" onClick={() => void resend()} loading={resending}>Resend the email</Button>
           <Link className="button button-primary" to="/login">Go to log in <ArrowRight size={16} aria-hidden="true" /></Link>
         </div>
+        <TurnstileWidget ref={resendCaptcha} action="resend" />
         {error && <div className="form-error" role="alert">{error}</div>}
         <p className="auth-success-note">Wrong address? <button type="button" className="text-button" onClick={() => { setSentTo(null); setStep(1); clearError() }}>Use a different email</button></p>
       </div> : <>
@@ -211,10 +234,11 @@ export default function SignupPage() {
           <ul className="auth-perks">
             {PERKS.map(perk => <li key={perk}><Check size={13} strokeWidth={3} aria-hidden="true" /> <span>{perk}</span></li>)}
           </ul>
+          {step === 2 && supabaseConfigured && <TurnstileWidget ref={captcha} action="signup" />}
           {error && <div className="form-error" role="alert">{error}</div>}
           {!supabaseConfigured && !localPreviewEnabled && <div className="form-error" role="status">Supabase is not configured, so accounts cannot be created yet. Add the public project URL and anon key to the deployment environment, then redeploy.</div>}
           {step === 1 ? (
-            <Button type="submit" className="auth-submit" size="lg">
+            <Button type="submit" className="auth-submit" size="lg" loading={checkingEmail}>
               Next <ArrowRight size={17} aria-hidden="true" />
             </Button>
           ) : (

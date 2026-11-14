@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, Sparkles } from 'lucide-react'
 import { Button, Field } from '../components/ui'
@@ -12,6 +12,7 @@ import { safeAppPath } from '../lib/safe-path'
 import { noticeTokenUserId, readNoticeToken, type AccountNotice } from '../lib/account-notices'
 import { banNoticeForDevice, discardLocalAccountData } from '../lib/account-notices-client'
 import { AccountNoticeDialog, BannedSignInBlock } from '../components/AccountNoticeDialog'
+import { TurnstileWidget, type TurnstileHandle } from '../components/TurnstileWidget'
 
 /**
  * Dedicated log-in page. Registration lives on /signup and password recovery on
@@ -27,6 +28,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const captcha = useRef<TurnstileHandle>(null)
 
   // Where the guard interrupted a request, so a deep link survives the sign-in round trip.
   // Only same-origin paths are replayed — never an absolute or protocol-relative target.
@@ -74,11 +76,14 @@ export default function LoginPage() {
     setBanned(null)
     setLoading(true)
     try {
-      await signIn(email, password)
+      const captchaToken = await captcha.current?.getToken()
+      await signIn(email, password, captchaToken)
       navigate(destination, { replace: true })
     } catch {
       // The context already exposes a friendly message; nothing else to do here.
     } finally {
+      // Turnstile tokens are single-use: always start a fresh check for the next attempt.
+      captcha.current?.reset()
       setLoading(false)
     }
   }
@@ -123,6 +128,7 @@ export default function LoginPage() {
         </Field>
         {banned && <BannedSignInBlock notice={banned.notice} />}
         {error && !banned && <div className="form-error" role="alert">{error}</div>}
+        {supabaseConfigured && <TurnstileWidget ref={captcha} action="login" />}
         {!supabaseConfigured && !localPreviewEnabled && <div className="form-error" role="status">Supabase is not configured. Add the public project URL and anon key to the deployment environment, then redeploy.</div>}
         <Button type="submit" className="auth-submit" size="lg" loading={loading || authLoading} disabled={!supabaseConfigured && !localPreviewEnabled}>
           Open my notebook <ArrowRight size={17} aria-hidden="true" />

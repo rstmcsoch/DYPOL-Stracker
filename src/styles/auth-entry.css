@@ -278,3 +278,8 @@
   align-items: center;
   justify-content: center;
 }
+
+/* Cloudflare Turnstile: invisible unless Cloudflare asks for a click; then a full-width box. */
+.turnstile-slot { width: 100%; min-width: 0; }
+.turnstile-slot:empty { display: none; }
+.turnstile-slot iframe { max-width: 100%; }
