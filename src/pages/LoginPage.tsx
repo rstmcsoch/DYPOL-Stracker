@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, Sparkles } from 'lucide-react'
 import { Button, Field } from '../components/ui'
@@ -9,6 +9,8 @@ import { useSiteStatus } from '../components/site/SiteStatusContext'
 import { localPreviewEnabled, supabaseConfigured } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
 import { safeAppPath } from '../lib/safe-path'
+import { readNoticeToken, signInRefusal } from '../lib/account-notices'
+import { banNoticeForDevice } from '../lib/account-notices-client'
 
 /**
  * Dedicated log-in page. Registration lives on /signup and password recovery on
@@ -32,6 +34,17 @@ export default function LoginPage() {
     : '/'
   const safeTarget = safeAppPath(requested)
   const destination = safeTarget.startsWith('/login') || safeTarget.startsWith('/signup') || safeTarget.startsWith('/reset-password') ? '/' : safeTarget
+
+  // Sent here after a suspension sign-out, or because a session ended: if this device last held
+  // a now-banned account, explain why (one small check, only when a device token exists).
+  const [suspended, setSuspended] = useState<string | null>(null)
+  const cameFromApp = typeof location.state === 'object' && location.state !== null && ('suspended' in location.state || 'from' in location.state)
+  useEffect(() => {
+    if (!cameFromApp || !readNoticeToken()) return
+    let active = true
+    void banNoticeForDevice().then(notice => { if (active && notice) setSuspended(signInRefusal(notice)) }).catch(() => undefined)
+    return () => { active = false }
+  }, [cameFromApp])
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -62,6 +75,7 @@ export default function LoginPage() {
       </div>
 
  {!siteStatus.signinEnabled && <div className="form-notice" role="status">Sign-in is paused right now. Please try again later.</div>}
+      {suspended && <div className="form-error account-suspended" role="alert"><strong>Account suspended.</strong> {suspended}</div>}
       {supabaseConfigured && <GoogleAuthButton intent="signin" next={destination} disabled={loading} />}
 
       <form className="form-stack auth-form" onSubmit={submit} noValidate>

@@ -99,6 +99,10 @@
       "destination": "/api/control/accounts?route=user"
     },
     {
+      "source": "/api/control/user-sanction",
+      "destination": "/api/control/accounts?route=user-sanction"
+    },
+    {
       "source": "/api/control/overview",
       "destination": "/api/control/system?route=overview"
     },

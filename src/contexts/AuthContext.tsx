@@ -4,6 +4,8 @@ import type { User } from '@supabase/supabase-js'
 import { localPreviewEnabled, supabase } from '../lib/supabase'
 import { loginFailureReason, track } from '../lib/telemetry/client'
 import { displayNameFromMetadata, userAuthProviders } from '../lib/google-auth'
+import { banNoticeForCredentials } from '../lib/account-notices-client'
+import { signInRefusal } from '../lib/account-notices'
 
 export interface AppUser {
   id: string
@@ -52,6 +54,10 @@ function userFromSupabase(user: User): AppUser {
     isLocal: false,
     providers: userAuthProviders(user.app_metadata)
   }
+}
+
+function isBannedAuthError(error: { message?: string; code?: string }): boolean {
+  return error.code === 'user_banned' || /user is banned|user banned/i.test(error.message ?? '')
 }
 
 function friendlyAuthError(message: string): string {
@@ -130,6 +136,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      if (signInError && isBannedAuthError(signInError)) {
+        // Supabase Auth says "banned" before it checks the password, so the details are only
+        // shown once the database has proven the password itself. Otherwise: a normal refusal.
+        track('login_failed', { reason: 'other' })
+        const check = await banNoticeForCredentials(email, password)
+        const message = check.kind === 'banned' ? signInRefusal(check.notice)
+          : check.kind === 'limited' ? 'Too many attempts. Wait a few minutes, then try again.'
+            : check.kind === 'unproven' ? 'Email or password is incorrect. Please try again.'
+              : 'We could not complete that sign-in. Please try again.'
+        setError(message)
+        throw new Error(message)
+      }
       if (signInError) {
         track('login_failed', { reason: loginFailureReason(signInError.message) })
         const message = friendlyAuthError(signInError.message)

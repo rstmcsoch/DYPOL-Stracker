@@ -33,6 +33,9 @@ export const PERMISSIONS = [
   'messages.manage',
   'users.view',
   'users.manage',
+  'users.warn',
+  'users.ban',
+  'users.delete',
   'analytics.view',
   'analytics.manage',
   'audit.view',
@@ -56,7 +59,10 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { id: 'messages.view', area: 'Messages', label: 'Read messages', description: 'Read Contact page messages and their attachments.' },
   { id: 'messages.manage', area: 'Messages', label: 'Manage messages', description: 'Mark, archive and delete messages.' },
   { id: 'users.view', area: 'Users', label: 'View users', description: 'Search the account directory and open account details.' },
-  { id: 'users.manage', area: 'Users', label: 'Suspend or restore users', description: 'Turn sign-in off or on for a student account.' },
+  { id: 'users.manage', area: 'Users', label: 'Quiet suspend (legacy)', description: 'Older sign-in switch for a student account, without a notice. Ban replaces it.' },
+  { id: 'users.warn', area: 'Users', label: 'Warn users', description: 'Send a student a warning they see once on their dashboard. Does not block access.' },
+  { id: 'users.ban', area: 'Users', label: 'Ban or unban users', description: 'Suspend a lower-ranked account permanently or until a set time, with a reason, and lift it.' },
+  { id: 'users.delete', area: 'Users', label: 'Delete users', description: 'Permanently delete a lower-ranked account, its study data and its files. Owner only by default.' },
   { id: 'analytics.view', area: 'Analytics', label: 'View analytics', description: 'Traffic, signups, activity, performance and errors.' },
   { id: 'analytics.manage', area: 'Analytics', label: 'Configure analytics', description: 'Change alert thresholds and analytics settings, export CSV.' },
   { id: 'audit.view', area: 'Audit log', label: 'View audit log', description: 'Read the audit log of console actions.' },
@@ -107,4 +113,21 @@ export function effectivePermissions(
 /** Roles an actor may give or remove. Only the owner manages Owner and Admin roles. */
 export function assignableRoles(actorRole: ControlRole): ControlRole[] {
   return actorRole === 'owner' ? [...CONTROL_ROLES] : ['moderator', 'viewer']
+}
+
+/** Seniority used for account actions. Students (no role) rank lowest. */
+export const ROLE_RANK: Record<ControlRole | 'student', number> = { owner: 4, administrator: 3, moderator: 2, viewer: 1, student: 0 }
+
+export type SanctionRefusal = 'self_action_blocked' | 'owner_protected' | 'rank_protected'
+
+/**
+ * Whether `actorRole` may warn, ban or delete an account holding `targetRole` (null = student).
+ * Nobody acts on the owner or on themselves; everyone else needs strictly higher rank. The owner
+ * outranks every other role. Returns null when allowed, or the refusal code.
+ */
+export function sanctionRefusal(actor: { id: string; role: ControlRole }, target: { id: string; role: ControlRole | null }): SanctionRefusal | null {
+  if (actor.id === target.id) return 'self_action_blocked'
+  if (target.role === 'owner') return 'owner_protected'
+  if (ROLE_RANK[actor.role] <= ROLE_RANK[target.role ?? 'student']) return 'rank_protected'
+  return null
 }

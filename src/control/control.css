@@ -744,3 +744,24 @@ textarea.cc-input { resize: vertical; min-height: 84px; }
 .cc-sidebar__brand .cc-brand--compact img { width: 34px; height: 34px; }
 .cc-sidebar__brand .cc-brand strong { font-size: 18.2px; line-height: 1.2; letter-spacing: -.01em; }
 @media (max-width: 767px) { .cc-sidebar__brand .cc-brand--compact img { width: 43px; height: 43px; } }
+
+/* Account actions (warn / ban / delete) on the user detail page */
+.cc-user-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -4px 0 14px; }
+.cc-sanctions { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.cc-sanction { padding: 12px 14px; border: 1px solid var(--cc-border-soft); border-left: 3px solid var(--cc-border-strong); border-radius: 6px; background: var(--cc-input); }
+.cc-sanction--ban { border-left-color: var(--cc-crit); }
+.cc-sanction--warning { border-left-color: var(--cc-warn); }
+.cc-sanction--unban, .cc-sanction--ban_ended { border-left-color: var(--cc-ok); }
+.cc-sanction__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13.5px; }
+.cc-sanction__meta { margin: 6px 0 0; font-size: 13px; font-weight: 600; }
+.cc-sanction__reason { margin: 6px 0 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cc-sanction__seen { margin: 6px 0 0; font-size: 12.5px; }
+.cc-ban-length { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; min-width: 0; }
+.cc-ban-length legend { font-size: 13px; font-weight: 600; margin-bottom: 8px; padding: 0; }
+.cc-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.cc-chip { min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--cc-border); background: var(--cc-input); color: var(--cc-text); font: 600 13px var(--cc-font); cursor: pointer; }
+.cc-chip:hover { border-color: var(--cc-border-strong); background: var(--cc-hover); }
+.cc-chip.is-active { background: var(--cc-accent-soft); border-color: var(--cc-accent); color: var(--cc-text); }
+.cc-chip:focus-visible { outline: 2px solid var(--cc-focus); outline-offset: 2px; }
+.cc-inline-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.cc-ban-length__preview { margin: 0; font-size: 13px; min-height: 1.3em; }

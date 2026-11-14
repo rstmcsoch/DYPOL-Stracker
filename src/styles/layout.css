@@ -255,3 +255,20 @@
 .site-notice strong { font-weight: 700; }
 .maintenance-page .not-found-mark { color: var(--accent, var(--ink)); }
 .maintenance-page .maintenance-foot { font-size: 13px; color: var(--ink-soft); }
+
+/* One-time account notices (warning / suspension) and the sign-in suspension message */
+.account-notice-body { display: flex; align-items: flex-start; gap: 12px; }
+.account-notice-body p { margin: 2px 0 0; color: var(--ink-soft); }
+.account-notice-icon { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; color: var(--accent); background: var(--accent-light); }
+.account-notice--ban .account-notice-icon { color: var(--red); background: var(--red-bg); }
+.account-notice--unban .account-notice-icon, .account-notice--ban_ended .account-notice-icon { color: var(--green); background: var(--green-bg); }
+.account-notice-reason { margin-top: 14px; padding: 10px 12px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--paper-soft, transparent); }
+.account-notice--ban .account-notice-reason { border-left-color: var(--red); }
+.account-notice-reason p { margin: 4px 0 0; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.account-notice-meta { margin: 12px 0 0; color: var(--muted); }
+.account-notice .dialog-actions { margin-top: 18px; }
+.account-suspended { margin-bottom: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.account-notice--warning .account-notice-icon { color: var(--orange); background: var(--orange-bg); }
+.account-notice--warning .account-notice-reason { border-left-color: var(--orange); }
+/* Account notices outrank every other dialog, including first-run setup. */
+.dialog-backdrop:has(> .account-notice) { z-index: 260; }

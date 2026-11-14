@@ -9,6 +9,7 @@ import { AIProvider } from './contexts/AIContext'
 import { FocusProvider } from './contexts/FocusContext'
 import { ToastProvider } from './contexts/ToastContext'
 import { AppFrame } from './components/AppShell'
+import { AccountNoticeGate } from './components/AccountNoticeGate'
 import { LoaderCircle } from 'lucide-react'
 import { TelemetryTracker } from './components/TelemetryTracker'
 import NotFoundPage from './pages/NotFoundPage'
@@ -78,7 +79,7 @@ function ProtectedApp() {
         </FocusProvider>
       </AppearanceProvider>
     </AIProvider>
-  </DataProvider></SiteGate>
+  </DataProvider>{/* After the app in the DOM so its popup sits above any other dialog. */}{!user.isLocal && <AccountNoticeGate key={user.id} />}</SiteGate>
 }
 
 /**
