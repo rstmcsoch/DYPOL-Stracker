@@ -467,7 +467,7 @@ function EmailDomainsTab({ domains }: { domains: EmailDomains | null }) {
       {addForm('allow')}
     </Panel>
     <Panel title="Blocked" description="New accounts with these email domains (or their subdomains) are refused, on top of the disposable-domain list. Existing accounts are not affected.">
-      <p className="cc-inline-status">Disposable-domain list: <Badge tone="neutral">{domains.list.count.toLocaleString('en-IN')} domains</Badge>{domains.list.refreshedAt && <small className="cc-muted"> · refreshed {formatDateTime(domains.list.refreshedAt, zone)} · updates weekly</small>}</p>
+      <div className="cc-domain-meta"><span>Disposable-domain list:</span> <Badge tone="neutral">{domains.list.count.toLocaleString('en-IN')} domains</Badge>{domains.list.refreshedAt && <small className="cc-muted">Refreshed {formatDateTime(domains.list.refreshedAt, zone)} · updates weekly</small>}</div>
       <p><a className="cc-link" href={GITHUB_BLOCKLIST_URL} target="_blank" rel="noopener noreferrer">View the list on GitHub <ExternalLink size={13} aria-hidden="true" /></a></p>
       <h3 className="cc-subhead">Added by you ({domains.blocked.length})</h3>
       {customList(domains.blocked, 'block')}
