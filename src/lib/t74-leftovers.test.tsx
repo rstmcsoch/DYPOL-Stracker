@@ -24,38 +24,40 @@ function links(overrides: Record<string, string>, homepageAnchor = false) {
 }
 
 describe('item 1: footer information links', () => {
-  it('ships no page text and keeps the bodies optional', () => {
+  const cleared = { 'public.footer.terms.body': '', 'public.footer.about.body': '', 'public.footer.privacy.body': '' }
+
+  it('ships page text written for Stracker by DYPOL LABS that stays editable and optional', () => {
     for (const kind of ['about', 'terms', 'privacy']) {
-      expect(SITE_CONTENT_DEFAULTS[`public.footer.${kind}.body`]).toBe('')
+      const body = SITE_CONTENT_DEFAULTS[`public.footer.${kind}.body`]!
+      expect(body).toContain('Last updated: 14 November 2026')
+      expect(body).toContain('DYPOL LABS')
+      expect(body).toContain('Contact page')
       const field = SITE_CONTENT_FIELDS.find(item => item.key === `public.footer.${kind}.body`)!
       expect(field.optional).toBe(true)
+      expect(validateFieldValue(field, body)).toEqual({ ok: true, value: body })
       expect(validateFieldValue(field, '')).toEqual({ ok: true, value: '' })
     }
   })
 
-  it('hides About and Terms until written; Privacy falls back to the homepage section', () => {
-    expect(links({}, true)).toEqual([['Privacy', '#privacy']])
-    expect(links({})).toEqual([['Privacy', '/privacy']])
+  it('links all three pages by default; cleared pages hide and Privacy falls back to the homepage section', () => {
+    expect(links({}, true)).toEqual([['Privacy', '/privacy'], ['Terms', '/terms'], ['About', '/about']])
+    expect(links(cleared, true)).toEqual([['Privacy', '#privacy']])
+    expect(links(cleared)).toEqual([['Privacy', '/privacy']])
   })
 
-  it('shows owner-written pages', () => {
-    expect(links({ 'public.footer.terms.body': 'T', 'public.footer.about.body': 'A', 'public.footer.privacy.body': 'P' }, true))
-      .toEqual([['Privacy', '/privacy'], ['Terms', '/terms'], ['About', '/about']])
-  })
-
-  it('renders owner text as paragraphs and 404s an unwritten page', () => {
+  it('renders owner text as paragraphs and 404s a cleared page', () => {
     expect(infoParagraphs('One\n\n Two \n\n\n')).toEqual(['One', 'Two'])
     const { unmount } = render(<MemoryRouter><SiteContentProvider overrides={{ 'public.footer.terms.body': 'First.\n\nSecond.' }}><InfoPage kind="terms" /></SiteContentProvider></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: 'Terms' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Terms & Conditions' })).toBeTruthy()
     expect(screen.getByText('Second.')).toBeTruthy()
     unmount()
-    render(<MemoryRouter><SiteContentProvider overrides={{}}><InfoPage kind="about" /></SiteContentProvider></MemoryRouter>)
+    render(<MemoryRouter><SiteContentProvider overrides={cleared}><InfoPage kind="about" /></SiteContentProvider></MemoryRouter>)
     expect(screen.getByText(/PAGE NOT FOUND/)).toBeTruthy()
   })
 
   it('routes the pages explicitly (no catch-all) and links them from the notebook footer', () => {
     const vercel = JSON.parse(read('vercel.json')) as { rewrites: { source: string; destination: string }[] }
-    for (const path of ['/privacy', '/terms', '/about']) expect(vercel.rewrites).toContainEqual({ source: path, destination: '/index.html' })
+    for (const path of ['/privacy', '/terms', '/about', '/contact']) expect(vercel.rewrites).toContainEqual({ source: path, destination: '/index.html' })
     expect(vercel.rewrites.some(rule => rule.source === '/(.*)')).toBe(false)
     expect(read('src/components/AppShell.tsx')).toContain('<InfoLinks />')
   })

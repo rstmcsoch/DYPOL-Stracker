@@ -159,6 +159,14 @@
       "destination": "/api/control/operations?route=analytics"
     },
     {
+      "source": "/api/contact",
+      "destination": "/api/control/operations?route=contact"
+    },
+    {
+      "source": "/api/control/messages",
+      "destination": "/api/control/operations?route=messages"
+    },
+    {
       "source": "/api/control/(.*)",
       "destination": "/api/control/system?route=not-found"
     },
@@ -256,6 +264,10 @@
     },
     {
       "source": "/about",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/contact",
       "destination": "/index.html"
     },
     {

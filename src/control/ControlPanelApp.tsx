@@ -24,6 +24,7 @@ const AppearancePage = lazy(() => import('./appearance/AppearancePage'))
 const ExamsPage = lazy(() => import('./exams/ExamsPage'))
 const AIDefaultsPage = lazy(() => import('./ai/AIDefaultsPage'))
 const AnalyticsPage = lazy(() => import('./analytics/AnalyticsPage'))
+const MessagesPage = lazy(() => import('./messages/MessagesPage'))
 const PublicPreviewPage = lazy(() => import('./appearance/PublicPreviewPage'))
 
 /**
@@ -122,6 +123,7 @@ function ControlRouter() {
             <Route path="exams" element={<ExamsPage />} />
             <Route path="ai" element={<AIDefaultsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="messages" element={<MessagesPage />} />
             <Route path="*" element={<NotInConsole />} />
           </Routes>
         </Suspense>

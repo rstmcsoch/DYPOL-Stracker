@@ -1,4 +1,5 @@
 import { SYLLABUS } from '../syllabus.js'
+import { DEFAULT_ABOUT_BODY, DEFAULT_PRIVACY_BODY, DEFAULT_TERMS_BODY } from './info-page-defaults.js'
 
 /**
  * Registry of owner-editable website and user-panel copy.
@@ -60,7 +61,7 @@ export interface FieldDefinition {
 export const SITE_CONTENT_SCHEMA_VERSION = 1
 
 /** Internal destinations an owner may choose for a link. Routes are the public routes only. */
-export const INTERNAL_ROUTE_TARGETS = ['/', '/login', '/signup', '/reset-password'] as const
+export const INTERNAL_ROUTE_TARGETS = ['/', '/login', '/signup', '/reset-password', '/privacy', '/terms', '/about', '/contact'] as const
 
 /** In-page anchors that exist on the homepage. A link may only point at one of these. */
 export const HOMEPAGE_ANCHOR_TARGETS = [
@@ -433,30 +434,32 @@ field('public', 'Footer', 'Links', 'public.footer.privacy.label', 'Link label: P
 field('public', 'Footer', 'Links', 'public.footer.study.label', 'Link label: Study system', 'text', 'Study system', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.dypol.label', 'Link label: DYPOL LABS', 'text', 'DYPOL LABS', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.top.label', 'Link label: Back to top', 'text', 'Back to top', { maxLength: 40 })
-// Contact: there is no published contact address, so none is invented. The link is hidden until the
-// owner enters a real one (an email as mailto:name@example.com, or an https:// contact page).
+// Contact: the footer Contact link opens the built-in /contact page, whose messages arrive in
+// Control Center → Messages. No email address is invented; the owner may point the link at a
+// real address (mailto:) or another https:// page instead.
 field('public', 'Footer', 'Links', 'public.footer.contact.label', 'Link label: Contact', 'text', 'Contact', { maxLength: 40 })
-field('public', 'Footer', 'Links', 'public.footer.contact.href', 'Contact address (optional)', 'link', '', {
+field('public', 'Footer', 'Links', 'public.footer.contact.href', 'Contact link override (optional)', 'link', '', {
   optional: true, maxLength: 200,
-  help: 'Leave empty to hide the Contact link. Use mailto: followed by one email address, or a full https:// contact page.'
+  help: 'Leave empty to use the built-in Contact page (messages arrive in Control Center → Messages). Or use mailto: followed by one email address, or a full https:// contact page.'
 })
-// Information pages (/about, /terms, /privacy). No page text is built in: About and Terms stay
-// hidden (link and page) until the owner writes them here. Privacy falls back to the homepage
-// Privacy section above, which is existing owner-editable copy.
-const INFO_PAGE_MAX = 12000
+// Information pages (/about, /terms, /privacy). They ship with text written for Stracker by
+// DYPOL LABS (info-page-defaults.ts); the owner can rewrite it here. Clearing About or Terms
+// hides that page; clearing Privacy shows the homepage Privacy section there instead.
+const INFO_PAGE_MAX = 20000
+const INFO_FORMAT_HELP = 'A blank line starts a new paragraph. Start a paragraph with "## " for a heading, or start each line with "- " for a list.'
 field('public', 'Footer', 'Information pages', 'public.footer.about.label', 'Link label: About', 'text', 'About', { maxLength: 40 })
-field('public', 'Footer', 'Information pages', 'public.footer.about.body', 'About page text (optional)', 'multiline', '', {
+field('public', 'Footer', 'Information pages', 'public.footer.about.body', 'About page text', 'multiline', DEFAULT_ABOUT_BODY, {
   optional: true, maxLength: INFO_PAGE_MAX,
-  help: 'Shown at /about. Leave empty to hide the About link and page. A blank line starts a new paragraph.'
+  help: `Shown at /about. Clear it to hide the About link and page. ${INFO_FORMAT_HELP}`
 })
 field('public', 'Footer', 'Information pages', 'public.footer.terms.label', 'Link label: Terms', 'text', 'Terms', { maxLength: 40 })
-field('public', 'Footer', 'Information pages', 'public.footer.terms.body', 'Terms page text (optional)', 'multiline', '', {
+field('public', 'Footer', 'Information pages', 'public.footer.terms.body', 'Terms page text', 'multiline', DEFAULT_TERMS_BODY, {
   optional: true, maxLength: INFO_PAGE_MAX,
-  help: 'Shown at /terms. Leave empty to hide the Terms link and page. A blank line starts a new paragraph.'
+  help: `Shown at /terms. Clear it to hide the Terms link and page. ${INFO_FORMAT_HELP}`
 })
-field('public', 'Footer', 'Information pages', 'public.footer.privacy.body', 'Privacy page text (optional)', 'multiline', '', {
+field('public', 'Footer', 'Information pages', 'public.footer.privacy.body', 'Privacy page text', 'multiline', DEFAULT_PRIVACY_BODY, {
   optional: true, maxLength: INFO_PAGE_MAX,
-  help: 'Shown at /privacy. Leave empty to show the homepage Privacy section there instead. A blank line starts a new paragraph.'
+  help: `Shown at /privacy. Clear it to show the homepage Privacy section there instead. ${INFO_FORMAT_HELP}`
 })
 
 /* ------------------------------------------------------------- user panel */

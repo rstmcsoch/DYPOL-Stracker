@@ -23,7 +23,7 @@ export interface AuditActionDefinition {
   /** Short noun phrase for menus. */
   label: string
   /** Where it is used in the console. */
-  group: 'Access' | 'Accounts' | 'Appearance' | 'Audit log' | 'Roles' | 'Exams' | 'Analytics' | 'Stracker AI'
+  group: 'Access' | 'Accounts' | 'Appearance' | 'Audit log' | 'Roles' | 'Exams' | 'Analytics' | 'Stracker AI' | 'Messages'
   /** Plain-language sentence per outcome; `{target}` is replaced with the target label. */
   sentence: Record<AuditOutcome, string>
 }
@@ -78,6 +78,8 @@ export const AUDIT_ACTIONS: readonly AuditActionDefinition[] = [
   { action: 'site_ai.provider_remove', label: 'Stracker AI model removed', group: 'Stracker AI', sentence: { success: 'Removed Stracker AI model {target}', denied: 'Removing Stracker AI model {target} refused', failed: 'Removing Stracker AI model {target} failed' } },
   { action: 'site_ai.settings', label: 'Stracker AI settings saved', group: 'Stracker AI', sentence: { success: 'Saved Stracker AI availability and limits', denied: 'Saving Stracker AI settings refused', failed: 'Saving Stracker AI settings failed' } },
   { action: 'ai.model_preferences.update', label: 'AI default models edited', group: 'Exams', sentence: { success: 'Edited the AI default model lists', denied: 'Editing AI default models refused', failed: 'Editing AI default models failed' } },
+  { action: 'message.status', label: 'Contact message updated', group: 'Messages', sentence: { success: 'Changed the status of contact message {target}', denied: 'Changing contact message {target} refused', failed: 'Changing contact message {target} failed' } },
+  { action: 'message.delete', label: 'Contact message deleted', group: 'Messages', sentence: { success: 'Deleted contact message {target}', denied: 'Deleting contact message {target} refused', failed: 'Deleting contact message {target} failed' } },
   { action: 'exam.reorder', label: 'Exams reordered', group: 'Exams', sentence: { success: 'Changed the exam order', denied: 'Reordering exams refused', failed: 'Reordering exams failed' } },
   {
     action: 'audit.export',

@@ -7,6 +7,8 @@ import { mediaUploadHandler } from '../_lib/control-routes/media.js'
 import { examsHandler } from '../_lib/control-routes/exams.js'
 import { analyticsIngestHandler } from '../_lib/control-routes/analytics-ingest.js'
 import { analyticsHandler } from '../_lib/control-routes/analytics.js'
+import { contactHandler } from '../_lib/control-routes/contact.js'
+import { messagesHandler } from '../_lib/control-routes/messages.js'
 
 type Handler = (req: ApiRequest, res: ApiResponse) => Promise<void>
 const handlers: Record<string, Handler> = {
@@ -24,6 +26,9 @@ const handlers: Record<string, Handler> = {
   // Public write-only event intake for first-party analytics (no auth; allowlisted, rate limited).
   'analytics-ingest': analyticsIngestHandler,
   analytics: analyticsHandler,
+  // Public contact form intake (no auth; validated, rate limited, honeypot) and the owner-only inbox.
+  contact: contactHandler,
+  messages: messagesHandler,
 }
 
 /** Dispatch related Control Center endpoints through one Vercel serverless function. */

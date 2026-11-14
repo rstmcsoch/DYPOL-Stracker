@@ -58,7 +58,14 @@ function PublicThemeToggle({ theme, onToggle }: { theme: PublicTheme; onToggle: 
  * Public-site header: wordmark, section navigation, independent theme action, and
  * account actions. The mobile trigger keeps its existing close behaviours and menu.
  */
-export function PublicHeader({ theme, onThemeToggle }: { theme: PublicTheme; onThemeToggle: () => void }) {
+export function PublicHeader({ theme, onThemeToggle, sectionPrefix = '', signedIn = false }: {
+  theme: PublicTheme
+  onThemeToggle: () => void
+  /** '' on the homepage; '/' on other public pages so section links return to the homepage. */
+  sectionPrefix?: '' | '/'
+  /** Signed-in visitors of a public page get one "Open notebook" action instead of Log in / Sign up. */
+  signedIn?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const t = useSiteText
   const panelRef = useRef<HTMLDivElement>(null)
@@ -91,12 +98,16 @@ export function PublicHeader({ theme, onThemeToggle }: { theme: PublicTheme; onT
     <div className="pub-header-inner">
       <PublicBrand />
       <nav className="pub-nav" aria-label="Stracker sections">
-        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-nav-link" href={section.href}>{t(section.key)}</a>)}
+        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-nav-link" href={`${sectionPrefix}${section.href}`}>{t(section.key)}</a>)}
       </nav>
       <PublicThemeToggle theme={theme} onToggle={onThemeToggle} />
       <div className="pub-header-actions">
-        <Link className="button button-quiet button-sm" to="/login">{t('public.header.login.label')}</Link>
-        <Link className="button button-primary button-sm" to="/signup">{t('public.header.signup.label')}</Link>
+        {signedIn
+          ? <Link className="button button-primary button-sm" to="/">Open notebook</Link>
+          : <>
+            <Link className="button button-quiet button-sm" to="/login">{t('public.header.login.label')}</Link>
+            <Link className="button button-primary button-sm" to="/signup">{t('public.header.signup.label')}</Link>
+          </>}
       </div>
       <button
         ref={triggerRef}
@@ -112,11 +123,15 @@ export function PublicHeader({ theme, onThemeToggle }: { theme: PublicTheme; onT
     </div>
     {open && <div className="pub-menu" id="stracker-public-menu" ref={panelRef}>
       <nav className="pub-menu-nav" aria-label="Stracker sections">
-        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-menu-link" href={section.href} onClick={() => setOpen(false)}>{t(section.key)}</a>)}
+        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-menu-link" href={`${sectionPrefix}${section.href}`} onClick={() => setOpen(false)}>{t(section.key)}</a>)}
       </nav>
       <div className="pub-menu-actions">
-        <Link className="button button-secondary" to="/login" onClick={() => setOpen(false)}>{t('public.header.login.label')}</Link>
-        <Link className="button button-primary" to="/signup" onClick={() => setOpen(false)}>{t('public.header.signup.label')}</Link>
+        {signedIn
+          ? <Link className="button button-primary" to="/" onClick={() => setOpen(false)}>Open notebook</Link>
+          : <>
+            <Link className="button button-secondary" to="/login" onClick={() => setOpen(false)}>{t('public.header.login.label')}</Link>
+            <Link className="button button-primary" to="/signup" onClick={() => setOpen(false)}>{t('public.header.signup.label')}</Link>
+          </>}
       </div>
     </div>}
   </header>
