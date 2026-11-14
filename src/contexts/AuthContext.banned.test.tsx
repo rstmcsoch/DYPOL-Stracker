@@ -25,10 +25,10 @@ vi.mock('../lib/telemetry/client', () => ({ track: vi.fn(), loginFailureReason: 
 const { AuthProvider, useAuth } = await import('./AuthContext')
 
 function Probe() {
-  const { signIn, error } = useAuth()
+  const { signIn, error, suspension } = useAuth()
   return <>
     <button onClick={() => { void signIn('Banned@Example.com ', 'secret-pass').catch(() => undefined) }}>go</button>
-    <output>{error ?? 'none'}</output>
+    <output>{suspension ? `BANNED|${suspension.permanent ? 'permanent' : suspension.until}|${suspension.reason}` : error ?? 'none'}</output>
   </>
 }
 
@@ -50,13 +50,13 @@ describe('sign-in refusal for a banned account', () => {
   it('shows the end time (IST) and reason once the database proves the password', async () => {
     auth.rpcResult = { kind: 'ban', reason: 'Repeated spam', until: '2026-11-20T10:30:00Z', permanent: false }
     const out = await attempt()
-    expect(out.textContent).toBe('This account is suspended until 20 Nov 2026, 4:00 pm IST. Reason: Repeated spam')
+    expect(out.textContent).toBe('BANNED|2026-11-20T10:30:00Z|Repeated spam')
     expect(auth.rpcCalls).toEqual([{ name: 'account_ban_notice_for_credentials', args: { email: 'Banned@Example.com', password: 'secret-pass' } }])
   })
 
   it('says permanently for a permanent ban', async () => {
     auth.rpcResult = { kind: 'ban', reason: 'Fraud', until: null, permanent: true }
-    expect((await attempt()).textContent).toBe('This account is suspended permanently. Reason: Fraud')
+    expect((await attempt()).textContent).toBe('BANNED|permanent|Fraud')
   })
 
   it('reveals nothing when the password is not proven (same text as a wrong password)', async () => {

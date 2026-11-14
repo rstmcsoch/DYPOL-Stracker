@@ -272,3 +272,10 @@
 .account-notice--warning .account-notice-reason { border-left-color: var(--orange); }
 /* Account notices outrank every other dialog, including first-run setup. */
 .dialog-backdrop:has(> .account-notice) { z-index: 260; }
+
+/* Sign-in page: banned account block under the password field */
+.auth-banned-block { display: flex; gap: 10px; align-items: flex-start; padding: 11px 12px; border: 1px solid #e4c5c0; border-left: 4px solid var(--red); border-radius: 9px; color: var(--ink); background: var(--red-bg); font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.auth-banned-block strong { display: block; color: var(--red); font-size: 14px; letter-spacing: .2px; }
+.auth-banned-block p { margin: 3px 0 0; }
+.auth-banned-block__icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: var(--red); background: rgba(255, 255, 255, .55); }
+.auth-banned-block__label { font-weight: 700; }

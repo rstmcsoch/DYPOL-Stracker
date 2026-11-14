@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { clearLocalUserData } from './database'
 import { parseNotice, readNoticeToken, storeNoticeToken, type AccountNotice } from './account-notices'
 
 /**
@@ -8,10 +9,25 @@ import { parseNotice, readNoticeToken, storeNoticeToken, type AccountNotice } fr
 export async function fetchMyNotice(): Promise<AccountNotice | null> {
   if (!supabase) return null
   const { data, error } = await supabase.rpc('my_account_notice')
-  if (error || !data || typeof data !== 'object') return null
+  if (error) {
+    // The session itself may be gone (revoked at ban time, or refresh refused with user_banned).
+    // The device token still lets this device learn about its own ban.
+    return banNoticeForDevice()
+  }
+  if (!data || typeof data !== 'object') return null
   const payload = data as { notice?: unknown; token?: unknown }
   storeNoticeToken(payload.token)
   return parseNotice(payload.notice)
+}
+
+/**
+ * Discards everything this device holds for the account: cached study rows, unsynced edits
+ * (the outbox) and cached images. The next sign-in reloads the server copy, so edits made
+ * while banned vanish. The database refuses or skips them as well.
+ */
+export async function discardLocalAccountData(userId: string | null | undefined): Promise<void> {
+  if (!userId) return
+  await clearLocalUserData(userId).catch(() => undefined)
 }
 
 export async function acknowledgeNotice(id: string | undefined): Promise<void> {

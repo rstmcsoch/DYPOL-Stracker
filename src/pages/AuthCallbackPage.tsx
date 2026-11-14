@@ -6,8 +6,6 @@ import { supabase } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
 import { parseOAuthCallbackError, takeOAuthNext, type OAuthCallbackProblem } from '../lib/google-auth'
 import { track } from '../lib/telemetry/client'
-import { banNoticeForDevice } from '../lib/account-notices-client'
-import { signInRefusal } from '../lib/account-notices'
 
 /**
  * Landing page for the Google (OAuth, PKCE) round trip.
@@ -21,20 +19,16 @@ import { signInRefusal } from '../lib/account-notices'
 export default function AuthCallbackPage() {
   usePageMeta('Signing you in — Stracker', 'Finishing sign-in to Stracker.')
   const navigate = useNavigate()
-  const [problem, setProblem] = useState<(OAuthCallbackProblem & { detailed?: boolean }) | null>(() => typeof window === 'undefined' ? null : parseOAuthCallbackError(window.location.search, window.location.hash))
+  const [problem, setProblem] = useState<OAuthCallbackProblem | null>(() => typeof window === 'undefined' ? null : parseOAuthCallbackError(window.location.search, window.location.hash))
 
   useEffect(() => {
     if (problem) {
       // Drop the error parameters so a reload does not repeat the message.
       window.history.replaceState(null, '', window.location.pathname)
-      if (problem.kind === 'suspended' && !problem.detailed) {
-        // Google returns no identity for a banned account. If this device last held the
-        // account (signed token from the dashboard), the details can be shown safely.
-        let active = true
-        void banNoticeForDevice().then(notice => {
-          if (active && notice) setProblem({ kind: 'suspended', message: signInRefusal(notice), detailed: true })
-        }).catch(() => undefined)
-        return () => { active = false }
+      if (problem.kind === 'suspended') {
+        // Google returns no identity for a banned account. The sign-in page explains it (popup and
+        // the block under the password field), using this device's token when it has one.
+        navigate('/login', { replace: true, state: { suspended: 'google' } })
       }
       return
     }
