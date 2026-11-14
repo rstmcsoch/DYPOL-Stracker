@@ -223,3 +223,8 @@ export function useAuth(): AuthContextValue {
   if (!context) throw new Error('useAuth must be used inside AuthProvider')
   return context
 }
+
+/** The signed-in user when an AuthProvider is present, otherwise null (public pages and tests). */
+export function useOptionalUser(): AppUser | null {
+  return useContext(AuthContext)?.user ?? null
+}

@@ -169,10 +169,10 @@ describe('item 28: optional footer Contact link', () => {
     expect(contactLinkKind('#privacy')).toBe('anchor')
   })
 
-  it('the public footer hides Contact by default and shows it once the owner sets an address', async () => {
+  it('the public footer links the built-in Contact page by default and the owner address once set', async () => {
     const { PublicFooter } = await import('../components/public/PublicFooter')
     renderAt(<SiteContentProvider overrides={{}}><PublicFooter /></SiteContentProvider>)
-    expect(screen.queryByRole('link', { name: 'Contact' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Contact' }).getAttribute('href')).toBe('/contact')
     cleanup()
     renderAt(<SiteContentProvider overrides={{ 'public.footer.contact.href': 'mailto:hello@example.com' }}><PublicFooter /></SiteContentProvider>)
     expect(screen.getByRole('link', { name: 'Contact' }).getAttribute('href')).toBe('mailto:hello@example.com')

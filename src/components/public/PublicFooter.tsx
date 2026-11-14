@@ -6,14 +6,15 @@ import { ContactLink } from './ContactLink'
 import { InfoLinks } from './InfoLinks'
 
 /**
- * Public footer. Every entry points at a route or an anchor that exists in this
- * application — there are no placeholder links, social stubs, or dead pages.
+ * Public footer, on the homepage and the public information pages. Every entry points at a
+ * route or an anchor that exists in this application — there are no placeholder links,
+ * social stubs, or dead pages. Off the homepage, section anchors lead back to the homepage.
  */
-export function PublicFooter() {
+export function PublicFooter({ sectionPrefix = '' }: { sectionPrefix?: '' | '/' }) {
   const year = new Date().getFullYear()
   const t = useSiteText
-  // Shown only when the owner has published a contact address; none is built in.
-  const contactSet = useSiteText('public.footer.contact.href').trim() !== ''
+  const onHome = sectionPrefix === ''
+  const at = (anchor: string) => `${sectionPrefix}${anchor}`
   return <footer className="pub-footer">
     <div className="pub-footer-inner">
       <div className="pub-footer-brand">
@@ -24,9 +25,9 @@ export function PublicFooter() {
         <div className="pub-footer-group">
           <h2>{t('public.footer.group_product.title')}</h2>
           <ul>
-            <li><a href="#features">{t('public.footer.features.label')}</a></li>
-            <li><a href="#ai">{t('public.footer.ai.label')}</a></li>
-            <li><a href="#how-it-works">{t('public.footer.how.label')}</a></li>
+            <li><a href={at('#features')}>{t('public.footer.features.label')}</a></li>
+            <li><a href={at('#ai')}>{t('public.footer.ai.label')}</a></li>
+            <li><a href={at('#how-it-works')}>{t('public.footer.how.label')}</a></li>
           </ul>
         </div>
         <div className="pub-footer-group">
@@ -40,15 +41,15 @@ export function PublicFooter() {
         <div className="pub-footer-group">
           <h2>{t('public.footer.group_information.title')}</h2>
           <ul>
-            <InfoLinks homepageAnchor wrap={(node, kind) => <li key={kind}>{node}</li>} />
-            <li><a href="#why-stracker">{t('public.footer.study.label')}</a></li>
-            {contactSet && <li><ContactLink /></li>}
+            <InfoLinks homepageAnchor={onHome} wrap={(node, kind) => <li key={kind}>{node}</li>} />
+            <li><a href={at('#why-stracker')}>{t('public.footer.study.label')}</a></li>
+            <li><ContactLink /></li>
           </ul>
         </div>
         <div className="pub-footer-group">
           <h2>{t('public.footer.group_brand.title')}</h2>
           <ul>
-            <li><a href="#dypol-labs">{t('public.footer.dypol.label')}</a></li>
+            <li><a href={at('#dypol-labs')}>{t('public.footer.dypol.label')}</a></li>
             <li><a href="#top">{t('public.footer.top.label')} <ArrowUp size={13} aria-hidden="true" /></a></li>
           </ul>
         </div>

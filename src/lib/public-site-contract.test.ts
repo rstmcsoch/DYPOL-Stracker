@@ -81,7 +81,8 @@ describe('public navigation integrity', () => {
   })
 
   it('only links to anchors that exist on the page', () => {
-    const anchors = matchAll(publicSources, /href="#([^"]+)"/g)
+    // Footer section links are written as at('#id') so they also work from the information pages.
+    const anchors = [...matchAll(publicSources, /href="#([^"]+)"/g), ...matchAll(publicSources, /href=\{at\('#([^']+)'\)\}/g)]
     expect(anchors.length).toBeGreaterThan(8)
     for (const anchor of anchors) expect(publicSources, `#${anchor} has no target`).toContain(`id="${anchor}"`)
   })

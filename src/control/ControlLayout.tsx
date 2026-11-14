@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { ChevronsLeft, ChevronDown, Menu, Search, LogOut, ShieldCheck, LayoutDashboard, Users, KeyRound, ShieldAlert, ScrollText, Activity, Info, Palette, GraduationCap, BarChart3, Sparkles } from 'lucide-react'
+import { ChevronsLeft, ChevronDown, Menu, Search, LogOut, ShieldCheck, LayoutDashboard, Users, KeyRound, ShieldAlert, ScrollText, Activity, Info, Palette, GraduationCap, BarChart3, Sparkles, Inbox } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { controlFetch } from './api'
 import { useControlSession } from './ControlSession'
 import { CommandLauncher } from './CommandLauncher'
 import { NAV_GROUPS, activeNavItem, breadcrumbsFor, CONSOLE_BASE, documentTitleFor, secondsUntilIdle, formatCountdown, type NavIcon } from './policy'
@@ -21,7 +23,20 @@ const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
   appearance: Palette,
   exams: GraduationCap,
   analytics: BarChart3,
-  ai: Sparkles
+  ai: Sparkles,
+  messages: Inbox
+}
+
+/** Unread contact messages for the sidebar badge. Polls gently; failures just hide the badge. */
+function useUnreadMessages(): number {
+  const { data } = useQuery({
+    queryKey: ['control', 'messages', 'unread'],
+    queryFn: () => controlFetch<{ unread: number }>('messages?summary=1'),
+    refetchInterval: 60_000,
+    retry: false,
+    staleTime: 20_000
+  })
+  return typeof data?.unread === 'number' ? data.unread : 0
 }
 
 /** Keeps the browser tab title in step with client-side navigation. */
@@ -49,6 +64,7 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
   const session = phase.kind === 'granted' ? phase.session : null
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const { dirty } = useUnsavedChanges()
+  const unread = useUnreadMessages()
   /** Asks before navigating away from a screen with unsaved edits. */
   const leaveAllowed = () => !dirty || window.confirm(UNSAVED_MESSAGE)
 
@@ -93,11 +109,14 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
                 const Icon = ICONS[item.icon]
                 const to = item.to ? `${CONSOLE_BASE}/${item.to}` : CONSOLE_BASE
                 const active = current?.to === item.to
+                const badge = item.icon === 'messages' && unread > 0 ? (unread > 99 ? '99+' : String(unread)) : null
                 return (
                   <NavLink key={item.to || 'overview'} to={to} end={item.to === ''} className={active ? 'is-active' : ''} title={collapsed ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={event => { if (!leaveAllowed()) event.preventDefault() }}>
                     <Icon size={18} aria-hidden="true" />
                     <span className="cc-nav__text">{item.label}</span>
+                    {badge && <span className="cc-nav__count" aria-hidden="true">{badge}</span>}
                     {collapsed && <span className="cc-sr-only">{item.label}</span>}
+                    {badge && <span className="cc-sr-only">, {unread} unread</span>}
                   </NavLink>
                 )
               })}
