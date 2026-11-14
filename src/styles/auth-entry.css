@@ -215,16 +215,16 @@
 }
 
 .auth-step-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  gap: 6px;
   margin-top: 3px;
 }
 
-.auth-step-actions .auth-submit { flex: 1 1 12rem; margin-top: 0; }
+.auth-step-actions .auth-submit { width: 100%; margin-top: 0; }
 
 .auth-step-back {
+  order: -1;
+  justify-self: start;
   min-height: 40px;
   padding: 4px 2px;
 }
