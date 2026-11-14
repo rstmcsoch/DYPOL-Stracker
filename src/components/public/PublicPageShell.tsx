@@ -23,7 +23,7 @@ export function PublicPageShell({ title, description, children }: { title: strin
   // Footer and sibling links are client-side navigations, so the browser keeps the old scroll
   // position. Open every public page at its top unless the link targets a section on it.
   useLayoutEffect(() => {
-    if (!hash) window.scrollTo(0, 0)
+    if (!hash) window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
   }, [pathname, hash])
 
   return <div className="pub-page pub-subpage" id="top" data-public-theme={theme} data-owner-accent={ownerAccent ? '' : undefined} data-owner-font={ownerFont !== 'identity' ? ownerFont : undefined} style={ownerAccent}>

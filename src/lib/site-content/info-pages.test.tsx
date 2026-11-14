@@ -61,7 +61,7 @@ describe('public page navigation', () => {
     render(<MemoryRouter initialEntries={["/privacy"]}><SiteContentProvider overrides={{}}><InfoPage kind="privacy" /></SiteContentProvider></MemoryRouter>)
     scrollTo.mockClear()
     fireEvent.click(screen.getByRole('navigation', { name: /more about stracker/i }).querySelector('a[href="/terms"]')!)
-    expect(scrollTo).toHaveBeenCalledWith(0, 0)
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'instant' })
     scrollTo.mockRestore()
   })
 })
