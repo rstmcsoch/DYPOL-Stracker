@@ -5,6 +5,8 @@ import { fetchCustomProvider } from './secure-fetch.js'
 import {
   AIError, normalizeHttpProviderError, normalizeUnknownError, parseProviderErrorBody, safeProviderText
 } from './ai-errors.js'
+import { logAIEvent } from './diagnostics.js'
+import { isThreeDevFailure, threeDevRoute, type ThreeDevRoute, type ThreeDevTrace } from './three-dev.js'
 
 export interface AgentMessage {
   role: 'user' | 'assistant' | 'tool'
@@ -50,6 +52,8 @@ export interface ProviderCall {
   signal: AbortSignal
   onDelta: (text: string) => void
   maxOutputTokens?: number
+  /** three.dev session/tags. Only calls that carry it may go through three.dev (see three-dev.ts). */
+  trace?: ThreeDevTrace
 }
 
 export interface ProviderCompletion {
@@ -74,10 +78,32 @@ async function readErrorBody(response: Response): Promise<string> {
   try { return (await response.text()).slice(0, MAX_ERROR_BODY_CHARS) } catch { return '' }
 }
 
-async function checkedFetch(config: Pick<ProviderCall, 'providerId' | 'modelId' | 'signal'>, url: string, init: RequestInit, custom = false): Promise<Response> {
+/**
+ * Send through three.dev; on a three.dev-side failure (unreachable proxy, a proxy error code, or a
+ * 5xx from in front of it) repeat the same request directly, so the student still gets an answer.
+ * This happens inside one provider attempt, before any text streams, so nothing is counted twice.
+ */
+async function fetchViaThreeDev(config: ProviderCall, route: ThreeDevRoute, directUrl: string, init: RequestInit): Promise<Response> {
+  let reason: string
+  try {
+    const proxied = await fetch(route.url, { ...init, headers: { ...(init.headers as Record<string, string>), ...route.headers }, redirect: 'error' })
+    if (!isThreeDevFailure(proxied)) return proxied
+    reason = proxied.headers.get('x-three-error-code') || `http_${proxied.status}`
+    try { await proxied.body?.cancel() } catch { /* already closed */ }
+  } catch (error) {
+    if (init.signal?.aborted) throw error
+    reason = 'unreachable'
+  }
+  logAIEvent('warn', 'three_dev_fallback_direct', { provider: config.providerId, model: config.modelId, reason: reason.slice(0, 64) })
+  return fetch(directUrl, { ...init, redirect: 'error' })
+}
+
+async function checkedFetch(config: ProviderCall, url: string, init: RequestInit, custom = false): Promise<Response> {
   let response: Response
   try {
-    response = custom ? await fetchCustomProvider(url, init) : await fetch(url, { ...init, redirect: 'error' })
+    const route = custom ? null : threeDevRoute(config, url, config.trace)
+    response = route ? await fetchViaThreeDev(config, route, url, init)
+      : custom ? await fetchCustomProvider(url, init) : await fetch(url, { ...init, redirect: 'error' })
   } catch (error) {
     if (init.signal?.aborted) throw error
     throw normalizeUnknownError(error, { provider: config.providerId, model: config.modelId })
@@ -203,7 +229,11 @@ async function callOpenAICompatible(config: ProviderCall): Promise<ProviderCompl
     body.tools = config.tools.map(tool => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.inputSchema } }))
     body.tool_choice = 'auto'
   }
-  const response = await checkedFetch(config, endpointFor(base, 'chat/completions'), {
+  const url = endpointFor(base, 'chat/completions')
+  // three.dev records tokens/cost for streamed Chat Completions only when usage is requested. The
+  // extra final chunk has empty `choices`, which the reader below already skips.
+  if (config.providerId === 'openai' && threeDevRoute(config, url, config.trace)) body.stream_options = { include_usage: true }
+  const response = await checkedFetch(config, url, {
     method: 'POST', headers: jsonHeaders(config), body: JSON.stringify(body), signal: config.signal
   }, config.providerId === 'custom')
   let text = ''
@@ -483,13 +513,15 @@ export function providerCallFromConfig(
   tools: ModelTool[],
   signal: AbortSignal,
   onDelta: (text: string) => void,
-  maxOutputTokens = 1200
+  maxOutputTokens = 1200,
+  trace?: ThreeDevTrace
 ): ProviderCall {
   const base = providerBaseUrl({ providerId: config.provider_id, baseUrl: config.base_url, region: config.provider_config?.region === 'china' ? 'china' : 'international' })
   return {
     providerId: config.provider_id, protocol: config.protocol, modelId: config.model_id,
     baseUrl: base, apiKey, organizationId: config.organization_id,
-    system, messages, tools, signal, onDelta, maxOutputTokens
+    system, messages, tools, signal, onDelta, maxOutputTokens,
+    ...(trace ? { trace } : {})
   }
 }
 

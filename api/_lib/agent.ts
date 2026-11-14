@@ -11,6 +11,7 @@ import {
   readSiteProviders, readSiteSettings, readStoredPreference, takeStrackerSlot, type AIPreference, type SiteAISettings
 } from './stracker-default.js'
 import { MODEL_TOOLS, prepareToolCall, toolProgress, type ActionPreview } from './tools.js'
+import { threeDevSessionId } from './three-dev.js'
 
 export interface AgentEventSink {
   (event: string, data: Record<string, unknown>): void
@@ -517,7 +518,10 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
         offerTools ? offeredTools : [],
         signal,
         text => { onProviderDelta.push(text); noteActivity(); input.emit('delta',{ text }) },
-        answerTokenLimit(input.message, taskType(input.message), limits)
+        answerTokenLimit(input.message, taskType(input.message), limits),
+        // three.dev (only used when THREE_DEV_API_KEY is set): hashed conversation as the session,
+        // plus enum tags. No user id, email or message text.
+        { sessionId:threeDevSessionId(input.conversationId),tags:{ 'model-source':isSiteRow(selected) ? 'stracker-default' : 'own-model','task-type':taskType(input.message),'tools':offerTools ? 'offered' : 'none' } }
       )), silentMs, fullMs)
       await refreshProviderHealth(input.adminClient,input.userId,selected)
       lastProvider = selected
