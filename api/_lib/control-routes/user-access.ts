@@ -22,7 +22,7 @@ const bodySchema = z.object({
  * verification in the last 15 minutes. Owners and the acting owner cannot be suspended here.
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['POST'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['POST'], { requireAal2: true, permission: 'users.manage' }, async context => {
     const parsed = bodySchema.safeParse(await readJson(req, 4_000))
     if (!parsed.success) throw new ApiError(400, 'invalid_request', parsed.error.issues[0]?.message ?? 'Check the account action and try again.')
     const { userId, action, reason, confirmEmail } = parsed.data

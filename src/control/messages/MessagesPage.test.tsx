@@ -79,8 +79,9 @@ describe('Messages tab wiring', () => {
     expect(items.find(item => item.label === 'Messages')).toMatchObject({ to: 'messages', icon: 'messages' })
     expect(activeNavItem('/control-panel/messages')?.label).toBe('Messages')
     const app = readFileSync(`${process.cwd()}/src/control/ControlPanelApp.tsx`, 'utf8')
-    expect(app).toContain('<Route path="messages" element={<MessagesPage />} />')
+    expect(app).toContain('<Route path="messages" element={need(\'messages.view\', <MessagesPage />)} />')
     expect(readFileSync(`${process.cwd()}/src/control/ControlLayout.tsx`, 'utf8')).toContain("controlFetch<{ unread: number }>('messages?summary=1')")
+    expect(items.find(item => item.label === 'Messages')?.permission).toBe('messages.view')
   })
 
   it('renders only http(s) links and builds a reply mailto', () => {

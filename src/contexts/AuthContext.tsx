@@ -60,6 +60,8 @@ function friendlyAuthError(message: string): string {
   if (normalized.includes('email not confirmed')) return 'Confirm your email before signing in.'
   if (normalized.includes('too many requests')) return 'Too many attempts. Wait a moment, then try again.'
   if (normalized.includes('failed to fetch') || normalized.includes('network')) return 'Could not reach the sign-in service. Check your connection and try again.'
+  // Raised inside Supabase Auth by the console's sign-in / sign-up switches (database triggers).
+  if (normalized.includes('database error')) return 'Sign-in is paused right now. Please try again later.'
   return 'We could not complete that authentication request. Please try again.'
 }
 
@@ -67,6 +69,7 @@ function friendlyAuthError(message: string): string {
 function friendlySignUpError(message: string): string {
   const normalized = message.toLowerCase()
   if (normalized.includes('already registered') || normalized.includes('already been registered')) return 'Could not create a new account with those details. If you already use Stracker, log in or reset the password.'
+  if (normalized.includes('database error')) return 'New sign-ups are paused right now. Please try again later.'
   if (normalized.includes('signups not allowed') || normalized.includes('signup disabled')) return 'This deployment does not allow new accounts to be created yet. Enable email sign-ups in Supabase Auth, or sign in with an existing account.'
   if (normalized.includes('password should be') || normalized.includes('password is too short')) return 'Use at least 8 characters for your password.'
   if (normalized.includes('unable to validate email') || normalized.includes('invalid email')) return 'That email address does not look right. Check it and try again.'

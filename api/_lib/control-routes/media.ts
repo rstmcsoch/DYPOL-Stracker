@@ -21,7 +21,7 @@ const mediaBody = z.object({
 }).strict()
 
 export async function mediaUploadHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['POST'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['POST'], { requireAal2: true, permission: 'appearance.edit' }, async context => {
     const parsed = mediaBody.safeParse(await readJson(req, 2_000))
     if (!parsed.success) throw new ApiError(400, 'invalid_request', 'Describe the file as an image or video with its type and size.')
     const { kind, mime, bytes } = parsed.data

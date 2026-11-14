@@ -19,7 +19,11 @@ describe('analytics owner route', () => {
     let body = ''
     const res = { statusCode: 0, setHeader: () => undefined, end: (text: string) => { body = text } }
     await analyticsHandler({ method: 'GET', url: '/api/control/operations?route=analytics&report=overview', headers: {} } as never, res as never)
-    expect(seen.options).toEqual({ requireAal2: true })
+    const options = seen.options as { requireAal2: boolean; permission: (req: unknown) => string }
+    expect(options.requireAal2).toBe(true)
+    expect(options.permission({ method: 'GET', url: '/x?report=overview' })).toBe('analytics.view')
+    expect(options.permission({ method: 'GET', url: '/x?report=overview&format=csv' })).toBe('analytics.manage')
+    expect(options.permission({ method: 'PUT', url: '/x' })).toBe('analytics.manage')
     expect(seen.methods).toEqual(['GET', 'PUT'])
     expect(res.statusCode).toBe(401)
     expect(body).toContain('unauthenticated')

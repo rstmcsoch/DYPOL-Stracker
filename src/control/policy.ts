@@ -9,13 +9,17 @@ export const RECENT_MFA_SECONDS = 15 * 60
 
 export const CONSOLE_BASE = '/control-panel'
 
-export type NavIcon = 'overview' | 'users' | 'roles' | 'security' | 'audit' | 'health' | 'about' | 'appearance' | 'exams' | 'analytics' | 'ai' | 'messages'
+import type { Permission } from '../lib/control-permissions'
+
+export type NavIcon = 'overview' | 'users' | 'roles' | 'security' | 'audit' | 'health' | 'about' | 'appearance' | 'exams' | 'analytics' | 'ai' | 'messages' | 'settings'
 
 export interface NavItem {
   to: string
   label: string
   icon: NavIcon
   description: string
+  /** Shown (and routable) only for role holders with this permission; null = every role holder. */
+  permission: Permission | null
 }
 
 export interface NavGroup {
@@ -31,37 +35,42 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Command',
     items: [
-      { to: '', label: 'Overview', icon: 'overview', description: 'Operational summary and warnings' },
-      { to: 'messages', label: 'Messages', icon: 'messages', description: 'Contact page messages: read, reply, archive and delete' }
+      { to: '', label: 'Overview', icon: 'overview', description: 'Operational summary and warnings', permission: 'overview.view' },
+      { to: 'messages', label: 'Messages', icon: 'messages', description: 'Contact page messages: read, reply, archive and delete', permission: 'messages.view' }
     ]
   },
   {
     label: 'People',
     items: [
-      { to: 'users', label: 'Users', icon: 'users', description: 'Account directory and account actions' },
-      { to: 'roles', label: 'Access & roles', icon: 'roles', description: 'Who holds administrative roles' },
-      { to: 'security', label: 'Security center', icon: 'security', description: 'MFA, sessions and access attempts' }
+      { to: 'users', label: 'Users', icon: 'users', description: 'Account directory and account actions', permission: 'users.view' },
+      { to: 'security', label: 'Security center', icon: 'security', description: 'MFA, sessions and access attempts', permission: 'security.view' }
     ]
   },
   {
     label: 'Operations',
     items: [
-      { to: 'analytics', label: 'Analytics', icon: 'analytics', description: 'Traffic, signups, student activity, performance, errors and alerts' },
-      { to: 'audit', label: 'Audit log', icon: 'audit', description: 'Every privileged action and denial' },
-      { to: 'health', label: 'System health', icon: 'health', description: 'Database, auth and configuration checks' }
+      { to: 'analytics', label: 'Analytics', icon: 'analytics', description: 'Traffic, signups, student activity, performance, errors and alerts', permission: 'analytics.view' },
+      { to: 'audit', label: 'Audit log', icon: 'audit', description: 'Every privileged action and denial', permission: 'audit.view' },
+      { to: 'health', label: 'System health', icon: 'health', description: 'Database, auth and configuration checks', permission: 'health.view' }
     ]
   },
   {
     label: 'Experience',
     items: [
-      { to: 'appearance', label: 'Appearance', icon: 'appearance', description: 'Website and notebook copy: edit, preview, publish and restore' },
-      { to: 'exams', label: 'Exams', icon: 'exams', description: 'Exams students can choose: add, edit, remove and reorder' },
-      { to: 'ai', label: 'Stracker AI', icon: 'ai', description: 'Default AI model for all students, availability and limits' }
+      { to: 'appearance', label: 'Appearance', icon: 'appearance', description: 'Website and notebook copy: edit, preview, publish and restore', permission: 'appearance.edit' },
+      { to: 'exams', label: 'Exams', icon: 'exams', description: 'Exams students can choose: add, edit, remove and reorder', permission: 'exams.manage' },
+      { to: 'ai', label: 'Stracker AI', icon: 'ai', description: 'Default AI model for all students, availability and limits', permission: 'ai.manage' }
+    ]
+  },
+  {
+    label: 'Admin',
+    items: [
+      { to: 'settings', label: 'Settings', icon: 'settings', description: 'Site status, sign-up and sign-in, security, roles and permissions', permission: null }
     ]
   },
   {
     label: 'Help',
-    items: [{ to: 'about', label: 'Help & About', icon: 'about', description: 'Console policy, credits and version' }]
+    items: [{ to: 'about', label: 'Help & About', icon: 'about', description: 'Console policy, credits and version', permission: null }]
   }
 ]
 
@@ -77,6 +86,22 @@ export function documentTitleFor(pathname: string, detailLabel?: string): string
 }
 
 export const ALL_NAV_ITEMS = NAV_GROUPS.flatMap(group => group.items)
+
+/** True when a nav item (or its route) is open to someone with these permissions. */
+export function navAllowed(item: Pick<NavItem, 'permission'>, permissions: readonly string[]): boolean {
+  return item.permission === null || permissions.includes(item.permission)
+}
+
+/** Navigation groups trimmed to what this role holder may open (empty groups dropped). */
+export function visibleNavGroups(permissions: readonly string[]): NavGroup[] {
+  return NAV_GROUPS.map(group => ({ ...group, items: group.items.filter(item => navAllowed(item, permissions)) })).filter(group => group.items.length > 0)
+}
+
+/** Where a role holder lands when the Overview is not part of their role. */
+export function firstAllowedPath(permissions: readonly string[]): string {
+  const item = ALL_NAV_ITEMS.find(entry => navAllowed(entry, permissions))
+  return `${CONSOLE_BASE}${item && item.to ? `/${item.to}` : ''}`
+}
 
 /** Maps a pathname under /control-panel to the matching nav item (longest match wins). */
 export function activeNavItem(pathname: string): NavItem | null {

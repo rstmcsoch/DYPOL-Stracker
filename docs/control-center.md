@@ -194,6 +194,39 @@ Storage: `supabase/migrations/20261010120000_site_content_publishing.sql` (`site
 `site_content_published`, `site_content_versions`, and `site_content_commit`). The migration is
 additive and must be applied before publishing works; until then the site shows its defaults.
 
+## Settings, roles and permissions
+
+Sidebar → **Settings** (`/control-panel/settings/*`) has horizontal tabs. Each tab only appears with its permission, and the server refuses the matching action without it.
+
+| Tab | Permission | What it does |
+| --- | --- | --- |
+| Site status | `settings.site` | Maintenance notice (banner) and **site down** (themed maintenance page for visitors and students; log in, `/auth/callback` and the console stay reachable; signed-in role holders keep using the site with a staff banner). |
+| Sign-up & sign-in | `settings.access` | Turn new sign-ups and sign-ins off/on. |
+| Security | every role holder | Change your own password; sign-in methods; **owner only:** passkeys. |
+| Roles & members | `roles.manage` | Give a role by email, change it, remove it. |
+| Permissions | owner only | Role × permission matrix and per-person allow/deny overrides. |
+| Activity | `audit.view` | Last 50 settings and role changes. |
+
+Roles: Owner, Admin (`administrator`), Manager, Support, Viewer (`analyst`). Defaults live in `control_role_permissions` (seeded by migration `20261114120000_control_settings_rbac`) and follow least privilege: Viewer reads, Support handles messages and reads users, Manager adds user/content work, Admin everything except permission editing. **The owner always has every permission** and cannot be changed, demoted or removed by anyone; only the owner can grant Owner/Admin or edit the matrix and overrides.
+
+**Every save needs a fresh authenticator code.** The client prompts for a TOTP before each save; the server (`requireStepUp`) accepts the write only if the session's TOTP verification is ≤ 120 s old and that verification has not been used before (`control_step_up_uses`, unique per user/session/verification time). Replays get `step_up_used`.
+
+**Granting** a role deletes any existing MFA factors and overrides, so the person must enroll a new authenticator on first console visit. **Removing** a role revokes it at once: overrides, MFA factors and passkeys are deleted and all their sessions are revoked (`control_revoke_user_sessions`). A re-grant needs a fresh enrollment.
+
+### Where things are enforced
+
+| Control | Server / database | UI only |
+| --- | --- | --- |
+| Console access (role, aal2, per-route permission) | every `/api/control/*` route (`authorizeControl`) | sidebar, command launcher and routes are also hidden |
+| Settings writes | permission + step-up on the server; owner protections on the server | prompts |
+| Sign-ups off | trigger on `auth.users` (`signups_paused`) — covers email and Google | sign-up page notice |
+| Sign-ins off | trigger on `auth.sessions` (`signins_paused`), role holders exempt; existing sessions are kept | log-in page notice |
+| Site down | AI chat and contact APIs refuse (`site_down`) | maintenance page. Student data reads through Supabase/RLS are **not** blocked by site-down. |
+
+### Passkeys (owner)
+
+Uses Supabase passkeys (`supabase.auth.registerPasskey`). The Settings → Security panel reads `passkeys_enabled` from the project; while it is off it explains how to turn it on (Supabase → Authentication → Passkeys, relying party ID `dypol-stracker.vercel.app`, origin `https://dypol-stracker.vercel.app`). Adding is preceded by a step-up (`passkey.authorize`, audited); removing goes through the server. A passkey only proves the account — the console still needs the TOTP (aal2).
+
 ## Not implemented yet
 
 Administrator, Support and Analyst permission sets; feature flags; announcements; exam, subject

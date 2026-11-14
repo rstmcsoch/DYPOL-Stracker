@@ -1,3 +1,4 @@
+import { isControlRole, type ControlRole } from '../../src/lib/control-permissions.js'
 /**
  * Pure policy helpers for the Stracker Control Center. Nothing in this module touches the
  * network or the database, so the rules that decide access, MFA freshness, audit contents
@@ -19,12 +20,19 @@ export const DENIED_AUDIT_LIMIT = { limit: 20, windowSeconds: 600 }
 /** Signed-out attempts per client-IP hash per minute. */
 export const ANONYMOUS_LIMIT = { limit: 60, windowSeconds: 60 }
 
-export const CONTROL_ROLES = ['owner', 'administrator', 'support', 'analyst'] as const
-export type ControlRole = (typeof CONTROL_ROLES)[number]
+export { CONTROL_ROLES, type ControlRole } from '../../src/lib/control-permissions.js'
 
-/** Only the owner has an implemented permission set today. Other roles grant nothing. */
-export function roleGrantsConsole(role: string | null | undefined, revokedAt: string | null | undefined): boolean {
-  return role === 'owner' && !revokedAt
+/** Any active (not revoked) known role opens the console; what it may do is the permission set. */
+export function roleGrantsConsole(role: string | null | undefined, revokedAt: string | null | undefined): role is ControlRole {
+  return isControlRole(role) && !revokedAt
+}
+
+/** A settings save needs an authenticator verification no older than this (step-up). */
+export const STEP_UP_MAX_AGE_SECONDS = 120
+
+/** True when the session's newest TOTP verification is fresh enough to authorize one save. */
+export function isFreshStepUp(mfaTimestamp: number | null, nowSeconds: number): boolean {
+  return isRecentMfa(mfaTimestamp, nowSeconds, STEP_UP_MAX_AGE_SECONDS)
 }
 
 export interface AmrEntry { method?: unknown; timestamp?: unknown }

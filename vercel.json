@@ -115,6 +115,10 @@
       "destination": "/api/control/security?route=roles"
     },
     {
+      "source": "/api/control/settings",
+      "destination": "/api/control/security?route=settings"
+    },
+    {
       "source": "/api/control/audit",
       "destination": "/api/control/operations?route=audit"
     },

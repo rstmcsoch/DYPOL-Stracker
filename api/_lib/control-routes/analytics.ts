@@ -83,7 +83,7 @@ async function maintain(context: ControlContext): Promise<void> {
 }
 
 export async function analyticsHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['GET', 'PUT'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['GET', 'PUT'], { requireAal2: true, permission: req2 => (req2.method === 'PUT' || new URL(req2.url ?? '/', 'http://localhost').searchParams.get('format') === 'csv') ? 'analytics.manage' : 'analytics.view' }, async context => {
     if (req.method === 'PUT') { await save(req, res, context); return }
     const params = new URL(req.url ?? '/', 'http://localhost').searchParams
     const { report, preset, filters } = parseFilters(params)

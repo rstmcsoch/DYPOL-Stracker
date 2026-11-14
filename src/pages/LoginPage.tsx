@@ -5,6 +5,7 @@ import { Button, Field } from '../components/ui'
 import { AuthScaffold } from '../components/public/AuthScaffold'
 import { GoogleAuthButton } from '../components/GoogleAuthButton'
 import { useAuth } from '../contexts/AuthContext'
+import { useSiteStatus } from '../components/site/SiteStatusContext'
 import { localPreviewEnabled, supabaseConfigured } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
 import { safeAppPath } from '../lib/safe-path'
@@ -16,6 +17,7 @@ import { safeAppPath } from '../lib/safe-path'
 export default function LoginPage() {
   usePageMeta('Log in — Stracker', 'Log in to your private Stracker notebook.')
   const { signIn, startLocalPreview, error, clearError, loading: authLoading } = useAuth()
+  const { status: siteStatus } = useSiteStatus()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
@@ -59,6 +61,7 @@ export default function LoginPage() {
         <div><span className="eyebrow">ACCOUNT ACCESS</span><h2 id="login-title">Log in to Stracker</h2></div>
       </div>
 
+ {!siteStatus.signinEnabled && <div className="form-notice" role="status">Sign-in is paused right now. Please try again later.</div>}
       {supabaseConfigured && <GoogleAuthButton intent="signin" next={destination} disabled={loading} />}
 
       <form className="form-stack auth-form" onSubmit={submit} noValidate>
@@ -90,7 +93,7 @@ export default function LoginPage() {
         </Button>
         <div className="auth-form-links">
           <Link className="text-button" to="/reset-password">Forgot your password?</Link>
-          <Link className="text-button" to="/signup">Create an account</Link>
+          {siteStatus.signupEnabled && <Link className="text-button" to="/signup">Create an account</Link>}
         </div>
       </form>
 

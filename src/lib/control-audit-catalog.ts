@@ -23,7 +23,7 @@ export interface AuditActionDefinition {
   /** Short noun phrase for menus. */
   label: string
   /** Where it is used in the console. */
-  group: 'Access' | 'Accounts' | 'Appearance' | 'Audit log' | 'Roles' | 'Exams' | 'Analytics' | 'Stracker AI' | 'Messages'
+  group: 'Access' | 'Accounts' | 'Appearance' | 'Audit log' | 'Roles' | 'Exams' | 'Analytics' | 'Stracker AI' | 'Messages' | 'Settings'
   /** Plain-language sentence per outcome; `{target}` is replaced with the target label. */
   sentence: Record<AuditOutcome, string>
 }
@@ -87,6 +87,15 @@ export const AUDIT_ACTIONS: readonly AuditActionDefinition[] = [
     group: 'Audit log',
     sentence: { success: 'Exported the audit log', denied: 'Audit export refused', failed: 'Audit export failed' }
   },
+  { action: 'settings.site', label: 'Site status changed', group: 'Settings', sentence: { success: 'Changed the site status (maintenance / site down)', denied: 'Changing the site status refused', failed: 'Changing the site status failed' } },
+  { action: 'settings.access', label: 'Sign-up / sign-in switches changed', group: 'Settings', sentence: { success: 'Changed the sign-up and sign-in switches', denied: 'Changing sign-up / sign-in refused', failed: 'Changing sign-up / sign-in failed' } },
+  { action: 'role.assign', label: 'Role given', group: 'Roles', sentence: { success: 'Gave a console role to {target}', denied: 'Giving a role to {target} refused', failed: 'Giving a role to {target} failed' } },
+  { action: 'role.remove', label: 'Role removed', group: 'Roles', sentence: { success: 'Removed the console role of {target} and ended their access', denied: 'Removing the role of {target} refused', failed: 'Removing the role of {target} failed' } },
+  { action: 'permissions.role', label: 'Role permissions changed', group: 'Roles', sentence: { success: 'Changed the permissions of role {target}', denied: 'Changing role permissions refused', failed: 'Changing role permissions failed' } },
+  { action: 'permissions.member', label: 'Personal permissions changed', group: 'Roles', sentence: { success: 'Changed the personal permissions of {target}', denied: 'Changing personal permissions of {target} refused', failed: 'Changing personal permissions of {target} failed' } },
+  { action: 'security.password', label: 'Console password changed', group: 'Settings', sentence: { success: 'Changed their own password', denied: 'Password change refused', failed: 'Password change failed' } },
+  { action: 'security.passkey_add', label: 'Passkey setup authorized', group: 'Settings', sentence: { success: 'Started adding a passkey', denied: 'Adding a passkey refused', failed: 'Adding a passkey failed' } },
+  { action: 'security.passkey_remove', label: 'Passkey removed', group: 'Settings', sentence: { success: 'Removed a passkey', denied: 'Removing a passkey refused', failed: 'Removing a passkey failed' } },
   {
     action: 'owner.provisioned',
     label: 'Owner role provisioned',
@@ -111,7 +120,12 @@ export const AUDIT_ERROR_LABELS: Record<string, string> = {
   self_action_blocked: 'the acting account cannot change itself',
   auth_update_failed: 'the authentication service rejected the change',
   audit_unavailable: 'the audit log was unavailable',
-  invalid_filter: 'a filter was not valid'
+  invalid_filter: 'a filter was not valid',
+  permission_denied: 'the role does not include this permission',
+  step_up_stale: 'no fresh authenticator code was entered for the save',
+  step_up_used: 'the authenticator code had already been used for a save',
+  owner_only: 'only the owner can do this',
+  last_owner: 'the last owner cannot be removed'
 }
 
 export function auditActionDefinition(action: string): AuditActionDefinition | undefined {

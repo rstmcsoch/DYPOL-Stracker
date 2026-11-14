@@ -41,7 +41,7 @@ function preview(text: unknown): string {
 }
 
 export async function messagesHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['GET', 'POST'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['GET', 'POST'], { requireAal2: true, permission: req2 => req2.method === 'GET' ? 'messages.view' : 'messages.manage' }, async context => {
     const admin = context.admin
     if (req.method === 'GET') {
       const params = new URL(req.url ?? '/', 'http://localhost').searchParams

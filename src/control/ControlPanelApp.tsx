@@ -9,13 +9,13 @@ import { ControlThemeRoot } from './ControlTheme'
 import { readControlThemePreference, resolveControlTheme, systemPrefersDark } from '../lib/control-theme'
 import { UnsavedChangesProvider } from './unsaved'
 import { Skeleton } from './ui'
-import { CONSOLE_BASE, CONSOLE_NAME } from './policy'
+import { CONSOLE_BASE, CONSOLE_NAME, firstAllowedPath } from './policy'
+import type { Permission } from '../lib/control-permissions'
 import './control.css'
 
 const OverviewPage = lazy(() => import('./pages/OverviewPage'))
 const UsersPage = lazy(() => import('./pages/UsersPage'))
 const UserDetailPage = lazy(() => import('./pages/UserDetailPage'))
-const RolesPage = lazy(() => import('./pages/RolesPage'))
 const AuditPage = lazy(() => import('./pages/AuditPage'))
 const SecurityPage = lazy(() => import('./pages/SecurityPage'))
 const HealthPage = lazy(() => import('./pages/HealthPage'))
@@ -25,6 +25,7 @@ const ExamsPage = lazy(() => import('./exams/ExamsPage'))
 const AIDefaultsPage = lazy(() => import('./ai/AIDefaultsPage'))
 const AnalyticsPage = lazy(() => import('./analytics/AnalyticsPage'))
 const MessagesPage = lazy(() => import('./messages/MessagesPage'))
+const SettingsPage = lazy(() => import('./settings/SettingsPage'))
 const PublicPreviewPage = lazy(() => import('./appearance/PublicPreviewPage'))
 
 /**
@@ -106,7 +107,11 @@ function ControlRouter() {
 
   // Owner preview of the public homepage: rendered without the console chrome, for the
   // Appearance preview frame only. Access is still the owner gate above and the API check.
+  const permissions = phase.session.permissions ?? []
+  const need = (permission: Permission, element: React.ReactNode) => permissions.includes(permission) ? element : <NotInRole fallback={firstAllowedPath(permissions)} />
+
   if (location.pathname === `${CONSOLE_BASE}/preview/public`) {
+    if (!permissions.includes('appearance.edit')) return <Navigate to={firstAllowedPath(permissions)} replace />
     return (
       <Suspense fallback={<p className="cc-preview-message">Loading preview…</p>}>
         <PublicPreviewPage />
@@ -120,24 +125,37 @@ function ControlRouter() {
       <ControlLayout>
         <Suspense fallback={<div className="cc-page-skeleton"><Skeleton rows={6} height={18} /></div>}>
           <Routes location={location}>
-            <Route index element={<OverviewPage />} />
-            <Route path="users" element={<UsersPage />} />
-            <Route path="users/:userId" element={<UserDetailPage />} />
-            <Route path="roles" element={<RolesPage />} />
-            <Route path="audit" element={<AuditPage />} />
-            <Route path="security" element={<SecurityPage />} />
-            <Route path="health" element={<HealthPage />} />
+            {/* Each page is shown only to role holders whose permissions include it; the API
+                refuses the same requests independently (403 permission_denied). */}
+            <Route index element={permissions.includes('overview.view') ? <OverviewPage /> : firstAllowedPath(permissions) === CONSOLE_BASE ? <NotInRole fallback={`${CONSOLE_BASE}/settings`} /> : <Navigate to={firstAllowedPath(permissions)} replace />} />
+            <Route path="users" element={need('users.view', <UsersPage />)} />
+            <Route path="users/:userId" element={need('users.view', <UserDetailPage />)} />
+            <Route path="roles" element={<Navigate to={`${CONSOLE_BASE}/settings/roles`} replace />} />
+            <Route path="audit" element={need('audit.view', <AuditPage />)} />
+            <Route path="security" element={need('security.view', <SecurityPage />)} />
+            <Route path="health" element={need('health.view', <HealthPage />)} />
             <Route path="about" element={<AboutPage />} />
-            <Route path="appearance/*" element={<AppearancePage />} />
-            <Route path="exams" element={<ExamsPage />} />
-            <Route path="ai" element={<AIDefaultsPage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="messages" element={<MessagesPage />} />
+            <Route path="appearance/*" element={need('appearance.edit', <AppearancePage />)} />
+            <Route path="exams" element={need('exams.manage', <ExamsPage />)} />
+            <Route path="ai" element={need('ai.manage', <AIDefaultsPage />)} />
+            <Route path="analytics" element={need('analytics.view', <AnalyticsPage />)} />
+            <Route path="messages" element={need('messages.view', <MessagesPage />)} />
+            <Route path="settings/*" element={<SettingsPage />} />
             <Route path="*" element={<NotInConsole />} />
           </Routes>
         </Suspense>
       </ControlLayout>
     </ReauthProvider>
+  )
+}
+
+function NotInRole({ fallback }: { fallback: string }) {
+  return (
+    <div className="cc-empty cc-empty--page">
+      <strong>This section is not part of your role.</strong>
+      <p>Ask the owner if you need it. Everything you can use is in the navigation.</p>
+      <a className="cc-btn cc-btn--default cc-btn--md" href={fallback}>Go to your first section</a>
+    </div>
   )
 }
 

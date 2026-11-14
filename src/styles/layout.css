@@ -248,3 +248,10 @@
 /* Weekly goals: going past the target is shown, not hidden behind a full bar. */
 .goal-over-badge { display: inline-flex; align-items: center; margin-left: 7px; padding: 1px 7px; border: 1px solid var(--green); border-radius: 999px; color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); font-size: max(.8125rem, calc(11px * var(--body-scale))); font-weight: 700; white-space: nowrap; }
 .weekly-goal-item.goal-over .goal-numbers > span:first-child { color: var(--green); }
+
+/* Console-controlled maintenance notice (Settings → Site status) and full maintenance page. */
+.site-notice { position: sticky; top: 0; z-index: 60; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 7px 14px; background: var(--ink); color: var(--paper); font-size: 13px; line-height: 1.35; text-align: center; }
+.site-notice svg { flex: none; }
+.site-notice strong { font-weight: 700; }
+.maintenance-page .not-found-mark { color: var(--accent, var(--ink)); }
+.maintenance-page .maintenance-foot { font-size: 13px; color: var(--ink-soft); }

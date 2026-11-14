@@ -12,7 +12,7 @@ import { CONTROL_IDLE_TIMEOUT_SECONDS, isAal2, isRecentMfa } from '../control-po
  * The first granted answer per Auth session is recorded as a successful console access.
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['GET'], { requireAal2: false }, async context => {
+  await controlHandler(req, res, ['GET'], { requireAal2: false, permission: null }, async context => {
     const nowSeconds = Math.floor(Date.now() / 1000)
     const granted = isAal2(context.aal)
     if (granted) await recordSessionGranted(context)
@@ -20,6 +20,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       status: granted ? 'granted' : 'mfa_required',
       userId: context.userId,
       role: context.role,
+      // Only after aal2: what this role holder may open. Before MFA the browser learns nothing more.
+      permissions: granted ? [...context.permissions] : [],
       aal: context.aal,
       recentMfa: isRecentMfa(context.mfaAt, nowSeconds),
       idleTimeoutSeconds: CONTROL_IDLE_TIMEOUT_SECONDS

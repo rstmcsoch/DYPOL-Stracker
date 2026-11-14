@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
+import { assertSiteUp } from '../site-status.js'
 import { z } from 'zod'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { ApiRequest, ApiResponse } from '../http.js'
@@ -215,6 +216,7 @@ async function start(req: ApiRequest, res: ApiResponse, body: unknown): Promise<
   const input = parseStart(body)
   if (input.honeypot) { sendJson(res, 200, { ok: true, id: null, uploads: [] }); return }
   const { url, anonKey, admin } = serviceClient()
+  await assertSiteUp(admin)
   const clientHash = clientKeyHash(req)
   await takeSlot(admin, `contact:${clientHash}`, 'contact-burst', CONTACT_BURST_RATE)
   await takeSlot(admin, `contact:${clientHash}`, 'contact-day', CONTACT_DAILY_RATE)

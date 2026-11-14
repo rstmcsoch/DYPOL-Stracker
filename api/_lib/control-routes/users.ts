@@ -19,7 +19,7 @@ type ProfileRow = { user_id: string; display_name: string | null }
  * Reads Auth account metadata and public profile labels. Never returns study-content rows.
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['GET'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['GET'], { requireAal2: true, permission: 'users.view' }, async context => {
     const params = new URL(req.url ?? '/', 'http://localhost').searchParams
     const search = parseSearch(params.get('q')).toLowerCase()
     const status = parseUserStatus(params.get('status'))

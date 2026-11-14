@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import type { ControlRole, Permission } from '../lib/control-permissions'
 
 export class ControlApiError extends Error {
   readonly status: number
@@ -88,7 +89,9 @@ export async function controlDownload(path: string): Promise<{ blob: Blob; filen
 export interface SessionResponse {
   status: 'granted' | 'mfa_required'
   userId: string
-  role: 'owner'
+  role: ControlRole
+  /** Effective permissions (empty until aal2). The server enforces them on every request. */
+  permissions: Permission[]
   aal: string
   recentMfa: boolean
   idleTimeoutSeconds: number

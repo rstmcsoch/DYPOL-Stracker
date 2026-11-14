@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Search, Users, ArrowRight } from 'lucide-react'
 import { controlFetch, type UsersResponse } from './api'
-import { ALL_NAV_ITEMS, CONSOLE_BASE } from './policy'
+import { ALL_NAV_ITEMS, CONSOLE_BASE, navAllowed } from './policy'
+import { useControlSession } from './ControlSession'
 import { Spinner } from './ui'
 
 interface LauncherEntry { key: string; label: string; detail: string; to: string; kind: 'page' | 'user' }
@@ -27,17 +28,21 @@ export function CommandLauncher({ onClose }: { onClose: () => void }) {
 
   useEffect(() => { input.current?.focus() }, [])
 
+  const { phase } = useControlSession()
+  const permissions = useMemo(() => (phase.kind === 'granted' ? phase.session.permissions ?? [] : []), [phase])
+  const canSearchUsers = permissions.includes('users.view')
   const pages = useMemo<LauncherEntry[]>(() => {
     const needle = query.trim().toLowerCase()
     return ALL_NAV_ITEMS
+      .filter(item => navAllowed(item, permissions))
       .filter(item => !needle || item.label.toLowerCase().includes(needle) || item.description.toLowerCase().includes(needle))
       .map(item => ({ key: `page-${item.to || 'overview'}`, label: item.label, detail: item.description, to: item.to ? `${CONSOLE_BASE}/${item.to}` : CONSOLE_BASE, kind: 'page' as const }))
-  }, [query])
+  }, [query, permissions])
 
   const accounts = useQuery({
     queryKey: ['control', 'launcher-users', debounced],
     queryFn: () => controlFetch<UsersResponse>(`users?q=${encodeURIComponent(debounced)}&pageSize=6`),
-    enabled: debounced.length >= 3,
+    enabled: canSearchUsers && debounced.length >= 3,
     staleTime: 15_000
   })
 

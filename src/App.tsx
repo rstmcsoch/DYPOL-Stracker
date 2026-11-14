@@ -13,6 +13,8 @@ import { LoaderCircle } from 'lucide-react'
 import { TelemetryTracker } from './components/TelemetryTracker'
 import NotFoundPage from './pages/NotFoundPage'
 import { isKnownAppPath } from './lib/app-routes'
+import { SiteStatusProvider } from './components/site/SiteStatusContext'
+import { SiteGate } from './components/site/SiteGate'
 
 const LandingPage = lazy(() => import('./pages/LandingPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
@@ -68,7 +70,7 @@ function ProtectedApp() {
   const location = useLocation()
   if (loading) return <AppLoading />
   if (!user) return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
-  return <DataProvider key={user.id}>
+  return <SiteGate kind="app"><DataProvider key={user.id}>
     <AIProvider>
       <AppearanceProvider>
         <FocusProvider key={user.id}>
@@ -76,7 +78,7 @@ function ProtectedApp() {
         </FocusProvider>
       </AppearanceProvider>
     </AIProvider>
-  </DataProvider>
+  </DataProvider></SiteGate>
 }
 
 /**
@@ -91,7 +93,7 @@ function RootRoute() {
   // Unknown addresses get an in-app 404 for visitors too, instead of silently showing the homepage.
   if (!user && !isKnownAppPath(location.pathname)) return <NotFoundPage signedIn={false} />
   // Published website and notebook copy is loaded once here, for both the homepage and the notebook.
-  if (!user) return <SiteContentProvider><LandingPage /></SiteContentProvider>
+  if (!user) return <SiteGate kind="public"><SiteContentProvider><LandingPage /></SiteContentProvider></SiteGate>
   return <SiteContentProvider><Outlet /></SiteContentProvider>
 }
 
@@ -147,18 +149,18 @@ function AppRoutes() {
       </Route>
       {/* Private console: not linked from any public or notebook navigation. Access is enforced by the server. */}
       <Route path="/control-panel/*" element={<ControlEntry />} />
-      <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
-      <Route path="/signup" element={<PublicOnly><SignupPage /></PublicOnly>} />
+      <Route path="/login" element={<PublicOnly><SiteGate kind="auth"><LoginPage /></SiteGate></PublicOnly>} />
+      <Route path="/signup" element={<PublicOnly><SiteGate kind="public"><SignupPage /></SiteGate></PublicOnly>} />
       {/* Password recovery stays on its original public route: the emailed link
           authenticates a short-lived session, so it must not be redirected away. */}
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/reset-password" element={<SiteGate kind="auth"><ResetPasswordPage /></SiteGate>} />
       {/* Google (OAuth, PKCE) returns here; the page finishes the code exchange and moves on. */}
-      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/auth/callback" element={<SiteGate kind="auth"><AuthCallbackPage /></SiteGate>} />
       {/* Information pages and Contact, open to visitors and students alike. Text ships built in and is owner-editable. */}
-      <Route path="/privacy" element={<SiteContentProvider><InfoPage kind="privacy" /></SiteContentProvider>} />
-      <Route path="/terms" element={<SiteContentProvider><InfoPage kind="terms" /></SiteContentProvider>} />
-      <Route path="/about" element={<SiteContentProvider><InfoPage kind="about" /></SiteContentProvider>} />
-      <Route path="/contact" element={<SiteContentProvider><ContactPage /></SiteContentProvider>} />
+      <Route path="/privacy" element={<SiteGate kind="public"><SiteContentProvider><InfoPage kind="privacy" /></SiteContentProvider></SiteGate>} />
+      <Route path="/terms" element={<SiteGate kind="public"><SiteContentProvider><InfoPage kind="terms" /></SiteContentProvider></SiteGate>} />
+      <Route path="/about" element={<SiteGate kind="public"><SiteContentProvider><InfoPage kind="about" /></SiteContentProvider></SiteGate>} />
+      <Route path="/contact" element={<SiteGate kind="public"><SiteContentProvider><ContactPage /></SiteContentProvider></SiteGate>} />
       <Route path="*" element={<NotFoundPage signedIn={false} />} />
     </Routes>
   </Suspense>
@@ -171,7 +173,9 @@ export default function App() {
   return <QueryClientProvider client={queryClient}>
     <ToastProvider>
       <AuthProvider>
-        <BrowserRouter><TelemetryTracker /><AppRoutes /></BrowserRouter>
+        <SiteStatusProvider>
+          <BrowserRouter><TelemetryTracker /><AppRoutes /></BrowserRouter>
+        </SiteStatusProvider>
       </AuthProvider>
     </ToastProvider>
   </QueryClientProvider>

@@ -48,7 +48,7 @@ const orderBody = z.object({ order: z.array(z.string().regex(EXAM_ID_PATTERN)).m
 const TARGET = 'exam_catalog'
 
 export async function examsHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['GET', 'PUT', 'POST'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['GET', 'PUT', 'POST'], { requireAal2: true, permission: 'exams.manage' }, async context => {
     const audit = (action: string, targetId: string, outcome: 'success' | 'failed', summary?: Record<string, string | number | boolean>) =>
       recordAuditEvent(context.admin, { requestId: context.requestId, actorId: context.userId, actorRole: context.role, action, targetType: TARGET, targetId, outcome, severity: outcome === 'success' ? 'notice' : 'warning', summary })
 

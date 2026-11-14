@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { assertSiteUp } from '../_lib/site-status.js'
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError, readJson, publicError, sendJson } from '../_lib/http.js'
@@ -44,6 +45,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
   let parsed
   try {
     context = await authenticateRequest(req)
+    await assertSiteUp(context.adminClient, context.userId)
     parsed = requestSchema.safeParse(await readJson(req,12_000))
     if (!parsed.success) throw new ApiError(400,'invalid_chat_request','Enter a message of up to 4,000 characters to continue.')
   } catch (error) {
