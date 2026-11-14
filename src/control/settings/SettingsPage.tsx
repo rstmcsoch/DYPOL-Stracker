@@ -23,7 +23,7 @@ import {
 } from '../../lib/control-permissions'
 import { describeAuditEvent } from '../../lib/control-audit-catalog'
 import { MIN_PASSWORD_LENGTH } from '../../lib/auth-rules'
-import { GITHUB_BLOCKLIST_URL, normalizeDomainInput } from '../../lib/email-domains'
+import { DISPOSABLE_LIST_SOURCES, normalizeDomainInput } from '../../lib/email-domains'
 
 export interface SiteSettings { maintenanceEnabled: boolean; maintenanceMessage: string; siteDown: boolean; signupEnabled: boolean; signinEnabled: boolean; updatedAt: string | null }
 export interface Member { userId: string; email: string; role: string; grantedAt: string; revokedAt: string | null; active: boolean; mfaEnrolled: boolean; overrides: Record<string, 'allow' | 'deny'> }
@@ -468,7 +468,8 @@ function EmailDomainsTab({ domains }: { domains: EmailDomains | null }) {
     </Panel>
     <Panel title="Blocked" description="New accounts with these email domains (or their subdomains) are refused, on top of the disposable-domain list. Existing accounts are not affected.">
       <div className="cc-domain-meta"><span>Disposable-domain list:</span> <Badge tone="neutral">{domains.list.count.toLocaleString('en-IN')} domains</Badge>{domains.list.refreshedAt && <small className="cc-muted">Refreshed {formatDateTime(domains.list.refreshedAt, zone)} · updates weekly</small>}</div>
-      <p><a className="cc-link" href={GITHUB_BLOCKLIST_URL} target="_blank" rel="noopener noreferrer">View the list on GitHub <ExternalLink size={13} aria-hidden="true" /></a></p>
+      <p className="cc-muted">Merged from free, open lists on GitHub:</p>
+      <ul className="cc-domain-sources">{DISPOSABLE_LIST_SOURCES.map(source => <li key={source.url}><a className="cc-link" href={source.url} target="_blank" rel="noopener noreferrer">{source.name} <ExternalLink size={13} aria-hidden="true" /></a></li>)}</ul>
       <h3 className="cc-subhead">Added by you ({domains.blocked.length})</h3>
       {customList(domains.blocked, 'block')}
       {addForm('block')}

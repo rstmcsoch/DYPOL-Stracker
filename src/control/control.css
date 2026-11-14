@@ -774,3 +774,4 @@ textarea.cc-input { resize: vertical; min-height: 84px; }
 .cc-domain-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--cc-border); background: var(--cc-input); color: var(--cc-text); font: 500 12.5px var(--cc-font); overflow-wrap: anywhere; }
 .cc-domain-list .cc-list__row { align-items: center; }
 .cc-domain-form { margin-top: 12px; }
+.cc-domain-sources { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 4px; }

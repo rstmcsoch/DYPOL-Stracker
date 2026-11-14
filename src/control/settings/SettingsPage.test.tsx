@@ -167,8 +167,10 @@ describe('Settings', () => {
     expect(screen.getByText('college.edu.in')).toBeTruthy()
     expect(screen.getByText('spam-mail.example')).toBeTruthy()
     expect(screen.getByText(/10,181 domains/)).toBeTruthy()
-    const link = screen.getByRole('link', { name: /View the list on GitHub/ })
+    const link = screen.getByRole('link', { name: /^disposable-email-domains/ })
     expect(link.getAttribute('href')).toBe('https://github.com/disposable-email-domains/disposable-email-domains/blob/main/disposable_email_blocklist.conf')
+    expect(screen.getByRole('link', { name: /disposable\/disposable-email-domains/ }).getAttribute('href')).toBe('https://github.com/disposable/disposable-email-domains')
+    expect(screen.getByRole('link', { name: /7c\/fakefilter/ }).getAttribute('href')).toBe('https://github.com/7c/fakefilter')
 
     fireEvent.change(screen.getByLabelText(/Block a domain/), { target: { value: 'user@bad.example' } })
     fireEvent.click(screen.getByRole('button', { name: /^Block$/ }))

@@ -60,3 +60,26 @@ describe('disposable email block (database migration)', () => {
     expect(sql).not.toMatch(/service_role|truncate public\.|drop table/i)
   })
 })
+
+describe('disposable email block (multi-source refresh migration)', () => {
+  const sql = readFileSync(new URL('../../supabase/migrations/20261114220000_disposable_domains_multi_source.sql', import.meta.url), 'utf8')
+  it('merges three normal lists and never a strict one', () => {
+    expect(sql).toContain('disposable-email-domains/disposable-email-domains/main/disposable_email_blocklist.conf')
+    expect(sql).toContain('disposable/disposable-email-domains/master/domains.txt')
+    expect(sql).toContain('7c/fakefilter/main/txt/data.txt')
+    expect(sql).not.toMatch(/strict[a-z_]*\.(txt|conf|json)/i)
+  })
+  it('refreshes daily because two sources regenerate daily', () => {
+    expect(sql).toContain("cron.schedule('stracker-disposable-domains-request', '17 3 * * *'")
+  })
+  it('keeps always-allowed providers out and never shrinks the list on a partial failure', () => {
+    expect(sql).toContain('not public.never_block_email_domain(d)')
+    expect(sql).toContain("when 'disposable' then 20000 else 1000")
+    expect(sql).toContain('if bad = 0 then')
+    expect(sql).toContain("if good = 0 then return 'no_good_source'")
+  })
+  it('is additive and holds no secrets or destructive resets', () => {
+    expect(sql).not.toMatch(/service_role|truncate public\.|drop table|drop column/i)
+    expect(sql).toMatch(/revoke all on function public\.disposable_domains_refresh_apply\(\) from public, anon, authenticated/)
+  })
+})
