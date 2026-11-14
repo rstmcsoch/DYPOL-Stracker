@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import type { AppData, Chapter, PyqRecord, StudyCard, BacklogItem, TestErrorLog, TestRecord, PracticeSession } from '../types'
 import { defaultExamTracks, defaultSettings } from '../lib/defaults'
 import { pyqRecordId } from '../lib/jee/ids'
+import { indiaToday } from '../lib/date'
 
 const harness = vi.hoisted(() => ({
   data: null as unknown as AppData,
@@ -83,7 +84,8 @@ describe('Practice log page', () => {
 
   it('shows per-chapter accuracy and flags weak practice once there are enough questions', async () => {
     const sessions: PracticeSession[] = [{
-      id: 'p1', user_id: USER, chapter_id: 'elec', practice_date: TODAY, attempted: 120, correct: 70, incorrect: 50,
+      // Inside the page's default 30-day window regardless of when the suite runs.
+      id: 'p1', user_id: USER, chapter_id: 'elec', practice_date: indiaToday(), attempted: 120, correct: 70, incorrect: 50,
       source: 'DPP', time_minutes: null, notes: '', created_at: NOW, updated_at: NOW
     }]
     harness.data = baseData({ practiceSessions: sessions })
