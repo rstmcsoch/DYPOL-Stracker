@@ -48,6 +48,7 @@ export const PERMISSIONS = [
   'ai.manage',
   'settings.site',
   'settings.access',
+  'settings.domains',
   'roles.manage'
 ] as const
 export type Permission = (typeof PERMISSIONS)[number]
@@ -75,6 +76,7 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { id: 'ai.manage', area: 'Stracker AI', label: 'Manage Stracker AI', description: 'Default AI providers, models and limits for all students.' },
   { id: 'settings.site', area: 'Settings', label: 'Site status', description: 'Maintenance notice and full site-down mode.' },
   { id: 'settings.access', area: 'Settings', label: 'Sign-up and sign-in switches', description: 'Pause new sign-ups or student sign-ins.' },
+  { id: 'settings.domains', area: 'Settings', label: 'Email domains', description: 'Always allow or block email domains for new sign-ups (on top of the disposable-domain list). Owner only by default.' },
   { id: 'roles.manage', area: 'Settings', label: 'Manage team roles', description: 'Give and remove Moderator and Viewer roles. Only the owner can manage Admins and Owners and edit permissions.' }
 ]
 

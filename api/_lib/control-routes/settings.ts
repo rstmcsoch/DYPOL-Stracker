@@ -15,6 +15,7 @@ import {
   type Permission
 } from '../../../src/lib/control-permissions.js'
 import { MIN_PASSWORD_LENGTH } from '../../../src/lib/auth-rules.js'
+import { BUILT_IN_ALLOWED_DOMAINS, isBuiltInAllowedDomain, normalizeDomainInput } from '../../../src/lib/email-domains.js'
 
 /**
  * Control Center → Settings.
@@ -27,7 +28,7 @@ import { MIN_PASSWORD_LENGTH } from '../../../src/lib/auth-rules.js'
  */
 
 const SITE_COLUMNS = 'maintenance_enabled, maintenance_message, site_down, signup_enabled, signin_enabled, updated_at'
-const SETTINGS_ACTIVITY = ['settings.site', 'settings.access', 'role.assign', 'role.remove', 'permissions.role', 'permissions.member', 'security.password', 'security.passkey_add', 'security.passkey_remove']
+const SETTINGS_ACTIVITY = ['settings.site', 'settings.access', 'role.assign', 'role.remove', 'permissions.role', 'permissions.member', 'security.password', 'security.passkey_add', 'security.passkey_remove', 'settings.email_domain']
 const DEFAULT_DOWN_MESSAGE = 'Stracker is down for maintenance. Please check back soon.'
 
 const permissionMap = z.partialRecord(z.enum(PERMISSIONS), z.boolean())
@@ -47,6 +48,8 @@ const actionBody = z.discriminatedUnion('action', [
   z.object({ action: z.literal('permissions.member'), userId: z.uuid(), overrides: overrideMap }).strict(),
   z.object({ action: z.literal('password.change'), password: z.string().min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters.`).max(72, 'Use at most 72 characters.') }).strict(),
   z.object({ action: z.literal('passkey.authorize') }).strict(),
+  z.object({ action: z.literal('domains.add'), domain: z.string().trim().min(1).max(260), kind: z.enum(['allow', 'block']) }).strict(),
+  z.object({ action: z.literal('domains.remove'), domain: z.string().trim().min(1).max(260) }).strict(),
   z.object({ action: z.literal('passkey.delete'), passkeyId: z.string().trim().min(1).max(100) }).strict()
 ])
 type ActionBody = z.infer<typeof actionBody>
@@ -145,6 +148,29 @@ async function readActivity(admin: SupabaseClient) {
   return (data ?? []) as Array<Record<string, unknown>>
 }
 
+export interface EmailDomainsView {
+  builtIn: readonly string[]
+  allowed: Array<{ domain: string; createdAt: string }>
+  blocked: Array<{ domain: string; createdAt: string }>
+  list: { count: number; refreshedAt: string | null }
+}
+
+async function readEmailDomains(admin: SupabaseClient): Promise<EmailDomainsView> {
+  const [rules, count, refresh] = await Promise.all([
+    admin.from('email_domain_rules').select('domain, kind, created_at').order('domain', { ascending: true }),
+    admin.from('disposable_email_domains').select('domain', { count: 'exact', head: true }),
+    admin.from('disposable_email_domain_refreshes').select('applied_at').eq('outcome', 'applied').order('applied_at', { ascending: false }).limit(1).maybeSingle()
+  ])
+  if (rules.error) throw new ApiError(503, 'control_unavailable', 'Email domain rules could not be loaded right now.')
+  const rows = (rules.data ?? []) as Array<{ domain: string; kind: string; created_at: string }>
+  return {
+    builtIn: BUILT_IN_ALLOWED_DOMAINS,
+    allowed: rows.filter(row => row.kind === 'allow').map(row => ({ domain: row.domain, createdAt: row.created_at })),
+    blocked: rows.filter(row => row.kind === 'block').map(row => ({ domain: row.domain, createdAt: row.created_at })),
+    list: { count: count.count ?? 0, refreshedAt: (refresh.data as { applied_at?: string } | null)?.applied_at ?? null }
+  }
+}
+
 async function readPasskeys(admin: SupabaseClient, userId: string): Promise<{ available: boolean; items: Array<{ id: string; name: string; createdAt: string; lastUsedAt: string | null }> }> {
   try {
     const { data, error } = await admin.auth.admin.passkey.listPasskeys({ userId })
@@ -158,12 +184,13 @@ async function readPasskeys(admin: SupabaseClient, userId: string): Promise<{ av
 async function handleGet(context: ControlContext, res: ApiResponse): Promise<void> {
   const can = (permission: Permission) => context.permissions.has(permission)
   const admin = context.admin
-  const [site, members, matrix, activity, passkeys] = await Promise.all([
+  const [site, members, matrix, activity, passkeys, emailDomains] = await Promise.all([
     readSite(admin),
     can('roles.manage') ? readMembers(admin) : Promise.resolve(null),
     can('roles.manage') ? readMatrix(admin) : Promise.resolve(null),
     can('audit.view') ? readActivity(admin) : Promise.resolve(null),
-    context.role === 'owner' ? readPasskeys(admin, context.userId) : Promise.resolve(null)
+    context.role === 'owner' ? readPasskeys(admin, context.userId) : Promise.resolve(null),
+    can('settings.domains') ? readEmailDomains(admin) : Promise.resolve(null)
   ])
   sendJson(res, 200, {
     me: { userId: context.userId, role: context.role, permissions: [...context.permissions], assignableRoles: can('roles.manage') ? assignableRoles(context.role) : [] },
@@ -171,7 +198,8 @@ async function handleGet(context: ControlContext, res: ApiResponse): Promise<voi
     members,
     matrix,
     activity,
-    passkeys
+    passkeys,
+    emailDomains
   })
 }
 
@@ -319,6 +347,38 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
       }
       await audit(context, 'security.password', 'user', context.userId, {}, undefined, 'warning')
       sendJson(res, 200, { ok: true })
+      return
+    }
+    case 'domains.add': {
+      requirePermission(context, 'settings.domains')
+      const domain = normalizeDomainInput(body.domain)
+      if (!domain) throw new ApiError(400, 'invalid_domain', 'Enter a domain like example.com: lowercase letters, numbers, dots and dashes, without @.')
+      if (isBuiltInAllowedDomain(domain)) {
+        throw new ApiError(409, 'built_in_domain', body.kind === 'block' ? 'This provider is on the built-in always-allowed list and cannot be blocked.' : 'This provider is already always allowed.')
+      }
+      const { data: existing, error: existingError } = await admin.from('email_domain_rules').select('kind').eq('domain', domain).maybeSingle()
+      if (existingError) throw new ApiError(503, 'control_unavailable', 'Email domain rules could not be checked. Nothing changed.')
+      if (existing?.kind === body.kind) throw new ApiError(409, 'no_change', body.kind === 'allow' ? 'This domain is already always allowed.' : 'This domain is already blocked.')
+      await requireStepUp(context, { action: 'settings.email_domain', targetType: 'email_domain', targetId: domain })
+      const now = new Date().toISOString()
+      const { error } = await admin.from('email_domain_rules').upsert({ domain, kind: body.kind, created_by: context.userId, updated_at: now, ...(existing ? {} : { created_at: now }) }, { onConflict: 'domain' })
+      if (error) throw new ApiError(502, 'save_failed', 'The domain could not be saved. Nothing changed.')
+      await audit(context, 'settings.email_domain', 'email_domain', domain, { before: existing?.kind ?? 'none', after: body.kind })
+      sendJson(res, 200, { ok: true, emailDomains: await readEmailDomains(admin) })
+      return
+    }
+    case 'domains.remove': {
+      requirePermission(context, 'settings.domains')
+      const domain = normalizeDomainInput(body.domain)
+      if (!domain) throw new ApiError(400, 'invalid_domain', 'That is not a valid domain.')
+      const { data: existing, error: existingError } = await admin.from('email_domain_rules').select('kind').eq('domain', domain).maybeSingle()
+      if (existingError) throw new ApiError(503, 'control_unavailable', 'Email domain rules could not be checked. Nothing changed.')
+      if (!existing) throw new ApiError(409, 'no_change', 'This domain has no custom rule.')
+      await requireStepUp(context, { action: 'settings.email_domain', targetType: 'email_domain', targetId: domain })
+      const { error } = await admin.from('email_domain_rules').delete().eq('domain', domain)
+      if (error) throw new ApiError(502, 'save_failed', 'The domain could not be removed. Nothing changed.')
+      await audit(context, 'settings.email_domain', 'email_domain', domain, { before: existing.kind, after: 'none' })
+      sendJson(res, 200, { ok: true, emailDomains: await readEmailDomains(admin) })
       return
     }
     case 'passkey.authorize': {

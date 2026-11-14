@@ -20,10 +20,13 @@ vi.mock('../contexts/ToastContext', () => ({
   useToast: () => ({ notify })
 }))
 const isDisposableEmail = vi.fn()
-vi.mock('../lib/disposable-email', () => ({
-  DISPOSABLE_EMAIL_MESSAGE: 'Temporary or disposable email addresses aren\'t allowed. Please use your regular email.',
-  isDisposableEmail: (email: string) => isDisposableEmail(email)
-}))
+vi.mock('../lib/disposable-email', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/disposable-email')>()
+  return {
+    DISPOSABLE_EMAIL_MESSAGE: actual.DISPOSABLE_EMAIL_MESSAGE,
+    createDisposableEmailPrecheck: () => actual.createDisposableEmailPrecheck((email: string) => isDisposableEmail(email))
+  }
+})
 vi.mock('../components/public/PublicHeader', () => ({ PublicBrand: () => <span>Stracker</span> }))
 
 const { default: SignupPage } = await import('./SignupPage')
@@ -163,5 +166,35 @@ describe('two-step sign-up', () => {
     expect(screen.getByText('Step 1 of 2')).toBeTruthy()
     expect(isDisposableEmail).toHaveBeenCalledWith('ada@mailinator.com')
     expect(signUp).not.toHaveBeenCalled()
+  })
+
+  it('shows nothing while typing a disposable address; the warning appears only on Next', async () => {
+    isDisposableEmail.mockResolvedValue(true)
+    visit()
+    fillStep1('Ada', 'ada@mailinator.com')
+    await new Promise(resolve => setTimeout(resolve, 500))
+    expect(isDisposableEmail).toHaveBeenCalledWith('ada@mailinator.com')
+    expect(screen.queryByText(/disposable email addresses/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByText(/disposable email addresses/)).toBeTruthy()
+    expect(isDisposableEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('never checks built-in providers such as Gmail', async () => {
+    visit()
+    fillStep1('Ada', ['ada', 'gmail.com'].join('@'))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByText('Step 2 of 2')).toBeTruthy()
+    expect(isDisposableEmail).not.toHaveBeenCalled()
+  })
+
+  it('does not hold up Next for long when the check is slow', async () => {
+    isDisposableEmail.mockImplementation(() => new Promise(() => undefined))
+    visit()
+    fillStep1('Ada', 'ada@slow-domain.org')
+    const started = Date.now()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByText('Step 2 of 2', {}, { timeout: 2000 })).toBeTruthy()
+    expect(Date.now() - started).toBeLessThan(1500)
   })
 })

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { useCurrentTabInView } from '../useCurrentTabInView'
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Fingerprint, KeyRound, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
+import { ExternalLink, Fingerprint, KeyRound, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import { controlFetch } from '../api'
 import { useControlSession } from '../ControlSession'
 import { useStepUp } from '../reauth'
@@ -23,6 +23,7 @@ import {
 } from '../../lib/control-permissions'
 import { describeAuditEvent } from '../../lib/control-audit-catalog'
 import { MIN_PASSWORD_LENGTH } from '../../lib/auth-rules'
+import { GITHUB_BLOCKLIST_URL, normalizeDomainInput } from '../../lib/email-domains'
 
 export interface SiteSettings { maintenanceEnabled: boolean; maintenanceMessage: string; siteDown: boolean; signupEnabled: boolean; signinEnabled: boolean; updatedAt: string | null }
 export interface Member { userId: string; email: string; role: string; grantedAt: string; revokedAt: string | null; active: boolean; mfaEnrolled: boolean; overrides: Record<string, 'allow' | 'deny'> }
@@ -33,13 +34,21 @@ export interface SettingsResponse {
   matrix: Record<EditableRole, Record<Permission, boolean>> | null
   activity: Array<Record<string, unknown>> | null
   passkeys: { available: boolean; items: Array<{ id: string; name: string; createdAt: string; lastUsedAt: string | null }> } | null
+  emailDomains?: EmailDomains | null
+}
+export interface EmailDomains {
+  builtIn: string[]
+  allowed: Array<{ domain: string; createdAt: string }>
+  blocked: Array<{ domain: string; createdAt: string }>
+  list: { count: number; refreshedAt: string | null }
 }
 
-type TabId = 'site' | 'access' | 'security' | 'roles' | 'permissions' | 'activity'
+type TabId = 'site' | 'access' | 'domains' | 'security' | 'roles' | 'permissions' | 'activity'
 interface TabDef { id: TabId; label: string; visible: (me: SettingsResponse['me']) => boolean }
 const SETTINGS_TABS: TabDef[] = [
   { id: 'site', label: 'Site status', visible: me => me.permissions.includes('settings.site') },
   { id: 'access', label: 'Sign-up & sign-in', visible: me => me.permissions.includes('settings.access') },
+  { id: 'domains', label: 'Email domains', visible: me => me.permissions.includes('settings.domains') },
   { id: 'security', label: 'Security', visible: () => true },
   { id: 'roles', label: 'Roles & members', visible: me => me.permissions.includes('roles.manage') },
   { id: 'permissions', label: 'Permissions', visible: me => me.role === 'owner' },
@@ -119,6 +128,7 @@ function TabBody({ id, data }: { id: TabId; data: SettingsResponse }) {
   switch (id) {
     case 'site': return <SiteTab site={data.site} />
     case 'access': return <AccessTab site={data.site} />
+    case 'domains': return <EmailDomainsTab domains={data.emailDomains ?? null} />
     case 'security': return <SecurityTab data={data} />
     case 'roles': return <RolesTab data={data} />
     case 'permissions': return <PermissionsTab data={data} />
@@ -410,4 +420,64 @@ function ActivityTab({ data }: { data: SettingsResponse }) {
   </Panel>
 }
 
+function EmailDomainsTab({ domains }: { domains: EmailDomains | null }) {
+  const { zone } = useTimeZone()
+  const save = useSave()
+  const [allowInput, setAllowInput] = useState('')
+  const [blockInput, setBlockInput] = useState('')
+  const [inputError, setInputError] = useState<{ kind: 'allow' | 'block'; message: string } | null>(null)
+  const [removing, setRemoving] = useState<{ domain: string; kind: 'allow' | 'block' } | null>(null)
+  if (!domains) return <Panel title="Email domains"><p className="cc-muted">Email domain rules could not be loaded.</p></Panel>
 
+  const add = async (kind: 'allow' | 'block') => {
+    const raw = kind === 'allow' ? allowInput : blockInput
+    const domain = normalizeDomainInput(raw)
+    if (!domain) { setInputError({ kind, message: 'Enter a domain like example.com: lowercase letters, numbers, dots and dashes, without @.' }); return }
+    if (domains.builtIn.includes(domain)) { setInputError({ kind, message: kind === 'block' ? 'This provider is always allowed and cannot be blocked.' : 'This provider is already always allowed.' }); return }
+    setInputError(null)
+    const ok = await save.run({ action: 'domains.add', domain, kind }, kind === 'allow' ? `${domain} is now always allowed.` : `${domain} is now blocked for new sign-ups.`)
+    if (ok) { if (kind === 'allow') setAllowInput(''); else setBlockInput('') }
+  }
+
+  const addForm = (kind: 'allow' | 'block') => {
+    const id = `domain-${kind}`
+    const value = kind === 'allow' ? allowInput : blockInput
+    return <form className="cc-form cc-domain-form" onSubmit={event => { event.preventDefault(); void add(kind) }}>
+      <Field label={kind === 'allow' ? 'Always allow a domain' : 'Block a domain'} htmlFor={id} hint="Domain only, e.g. example.com. Subdomains follow their parent." error={inputError?.kind === kind ? inputError.message : undefined}>
+        <input id={id} className="cc-input" inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={253} placeholder="example.com" value={value}
+          onChange={event => { if (kind === 'allow') setAllowInput(event.target.value); else setBlockInput(event.target.value); setInputError(null) }} disabled={save.busy} />
+      </Field>
+      <div className="cc-form__actions"><Button type="submit" variant={kind === 'block' ? 'danger' : 'primary'} disabled={save.busy || !value.trim()}><ShieldCheck size={15} aria-hidden="true" /> {kind === 'allow' ? 'Always allow' : 'Block'}</Button></div>
+    </form>
+  }
+
+  const customList = (rows: Array<{ domain: string; createdAt: string }>, kind: 'allow' | 'block') => rows.length === 0
+    ? <p className="cc-muted">{kind === 'allow' ? 'No domains added yet.' : 'No custom blocked domains yet.'}</p>
+    : <ul className="cc-list cc-domain-list">{rows.map(row => <li key={row.domain} className="cc-list__row">
+      <span><strong>{row.domain}</strong> <small className="cc-muted">· added {formatDateTime(row.createdAt, zone)}</small></span>
+      <Button size="sm" variant="ghost" disabled={save.busy} onClick={() => setRemoving({ domain: row.domain, kind })} aria-label={`Remove ${row.domain}`}><Trash2 size={14} aria-hidden="true" /> Remove</Button>
+    </li>)}</ul>
+
+  return <>
+    <Panel title="Always allowed" description="These domains skip every disposable-email check, in the sign-up form and on the server. Your own entries override the disposable-domain list.">
+      <h3 className="cc-subhead">Built-in providers ({domains.builtIn.length})</h3>
+      <div className="cc-domain-chips" aria-label="Built-in always-allowed providers">{domains.builtIn.map(domain => <span key={domain} className="cc-domain-chip">{domain}</span>)}</div>
+      <h3 className="cc-subhead">Added by you ({domains.allowed.length})</h3>
+      {customList(domains.allowed, 'allow')}
+      {addForm('allow')}
+    </Panel>
+    <Panel title="Blocked" description="New accounts with these email domains (or their subdomains) are refused, on top of the disposable-domain list. Existing accounts are not affected.">
+      <p className="cc-inline-status">Disposable-domain list: <Badge tone="neutral">{domains.list.count.toLocaleString('en-IN')} domains</Badge>{domains.list.refreshedAt && <small className="cc-muted"> · refreshed {formatDateTime(domains.list.refreshedAt, zone)} · updates weekly</small>}</p>
+      <p><a className="cc-link" href={GITHUB_BLOCKLIST_URL} target="_blank" rel="noopener noreferrer">View the list on GitHub <ExternalLink size={13} aria-hidden="true" /></a></p>
+      <h3 className="cc-subhead">Added by you ({domains.blocked.length})</h3>
+      {customList(domains.blocked, 'block')}
+      {addForm('block')}
+      <p className="cc-muted">{STEP_UP_NOTE}</p>
+      <SaveStatus message={save.message} tone={save.tone} />
+    </Panel>
+    {removing && <Dialog title={`Remove ${removing.domain}?`} description={removing.kind === 'allow' ? 'It goes back to normal checks: if it is on the disposable-domain list, new sign-ups with it are refused again.' : 'New sign-ups with this domain are allowed again, unless it is on the disposable-domain list.'} onClose={() => setRemoving(null)}
+      footer={<><Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button><Button variant="danger" onClick={() => { const target = removing; setRemoving(null); void save.run({ action: 'domains.remove', domain: target.domain }, `${target.domain} removed.`) }}>Remove</Button></>}>
+      <p className="cc-muted">{STEP_UP_NOTE}</p>
+    </Dialog>}
+  </>
+}

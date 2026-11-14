@@ -27,6 +27,15 @@ To undo, switch CAPTCHA protection off in the same screen.
 
 ## 2. Disposable email domains
 
+* Order of checks (database function `public.is_disposable_email`, used by the trigger, the
+  optional hook and the sign-up form): built-in always-allowed providers (`src/lib/email-domains.ts`,
+  mirrored in `public.never_block_email_domain`) → owner "always allow" rules → owner "block" rules →
+  the GitHub list. Rules match the domain and its parent domains.
+* Owner rules live in `public.email_domain_rules` (private) and are edited in Control Centre →
+  Settings → Email domains (permission `settings.domains`, owner by default; every save needs a
+  fresh step-up).
+* Sign-up step 1 checks quietly in the background ~400 ms after a complete address is typed (or on
+  blur); nothing is shown until Next, and Next waits at most 0.6 s for an unfinished check.
 * Source: [disposable-email-domains/disposable-email-domains](https://github.com/disposable-email-domains/disposable-email-domains),
   normal `disposable_email_blocklist.conf` (not strict lists). The repository currently has no
   separate allowlist file; mainstream and relay providers (Gmail, Outlook/Hotmail, iCloud,

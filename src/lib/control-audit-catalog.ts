@@ -88,6 +88,7 @@ export const AUDIT_ACTIONS: readonly AuditActionDefinition[] = [
     sentence: { success: 'Exported the audit log', denied: 'Audit export refused', failed: 'Audit export failed' }
   },
   { action: 'settings.site', label: 'Site status changed', group: 'Settings', sentence: { success: 'Changed the site status (maintenance / site down)', denied: 'Changing the site status refused', failed: 'Changing the site status failed' } },
+  { action: 'settings.email_domain', label: 'Email domain rule changed', group: 'Settings', sentence: { success: 'Changed an email domain rule', denied: 'Changing an email domain rule refused', failed: 'Changing an email domain rule failed' } },
   { action: 'settings.access', label: 'Sign-up / sign-in switches changed', group: 'Settings', sentence: { success: 'Changed the sign-up and sign-in switches', denied: 'Changing sign-up / sign-in refused', failed: 'Changing sign-up / sign-in failed' } },
   { action: 'role.assign', label: 'Role given', group: 'Roles', sentence: { success: 'Gave a console role to {target}', denied: 'Giving a role to {target} refused', failed: 'Giving a role to {target} failed' } },
   { action: 'role.remove', label: 'Role removed', group: 'Roles', sentence: { success: 'Removed the console role of {target} and ended their access', denied: 'Removing the role of {target} refused', failed: 'Removing the role of {target} failed' } },
