@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useLayoutEffect, type ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 import { PublicHeader } from './PublicHeader'
 import { PublicFooter } from './PublicFooter'
 import { useSiteText } from '../../contexts/SiteContentContext'
@@ -18,6 +19,12 @@ export function PublicPageShell({ title, description, children }: { title: strin
   const ownerAccent = accentStyle(t('public.appearance.accent'))
   const ownerFont = t('public.appearance.font')
   usePageMeta(`${title} · Stracker by DYPOL LABS`, description)
+  const { pathname, hash } = useLocation()
+  // Footer and sibling links are client-side navigations, so the browser keeps the old scroll
+  // position. Open every public page at its top unless the link targets a section on it.
+  useLayoutEffect(() => {
+    if (!hash) window.scrollTo(0, 0)
+  }, [pathname, hash])
 
   return <div className="pub-page pub-subpage" id="top" data-public-theme={theme} data-owner-accent={ownerAccent ? '' : undefined} data-owner-font={ownerFont !== 'identity' ? ownerFont : undefined} style={ownerAccent}>
     <a className="pub-skip-link" href="#main">Skip to content</a>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { SiteContentProvider } from '../../contexts/SiteContentContext'
 import InfoPage from '../../pages/InfoPage'
@@ -52,5 +52,16 @@ describe('built-in page text is specific to Stracker and invents nothing', () =>
     expect(toc.querySelectorAll('a').length).toBeGreaterThan(8)
     expect(screen.getByRole('heading', { level: 2, name: /^AI observability with three\.dev$/ }).id).toBe(`ai-observability-with-three${'-'}dev`)
     expect(screen.getByRole('navigation', { name: 'More about Stracker' }).textContent).toBe('TermsAboutContact')
+  })
+})
+
+describe('public page navigation', () => {
+  it('opens the next page at its top after a footer or sibling link click', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    render(<MemoryRouter initialEntries={["/privacy"]}><SiteContentProvider overrides={{}}><InfoPage kind="privacy" /></SiteContentProvider></MemoryRouter>)
+    scrollTo.mockClear()
+    fireEvent.click(screen.getByRole('navigation', { name: /more about stracker/i }).querySelector('a[href="/terms"]')!)
+    expect(scrollTo).toHaveBeenCalledWith(0, 0)
+    scrollTo.mockRestore()
   })
 })
