@@ -8,7 +8,7 @@ import { controlHandler } from '../control.js'
  * procedure and are recorded in the audit log. No browser endpoint can grant a role.
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['GET'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['GET'], { requireAal2: true, permission: 'roles.manage' }, async context => {
     const { data, error } = await context.admin.from('control_roles').select('user_id, role, granted_at, revoked_at').order('granted_at', { ascending: true })
     if (error) throw new Error('roles_query_failed')
     const assignments = await Promise.all((data ?? []).map(async row => {

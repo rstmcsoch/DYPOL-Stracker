@@ -92,3 +92,13 @@ describe('time formatting', () => {
     expect(formatCountdown(-3)).toBe('0:00')
   })
 })
+
+describe('navigation by permission', async () => {
+  const { visibleNavGroups, firstAllowedPath } = await import('./policy')
+  it('shows only permitted sections, and Settings + Help to every role holder', () => {
+    const labels = visibleNavGroups(['messages.view']).flatMap(group => group.items.map(item => item.label))
+    expect(labels).toEqual(['Messages', 'Settings', 'Help & About'])
+    expect(firstAllowedPath(['messages.view'])).toBe('/control-panel/messages')
+    expect(visibleNavGroups(['overview.view', 'users.view', 'roles.manage']).flatMap(group => group.items.map(item => item.to))).toContain('users')
+  })
+})

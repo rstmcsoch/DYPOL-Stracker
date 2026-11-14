@@ -53,7 +53,7 @@ async function listAuthUsers(admin: { auth: { admin: { listUsers: (options: { pa
  * `range.lastDay` are the inclusive calendar days for display.
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['GET'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['GET'], { requireAal2: true, permission: 'overview.view' }, async context => {
     const params = new URL(req.url ?? '/', 'http://localhost').searchParams
     const rangeKey = parseRangeKey(params.get('range'))
     const timeZone = parseTimeZone(params.get('tz'))

@@ -80,7 +80,7 @@ describe('/control-panel gatekeeping', () => {
 
   it('opens the console only when the server reports granted', async () => {
     auth.user = { id: 'owner' }
-    session.phase = { kind: 'granted', session: { status: 'granted', userId: 'owner', role: 'owner', aal: 'aal2', recentMfa: true, idleTimeoutSeconds: 1200 } as never }
+    session.phase = { kind: 'granted', session: { status: 'granted', userId: 'owner', role: 'owner', permissions: ['overview.view'], aal: 'aal2', recentMfa: true, idleTimeoutSeconds: 1200 } as never }
     renderAt('/control-panel')
     expect(await screen.findByText('Overview')).toBeTruthy()
   })

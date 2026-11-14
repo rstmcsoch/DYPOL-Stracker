@@ -702,3 +702,12 @@ textarea.cc-input { resize: vertical; min-height: 84px; }
   .cc-msg-file { grid-template-columns: auto minmax(0, 1fr); }
   .cc-msg-file__actions { grid-column: 1 / -1; }
 }
+
+/* Settings (sidebar → Settings): tabs reuse .cc-tabs; these are the few extra pieces. */
+.cc-note--ok { color: var(--cc-ok); border-color: rgba(70, 180, 120, .35); }
+.cc-list li.cc-list__row { grid-template-columns: minmax(0, 1fr) auto; }
+.cc-list__row > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.cc-input--sm { min-height: 32px; padding: 4px 8px; font-size: 13px; width: auto; }
+.cc-form--inline { display: grid; grid-template-columns: minmax(0, 2fr) minmax(140px, 1fr) auto; gap: 12px; align-items: end; }
+@media (max-width: 720px) { .cc-form--inline { grid-template-columns: 1fr; } }
+.cc-segmented[role="tablist"] { margin-bottom: 8px; }

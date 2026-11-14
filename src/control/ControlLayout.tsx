@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { ChevronsLeft, ChevronDown, Menu, Search, LogOut, ShieldCheck, LayoutDashboard, Users, KeyRound, ShieldAlert, ScrollText, Activity, Info, Palette, GraduationCap, BarChart3, Sparkles, Inbox } from 'lucide-react'
+import { ChevronsLeft, ChevronDown, Menu, Search, LogOut, ShieldCheck, LayoutDashboard, Users, KeyRound, ShieldAlert, ScrollText, Activity, Info, Palette, GraduationCap, BarChart3, Sparkles, Inbox, Settings } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { controlFetch } from './api'
 import { useControlSession } from './ControlSession'
 import { CommandLauncher } from './CommandLauncher'
-import { NAV_GROUPS, activeNavItem, breadcrumbsFor, CONSOLE_BASE, documentTitleFor, secondsUntilIdle, formatCountdown, type NavIcon } from './policy'
+import { visibleNavGroups, activeNavItem, breadcrumbsFor, CONSOLE_BASE, documentTitleFor, secondsUntilIdle, formatCountdown, type NavIcon } from './policy'
 import { Button, Dialog } from './ui'
 import { BrandMark } from './BrandMark'
 import { useTimeZone } from './time'
 import { ControlThemeSwitch } from './ControlTheme'
 import { useUnsavedChanges, UNSAVED_MESSAGE } from './unsaved'
+import { ROLE_LABELS, type ControlRole } from '../lib/control-permissions'
 
 const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
   overview: LayoutDashboard,
@@ -24,12 +25,14 @@ const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
   exams: GraduationCap,
   analytics: BarChart3,
   ai: Sparkles,
-  messages: Inbox
+  messages: Inbox,
+  settings: Settings
 }
 
 /** Unread contact messages for the sidebar badge. Polls gently; failures just hide the badge. */
-function useUnreadMessages(): number {
+function useUnreadMessages(enabled: boolean): number {
   const { data } = useQuery({
+    enabled,
     queryKey: ['control', 'messages', 'unread'],
     queryFn: () => controlFetch<{ unread: number }>('messages?summary=1'),
     refetchInterval: 60_000,
@@ -64,7 +67,8 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
   const session = phase.kind === 'granted' ? phase.session : null
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const { dirty } = useUnsavedChanges()
-  const unread = useUnreadMessages()
+  const permissions = session?.permissions ?? []
+  const unread = useUnreadMessages(permissions.includes('messages.view'))
   /** Asks before navigating away from a screen with unsaved edits. */
   const leaveAllowed = () => !dirty || window.confirm(UNSAVED_MESSAGE)
 
@@ -102,7 +106,7 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
           <BrandMark compact={collapsed} />
         </div>
         <nav className="cc-nav">
-          {NAV_GROUPS.map(group => (
+          {visibleNavGroups(permissions).map(group => (
             <div key={group.label} className="cc-nav__group">
               <span className="cc-nav__label">{group.label}</span>
               {group.items.map(item => {
@@ -151,7 +155,7 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
             <span className="cc-pill cc-pill--ok" title={session ? `Assurance ${session.aal}; ${session.recentMfa ? 'verified recently' : 'verification older than 15 minutes'}` : undefined}>
               <ShieldCheck size={14} aria-hidden="true" /> {session?.recentMfa ? 'MFA verified' : 'MFA session'}
             </span>
-            <AccountMenu idleWarning={idle === 'warning'} onSignOut={() => void signOut('local')} />
+            <AccountMenu idleWarning={idle === 'warning'} role={session?.role ?? 'owner'} canSecurity={permissions.includes('security.view')} onSignOut={() => void signOut('local')} />
           </div>
         </header>
 
@@ -182,7 +186,7 @@ export function ControlLayout({ children, detailLabel, pageTitle, pageDescriptio
  * the shell; the button is labelled so it is discoverable, and the menu follows the
  * menu-button keyboard pattern (arrows, Home/End, Escape, focus return).
  */
-function AccountMenu({ idleWarning, onSignOut }: { idleWarning: boolean; onSignOut: () => void }) {
+function AccountMenu({ idleWarning, onSignOut, role, canSecurity }: { idleWarning: boolean; onSignOut: () => void; role: ControlRole; canSecurity: boolean }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -227,16 +231,17 @@ function AccountMenu({ idleWarning, onSignOut }: { idleWarning: boolean; onSignO
         aria-controls="cc-account-menu"
         onClick={() => setOpen(value => !value)}
         onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true) } }}
-        aria-label="Account menu: owner session, security, help and sign out"
+        aria-label={`Account menu: ${ROLE_LABELS[role]} session, settings, help and sign out`}
         title="Account menu · sign out"
       >
-        <span className="cc-avatar__initials" aria-hidden="true">OW</span>
+        <span className="cc-avatar__initials" aria-hidden="true">{ROLE_LABELS[role].slice(0, 2).toUpperCase()}</span>
         <ChevronDown size={14} aria-hidden="true" className="cc-avatar__chevron" />
       </button>
       {open && (
         <div role="menu" id="cc-account-menu" className="cc-menu__list" ref={listRef} onKeyDown={onMenuKey} aria-label="Account">
-          <div className="cc-menu__meta">Owner · {idleWarning ? 'idle warning' : 'session active'}</div>
-          <Link role="menuitem" to={`${CONSOLE_BASE}/security`} onClick={() => close(false)}>Security center</Link>
+          <div className="cc-menu__meta">{ROLE_LABELS[role]} · {idleWarning ? 'idle warning' : 'session active'}</div>
+          <Link role="menuitem" to={`${CONSOLE_BASE}/settings/security`} onClick={() => close(false)}>My security</Link>
+          {canSecurity && <Link role="menuitem" to={`${CONSOLE_BASE}/security`} onClick={() => close(false)}>Security center</Link>}
           <Link role="menuitem" to={`${CONSOLE_BASE}/about`} onClick={() => close(false)}>Help &amp; about</Link>
           <button role="menuitem" type="button" className="is-danger" onClick={() => { close(false); onSignOut() }}><LogOut size={15} aria-hidden="true" /> Sign out</button>
         </div>

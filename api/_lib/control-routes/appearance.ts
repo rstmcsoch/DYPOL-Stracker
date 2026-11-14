@@ -89,7 +89,7 @@ function ownerFlag(context: ControlContext, userId: unknown): boolean {
 
 /** GET /api/control/appearance?route=state */
 export async function stateHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['GET'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['GET'], { requireAal2: true, permission: 'appearance.edit' }, async context => {
     const [draft, published] = await Promise.all([readDraft(context), readPublished(context)])
     const { data: versions, error } = await context.admin
       .from('site_content_versions')
@@ -127,7 +127,7 @@ export async function stateHandler(req: ApiRequest, res: ApiResponse): Promise<v
 
 /** PUT /api/control/appearance?route=draft  { overrides } */
 export async function draftHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['PUT'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['PUT'], { requireAal2: true, permission: 'appearance.edit' }, async context => {
     const parsed = draftBody.safeParse(await readJson(req, DRAFT_BODY_LIMIT))
     if (!parsed.success) throw new ApiError(400, 'invalid_request', 'The content payload has an unexpected shape.')
     const checked = validateOverrides(parsed.data.overrides)
@@ -153,7 +153,7 @@ export async function draftHandler(req: ApiRequest, res: ApiResponse): Promise<v
 
 /** POST /api/control/appearance?route=discard — drafts are removed; the published copy stays live. */
 export async function discardHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['POST'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['POST'], { requireAal2: true, permission: 'appearance.edit' }, async context => {
     const { error } = await context.admin.from('site_content_draft').delete().eq('id', 1)
     if (error) throw new ApiError(503, 'content_unavailable', 'The draft could not be discarded. Nothing was changed; try again.')
     sendJson(res, 200, { ok: true })
@@ -162,7 +162,7 @@ export async function discardHandler(req: ApiRequest, res: ApiResponse): Promise
 
 /** POST /api/control/appearance?route=publish  { note? } */
 export async function publishHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['POST'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['POST'], { requireAal2: true, permission: 'appearance.publish' }, async context => {
     const parsed = publishBody.safeParse(await readJson(req, 4_000))
     if (!parsed.success) throw new ApiError(400, 'invalid_request', parsed.error.issues[0]?.message ?? 'Check the publish note and try again.')
     await requireRecentMfa(context, { action: 'content.publish', ...SITE_TARGET })
@@ -213,7 +213,7 @@ export async function publishHandler(req: ApiRequest, res: ApiResponse): Promise
 
 /** POST /api/control/appearance?route=restore  { version, note? } */
 export async function restoreHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['POST'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['POST'], { requireAal2: true, permission: 'appearance.publish' }, async context => {
     const parsed = restoreBody.safeParse(await readJson(req, 4_000))
     if (!parsed.success) throw new ApiError(400, 'invalid_request', parsed.error.issues[0]?.message ?? 'Choose a version to restore.')
     await requireRecentMfa(context, { action: 'content.restore', ...SITE_TARGET })

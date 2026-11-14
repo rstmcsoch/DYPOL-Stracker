@@ -37,7 +37,7 @@ describe('public site routes', () => {
     expect(app).toContain('<Route path="/" element={<RootRoute />}>')
     const root = /function RootRoute\(\) \{([\s\S]*?)\n\}/.exec(app)?.[1] ?? ''
     expect(root).toContain('if (loading)')
-    expect(root).toContain('if (!user) return <SiteContentProvider><LandingPage /></SiteContentProvider>')
+    expect(root).toContain('if (!user) return <SiteGate kind="public"><SiteContentProvider><LandingPage /></SiteContentProvider></SiteGate>')
     expect(root).toContain('<Outlet />')
   })
 
@@ -45,12 +45,12 @@ describe('public site routes', () => {
     expect(declaredRoutes).toContain('/login')
     expect(declaredRoutes).toContain('/signup')
     expect(declaredRoutes).toContain('/reset-password')
-    expect(app).toContain('<Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />')
-    expect(app).toContain('<Route path="/signup" element={<PublicOnly><SignupPage /></PublicOnly>} />')
+    expect(app).toContain('<Route path="/login" element={<PublicOnly><SiteGate kind="auth"><LoginPage /></SiteGate></PublicOnly>} />')
+    expect(app).toContain('<Route path="/signup" element={<PublicOnly><SiteGate kind="public"><SignupPage /></SiteGate></PublicOnly>} />')
     // Recovery keeps its published route and is deliberately not wrapped in PublicOnly:
     // the emailed link signs the owner in, so redirecting an authenticated visitor away
     // from it would break the flow it exists for.
-    expect(app).toContain('<Route path="/reset-password" element={<ResetPasswordPage />} />')
+    expect(app).toContain('<Route path="/reset-password" element={<SiteGate kind="auth"><ResetPasswordPage /></SiteGate>} />')
   })
 
   it('sends authenticated visitors into the application instead of the marketing pages', () => {

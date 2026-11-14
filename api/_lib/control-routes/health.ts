@@ -24,7 +24,7 @@ const AUTH_PROBE_TIMEOUT_MS = 4_000
  * this codebase, so it is reported as unknown rather than healthy.
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['GET'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['GET'], { requireAal2: true, permission: 'health.view' }, async context => {
     const checks: Check[] = []
     const now = () => new Date().toISOString()
 

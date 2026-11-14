@@ -500,7 +500,7 @@ describe('every console route is enforced on the server, not only by the browser
   const PUBLIC_ROUTES = new Set(['contact', 'analytics-ingest'])
   const dispatchers: Array<{ file: string; routes: string[] }> = [
     { file: 'operations', routes: ['audit', 'user-access', 'state', 'draft', 'discard', 'publish', 'restore', 'media', 'exams', 'analytics', 'messages'] },
-    { file: 'security', routes: ['session', 'roles'] },
+    { file: 'security', routes: ['session', 'roles', 'settings'] },
     { file: 'system', routes: ['overview', 'health'] },
     { file: 'accounts', routes: ['users', 'user'] }
   ]

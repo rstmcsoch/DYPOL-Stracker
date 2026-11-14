@@ -45,7 +45,7 @@ export function scopeColumns(scope: ProviderScope): Record<string, unknown> {
 /** Authenticates the request for its scope, then runs the shared provider logic. */
 export async function withProviderScope(req: ApiRequest, res: ApiResponse, methods: string[], run: (scope: ProviderScope) => Promise<void>): Promise<void> {
   if (isSiteScopeRequest(req)) {
-    await controlHandler(req, res, methods, { requireAal2: true }, context => run({
+    await controlHandler(req, res, methods, { requireAal2: true, permission: 'ai.manage' }, context => run({
       ...siteScope(context.userId, context.admin),
       audit: async (action, targetId, outcome, summary = {}) => {
         await recordAuditEvent(context.admin, { requestId: context.requestId, actorId: context.userId, actorRole: context.role, action, targetType: 'site_ai_provider', targetId, outcome, severity: outcome === 'success' ? 'notice' : 'warning', summary })

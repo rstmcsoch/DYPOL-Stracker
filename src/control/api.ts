@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import type { ControlRole, Permission } from '../lib/control-permissions'
 
 export class ControlApiError extends Error {
   readonly status: number
@@ -21,7 +22,7 @@ async function accessToken(): Promise<string> {
   if (!supabase) throw new ControlApiError(503, 'not_configured', 'Cloud sign-in is not configured for this deployment.')
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
-  if (!token) throw new ControlApiError(401, 'unauthenticated', 'Sign in to open the Stracker Control Center.')
+  if (!token) throw new ControlApiError(401, 'unauthenticated', 'Sign in to continue.')
   return token
 }
 
@@ -88,7 +89,9 @@ export async function controlDownload(path: string): Promise<{ blob: Blob; filen
 export interface SessionResponse {
   status: 'granted' | 'mfa_required'
   userId: string
-  role: 'owner'
+  role: ControlRole
+  /** Effective permissions (empty until aal2). The server enforces them on every request. */
+  permissions: Permission[]
   aal: string
   recentMfa: boolean
   idleTimeoutSeconds: number

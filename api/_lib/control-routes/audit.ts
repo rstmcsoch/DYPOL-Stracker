@@ -133,7 +133,7 @@ async function exportCsv(context: ControlContext, filters: AuditQueryFilters, re
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   const params = new URL(req.url ?? '/', 'http://localhost').searchParams
-  await controlHandler(req, res, ['GET'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['GET'], { requireAal2: true, permission: () => params.get('format') === 'csv' ? 'audit.export' : 'audit.view' }, async context => {
     const filters = parseFilters(params, context)
     if (params.get('format') === 'csv') {
       await exportCsv(context, filters, res)

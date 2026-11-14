@@ -4,6 +4,7 @@ import type { ApiRequest, ApiResponse } from './http.js'
 import { ApiError, methodNotAllowed, publicError, sendJson } from './http.js'
 import { supabaseServerConfig } from './server-config.js'
 import { logAIEvent, newReference } from './diagnostics.js'
+import { effectivePermissions, type Permission } from '../../src/lib/control-permissions.js'
 import {
   ANONYMOUS_LIMIT,
   CONTROL_API_LIMIT,
@@ -15,6 +16,7 @@ import {
   roleGrantsConsole,
   sanitizeAuditSummary,
   cleanText,
+  isFreshStepUp,
   type AuditSummaryValue,
   type ControlRole
 } from './control-policy.js'
@@ -27,6 +29,8 @@ import {
 export interface ControlContext {
   userId: string
   role: ControlRole
+  /** Effective permissions (owner: all; others: role matrix + per-person overrides). */
+  permissions: ReadonlySet<Permission>
   aal: string
   /** Unix seconds of the newest TOTP/phone verification in this session, or null. */
   mfaAt: number | null
@@ -148,6 +152,26 @@ async function recordDeniedAccess(admin: SupabaseClient, userId: string, request
 export interface AuthorizeOptions {
   /** Require aal2 (a verified second factor in this session). The session route uses false. */
   requireAal2: boolean
+  /**
+   * The permission this request needs, decided from the request (method, query). Every console
+   * route must declare one; `null` is only for routes any role holder may call (session, own
+   * security settings). A missing permission answers 403 permission_denied.
+   */
+  permission: Permission | null | ((req: ApiRequest) => Permission | null)
+}
+
+/** Loads the effective permissions for an active role holder. Fails closed. */
+export async function loadPermissions(admin: SupabaseClient, userId: string, role: ControlRole): Promise<Set<Permission>> {
+  if (role === 'owner') return new Set(effectivePermissions('owner', []))
+  const [roleRows, memberRows] = await Promise.all([
+    admin.from('control_role_permissions').select('permission, allowed').eq('role', role),
+    admin.from('control_member_permissions').select('permission, allowed').eq('user_id', userId)
+  ])
+  if (roleRows.error || memberRows.error) {
+    logAIEvent('error', 'control_permission_lookup_failed', { code: (roleRows.error ?? memberRows.error)?.code ?? '' })
+    throw new ApiError(503, 'control_unavailable', 'Access could not be verified right now. Try again in a moment.')
+  }
+  return new Set(effectivePermissions(role, (roleRows.data ?? []) as Array<{ permission: string; allowed: boolean }>, (memberRows.data ?? []) as Array<{ permission: string; allowed: boolean }>))
 }
 
 /**
@@ -165,7 +189,7 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
 
   if (!token) {
     await takeControlRate(admin, `anon:${clientKeyHash(req)}`, ANONYMOUS_LIMIT, 'anonymous')
-    throw new ApiError(401, 'unauthenticated', 'Sign in to open the Stracker Control Center.')
+    throw new ApiError(401, 'unauthenticated', 'Sign in to continue.')
   }
 
   // getClaims verifies the token with the Auth server (or the project's JWKS). A forged,
@@ -187,7 +211,8 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
     logAIEvent('error', 'control_role_lookup_failed', { code: roleError.code ?? '' })
     throw new ApiError(503, 'control_unavailable', 'Access could not be verified right now. Try again in a moment.')
   }
-  if (!roleGrantsConsole(roleRow?.role, roleRow?.revoked_at)) {
+  const role = roleRow?.role
+  if (!roleGrantsConsole(role, roleRow?.revoked_at)) {
     await recordDeniedAccess(admin, userId, requestId, 'not_owner')
     throw new ApiError(403, 'access_not_granted', 'Access not granted.')
   }
@@ -198,13 +223,21 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
   if (options.requireAal2 && !isAal2(aal)) {
     // A data request from an owner session that never completed two-step verification is a
     // security-relevant denial (the normal pre-MFA flow only calls /session, which allows aal1).
-    await recordDeniedAccess(admin, userId, requestId, 'mfa_required', 'owner')
+    await recordDeniedAccess(admin, userId, requestId, 'mfa_required', role)
     throw new ApiError(403, 'mfa_required', 'Complete two-step verification to continue.', { reason: 'aal2_required' })
+  }
+
+  const permissions = await loadPermissions(admin, userId, role)
+  const needed = typeof options.permission === 'function' ? options.permission(req) : options.permission
+  if (needed && !permissions.has(needed)) {
+    await recordBoundedDenial(admin, { requestId, actorId: userId, actorRole: role, action: 'control.access', targetType: 'permission', targetId: needed, errorCode: 'permission_denied' })
+    throw new ApiError(403, 'permission_denied', 'Your role does not include this part of the console.', { reason: needed })
   }
 
   return {
     userId,
-    role: 'owner',
+    role,
+    permissions,
     aal,
     mfaAt: latestMfaTimestamp(claims.amr),
     sessionId: typeof claims.session_id === 'string' && claims.session_id.length <= 80 ? claims.session_id : null,
@@ -234,6 +267,28 @@ export async function requireRecentMfa(context: ControlContext, attempted: { act
     errorCode: 'recent_mfa_required'
   })
   throw new ApiError(403, 'reauthentication_required', 'Verify your authenticator code again before making this change.', { reason: 'recent_mfa_required' })
+}
+
+/**
+ * Step-up for settings saves: the session must carry an authenticator verification from the
+ * last STEP_UP_MAX_AGE_SECONDS, and each verification authorizes exactly one save (an atomic
+ * insert keyed on user + Auth session + verification time; a replay hits the primary key).
+ * The browser asks for a fresh code immediately before every save. Never logs codes.
+ */
+export async function requireStepUp(context: ControlContext, attempted: { action: string; targetType?: string; targetId?: string }, nowSeconds = Math.floor(Date.now() / 1000)): Promise<void> {
+  const refuse = async (reason: string, message: string): Promise<never> => {
+    await recordBoundedDenial(context.admin, { requestId: context.requestId, actorId: context.userId, actorRole: context.role, action: attempted.action, targetType: attempted.targetType, targetId: attempted.targetId, errorCode: reason })
+    throw new ApiError(403, 'step_up_required', message, { reason })
+  }
+  if (!context.sessionId || context.mfaAt === null || !isFreshStepUp(context.mfaAt, nowSeconds)) {
+    await refuse('step_up_stale', 'Enter a fresh authenticator code to save this change.')
+  }
+  const { error } = await context.admin.from('control_step_up_uses').insert({ user_id: context.userId, session_id: context.sessionId, mfa_at: context.mfaAt, action: attempted.action.slice(0, 80) })
+  if (error) {
+    if (error.code === '23505') await refuse('step_up_used', 'That authenticator code was already used for a save. Enter a new code.')
+    logAIEvent('error', 'control_step_up_unavailable', { code: error.code ?? '' })
+    throw new ApiError(503, 'control_unavailable', 'The change could not be verified right now. Nothing was saved.')
+  }
 }
 
 /**

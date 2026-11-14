@@ -9,7 +9,7 @@ import { isUuid } from '../control-policy.js'
  * Study content (chapter notes, mistakes, test answers) is never returned here.
  */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await controlHandler(req, res, ['GET'], { requireAal2: true }, async context => {
+  await controlHandler(req, res, ['GET'], { requireAal2: true, permission: 'users.view' }, async context => {
     const id = new URL(req.url ?? '/', 'http://localhost').searchParams.get('id')
     if (!isUuid(id)) throw new ApiError(400, 'invalid_user_id', 'Choose a valid account.')
     const admin = context.admin

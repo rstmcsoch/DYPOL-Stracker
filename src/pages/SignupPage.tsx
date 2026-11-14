@@ -5,6 +5,7 @@ import { Button, Field } from '../components/ui'
 import { AuthScaffold } from '../components/public/AuthScaffold'
 import { GoogleAuthButton } from '../components/GoogleAuthButton'
 import { useAuth } from '../contexts/AuthContext'
+import { useSiteStatus } from '../components/site/SiteStatusContext'
 import { useToast } from '../contexts/ToastContext'
 import { localPreviewEnabled, supabaseConfigured } from '../lib/supabase'
 import { usePageMeta } from '../lib/head'
@@ -30,6 +31,7 @@ const PERKS = [
 export default function SignupPage() {
   usePageMeta('Create your Stracker account', 'Create a Stracker account to organize exam preparation: syllabus, tests, mistakes, revision, planning and focus sessions.')
   const { signUp, resendConfirmation, error, clearError, loading: authLoading } = useAuth()
+  const { status: siteStatus } = useSiteStatus()
   const { notify } = useToast()
   const navigate = useNavigate()
   const [step, setStep] = useState<1 | 2>(1)
@@ -131,7 +133,14 @@ export default function SignupPage() {
   >
     <section className="auth-card" aria-labelledby="signup-title">
       <div className="auth-card-sticker"><NotebookPen size={14} aria-hidden="true" /> A NEW NOTEBOOK</div>
-      {sentTo ? <div className="auth-success">
+      {!siteStatus.signupEnabled && !sentTo ? <div className="auth-success" role="status">
+        <div className="success-circle" aria-hidden="true"><Mail size={22} /></div>
+        <h3>New sign-ups are paused</h3>
+        <p>Stracker is not taking new accounts right now. Please check back soon. If you already have an account, you can log in.</p>
+        <div className="auth-success-actions">
+          <Link className="button button-primary" to="/login">Go to log in <ArrowRight size={16} aria-hidden="true" /></Link>
+        </div>
+      </div> : sentTo ? <div className="auth-success">
         <div className="success-circle" aria-hidden="true"><Mail size={22} /></div>
         <h3>Confirm your email</h3>
         <p>Your account is created. We sent a confirmation link to <strong>{sentTo}</strong> — open it to activate the notebook, then log in.</p>
