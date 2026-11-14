@@ -4,13 +4,16 @@
  * Pure data and validation only: no browser or Node APIs.
  */
 export const CONTACT_REASONS = [
+  { value: 'general_query', label: 'General query', hint: 'A question about Stracker, your account or your data' },
   { value: 'feature_request', label: 'Feature request', hint: 'An idea that would make Stracker more useful for your preparation' },
   { value: 'bug_report', label: 'Bug report', hint: 'Something in Stracker is broken, wrong or not saving' },
   { value: 'complaint', label: 'Complaint', hint: 'Something about Stracker or DYPOL LABS did not meet your expectations' },
   { value: 'copyright', label: 'Copyright', hint: 'Content on Stracker that you believe uses your work without permission' },
-  { value: 'sponsorship', label: 'Sponsorship', hint: 'Partnering with or sponsoring Stracker by DYPOL LABS' },
-  { value: 'general_query', label: 'General query', hint: 'Anything else about Stracker, your account or your data' }
+  { value: 'sponsorship', label: 'Sponsorship', hint: 'Partnering with or sponsoring Stracker by DYPOL LABS' }
 ] as const
+
+/** The reason the form opens with. */
+export const DEFAULT_CONTACT_REASON = 'general_query'
 
 export type ContactReason = typeof CONTACT_REASONS[number]['value']
 export const CONTACT_REASON_VALUES = CONTACT_REASONS.map(reason => reason.value) as [ContactReason, ...ContactReason[]]
@@ -34,16 +37,6 @@ export function contactReasonLabel(value: string): string {
   return CONTACT_REASONS.find(reason => reason.value === value)?.label ?? 'General query'
 }
 
-/** What the main message box is called for each reason. */
-export const MESSAGE_LABELS: Record<ContactReason, { label: string; placeholder: string }> = {
-  feature_request: { label: 'Your idea', placeholder: 'Describe the feature you would like in Stracker.' },
-  bug_report: { label: 'What went wrong', placeholder: 'A short summary of the problem you hit in Stracker.' },
-  complaint: { label: 'What happened', placeholder: 'Tell us what happened and what you would like us to do about it.' },
-  copyright: { label: 'Your notice', placeholder: 'Explain which content you believe infringes your rights and what you are asking us to do.' },
-  sponsorship: { label: 'Your proposal', placeholder: 'What you have in mind, who it is for, and the timeline.' },
-  general_query: { label: 'Message', placeholder: 'How can we help?' }
-}
-
 /* ------------------------------------------------------------------ reason-specific fields */
 
 export type DetailFieldType = 'text' | 'multiline' | 'url' | 'checkbox'
@@ -55,34 +48,111 @@ export interface DetailField {
   required?: boolean
   placeholder?: string
   hint?: string
+  rows?: number
 }
 
-/** Whitelist of extra fields per reason. Anything not listed here is rejected by the server. */
-export const REASON_FIELDS: Record<ContactReason, readonly DetailField[]> = {
-  bug_report: [
-    { key: 'area', label: 'Page or feature affected', type: 'text', max: 120, required: true, placeholder: 'For example: Tests → Log a mock, Planner, Stracker AI' },
-    { key: 'steps', label: 'Steps to reproduce', type: 'multiline', max: 2000, placeholder: '1. Open …\n2. Tap …\n3. …' },
-    { key: 'expected', label: 'What you expected', type: 'multiline', max: 1000 },
-    { key: 'actual', label: 'What actually happened', type: 'multiline', max: 1000 },
-    { key: 'device', label: 'Device and browser', type: 'text', max: 120, placeholder: 'For example: Android tablet, Chrome 131' }
+/**
+ * A field on the form. `target: 'message'` is the reason's main description and is stored in the
+ * `message` column (required, 10–4000 characters); `target: 'subject'` is stored in `subject`.
+ * Every other field is a reason-specific detail stored in the `details` jsonb.
+ */
+export interface FormField extends DetailField { target?: 'subject' | 'message' }
+
+/**
+ * One coherent field set per reason, in display order, after "About you" (name and email).
+ * No two fields ask for the same thing: the reason's main description replaces a generic
+ * message box, and only General query and Feature request ask for a title; every other
+ * reason gets its subject from its first field (see `contactSubject`).
+ */
+export const REASON_FORMS: Record<ContactReason, readonly FormField[]> = {
+  general_query: [
+    { key: 'subject', target: 'subject', label: 'Subject', type: 'text', max: CONTACT_LIMITS.subject.max, placeholder: 'For example: exporting my notebook, changing my email address' },
+    { key: 'message', target: 'message', label: 'Your question', type: 'multiline', max: CONTACT_LIMITS.message.max, required: true, rows: 6, placeholder: 'Ask anything about Stracker, your account or your data. The more context, the better our answer.' }
   ],
   feature_request: [
-    { key: 'area', label: 'Which part of Stracker', type: 'text', max: 120, placeholder: 'For example: Revision planner, Analytics, Focus timer' },
-    { key: 'benefit', label: 'How it would help your preparation', type: 'multiline', max: 1000 }
+    { key: 'subject', target: 'subject', label: 'Your idea in one line', type: 'text', max: CONTACT_LIMITS.subject.max, required: true, placeholder: 'For example: Revision reminders for chapters I marked weak' },
+    { key: 'area', label: 'Part of Stracker it touches', type: 'text', max: 120, placeholder: 'For example: Planner, Tests, Analytics, Focus timer, Stracker AI' },
+    { key: 'message', target: 'message', label: 'How it would work', type: 'multiline', max: CONTACT_LIMITS.message.max, required: true, rows: 5, placeholder: 'Walk us through it: where you would start, what you would tap, what Stracker would show.' },
+    { key: 'benefit', label: 'How it would help your preparation', type: 'multiline', max: 1000, rows: 3, placeholder: 'For example: I would stop losing track of chapters I have not revised in two weeks.' }
+  ],
+  bug_report: [
+    { key: 'area', label: 'Where it happened', type: 'text', max: 120, required: true, placeholder: 'For example: Tests → Log a mock, Planner, Stracker AI' },
+    { key: 'message', target: 'message', label: 'What went wrong', type: 'multiline', max: CONTACT_LIMITS.message.max, required: true, rows: 4, placeholder: 'What you saw: an error message, a wrong number, something that did not save.' },
+    { key: 'steps', label: 'Steps to reproduce', type: 'multiline', max: 2000, rows: 4, placeholder: '1. Open …\n2. Tap …\n3. …', hint: 'If we can make it happen on our side, we can fix it faster.' },
+    { key: 'expected', label: 'What you expected instead', type: 'multiline', max: 1000, rows: 2 },
+    { key: 'device', label: 'Device and browser', type: 'text', max: 120, placeholder: 'For example: Android phone, Chrome 131 · or the installed Stracker app' }
   ],
   complaint: [
-    { key: 'area', label: 'Area concerned', type: 'text', max: 120, required: true, placeholder: 'For example: my account, Stracker AI answers, a page on the site' }
+    { key: 'area', label: 'What it concerns', type: 'text', max: 120, required: true, placeholder: 'For example: my account, a Stracker AI answer, a reply from the team' },
+    { key: 'message', target: 'message', label: 'What happened', type: 'multiline', max: CONTACT_LIMITS.message.max, required: true, rows: 5, placeholder: 'Tell us what happened and when, in your own words.' },
+    { key: 'resolution', label: 'What would put it right', type: 'multiline', max: 1000, rows: 2, placeholder: 'Optional: what you would like us to do.' }
   ],
   copyright: [
-    { key: 'original_work', label: 'Your original work and ownership', type: 'multiline', max: 2000, required: true, hint: 'Describe the work and how you own or represent the rights to it.' },
-    { key: 'content_location', label: 'Where the content appears on Stracker', type: 'text', max: 500, required: true, placeholder: 'The page address or where in Stracker you saw it' },
+    { key: 'original_work', label: 'Your work and your rights to it', type: 'multiline', max: 2000, required: true, rows: 3, hint: 'Describe the original work, and whether you own it or act for the owner.' },
+    { key: 'content_location', label: 'Where it appears on Stracker', type: 'text', max: 500, required: true, placeholder: 'The page address, or where in Stracker you saw it' },
+    { key: 'message', target: 'message', label: 'What you are asking us to do', type: 'multiline', max: CONTACT_LIMITS.message.max, required: true, rows: 3, placeholder: 'For example: remove the content, or credit the original source.' },
     { key: 'good_faith', label: 'I believe in good faith that this use is not authorised by the rights owner, its agent or the law, and the information in this notice is accurate.', type: 'checkbox', max: 5, required: true }
   ],
   sponsorship: [
-    { key: 'organisation', label: 'Organisation name', type: 'text', max: 120, required: true },
-    { key: 'website', label: 'Organisation website', type: 'url', max: 300, placeholder: 'https://' }
-  ],
-  general_query: []
+    { key: 'organisation', label: 'Organisation', type: 'text', max: 120, required: true },
+    { key: 'website', label: 'Organisation website', type: 'url', max: 300, placeholder: 'https://' },
+    { key: 'role', label: 'Your role', type: 'text', max: 120, placeholder: 'For example: Partnerships lead' },
+    { key: 'message', target: 'message', label: 'Your proposal', type: 'multiline', max: CONTACT_LIMITS.message.max, required: true, rows: 5, placeholder: 'What you have in mind, who it is for (which exams or classes), and your timeline.' }
+  ]
+}
+
+/** Whitelist of detail fields per reason (the form fields stored in `details`). Anything else is rejected by the server. */
+export const REASON_FIELDS: Record<ContactReason, readonly DetailField[]> = Object.fromEntries(
+  CONTACT_REASON_VALUES.map(reason => [reason, REASON_FORMS[reason].filter(field => !field.target)])
+) as unknown as Record<ContactReason, readonly DetailField[]>
+
+export function reasonField(reason: ContactReason, target: 'subject' | 'message'): FormField | undefined {
+  return REASON_FORMS[reason].find(field => field.target === target)
+}
+
+/** The stored subject: the sender's own where the form asks for one, otherwise reason + first field. */
+export function contactSubject(reason: ContactReason, subject: string, details: ContactDetails): string | null {
+  if (reasonField(reason, 'subject')) return subject.trim() || null
+  const first = REASON_FIELDS[reason].find(field => field.type !== 'checkbox' && typeof details[field.key] === 'string' && (details[field.key] as string).trim())
+  const lead = { general_query: 'Question', feature_request: 'Idea', bug_report: 'Bug', complaint: 'Complaint', copyright: 'Copyright notice', sponsorship: 'Sponsorship' }[reason]
+  const text = first ? `${lead}: ${(details[first.key] as string).trim().replace(/\s+/g, ' ')}` : contactReasonLabel(reason)
+  return text.length > CONTACT_LIMITS.subject.max ? `${text.slice(0, CONTACT_LIMITS.subject.max - 1)}…` : text
+}
+
+/** Labels for detail keys used by earlier versions of the form, so older messages still read well. */
+const LEGACY_DETAIL_LABELS: Record<string, string> = {
+  actual: 'What actually happened',
+  area: 'Area',
+  benefit: 'How it would help',
+  original_work: 'Original work and ownership',
+  content_location: 'Where the content appears'
+}
+
+export interface MessageRow { key: string; label: string; type: DetailFieldType; value: string | boolean }
+
+/**
+ * Everything a sender wrote, in the order of the form they used, under the form's labels:
+ * the main description under its reason label, detail fields, then any older or unknown keys.
+ */
+export function messageRows(reason: string, message: string, details: Record<string, string | boolean>): MessageRow[] {
+  const form = isContactReason(reason) ? REASON_FORMS[reason] : []
+  const rows: MessageRow[] = []
+  const seen = new Set<string>()
+  for (const field of form) {
+    if (field.target === 'subject') continue
+    if (field.target === 'message') { rows.push({ key: 'message', label: field.label, type: 'multiline', value: message }); continue }
+    seen.add(field.key)
+    const value = details[field.key]
+    if (value === undefined || value === '') continue
+    rows.push({ key: field.key, label: field.type === 'checkbox' ? 'Good-faith statement' : field.label, type: field.type, value })
+  }
+  if (!form.length) rows.push({ key: 'message', label: 'Message', type: 'multiline', value: message })
+  for (const [key, value] of Object.entries(details)) {
+    if (seen.has(key) || value === '' || (typeof value !== 'string' && typeof value !== 'boolean')) continue
+    const label = LEGACY_DETAIL_LABELS[key] ?? key.replace(/_/g, ' ').replace(/^./, letter => letter.toUpperCase())
+    rows.push({ key, label, type: typeof value === 'boolean' ? 'checkbox' : 'multiline', value })
+  }
+  return rows
 }
 
 export type ContactDetails = Record<string, string | boolean>
@@ -196,6 +266,11 @@ export function validateContactDraft(draft: ContactDraft): ContactFieldErrors {
   else if (email.length > CONTACT_LIMITS.email.max || !CONTACT_EMAIL_PATTERN.test(email)) errors.email = 'Enter one valid email address, like you@example.com.'
   if (!isContactReason(draft.reason)) errors.reason = 'Choose why you are contacting us.'
   if (subject.length > CONTACT_LIMITS.subject.max) errors.subject = `Use ${CONTACT_LIMITS.subject.max} characters or fewer.`
+  else if (isContactReason(draft.reason)) {
+    const subjectField = reasonField(draft.reason, 'subject')
+    if (!subjectField && subject) errors.subject = 'This kind of message does not use a subject.'
+    else if (subjectField?.required && !subject) errors.subject = 'Sum it up in one line.'
+  }
   if (message.length < CONTACT_LIMITS.message.min) errors.message = `Write at least ${CONTACT_LIMITS.message.min} characters so we can help.`
   else if (message.length > CONTACT_LIMITS.message.max) errors.message = `Use ${CONTACT_LIMITS.message.max} characters or fewer.`
   if (isContactReason(draft.reason)) {

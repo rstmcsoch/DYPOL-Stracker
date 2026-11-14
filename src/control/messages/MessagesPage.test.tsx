@@ -12,7 +12,7 @@ vi.mock('../api', () => ({
   controlFetch: async (path: string, init?: { method?: string; body?: unknown }) => {
     calls.push({ path, init })
     if (path.startsWith('messages?status=')) return { messages: [{ id, created_at: '2026-11-14T04:00:00Z', name: 'Asha', email: 'asha@example.com', reason: 'bug_report', subject: 'Planner will not save', status: 'new', read_at: null, preview: 'When I drag a task…', fileCount: 1, linkCount: 1 }], total: 1, unread: 1, page: 1, pageSize: 25 }
-    if (path === `messages?id=${id}`) return { message: { id, created_at: '2026-11-14T04:00:00Z', name: 'Asha', email: 'asha@example.com', reason: 'bug_report', subject: 'Planner will not save', message: 'When I drag a task it jumps back.', details: { area: 'Planner', device: 'Android tablet' }, links: ['https://example.com/video', 'javascript:alert(1)'], status: 'new', read_at: null, signedIn: true, files: [{ name: 'shot.png', size: 2048, type: 'image/png', viewUrl: 'https://x.supabase.co/v', downloadUrl: 'https://x.supabase.co/d' }], linkExpiresInSeconds: 300 } }
+    if (path === `messages?id=${id}`) return { message: { id, created_at: '2026-11-14T04:00:00Z', name: 'Asha', email: 'asha@example.com', reason: 'bug_report', subject: 'Planner will not save', message: 'When I drag a task it jumps back.', details: { area: 'Planner', device: 'Android tablet', actual: 'Old-form answer' }, links: ['https://example.com/video', 'javascript:alert(1)'], status: 'new', read_at: null, signedIn: true, files: [{ name: 'shot.png', size: 2048, type: 'image/png', viewUrl: 'https://x.supabase.co/v', downloadUrl: 'https://x.supabase.co/d' }], linkExpiresInSeconds: 300 } }
     if (path === 'messages') return (init?.body as { action: string }).action === 'delete' ? { deleted: true } : { status: (init?.body as { status: string }).status }
     throw new Error(`unexpected ${path}`)
   }
@@ -38,7 +38,10 @@ describe('Control Center → Messages', () => {
     fireEvent.click(row)
     await screen.findByText('When I drag a task it jumps back.')
     await waitFor(() => expect(calls.some(call => call.path === 'messages' && (call.init?.body as { status?: string }).status === 'read')).toBe(true))
-    expect(screen.getByText('Page or feature affected')).toBeTruthy()
+    const labels = [...document.querySelectorAll('.cc-msg-details dt')].map(term => term.textContent)
+    expect(labels).toEqual(['Where it happened', 'What went wrong', 'Device and browser', 'What actually happened'])
+    expect(screen.getByText('When I drag a task it jumps back.')).toBeTruthy()
+    expect(screen.getByText('Old-form answer')).toBeTruthy()
     expect(screen.getByText('Android tablet')).toBeTruthy()
     const link = screen.getByRole('link', { name: /example\.com\/video/ })
     expect(link.getAttribute('rel')).toBe('noopener noreferrer nofollow')

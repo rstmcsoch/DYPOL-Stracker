@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { CONTACT_REASONS, type ContactReason } from '../../lib/contact/reasons'
+import { ReasonIcon } from './ReasonIcon'
 
 /**
  * Themed single-select for the contact reason (a listbox, not a native <select>).
@@ -82,7 +83,10 @@ export function ReasonSelect({ value, onChange, error, labelId, describedBy }: {
       onClick={() => (open ? setOpen(false) : openList())}
       onKeyDown={onKeyDown}
     >
-      <span id={`${listId}-value`} className={selected ? 'reason-select-value' : 'reason-select-placeholder'}>{selected?.label ?? 'Choose a reason'}</span>
+      <span className="reason-select-current">
+        {selected && <span className="reason-select-badge"><ReasonIcon reason={selected.value} /></span>}
+        <span id={`${listId}-value`} className={selected ? 'reason-select-value' : 'reason-select-placeholder'}>{selected?.label ?? 'Choose a reason'}</span>
+      </span>
       <ChevronDown size={17} aria-hidden="true" className="reason-select-chevron" />
     </button>
     <ul id={listId} role="listbox" aria-labelledby={labelId} className="reason-select-list" hidden={!open} tabIndex={-1}>
@@ -96,6 +100,7 @@ export function ReasonSelect({ value, onChange, error, labelId, describedBy }: {
         onMouseDown={event => event.preventDefault()}
         onClick={() => choose(index)}
       >
+        <span className="reason-select-badge"><ReasonIcon reason={reason.value} /></span>
         <span className="reason-select-option-text"><strong>{reason.label}</strong><small>{reason.hint}</small></span>
         {reason.value === value && <Check size={16} aria-hidden="true" />}
       </li>)}

@@ -7,7 +7,7 @@ import { PageHeader } from '../pageParts'
 import { formatDateTime } from '../policy'
 import { useTimeZone } from '../time'
 import { useToast } from '../../contexts/ToastContext'
-import { CONTACT_REASONS, REASON_FIELDS, contactReasonLabel, formatBytes, isContactReason, type ContactStatus } from '../../lib/contact/reasons'
+import { CONTACT_REASONS, contactReasonLabel, formatBytes, messageRows, type ContactStatus } from '../../lib/contact/reasons'
 import { replyHref, safeHttpUrl, type MessageDetail, type MessageSummary } from './format'
 
 interface ListResponse { messages: MessageSummary[]; total: number; unread: number; page: number; pageSize: number }
@@ -127,8 +127,7 @@ function MessageDetailPanel({ id, onClose }: { id: string; onClose: () => void }
   if (detail.isPending) return <Panel title="Message" className="cc-msg-detail-panel"><Skeleton rows={8} height={16} /></Panel>
   if (detail.isError || !message) return <Panel title="Message" className="cc-msg-detail-panel"><ErrorState message={detail.error instanceof Error ? detail.error.message : 'The message could not be loaded.'} onRetry={() => void detail.refetch()} /></Panel>
 
-  const reasonFields = isContactReason(message.reason) ? REASON_FIELDS[message.reason] : []
-  const detailRows = reasonFields.filter(field => message.details[field.key] !== undefined && message.details[field.key] !== '')
+  const rows = messageRows(message.reason, message.message, message.details)
   const busy = setStatus.isPending || remove.isPending
 
   return <Panel
@@ -155,18 +154,15 @@ function MessageDetailPanel({ id, onClose }: { id: string; onClose: () => void }
         <Button size="sm" variant="danger" disabled={busy} onClick={() => setConfirmDelete(true)}><Trash2 size={14} aria-hidden="true" /> Delete</Button>
       </div>
 
-      <section aria-label="Message text" className="cc-msg-body">{message.message}</section>
-
-      {detailRows.length > 0 && <dl className="cc-msg-details">
-        {detailRows.map(field => {
-          const value = message.details[field.key]
-          const url = field.type === 'url' && typeof value === 'string' ? safeHttpUrl(value) : null
-          return <div key={field.key}>
-            <dt>{field.type === 'checkbox' ? 'Good-faith statement' : field.label}</dt>
-            <dd>{field.type === 'checkbox' ? (value === true ? 'Confirmed by the sender' : 'Not confirmed') : url ? <a className="cc-link" href={url} target="_blank" rel="noopener noreferrer nofollow">{value as string} <ExternalLink size={12} aria-hidden="true" /></a> : String(value)}</dd>
+      <dl className="cc-msg-details" aria-label="What the sender wrote">
+        {rows.map(row => {
+          const url = row.type === 'url' && typeof row.value === 'string' ? safeHttpUrl(row.value) : null
+          return <div key={row.key} className={row.type === 'multiline' ? 'is-block' : undefined}>
+            <dt>{row.label}</dt>
+            <dd className={row.type === 'multiline' ? 'cc-msg-body' : undefined}>{row.type === 'checkbox' ? (row.value === true ? 'Confirmed by the sender' : 'Not confirmed') : url ? <a className="cc-link" href={url} target="_blank" rel="noopener noreferrer nofollow">{row.value as string} <ExternalLink size={12} aria-hidden="true" /></a> : String(row.value)}</dd>
           </div>
         })}
-      </dl>}
+      </dl>
 
       {message.links.length > 0 && <div className="cc-msg-section">
         <h3>Links</h3>

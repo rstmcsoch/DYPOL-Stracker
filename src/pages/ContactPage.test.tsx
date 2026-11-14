@@ -25,14 +25,17 @@ describe('custom reason dropdown', () => {
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
     const options = screen.getAllByRole('option')
-    expect(options.map(option => option.querySelector('strong')?.textContent)).toEqual(['Feature request', 'Bug report', 'Complaint', 'Copyright', 'Sponsorship', 'General query'])
+    expect(options.map(option => option.querySelector('strong')?.textContent)).toEqual(['General query', 'Feature request', 'Bug report', 'Complaint', 'Copyright', 'Sponsorship'])
+    expect(options.every(option => option.querySelector('svg.reason-icon'))).toBe(true)
     expect(trigger.getAttribute('aria-activedescendant')).toBe(options[0]!.id)
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     expect(trigger.getAttribute('aria-activedescendant')).toBe(options[1]!.id)
     fireEvent.keyDown(trigger, { key: 'End' })
     expect(trigger.getAttribute('aria-activedescendant')).toBe(options[5]!.id)
     fireEvent.keyDown(trigger, { key: 's' })
-    expect(trigger.getAttribute('aria-activedescendant')).toBe(options[4]!.id)
+    expect(trigger.getAttribute('aria-activedescendant')).toBe(options[5]!.id)
+    fireEvent.keyDown(trigger, { key: 'Home' })
+    fireEvent.keyDown(trigger, { key: 's' })
     fireEvent.keyDown(trigger, { key: 'Enter' })
     expect(onChange).toHaveBeenCalledWith('sponsorship')
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
@@ -54,33 +57,51 @@ describe('custom reason dropdown', () => {
 
 describe('contact page', () => {
   const choose = (label: RegExp) => {
-    fireEvent.click(screen.getByRole('button', { name: /Why are you contacting us/ }))
+    fireEvent.click(screen.getByRole('button', { name: /What is it about/ }))
     fireEvent.click(screen.getByRole('option', { name: label }))
   }
+  /** Labels of every visible field in the reason's own section, in order. */
+  const reasonLabels = () => [...document.querySelectorAll('.contact-reveal label')].map(label => label.textContent!.replace(/\s*\*$/, '').replace(/ \(optional\)$/, '').trim())
 
-  it('shows reason-specific fields and swaps them when the reason changes', () => {
+  it('opens on General query with its own fields and no duplicate message box', () => {
     renderContact()
-    expect(screen.queryByLabelText(/Steps to reproduce/)).toBeNull()
+    expect(screen.getByRole('button', { name: /What is it about\? General query/ })).toBeTruthy()
+    expect(reasonLabels()).toEqual(['Subject', 'Your question'])
+    expect(screen.getAllByRole('textbox').filter(box => /message/i.test(box.getAttribute('aria-label') ?? ''))).toHaveLength(0)
+  })
+
+  it.each([
+    [/General query/, ['Subject', 'Your question']],
+    [/Feature request/, ['Your idea in one line', 'Part of Stracker it touches', 'How it would work', 'How it would help your preparation']],
+    [/Bug report/, ['Where it happened', 'What went wrong', 'Steps to reproduce', 'What you expected instead', 'Device and browser']],
+    [/Complaint/, ['What it concerns', 'What happened', 'What would put it right']],
+    [/Copyright/, ['Your work and your rights to it', 'Where it appears on Stracker', 'What you are asking us to do', expect.stringMatching(/^I believe in good faith/)]],
+    [/Sponsorship/, ['Organisation', 'Organisation website', 'Your role', 'Your proposal']]
+  ])('%s shows one coherent, non-overlapping field set', (reason, labels) => {
+    renderContact()
+    choose(reason)
+    expect(reasonLabels()).toEqual(labels)
+    // Only one subject-like and one main description box: no generic Subject/Message duplicates.
+    expect(document.querySelectorAll('#contact-subject')).toHaveLength(labels.includes('Subject') || labels.includes('Your idea in one line') ? 1 : 0)
+    expect(document.querySelectorAll('#contact-message')).toHaveLength(1)
+    expect(document.querySelectorAll('.contact-form textarea, .contact-form input[type="text"]:not(#contact-website), .contact-form input:not([type])').length).toBeGreaterThan(0)
+  })
+
+  it('drops the previous reason\'s values when the reason changes', () => {
+    renderContact()
     choose(/Bug report/)
-    expect(screen.getByLabelText(/Page or feature affected/)).toBeTruthy()
-    expect(screen.getByLabelText(/Steps to reproduce/)).toBeTruthy()
-    expect(screen.getByLabelText(/Device and browser/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/Where it happened/), { target: { value: 'Planner' } })
     choose(/Copyright/)
-    expect(screen.queryByLabelText(/Steps to reproduce/)).toBeNull()
-    expect(screen.getByLabelText(/Where the content appears/)).toBeTruthy()
-    expect(screen.getByRole('checkbox', { name: /good faith/ })).toBeTruthy()
-    choose(/Sponsorship/)
-    expect(screen.getByLabelText(/Organisation name/)).toBeTruthy()
-    expect(screen.getByLabelText(/Your proposal/)).toBeTruthy()
-    choose(/General query/)
-    expect(document.querySelector('.contact-reveal')).toBeNull()
+    expect(screen.queryByLabelText(/Where it happened/)).toBeNull()
+    choose(/Bug report/)
+    expect((screen.getByLabelText(/Where it happened/) as HTMLInputElement).value).toBe('')
   })
 
   it('reveals with a CSS animation that is switched off for reduced motion', () => {
     const css = readFileSync(`${process.cwd()}/src/styles/public.css`, 'utf8')
     expect(css).toMatch(/\.contact-reveal \{[^}]*animation: contact-reveal-in/)
     const reduced = css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)'))
-    expect(reduced).toMatch(/\.contact-reveal, \.reason-select-list \{ animation: none; \}/)
+    expect(reduced).toMatch(/\.contact-reveal, \.reason-select-list, \.contact-sent-badge \{ animation: none; \}/)
   })
 
   it('adds and removes up to five links', () => {
@@ -113,17 +134,16 @@ describe('contact page', () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true, id: 'x', uploads: [], finalised: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)
     renderContact()
-    fireEvent.click(screen.getByRole('button', { name: /Send message/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Send question/ }))
     expect(fetchMock).not.toHaveBeenCalled()
     expect(screen.getByText('Check the highlighted fields.')).toBeTruthy()
     fireEvent.change(screen.getByLabelText(/Your name/), { target: { value: 'Asha' } })
     fireEvent.change(screen.getByLabelText(/Email for our reply/), { target: { value: 'asha@example.com' } })
-    choose(/General query/)
-    fireEvent.change(screen.getByLabelText(/^Message/), { target: { value: 'How do I export my tests to CSV?' } })
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Send message/ })) })
+    fireEvent.change(screen.getByLabelText(/^Your question/), { target: { value: 'How do I export my tests to CSV?' } })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Send question/ })) })
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Message sent' })).toBeTruthy())
     const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
-    expect(body).toMatchObject({ action: 'start', name: 'Asha', reason: 'general_query', website: '', files: [] })
+    expect(body).toMatchObject({ action: 'start', name: 'Asha', reason: 'general_query', subject: '', message: 'How do I export my tests to CSV?', website: '', files: [] })
   })
 
   it('shows the server error and keeps the form when sending fails', async () => {
@@ -132,10 +152,13 @@ describe('contact page', () => {
     fireEvent.change(screen.getByLabelText(/Your name/), { target: { value: 'Asha' } })
     fireEvent.change(screen.getByLabelText(/Email for our reply/), { target: { value: 'asha@example.com' } })
     choose(/Feature request/)
-    fireEvent.change(screen.getByLabelText(/^Your idea/), { target: { value: 'Let me pin the planner to Home.' } })
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Send message/ })) })
+    fireEvent.click(screen.getByRole('button', { name: /Send idea/ }))
+    expect(screen.getByText('Sum it up in one line.')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/^Your idea in one line/), { target: { value: 'Pin the planner to Home' } })
+    fireEvent.change(screen.getByLabelText(/^How it would work/), { target: { value: 'Let me pin the planner to Home.' } })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Send idea/ })) })
     await waitFor(() => expect(screen.getByText(/sent several messages recently/)).toBeTruthy())
-    expect(screen.getByRole('button', { name: /Send message/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Send idea/ })).toBeTruthy()
   })
 
   it('keeps the honeypot out of sight and out of the tab order', () => {
