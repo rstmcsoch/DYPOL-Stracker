@@ -138,7 +138,7 @@ const descriptions: Record<ToolName, { description: string; kind: ToolKind; prog
   get_study_time_summary: { description: 'Summarize logged study minutes over a bounded number of recent days.', kind: 'read', progress: 'Summarizing your study time…' },
   get_settings: { description: 'Read non-sensitive study preferences, exam dates, goals, and analytics thresholds.', kind: 'read', progress: 'Checking your study settings…' },
   find_chapters: { description: 'Search the signed-in user’s Stracker chapter notebook by subject and name.', kind: 'read', progress: 'Finding the chapter…' },
-  create_test: { description: 'Propose a new test entry. Requires user confirmation before saving.', kind: 'write', progress: 'Preparing a test entry…' },
+  create_test: { description: 'Propose a new test entry from what the student said (title, date, type, marks/total, correct/wrong/skipped, time). Leave optional fields out unless given; never ask the student for an ID. Requires user confirmation before saving.', kind: 'write', progress: 'Preparing a test entry…' },
   update_test: { description: 'Propose changes to one owned test. Requires user confirmation before saving.', kind: 'write', progress: 'Preparing a test update…' },
   update_subject_score: { description: 'Propose a subject score update for an existing full-mock test. Requires confirmation.', kind: 'write', progress: 'Preparing a subject score update…' },
   delete_test: { description: 'Propose deletion of one test and its database-related child rows. Requires explicit confirmation.', kind: 'write', progress: 'Preparing a test deletion…' },
@@ -160,7 +160,9 @@ const descriptions: Record<ToolName, { description: string; kind: ToolKind; prog
 export const TOOL_DEFINITIONS: ToolDefinition[] = (Object.keys(toolSchemas) as ToolName[]).map(name => ({ name, schema: toolSchemas[name], ...descriptions[name] }))
 
 function modelSchema(schema: z.ZodType): Record<string, unknown> {
-  const generated = z.toJSONSchema(schema) as Record<string, unknown>
+  // Input shape: fields with a default (chapter_id, negative_marks, notes, …) are optional for the
+  // model. The output shape listed every one as required, so models asked students for all of them.
+  const generated = z.toJSONSchema(schema, { io: 'input' }) as Record<string, unknown>
   delete generated.$schema
   return generated
 }
