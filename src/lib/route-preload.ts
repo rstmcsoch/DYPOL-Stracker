@@ -6,9 +6,12 @@
  * Each loader is memoised, so `lazy()` and the prefetcher share one promise per chunk; a
  * failed load (offline, deploy swap) is forgotten so the next attempt retries.
  */
+import { withChunkRecovery } from './chunk-recovery'
+
 type Loader<T> = () => Promise<T>
 
-function once<T>(load: Loader<T>): Loader<T> {
+function once<T>(rawLoad: Loader<T>): Loader<T> {
+  const load = withChunkRecovery(rawLoad)
   let promise: Promise<T> | null = null
   return () => {
     if (!promise) promise = load().catch(error => { promise = null; throw error })

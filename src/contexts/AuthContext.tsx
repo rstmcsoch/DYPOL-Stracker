@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { localPreviewEnabled, supabase } from '../lib/supabase'
+import { localPreviewEnabled, readStoredSessionUser, supabase, supabaseAuthStorageKey } from '../lib/supabase'
 import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from '../lib/disposable-email'
 import { loginFailureReason, track } from '../lib/telemetry/client'
 import { displayNameFromMetadata, userAuthProviders } from '../lib/google-auth'
@@ -94,9 +94,20 @@ function friendlySignUpError(message: string): string {
   return friendlyAuthError(message)
 }
 
+function mayHaveSession(): boolean {
+  if (typeof window === 'undefined') return true
+  if (/[?&#](code|access_token|refresh_token|error_description|token_hash)=/.test(`${window.location.search}${window.location.hash}`)) return true
+  try { return Boolean(supabaseAuthStorageKey && window.localStorage.getItem(supabaseAuthStorageKey)) } catch { return true }
+}
+
+/** Longest the app waits on session restore before rendering anyway. */
+export const AUTH_RESTORE_TIMEOUT_MS = 5_000
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null)
-  const [loading, setLoading] = useState(true)
+  // A visitor with no saved session and no sign-in redirect in the URL is signed out for sure, so the
+  // public homepage paints immediately instead of waiting for supabase-js to start up.
+  const [loading, setLoading] = useState(() => !supabase || mayHaveSession())
   const [error, setError] = useState<string | null>(null)
   const [suspension, setSuspension] = useState<AccountNotice | null>(null)
 
@@ -109,20 +120,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     let mounted = true
+    let settled = false
     // A confirmation link lands with type=signup in the URL hash; record it once.
     let confirming = typeof window !== 'undefined' && /type=signup/.test(window.location.hash)
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return
       if (confirming && event === 'SIGNED_IN' && session?.user?.email_confirmed_at) { confirming = false; track('email_verification_completed') }
+      settled = true
       setUser(session?.user ? userFromSupabase(session.user) : null)
       setLoading(false)
     })
+    // Safety net: never hold the page on a spinner if session restore hangs (auth lock held by a
+    // frozen tab, a token refresh stuck on a bad connection). After AUTH_RESTORE_TIMEOUT_MS the
+    // app renders with the session saved on this device (or signed out if there is none); the
+    // real answer still replaces it as soon as supabase-js responds.
+    const restoreTimer = window.setTimeout(() => {
+      if (!mounted || settled) return
+      const stored = readStoredSessionUser()
+      setUser(current => current ?? (stored ? userFromSupabase(stored) : null))
+      setLoading(false)
+    }, AUTH_RESTORE_TIMEOUT_MS)
     void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      settled = true
+      window.clearTimeout(restoreTimer)
       if (!mounted) return
       if (sessionError) setError('Could not restore your session. Please sign in again.')
       setUser(data.session?.user ? userFromSupabase(data.session.user) : null)
       setLoading(false)
     }).catch(() => {
+      settled = true
+      window.clearTimeout(restoreTimer)
       if (mounted) {
         setUser(null)
         setLoading(false)
@@ -131,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     return () => {
       mounted = false
+      window.clearTimeout(restoreTimer)
       listener.subscription.unsubscribe()
     }
   }, [])

@@ -1,5 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { routeLoaders } from './lib/route-preload'
+import { withChunkRecovery } from './lib/chunk-recovery'
+import { ChunkErrorBoundary } from './components/ChunkErrorBoundary'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -18,11 +20,11 @@ import { isKnownAppPath } from './lib/app-routes'
 import { SiteStatusProvider } from './components/site/SiteStatusContext'
 import { SiteGate } from './components/site/SiteGate'
 
-const LandingPage = lazy(() => import('./pages/LandingPage'))
-const LoginPage = lazy(() => import('./pages/LoginPage'))
-const SignupPage = lazy(() => import('./pages/SignupPage'))
-const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
-const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
+const LandingPage = lazy(withChunkRecovery(() => import('./pages/LandingPage')))
+const LoginPage = lazy(withChunkRecovery(() => import('./pages/LoginPage')))
+const SignupPage = lazy(withChunkRecovery(() => import('./pages/SignupPage')))
+const ResetPasswordPage = lazy(withChunkRecovery(() => import('./pages/ResetPasswordPage')))
+const AuthCallbackPage = lazy(withChunkRecovery(() => import('./pages/AuthCallbackPage')))
 const SyllabusPage = lazy(routeLoaders['/syllabus'])
 const TestsPage = lazy(routeLoaders['/tests'])
 const MistakesPage = lazy(routeLoaders['/mistakes'])
@@ -44,8 +46,8 @@ const StudyNowPage = lazy(routeLoaders['/study-now'])
 // Private operations console: lazy-loaded so its code and styles never reach the public or
 // notebook bundles, and are not even downloaded by a visitor without a Stracker session.
 const ControlPanelApp = lazy(() => import('./control/ControlPanelApp'))
-const InfoPage = lazy(() => import('./pages/InfoPage'))
-const ContactPage = lazy(() => import('./pages/ContactPage'))
+const InfoPage = lazy(withChunkRecovery(() => import('./pages/InfoPage')))
+const ContactPage = lazy(withChunkRecovery(() => import('./pages/ContactPage')))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -176,7 +178,7 @@ export default function App() {
     <ToastProvider>
       <AuthProvider>
         <SiteStatusProvider>
-          <BrowserRouter><TelemetryTracker /><AppRoutes /></BrowserRouter>
+          <BrowserRouter><TelemetryTracker /><ChunkErrorBoundary><AppRoutes /></ChunkErrorBoundary></BrowserRouter>
         </SiteStatusProvider>
       </AuthProvider>
     </ToastProvider>
