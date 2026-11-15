@@ -341,7 +341,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .mobile-topbar, .mobile-nav { display: none; }
 .mobile-sync { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px; color: var(--ink-soft); background: transparent; }
 .mobile-pending-dot { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border: 1px solid var(--paper); border-radius: 50%; background: var(--orange); }
-.quick-action-area { position: fixed; right: 27px; bottom: 28px; z-index: 45; }
+.quick-action-area { position: fixed; right: 27px; bottom: 28px; z-index: 62; }
 .quick-action-fab { display: grid; place-items: center; width: 58px; height: 58px; border: 1px solid var(--fab-border); border-radius: 19px 17px 20px 16px; color: var(--fab-ink); background: var(--fab-bg); box-shadow: 0 9px 22px rgba(50, 74, 116, .28); cursor: pointer; transform: rotate(2deg); transition: transform .16s ease, box-shadow .16s ease; }
 .quick-action-fab:hover { transform: translateY(-2px) rotate(-1deg); box-shadow: 0 12px 26px rgba(50, 74, 116, .33); }
 .quick-action-fab.fab-open { transform: rotate(0deg); }

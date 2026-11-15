@@ -139,7 +139,13 @@ describe('sync pill placement + mobile FAB (follow-up)', () => {
   it('short-height tiers cannot drop the lightning button under the mobile bar', () => {
     expect(layout).toContain('@media (min-width: 961px) and (max-height: 760px)')
     expect(layout).not.toContain('@media (max-height: 760px) { :root { --fab-right: 20px; --fab-bottom: 20px; } }')
-    expect(responsive).toContain('.quick-action-area { z-index: 65; }')
+    // One z-index scale: the lightning button (62) always floats above the phone bottom bar (60)
+    // and the Ask Stracker launcher (56), at every width.
+    const base = readFileSync(`${process.cwd()}/src/styles/base.css`, 'utf8')
+    const z = (css: string, selector: string) => Number(css.match(new RegExp(`${selector.replace('.', '\\.')} \\{[^}]*z-index: ?(\\d+)`))?.[1])
+    expect(z(base, '.quick-action-area')).toBe(62)
+    expect(z(base, '.quick-action-area')).toBeGreaterThan(z(base, '.mobile-nav'))
+    expect(responsive).not.toMatch(/\.quick-action-area \{ z-index/)
     // The pair itself is untouched: same component, same four actions.
     for (const action of ['Plan a task', 'Add a test', 'Log practice', 'Focus session']) expect(shell).toContain(action)
     expect(shell).toContain('quick-action-fab')

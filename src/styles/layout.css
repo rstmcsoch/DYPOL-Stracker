@@ -178,6 +178,25 @@
   .ai-launcher, .ai-launcher-label { transition: none; }
 }
 
+/* Floating layers, bottom to top (one scale, so nothing fights at any width):
+     40  phone top bar (sticky)
+     56  Ask Stracker launcher (sits above the lightning button)
+     60  phone bottom bar
+     62  lightning button + its quick-action menu (above the launcher and the bottom bar)
+     65  Stracker AI floating window
+     80  undo toast
+     95/100  phone drawer / sheets
+    110  Stracker AI large workspace
+    120  dialogs          130  overflow menus
+    150  toasts           200  onboarding      260  account notice
+   The quick-action menu opens upward over the launcher's spot, so the launcher steps aside
+   while the menu is open (no animation, keeps its place). */
+.ai-launcher-wrap.ai-launcher-hidden { visibility: hidden; pointer-events: none; }
+@media (max-width: 960px) {
+  /* Toasts sit above the phone bottom bar and stop short of the lightning button. */
+  .toast-stack { bottom: calc(70px + var(--safe-bottom)); width: min(400px, calc(100vw - 16px - var(--fab-right) - var(--fab-size) - 10px)); }
+}
+
 /* Home: reserve room under the last card for the stacked floating buttons (lightning + Ask Stracker),
    so "One thing to notice" can always scroll clear of them. Uses the same --fab-* variables (which
    already include the safe-area inset on phones), so it holds at every breakpoint. */

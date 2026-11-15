@@ -239,7 +239,8 @@ export function AppFrame() {
     {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     {quickTaskOpen && <QuickTaskDialog data={data} onClose={() => setQuickTaskOpen(false)} />}
     {undoAvailable && <div className="undo-toast" role="status"><Check size={15} /><span>Deleted</span><button onClick={() => void undoDelete().then(() => notify('Deletion undone.')).catch(error => notify(error instanceof Error ? error.message : 'Could not undo deletion.', 'error'))}>Undo</button><IconButton label="Dismiss" onClick={dismissUndo}><X size={14} /></IconButton></div>}
-    <AIExperience />
+    {/* The Ask Stracker launcher sits right where the quick-action menu opens, so it steps aside while the menu is open. */}
+    <AIExperience hideLauncher={quickActionsOpen} />
   </div>
   {onboarding && <OnboardingDialog />}
   </>
