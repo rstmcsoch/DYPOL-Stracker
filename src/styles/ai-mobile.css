@@ -1,0 +1,87 @@
+/* Stracker AI floating window on phones (≤520px): about 20% smaller than before, so the page
+   stays visible around it. The window sits above the lightning button (never over it) and below
+   the phone top bar (even on short phones), with an
+   even 10vw margin left and right, and its corners are 25% rounder (14–16px → 18–20px).
+   Floors: no reading text under 12px, tap targets about 40px, and the message box keeps 16px
+   type so iOS never zooms in. Only the small floating window changes; the large workspace,
+   tablets and desktop are untouched. */
+@media (max-width: 520px) {
+  html .app-shell .ai-floating-window {
+    top: auto;
+    left: auto;
+    right: 10vw;
+    bottom: calc(var(--fab-bottom) + var(--fab-size) + 12px);
+    width: 80vw;
+    height: min(calc((100dvh - 100px - var(--safe-bottom)) * .8), calc(100dvh - var(--fab-bottom) - var(--fab-size) - 12px - 70px - env(safe-area-inset-top, 0px)));
+    min-height: 0;
+    max-height: none;
+    border-radius: 18px 20px 16px 19px;
+  }
+  html .app-shell .ai-floating-window .ai-floating-shell { border-radius: 18px 20px 16px 19px; font-size: 12.8px; }
+
+  /* Header */
+  html .app-shell .ai-floating-window .ai-window-header { gap: 4px; min-height: 44px; padding: 2px 3px 2px 9px; }
+  html .app-shell .ai-floating-window .ai-window-brand { gap: 7px; }
+  html .app-shell .ai-floating-window .ai-brand-mark { width: 27px; height: 27px; border-radius: 9px 7px 10px 7px; }
+  html .app-shell .ai-floating-window .ai-brand-mark svg { width: 13px; height: 13px; }
+  html .app-shell .ai-floating-window .ai-window-brand strong { font-size: 13px; }
+  html .app-shell .ai-floating-window .ai-window-brand span:not(.ai-brand-mark) { max-width: 100%; font-size: 12px; }
+  html .app-shell .ai-floating-window .ai-window-tools { gap: 0; }
+  html .app-shell .ai-floating-window .ai-window-tools .icon-button { width: 34px; min-width: 34px; height: 40px; min-height: 40px; border-radius: 10px; }
+  html .app-shell .ai-floating-window .ai-window-tools .icon-button svg { width: 14px; height: 14px; }
+
+  /* Title strip */
+  html .app-shell .ai-floating-window .ai-compact-titlebar { min-height: 28px; padding: 3px 11px; font-size: 12px; }
+  html .app-shell .ai-floating-window .ai-ready-dot { font-size: 12px; }
+  html .app-shell .ai-floating-window .ai-add-own-model { position: relative; }
+  html .app-shell .ai-floating-window .ai-add-own-model::after { position: absolute; inset: -10px -2px; content: ''; } /* ~40px tap area, same look */
+  html[data-app-font] .app-shell .ai-floating-window button.ai-add-own-model { font-size: 12px !important; }
+
+  /* Conversation */
+  html .app-shell .ai-floating-window .ai-message-scroll { padding: 10px 8px 6px; }
+  html .app-shell .ai-floating-window .ai-welcome-mark { width: 36px; height: 36px; margin: 5px 0 12px; border-radius: 12px 10px 12px 9px; }
+  html .app-shell .ai-floating-window .ai-welcome-mark svg { width: 16px; height: 16px; }
+  html[data-app-font] .app-shell .ai-floating-window .ai-welcome h2 { margin-bottom: 5px; font-size: 16px !important; }
+  html[data-app-font] .app-shell .ai-floating-window .ai-welcome > p { font-size: 12px !important; }
+  html .app-shell .ai-floating-window .ai-connect-nudge { gap: 6px; margin-top: 12px; padding: 7px; border-radius: 8px; }
+  html .app-shell .ai-floating-window .ai-connect-icon { width: 25px; height: 25px; }
+  html .app-shell .ai-floating-window .ai-connect-icon svg { width: 14px; height: 14px; }
+  html .app-shell .ai-floating-window .ai-connect-nudge :is(strong, small) { font-size: 12px; }
+  html .app-shell .ai-floating-window .ai-connect-nudge .button { min-height: 40px; padding: 3px 9px; }
+  html[data-app-font] .app-shell .ai-floating-window .ai-connect-nudge .button { font-size: 12px !important; }
+  html .app-shell .ai-floating-window .ai-provider-ready { gap: 6px; margin-top: 11px; font-size: 12px; }
+  html .app-shell .ai-floating-window .ai-suggestion-grid { gap: 4px; margin-top: 11px; }
+  html .app-shell .ai-floating-window .ai-suggestion-grid button { grid-template-columns: 18px minmax(0, 1fr) 12px; gap: 5px; min-height: 40px; padding: 4px 7px; }
+  html[data-app-font] .app-shell .ai-floating-window .ai-suggestion-grid button { font-size: 12px !important; }
+  html .app-shell .ai-floating-window .ai-suggestion-grid button > span { font-size: 12px; }
+  html .app-shell .ai-floating-window .ai-suggestion-grid button > svg { width: 12px; height: 12px; }
+  html[data-app-font] .app-shell .ai-floating-window .ai-message-body { font-size: 12.8px !important; }
+  html .app-shell .ai-floating-window .ai-user-bubble { gap: 4px; padding: 7px 9px 4px; border-radius: 10px 10px 3px 10px; }
+  html .app-shell .ai-floating-window .ai-user-bubble time { font-size: 12px; }
+  html .app-shell .ai-floating-window :is(.ai-task-progress, .ai-typing-progress, .ai-retry-row, .ai-confirm-expired) { font-size: 12px; }
+  html .app-shell .ai-floating-window .ai-task-progress { gap: 5px; padding: 6px 7px; }
+  html .app-shell .ai-floating-window .ai-confirm-card { gap: 7px; padding: 8px; }
+  html .app-shell .ai-floating-window .ai-confirm-icon { width: 24px; height: 24px; }
+  html .app-shell .ai-floating-window .ai-confirm-heading strong { font-size: 12.5px; }
+  html .app-shell .ai-floating-window :is(.ai-confirm-heading small, .ai-confirm-summary > strong, .ai-confirm-summary dt, .ai-confirm-summary dd) { font-size: 12px; }
+  html .app-shell .ai-floating-window .ai-confirm-summary { gap: 6px; padding: 6px 7px; }
+  html .app-shell .ai-floating-window .ai-confirm-summary dl > div { grid-template-columns: minmax(70px, .42fr) minmax(0, 1fr); gap: 6px; }
+  html .app-shell .ai-floating-window :is(.ai-confirm-actions, .ai-retry-row) .button { min-height: 40px; padding: 4px 8px; }
+  html[data-app-font] .app-shell .ai-floating-window :is(.ai-confirm-actions, .ai-retry-row) .button { font-size: 12px !important; }
+  html .app-shell .ai-floating-window .ai-scroll-bottom { min-height: 36px; padding: 3px 9px; font-size: 12px; }
+
+  /* Composer */
+  html .app-shell .ai-floating-window .ai-composer-wrap { padding: 5px 6px 4px; }
+  html .app-shell .ai-floating-window .ai-composer { gap: 4px; padding: 5px 6px 4px; border-radius: 9px 10px 8px 10px; }
+  /* 16px keeps iOS from zooming the page when the box is tapped (the one exception to the shrink). */
+  html[data-app-font] .app-shell .ai-floating-window .ai-composer textarea { min-height: 36px; padding: 6px 2px 4px; font-size: 16px !important; line-height: 1.4; }
+  /* A long hint stays on one line (ends in …) instead of showing a clipped second line. */
+  html .app-shell .ai-floating-window .ai-composer textarea:placeholder-shown { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  html .app-shell .ai-floating-window .ai-composer-footer { gap: 6px; }
+  html .app-shell .ai-floating-window .ai-composer-footer > span { flex: 1 1 auto; min-width: 0; }
+  html .app-shell .ai-floating-window .ai-composer-footer > div { flex: none; }
+  html .app-shell .ai-floating-window .ai-message-limit { white-space: nowrap; }
+  html .app-shell .ai-floating-window :is(.ai-composer-footer > span, .ai-message-limit) { font-size: 12px; line-height: 1.3; }
+  html .app-shell .ai-floating-window .ai-send-button { width: 40px; height: 40px; border-radius: 11px 9px 12px 10px; }
+  html .app-shell .ai-floating-window .ai-send-button svg { width: 15px; height: 15px; }
+}
