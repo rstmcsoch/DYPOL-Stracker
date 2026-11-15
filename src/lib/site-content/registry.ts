@@ -1,4 +1,3 @@
-import { SYLLABUS } from '../syllabus.js'
 import { DEFAULT_ABOUT_BODY, DEFAULT_PRIVACY_BODY, DEFAULT_TERMS_BODY } from './info-page-defaults.js'
 
 /**
@@ -68,8 +67,6 @@ export const HOMEPAGE_ANCHOR_TARGETS = [
   '#top', '#why-stracker', '#features', '#how-it-works', '#ai', '#privacy', '#dypol-labs'
 ] as const
 
-const CHAPTER_COUNT = Object.values(SYLLABUS).reduce((sum, chapters) => sum + chapters.length, 0)
-
 const fields: FieldDefinition[] = []
 
 function field(
@@ -114,7 +111,7 @@ field('public', 'Header', 'Navigation', 'public.header.privacy.label', 'Section 
 field('public', 'Header', 'Account buttons', 'public.header.login.label', 'Log in button', 'text', 'Log In', { maxLength: 30 })
 field('public', 'Header', 'Account buttons', 'public.header.signup.label', 'Sign up button', 'text', 'Sign Up', { maxLength: 30 })
 
-field('public', HOME, 'Hero', 'public.hero.eyebrow', 'Eyebrow line', 'text', 'FOR EVERY EXAM · A DIGITAL STUDY NOTEBOOK', { maxLength: 90 })
+field('public', HOME, 'Hero', 'public.hero.eyebrow', 'Eyebrow line', 'text', 'BUILT FOR EVERY MAJOR EXAM · STUDY SMARTER', { maxLength: 90 })
 field('public', HOME, 'Hero', 'public.hero.title', 'Heading (first part)', 'text', 'Your exam preparation, organized in', { maxLength: 120, help: 'The main heading is this text followed by the emphasised part below.' })
 field('public', HOME, 'Hero', 'public.hero.title_emphasis', 'Heading (emphasised part)', 'text', 'one serious study notebook.', { maxLength: 80 })
 field('public', HOME, 'Hero', 'public.hero.lede', 'Introduction', 'multiline',
@@ -153,9 +150,9 @@ field('public', HOME, 'Features', 'public.features.footnote', 'Footnote', 'multi
 const FEATURES: Array<{ title: string; summary: string; points: string[] }> = [
   {
     title: 'Syllabus Notebook',
-    summary: 'Your whole exam topic list, kept like a real register.',
+    summary: 'Your subjects, papers and chapters, kept like a real register.',
     points: [
-      `Editable Physics, Chemistry and Maths chapters from the seeded ${CHAPTER_COUNT}-chapter grouping`,
+      'Subjects set by the exam you pick, with chapters you can add, edit and reorder',
       'Status and priority for each chapter: Not Started, Studying, Done or Revised',
       'Chapter notes, formula notes, search and custom ordering in one place'
     ]
@@ -291,9 +288,9 @@ PRINCIPLE_SLOTS.forEach(([title, body], index) => {
 
 field('public', HOME, 'How it works', 'public.how.eyebrow', 'Eyebrow line', 'text', 'HOW IT WORKS', { maxLength: 90 })
 field('public', HOME, 'How it works', 'public.how.title', 'Heading', 'text', 'Four steps, repeated all year.', { maxLength: 120 })
-field('public', HOME, 'How it works', 'public.how.lede', 'Introduction', 'multiline', 'This is the whole method. There is nothing to configure beyond your own syllabus and your own dates.')
+field('public', HOME, 'How it works', 'public.how.lede', 'Introduction', 'multiline', 'This is the whole method, whichever exam you are preparing for. There is nothing to configure beyond your own syllabus and your own dates.')
 const STEPS: Array<[string, string]> = [
-  ['Set up your preparation', 'Start from the seeded syllabus: set your exam dates and daily goal, mark what you have already covered, and put the first chapters in order.'],
+  ['Set up your preparation', 'Pick the exam you are preparing for, set your dates and daily goal, then organise your subjects, topics and chapters and mark what you have already covered.'],
   ['Study and record', 'Run focus sessions, tick off the day’s tasks, log every test with its marks and counts, and file the mistakes that cost you.'],
   ['Analyse', 'Open the analytics page and the due desk: subject signals, chapter trends, error types and the chapters sitting below your threshold.'],
   ['Improve', 'Revise what is due, retry the mistakes, and let that decide tomorrow’s tasks and this week’s goals. Then run the loop again.']
@@ -340,7 +337,7 @@ PRIVACY.forEach(([title, body], index) => {
 field('public', HOME, 'Privacy', 'public.privacy.foot', 'Footnote', 'multiline', 'No ads, no third-party trackers, and only the public key in the browser.')
 
 field('public', HOME, 'DYPOL LABS', 'public.dypol.title', 'Heading', 'text', 'Stracker by DYPOL LABS', { maxLength: 120 })
-field('public', HOME, 'DYPOL LABS', 'public.dypol.body', 'Paragraph', 'multiline', 'A DYPOL LABS product: practical tools for serious learners that do one job well and keep your data yours.')
+field('public', HOME, 'DYPOL LABS', 'public.dypol.body', 'Paragraph', 'multiline', 'A DYPOL LABS product: an organised preparation system for serious aspirants across school, entrance, competitive and professional exams — practical tools that do one job well and keep your data yours.')
 field('public', HOME, 'DYPOL LABS', 'public.dypol.tag', 'Tag', 'text', 'A DYPOL LABS STUDY TOOL', { maxLength: 60 })
 
 field('public', HOME, 'Final call to action', 'public.final.eyebrow', 'Eyebrow line', 'text', 'LAST PAGE, FIRST ENTRY', { maxLength: 90 })
@@ -351,7 +348,7 @@ field('public', HOME, 'Final call to action', 'public.final.cta_primary.label', 
 field('public', HOME, 'Final call to action', 'public.final.cta_primary.href', 'Primary button destination', 'link', '/signup')
 field('public', HOME, 'Final call to action', 'public.final.cta_secondary.label', 'Secondary button label', 'text', 'I already have an account', { maxLength: 60 })
 field('public', HOME, 'Final call to action', 'public.final.cta_secondary.href', 'Secondary button destination', 'link', '/login')
-field('public', HOME, 'Final call to action', 'public.final.note', 'Note', 'multiline', 'Start with a ready-made, editable syllabus. Set your dates and goal; the plan follows.')
+field('public', HOME, 'Final call to action', 'public.final.note', 'Note', 'multiline', 'Pick your exam, set your dates and goal; the plan follows.')
 
 field('public', 'Footer', 'Brand', 'public.footer.tagline', 'Tagline', 'text', 'A focused digital study notebook for exam preparation.', { maxLength: 160 })
 field('public', 'Footer', 'Brand', 'public.footer.copyright', 'Copyright line (after the year)', 'text', 'DYPOL LABS · Stracker', { maxLength: 120, help: 'The year is added automatically: “© 2026 …”.' })

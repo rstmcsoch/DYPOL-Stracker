@@ -76,9 +76,9 @@ describe('homepage placement', () => {
   it('renders the player between the DYPOL LABS band and the final CTA', () => {
     const { container } = render(<MemoryRouter initialEntries={['/']}><LandingPage /></MemoryRouter>)
     const main = container.querySelector('main')!
-    const dypol = main.querySelector('.pub-section-dypol')!
+    const dypol = main.querySelector('#dypol-labs')!
     const promo = main.querySelector('.pub-section-promo')!
-    const final = main.querySelector('.pub-final')!
+    const final = main.querySelector('.hp-final')!
 
     expect(dypol).not.toBeNull()
     expect(promo).not.toBeNull()

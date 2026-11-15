@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   AlarmClock, ArrowRight, BookOpen, CalendarCheck, Check, ChevronDown, ChevronUp, Compass,
   ListChecks, LockKeyhole, NotebookPen, Repeat2, Shield, ShieldCheck, Sparkles, Target,
@@ -8,30 +8,24 @@ import { useSiteText } from '../../contexts/SiteContentContext'
 import { parseOrder } from '../../lib/site-content/content'
 import { fieldDefinition } from '../../lib/site-content/registry'
 import { SiteLink } from './SiteLink'
+import { prefersReducedMotion } from './home-motion'
+import { useFeatureOrder } from './feature-order'
 
 /** Splits a one-item-per-line field into clean list entries. */
 function lines(value: string): string[] {
   return value.split('\n').map(line => line.trim()).filter(Boolean)
 }
 
-function SectionShell({ id, eyebrow, title, lede, children, tone = 'paper' }: {
-  id: string
-  eyebrow: string
-  title: ReactNode
-  lede?: ReactNode
-  children: ReactNode
-  tone?: 'paper' | 'plain'
-}) {
-  return <section id={id} className={`pub-section pub-section-${tone}`} aria-labelledby={`${id}-title`}>
-    <div className="pub-shell">
-      <div className="pub-section-head">
-        <p className="pub-eyebrow"><span aria-hidden="true">✎</span> {eyebrow}</p>
-        <h2 id={`${id}-title`}>{title}</h2>
-        {lede && <p className="pub-lede">{lede}</p>}
-      </div>
-      {children}
-    </div>
-  </section>
+/** Pastel tones rotate through cards so neighbours never look identical. */
+const TONES = ['blue', 'mint', 'orange', 'pink', 'violet', 'sky', 'teal', 'yellow'] as const
+const tone = (index: number) => TONES[index % TONES.length]
+
+function SectionHead({ id, eyebrow, title, lede, center = false }: { id: string; eyebrow: string; title: ReactNode; lede?: ReactNode; center?: boolean }) {
+  return <div className={`hp-head${center ? ' hp-head-center' : ''}`} data-reveal="">
+    <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {eyebrow}</p>
+    <h2 id={`${id}-title`} className="hp-h2">{title}</h2>
+    {lede && <p className="hp-lede">{lede}</p>}
+  </div>
 }
 
 /* ------------------------------------------------------------ the study loop */
@@ -47,124 +41,112 @@ const LOOP_STEPS = [
 
 export function StudyLoopSection() {
   const t = useSiteText
-  return <SectionShell
-    id="why-stracker"
-    eyebrow={t('public.loop.eyebrow')}
-    title={t('public.loop.title')}
-    lede={t('public.loop.lede')}
-  >
-    <ol className="loop-list">
-      {LOOP_STEPS.map((item, index) => <li className="loop-step" key={item.step}>
-        <div className="loop-step-card">
-          <span className="loop-step-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+  return <section id="why-stracker" className="hp-section" aria-labelledby="why-stracker-title">
+    <div className="hp-shell">
+      <SectionHead id="why-stracker" eyebrow={t('public.loop.eyebrow')} title={t('public.loop.title')} lede={t('public.loop.lede')} />
+      <ol className="hp-loop">
+        {LOOP_STEPS.map((item, index) => <li className={`hp-loop-step hp-tone-${tone(index)}`} key={item.step} data-reveal="" style={{ ['--d' as string]: `${index * 60}ms` }}>
+          <span className="hp-loop-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
           <h3>{item.step}</h3>
           <p>{t(`public.loop.step_${index + 1}.body`)}</p>
-          <span className="loop-step-link">{item.link}</span>
-        </div>
-        {index < LOOP_STEPS.length - 1
-          ? <span className="loop-arrow" aria-hidden="true">→</span>
-          : <span className="loop-arrow loop-arrow-repeat" aria-hidden="true">↻</span>}
-      </li>)}
-    </ol>
-    <p className="loop-footnote"><Repeat2 size={15} aria-hidden="true" /> {t('public.loop.footnote')}</p>
-  </SectionShell>
+          <span className="hp-loop-chip">{item.link}</span>
+          <span className="hp-loop-arrow" aria-hidden="true">{index < LOOP_STEPS.length - 1 ? '→' : '↻'}</span>
+        </li>)}
+      </ol>
+      <p className="hp-footnote" data-reveal=""><Repeat2 size={15} aria-hidden="true" /> {t('public.loop.footnote')}</p>
+    </div>
+  </section>
 }
 
 /* ----------------------------------------------------------------- features */
 
 /** Fixed icon map for owner-selectable feature icons (see FEATURE_ICON_OPTIONS in the registry). */
 const FEATURE_ICONS: Record<string, ReactNode> = {
-  'book-open': <BookOpen size={19} />, 'list-checks': <ListChecks size={19} />, 'notebook-pen': <NotebookPen size={19} />,
-  'alarm-clock': <AlarmClock size={19} />, 'calendar-check': <CalendarCheck size={19} />, timer: <Timer size={19} />,
-  'trending-up': <TrendingUp size={19} />, sparkles: <Sparkles size={19} />, target: <Target size={19} />,
-  'shield-check': <ShieldCheck size={19} />, compass: <Compass size={19} />, repeat: <Repeat2 size={19} />
+  'book-open': <BookOpen size={20} />, 'list-checks': <ListChecks size={20} />, 'notebook-pen': <NotebookPen size={20} />,
+  'alarm-clock': <AlarmClock size={20} />, 'calendar-check': <CalendarCheck size={20} />, timer: <Timer size={20} />,
+  'trending-up': <TrendingUp size={20} />, sparkles: <Sparkles size={20} />, target: <Target size={20} />,
+  'shield-check': <ShieldCheck size={20} />, compass: <Compass size={20} />, repeat: <Repeat2 size={20} />
 }
 
-const FEATURE_COUNT = fieldDefinition('public.features.order')?.itemCount ?? 8
 const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
+
 
 export function FeatureSection() {
   const [expanded, setExpanded] = useState(false)
   const t = useSiteText
-  const order = parseOrder(t('public.features.order'), FEATURE_COUNT)
-    ?? Array.from({ length: FEATURE_COUNT }, (_, index) => index + 1)
+  const order = useFeatureOrder()
   const collapsible = order.length > 4
 
-  return <SectionShell
-    id="features"
-    eyebrow={t('public.features.eyebrow')}
-    title={t('public.features.title')}
-    lede={t('public.features.lede')}
-  >
-    <ol id="feature-list" className={`feature-list ${expanded ? 'is-expanded' : ''}`}>
-      {order.map((n, index) => {
-        const icon = FEATURE_ICONS[t(`public.features.item_${n}.icon`)] ?? <Sparkles size={19} />
-        const image = t(`public.features.item_${n}.image`)
-        return <li className={`feature-entry${image ? ' has-image' : ''}`} key={n}>
-          {image && <img className="feature-image" src={image} alt={t(`public.features.item_${n}.title`)} loading="lazy" decoding="async" width={640} height={360} />}
-          <div className="feature-entry-head">
-            <span className="feature-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-            <span className="feature-icon" aria-hidden="true">{icon}</span>
-            <div>
-              <h3>{t(`public.features.item_${n}.title`)}</h3>
-              <p>{t(`public.features.item_${n}.summary`)}</p>
+  return <section id="features" className="hp-section hp-section-band" aria-labelledby="features-title">
+    <span className="hp-doodle hp-doodle-features" data-px="12" aria-hidden="true">✎</span>
+    <div className="hp-shell">
+      <SectionHead id="features" eyebrow={t('public.features.eyebrow')} title={t('public.features.title')} lede={t('public.features.lede')} />
+      <ol id="feature-list" className={`hp-features${expanded ? ' is-expanded' : ''}`}>
+        {order.map((n, index) => {
+          const icon = FEATURE_ICONS[t(`public.features.item_${n}.icon`)] ?? <Sparkles size={20} />
+          const image = t(`public.features.item_${n}.image`)
+          return <li className={`hp-feature hp-tone-${tone(index)}${image ? ' has-image' : ''}`} key={n} data-reveal="">
+            {image && <img className="hp-feature-image" src={image} alt={t(`public.features.item_${n}.title`)} loading="lazy" decoding="async" width={640} height={360} />}
+            <div className="hp-feature-head">
+              <span className="hp-feature-icon" aria-hidden="true">{icon}</span>
+              <span className="hp-feature-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
             </div>
-          </div>
-          <ul className="feature-points">
-            {lines(t(`public.features.item_${n}.points`)).map(point => <li key={point}><Check size={13} strokeWidth={3} aria-hidden="true" /> <span>{point}</span></li>)}
-          </ul>
-        </li>
-      })}
-    </ol>
-    {collapsible && <button
-      className="feature-toggle"
-      type="button"
-      aria-controls="feature-list"
-      aria-expanded={expanded}
-      aria-label={expanded ? 'Show fewer features' : `See all ${NUMBER_WORDS[order.length] ?? order.length} Stracker features`}
-      onClick={() => setExpanded(value => !value)}
-    >
-      <span>{expanded ? 'Show fewer features' : 'See all features'}</span>
-      {expanded ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
-    </button>}
-    <p className="feature-footnote">
-      <span aria-hidden="true">✎</span> {t('public.features.footnote')}
-    </p>
-  </SectionShell>
-}
-
-/* -------------------------------------------------------- product principle */
-
-export function PrincipleSection() {
-  const t = useSiteText
-  const principleOrder = parseOrder(t('public.principles.order'), PRINCIPLE_COUNT)
-    ?? Array.from({ length: Math.min(6, PRINCIPLE_COUNT) }, (_, index) => index + 1)
-  return <section className="pub-section pub-section-principle" aria-labelledby="principle-title">
-    <div className="pub-shell">
-      <div className="principle-spread">
-        <div className="principle-copy">
-          <p className="pub-eyebrow"><span aria-hidden="true">✎</span> {t('public.principles.eyebrow')}</p>
-          <h2 id="principle-title">{t('public.principles.title')}</h2>
-          <p>{t('public.principles.body')}</p>
-          <p className="principle-note"><Compass size={15} aria-hidden="true" /> <span>{t('public.principles.note')}</span></p>
-        </div>
-        <ul className="principle-list">
-          {principleOrder.map(n => <li key={n}>
-            <span className="principle-tick" aria-hidden="true">{PRINCIPLE_ICONS[t(`public.principles.item_${n}.icon`)] ?? <Check size={13} strokeWidth={3} />}</span>
-            <div><strong>{t(`public.principles.item_${n}.title`)}</strong><p>{t(`public.principles.item_${n}.body`)}</p></div>
-          </li>)}
-        </ul>
+            <h3>{t(`public.features.item_${n}.title`)}</h3>
+            <p>{t(`public.features.item_${n}.summary`)}</p>
+            <ul className="hp-feature-points">
+              {lines(t(`public.features.item_${n}.points`)).map(point => <li key={point}><Check size={13} strokeWidth={3} aria-hidden="true" /> <span>{point}</span></li>)}
+            </ul>
+          </li>
+        })}
+      </ol>
+      <div className="hp-features-foot">
+        {collapsible && <button
+          className="hp-btn hp-btn-secondary hp-feature-toggle"
+          type="button"
+          aria-controls="feature-list"
+          aria-expanded={expanded}
+          aria-label={expanded ? 'Show fewer features' : `See all ${NUMBER_WORDS[order.length] ?? order.length} Stracker features`}
+          onClick={() => setExpanded(value => !value)}
+        >
+          <span>{expanded ? 'Show fewer features' : 'See all features'}</span>
+          {expanded ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
+        </button>}
+        <p className="hp-footnote"><span aria-hidden="true">✎</span> {t('public.features.footnote')}</p>
       </div>
     </div>
   </section>
 }
 
+/* -------------------------------------------------------- product principle */
+
 const PRINCIPLE_COUNT = fieldDefinition('public.principles.order')?.itemCount ?? 6
 const PRINCIPLE_ICONS: Record<string, ReactNode> = {
-  'book-open': <BookOpen size={13} />, 'list-checks': <ListChecks size={13} />, 'notebook-pen': <NotebookPen size={13} />,
-  'alarm-clock': <AlarmClock size={13} />, 'calendar-check': <CalendarCheck size={13} />, timer: <Timer size={13} />,
-  'trending-up': <TrendingUp size={13} />, sparkles: <Sparkles size={13} />, target: <Target size={13} />,
-  'shield-check': <ShieldCheck size={13} />, compass: <Compass size={13} />, repeat: <Repeat2 size={13} />
+  'book-open': <BookOpen size={15} />, 'list-checks': <ListChecks size={15} />, 'notebook-pen': <NotebookPen size={15} />,
+  'alarm-clock': <AlarmClock size={15} />, 'calendar-check': <CalendarCheck size={15} />, timer: <Timer size={15} />,
+  'trending-up': <TrendingUp size={15} />, sparkles: <Sparkles size={15} />, target: <Target size={15} />,
+  'shield-check': <ShieldCheck size={15} />, compass: <Compass size={15} />, repeat: <Repeat2 size={15} />
+}
+
+export function PrincipleSection() {
+  const t = useSiteText
+  const principleOrder = parseOrder(t('public.principles.order'), PRINCIPLE_COUNT)
+    ?? Array.from({ length: Math.min(6, PRINCIPLE_COUNT) }, (_, index) => index + 1)
+  return <section className="hp-section" aria-labelledby="principle-title">
+    <div className="hp-shell hp-principles">
+      <div className="hp-principles-copy" data-reveal="">
+        <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {t('public.principles.eyebrow')}</p>
+        <h2 id="principle-title" className="hp-h2">{t('public.principles.title')}</h2>
+        <p className="hp-lede">{t('public.principles.body')}</p>
+        <p className="hp-note-card"><Compass size={16} aria-hidden="true" /> <span>{t('public.principles.note')}</span></p>
+      </div>
+      <ul className="hp-principle-list">
+        {principleOrder.map((n, index) => <li key={n} className={`hp-tone-${tone(index)}`} data-reveal="">
+          <span className="hp-principle-tick" aria-hidden="true">{PRINCIPLE_ICONS[t(`public.principles.item_${n}.icon`)] ?? <Check size={15} strokeWidth={3} />}</span>
+          <div><strong>{t(`public.principles.item_${n}.title`)}</strong><p>{t(`public.principles.item_${n}.body`)}</p></div>
+        </li>)}
+      </ul>
+    </div>
+  </section>
 }
 
 /* -------------------------------------------------------------- how it works */
@@ -173,58 +155,84 @@ const HOW_STEP_INDEXES = [1, 2, 3, 4]
 
 export function HowItWorksSection() {
   const t = useSiteText
-  return <SectionShell
-    id="how-it-works"
-    eyebrow={t('public.how.eyebrow')}
-    title={t('public.how.title')}
-    lede={t('public.how.lede')}
-    tone="plain"
-  >
-    <ol className="step-list">
-      {HOW_STEP_INDEXES.map((n, index) => <li className="step-entry" key={n}>
-        <span className="step-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-        <div className="step-copy">
-          <h3>{t(`public.how.step_${n}.title`)}</h3>
-          <p>{t(`public.how.step_${n}.body`)}</p>
-        </div>
-        <span className="step-check" aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
-      </li>)}
-    </ol>
-  </SectionShell>
+  return <section id="how-it-works" className="hp-section hp-section-band" aria-labelledby="how-it-works-title">
+    <div className="hp-shell hp-shell-narrow">
+      <SectionHead id="how-it-works" eyebrow={t('public.how.eyebrow')} title={t('public.how.title')} lede={t('public.how.lede')} center />
+      <div className="hp-steps">
+        <span className="hp-steps-line" aria-hidden="true"><span className="hp-steps-fill" /></span>
+        <ol className="hp-step-list">
+        {HOW_STEP_INDEXES.map((n, index) => <li className={`hp-step hp-tone-${tone(index)}`} key={n} data-reveal="">
+          <span className="hp-step-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+          <div className="hp-step-copy">
+            <h3>{t(`public.how.step_${n}.title`)}</h3>
+            <p>{t(`public.how.step_${n}.body`)}</p>
+          </div>
+          <span className="hp-step-check" aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
+        </li>)}
+        </ol>
+      </div>
+    </div>
+  </section>
 }
 
 /* --------------------------------------------------------------- AI section */
 
+type ChatStage = 'static' | 'idle' | 'ask' | 'typing' | 'answer'
+
+/** Plays question → typing dots → answer once the example scrolls into view. */
+function useChatSequence() {
+  const ref = useRef<HTMLElement>(null)
+  const [stage, setStage] = useState<ChatStage>('static')
+  useEffect(() => {
+    const node = ref.current
+    if (!node || prefersReducedMotion() || typeof IntersectionObserver === 'undefined') return undefined
+    setStage('idle')
+    const timers: number[] = []
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return
+      observer.disconnect()
+      setStage('ask')
+      timers.push(window.setTimeout(() => setStage('typing'), 650))
+      timers.push(window.setTimeout(() => setStage('answer'), 1900))
+    }, { threshold: .45 })
+    observer.observe(node)
+    return () => { observer.disconnect(); timers.forEach(id => window.clearTimeout(id)) }
+  }, [])
+  return [ref, stage] as const
+}
+
 /** The example exchange is illustrative product copy, not owner content: it stays in code. */
 export function AiSection() {
   const t = useSiteText
-  return <section id="ai" className="pub-section pub-section-ai" aria-labelledby="ai-title">
-    <div className="pub-shell">
-      <div className="ai-spread">
-        <div className="ai-copy">
-          <p className="pub-eyebrow"><span aria-hidden="true">✎</span> {t('public.ai.eyebrow')}</p>
-          <h2 id="ai-title">{t('public.ai.title')}</h2>
-          <p className="pub-lede">{t('public.ai.lede')}</p>
-          <dl className="ai-facts">
-            {[1, 2, 3, 4].map(n => <div key={n}>
-              <dt>{t(`public.ai.fact_${n}.term`)}</dt>
-              <dd>{t(`public.ai.fact_${n}.body`)}</dd>
-            </div>)}
-          </dl>
-          <div className="pub-cta-row">
-            <SiteLink className="button button-secondary button-lg" href="/login">{t('public.ai.cta.label')} <ArrowRight size={17} aria-hidden="true" /></SiteLink>
-            <span className="pub-cta-note">{t('public.ai.cta.note')}</span>
-          </div>
+  const [exampleRef, stage] = useChatSequence()
+  return <section id="ai" className="hp-section hp-section-ai" aria-labelledby="ai-title">
+    <span className="hp-doodle hp-doodle-ai" data-px="14" aria-hidden="true">✦</span>
+    <div className="hp-shell hp-ai">
+      <div className="hp-ai-copy" data-reveal="">
+        <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {t('public.ai.eyebrow')}</p>
+        <h2 id="ai-title" className="hp-h2">{t('public.ai.title')}</h2>
+        <p className="hp-lede">{t('public.ai.lede')}</p>
+        <dl className="hp-ai-facts">
+          {[1, 2, 3, 4].map(n => <div key={n} className={`hp-tone-${tone(n - 1)}`}>
+            <dt>{t(`public.ai.fact_${n}.term`)}</dt>
+            <dd>{t(`public.ai.fact_${n}.body`)}</dd>
+          </div>)}
+        </dl>
+        <div className="hp-cta-row">
+          <SiteLink className="hp-btn hp-btn-secondary" href="/login">{t('public.ai.cta.label')} <ArrowRight size={17} aria-hidden="true" /></SiteLink>
+          <span className="hp-cta-note">{t('public.ai.cta.note')}</span>
         </div>
-        <aside className="ai-example" aria-labelledby="ai-example-title">
-          <p className="ai-example-label" id="ai-example-title">ILLUSTRATIVE EXCHANGE</p>
-          <div className="ai-example-quote">
-            <p className="ai-example-ask">“Which chapters are dragging my Physics score down?”</p>
-            <p className="ai-example-answer">“Two tested chapters sit below your weak threshold: Current Electricity (48%) and Rotational Motion (52%). Both have mistakes logged as Concept errors, and one revision is due today.”</p>
-          </div>
-          <p className="ai-example-note"><Shield size={13} aria-hidden="true" /> An example of the kind of answer supported tools produce from your own figures — not a transcript of your data.</p>
-        </aside>
       </div>
+      <aside className={`hp-chat is-${stage}`} aria-labelledby="ai-example-title" ref={exampleRef}>
+        <span className="hp-tape hp-tape-blue" aria-hidden="true" />
+        <p className="hp-chat-label" id="ai-example-title"><Sparkles size={13} aria-hidden="true" /> Illustrative exchange · not real student data</p>
+        <div className="hp-chat-thread">
+          <p className="hp-bubble hp-bubble-ask"><span className="visually-hidden">Example question: </span>“Which topics are pulling my recent mock scores down?”</p>
+          <span className="hp-typing" aria-hidden="true"><i /><i /><i /></span>
+          <p className="hp-bubble hp-bubble-answer"><span className="visually-hidden">Example answer: </span>“Two tested chapters sit below your weak threshold: <strong>Probability (48%)</strong> and <strong>Reading comprehension (52%)</strong>. Both have mistakes logged as concept errors, and one revision is due today.”</p>
+        </div>
+        <p className="hp-chat-note"><Shield size={13} aria-hidden="true" /> An example of the kind of answer supported tools produce from your own figures — not a transcript of anyone&rsquo;s data.</p>
+      </aside>
     </div>
   </section>
 }
@@ -233,39 +241,35 @@ export function AiSection() {
 
 export function PrivacySection() {
   const t = useSiteText
-  return <SectionShell
-    id="privacy"
-    eyebrow={t('public.privacy.eyebrow')}
-    title={t('public.privacy.title')}
-    lede={t('public.privacy.lede')}
-  >
-    <div className="privacy-board">
-      <dl className="privacy-list">
-        {[1, 2, 3, 4, 5, 6].map(n => <div key={n}>
-          <dt><ShieldCheck size={15} aria-hidden="true" /> {t(`public.privacy.item_${n}.title`)}</dt>
-          <dd>{t(`public.privacy.item_${n}.body`)}</dd>
-        </div>)}
-      </dl>
-      <p className="privacy-foot">
-        <LockKeyhole size={14} aria-hidden="true" /> {t('public.privacy.foot')}
-      </p>
+  return <section id="privacy" className="hp-section hp-section-band" aria-labelledby="privacy-title">
+    <div className="hp-shell">
+      <SectionHead id="privacy" eyebrow={t('public.privacy.eyebrow')} title={t('public.privacy.title')} lede={t('public.privacy.lede')} />
+      <div className="hp-privacy" data-reveal="">
+        <dl className="hp-privacy-list">
+          {[1, 2, 3, 4, 5, 6].map(n => <div key={n}>
+            <dt><span className="hp-privacy-icon" aria-hidden="true"><ShieldCheck size={16} /></span> {t(`public.privacy.item_${n}.title`)}</dt>
+            <dd>{t(`public.privacy.item_${n}.body`)}</dd>
+          </div>)}
+        </dl>
+        <p className="hp-privacy-foot"><LockKeyhole size={15} aria-hidden="true" /> {t('public.privacy.foot')}</p>
+      </div>
     </div>
-  </SectionShell>
+  </section>
 }
 
 /* ----------------------------------------------------------- DYPOL LABS */
 
 export function DypolSection() {
   const t = useSiteText
-  return <section id="dypol-labs" className="pub-section pub-section-dypol" aria-labelledby="dypol-title">
-    <div className="pub-shell">
-      <div className="dypol-band">
+  return <section id="dypol-labs" className="hp-section hp-section-tight" aria-labelledby="dypol-title">
+    <div className="hp-shell">
+      <div className="hp-dypol" data-reveal="">
         <div className="dypol-mark" aria-hidden="true"><span>S</span><i>✎</i></div>
-        <div>
+        <div className="hp-dypol-copy">
           <h2 id="dypol-title">{t('public.dypol.title')}</h2>
           <p>{t('public.dypol.body')}</p>
         </div>
-        <span className="dypol-tag">{t('public.dypol.tag')}</span>
+        <span className="hp-dypol-tag">{t('public.dypol.tag')}</span>
       </div>
     </div>
   </section>
@@ -275,19 +279,19 @@ export function DypolSection() {
 
 export function FinalCta() {
   const t = useSiteText
-  return <section className="pub-section pub-final" aria-labelledby="final-title">
-    <div className="pub-shell">
-      <div className="final-sheet">
-        <span className="final-tape" aria-hidden="true" />
-        <p className="pub-eyebrow"><span aria-hidden="true">✎</span> {t('public.final.eyebrow')}</p>
-        <h2 id="final-title">{t('public.final.title')} <em>{t('public.final.title_emphasis')}</em></h2>
-        <p>{t('public.final.body')}</p>
-        <div className="pub-cta-row pub-cta-row-center">
-          <SiteLink className="button button-primary button-lg" href={t('public.final.cta_primary.href')}>{t('public.final.cta_primary.label')} <ArrowRight size={17} aria-hidden="true" /></SiteLink>
-          <SiteLink className="button button-secondary button-lg" href={t('public.final.cta_secondary.href')}>{t('public.final.cta_secondary.label')}</SiteLink>
+  return <section className="hp-section" aria-labelledby="final-title">
+    <div className="hp-shell hp-shell-narrow">
+      <div className="hp-final" data-reveal="">
+        <span className="hp-tape hp-tape-top" aria-hidden="true" />
+        <span className="hp-final-doodle" aria-hidden="true">✎</span>
+        <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {t('public.final.eyebrow')}</p>
+        <h2 id="final-title" className="hp-h2 hp-final-title">{t('public.final.title')} <em className="hp-highlight">{t('public.final.title_emphasis')}</em></h2>
+        <p className="hp-lede">{t('public.final.body')}</p>
+        <div className="hp-cta-row hp-cta-row-center">
+          <SiteLink className="hp-btn hp-btn-primary hp-btn-lg" href={t('public.final.cta_primary.href')}>{t('public.final.cta_primary.label')} <ArrowRight size={17} aria-hidden="true" /></SiteLink>
+          <SiteLink className="hp-btn hp-btn-secondary hp-btn-lg" href={t('public.final.cta_secondary.href')}>{t('public.final.cta_secondary.label')}</SiteLink>
         </div>
-        <p className="final-note"><Target size={14} aria-hidden="true" /> {t('public.final.note')}</p>
-        <span className="final-doodle" aria-hidden="true">✎</span>
+        <p className="hp-final-note"><Target size={14} aria-hidden="true" /> {t('public.final.note')}</p>
       </div>
     </div>
   </section>
