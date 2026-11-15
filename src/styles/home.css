@@ -1188,15 +1188,12 @@ html[data-app-font='active'] .pub-home .pub-footer-wordmark {
 }
 
 /* The wordmark keeps its Sora capitals and its own size through the font routing above. */
-/* The wordmark is set in Patrick Hand, B's handwritten display face, through the font routing above. */
 :root .pub-page.pub-home .pub-footer-wordmark {
-  --font-public: var(--hp-hand);
-  --hp-fw: 400;
+  --font-public: 'Sora', sans-serif;
+  --hp-fw: 700;
   --hp-fs: var(--pub-wordmark-size);
-  --hp-lh: .9;
-  letter-spacing: .02em;
+  --hp-lh: .84;
 }
-.pub-home .pub-footer-wordmark-window { --pub-wordmark-size: clamp(3.5rem, 23vw, 22rem); }
 
 /* The page ends at the footer: nothing decorative may extend the document, and the
    app-wide ruled body backdrop never shows on the homepage (grain only). */
