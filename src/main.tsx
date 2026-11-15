@@ -7,7 +7,9 @@ import './styles/fonts.css'
 import App from './App'
 import './styles.css'
 import { registerOfflineApplicationShell } from './lib/offline-shell'
+import { installChunkErrorRecovery } from './lib/chunk-recovery'
 
+installChunkErrorRecovery()
 registerOfflineApplicationShell()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
