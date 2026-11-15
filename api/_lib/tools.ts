@@ -48,9 +48,9 @@ const toolSchemas = {
   create_test: z.object({
     title: z.string().trim().min(1).max(160), test_date: z.iso.date(),
     test_type: z.enum(['Chapter Test','Subject Test','Full Mock','PYQ Practice']),
-    subject: subjectSchema.nullable(), chapter_id: idSchema.nullable().default(null),
+    subject: subjectSchema.nullable().default(null), chapter_id: idSchema.nullable().default(null),
     marks_obtained: z.number().finite().min(0).max(9_999_999.5).multipleOf(0.5).nullable().default(null),
-    total_marks: z.number().finite().int().min(1).max(9_999_999).nullable(),
+    total_marks: z.number().finite().int().min(1).max(9_999_999).nullable().default(null),
     correct: z.number().int().min(0).max(POSTGRES_INTEGER_MAX).nullable().default(null),
     wrong: z.number().int().min(0).max(POSTGRES_INTEGER_MAX).nullable().default(null),
     skipped: z.number().int().min(0).max(POSTGRES_INTEGER_MAX).nullable().default(null),
@@ -159,15 +159,226 @@ const descriptions: Record<ToolName, { description: string; kind: ToolKind; prog
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = (Object.keys(toolSchemas) as ToolName[]).map(name => ({ name, schema: toolSchemas[name], ...descriptions[name] }))
 
-function modelSchema(schema: z.ZodType): Record<string, unknown> {
+/** Validation-only keywords: the server re-checks every value, so the model never needs them. */
+const SCHEMA_NOISE = new Set(['$schema','pattern','minLength','maxLength','minimum','maximum','exclusiveMinimum','exclusiveMaximum','multipleOf','default','minItems','maxItems'])
+
+/**
+ * Compact JSON Schema for the model. Zod's uuid/date regexes and integer bounds were most of the
+ * catalog's size; they are enforced again on the server (schema parse, preflight, RLS, the RPCs),
+ * so dropping them keeps every tool, read and write, inside each provider's request budget.
+ */
+export function compactSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(compactSchema)
+  if (!value || typeof value !== 'object') return value
+  const out: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (SCHEMA_NOISE.has(key)) continue
+    out[key] = key === 'properties'
+      ? Object.fromEntries(Object.entries(item as Record<string, unknown>).map(([name, prop]) => [name, compactSchema(prop)]))
+      : compactSchema(item)
+  }
+  return out
+}
+
+const FIELD_HINTS: Partial<Record<ToolName, Record<string, string>>> = {
+  create_test: {
+    test_date: 'YYYY-MM-DD; "today" is the current Stracker date.',
+    subject: 'One of the student\u2019s subjects, or null for a Full Mock.',
+    marks_obtained: 'Overall marks obtained.',
+    total_marks: 'Overall maximum marks.',
+    subject_scores: 'Optional per-subject split for a Full Mock. Only include it when the student gave each subject\u2019s marks and its total; never ask for it.'
+  },
+  create_task: { task_date: 'YYYY-MM-DD.', subject: 'One of the student\u2019s subjects, or null.' }
+}
+
+function modelSchema(name: ToolName, schema: z.ZodType): Record<string, unknown> {
   // Input shape: fields with a default (chapter_id, negative_marks, notes, …) are optional for the
   // model. The output shape listed every one as required, so models asked students for all of them.
-  const generated = z.toJSONSchema(schema, { io: 'input' }) as Record<string, unknown>
-  delete generated.$schema
+  const generated = compactSchema(z.toJSONSchema(schema, { io: 'input' })) as Record<string, unknown>
+  const properties = generated.properties as Record<string, Record<string, unknown>> | undefined
+  for (const [field, hint] of Object.entries(FIELD_HINTS[name] ?? {})) {
+    if (properties?.[field]) properties[field] = { ...properties[field], description: hint }
+  }
   return generated
 }
 
-export const MODEL_TOOLS: ModelTool[] = TOOL_DEFINITIONS.map(tool => ({ name: tool.name, description: tool.description, inputSchema: modelSchema(tool.schema) }))
+export const MODEL_TOOLS: ModelTool[] = TOOL_DEFINITIONS.map(tool => ({ name: tool.name, description: tool.description, inputSchema: modelSchema(tool.name, tool.schema) }))
+
+/** Fields that name one of the student's subjects, per tool (for the per-student enum). */
+const SUBJECT_FIELDS: Partial<Record<ToolName, string[]>> = {
+  create_test: ['subject', 'subject_scores.subject'], update_test: ['subject'], update_subject_score: ['subject'],
+  create_task: ['subject'], update_task: ['subject'],
+  get_subject_performance: ['subject'], get_chapter_performance: ['subject'], get_weak_areas: ['subject'], get_mistake_summary: ['subject'], find_chapters: ['subject']
+}
+
+function withSubjectEnum(node: Record<string, unknown>, subjects: string[]): Record<string, unknown> {
+  if (Array.isArray(node.anyOf)) return { ...node, anyOf: (node.anyOf as Record<string, unknown>[]).map(branch => branch.type === 'string' ? { ...branch, enum: subjects } : branch) }
+  return node.type === 'string' ? { ...node, enum: subjects } : node
+}
+
+/**
+ * The full catalog (every read and write tool, every turn) with the student's exam subjects as an
+ * enum on each subject field, so no model can invent a subject such as "Biology" for a NEET
+ * student whose subjects are Botany and Zoology.
+ */
+export function modelToolsFor(subjects: string[] = []): ModelTool[] {
+  const list = [...new Set(subjects.map(subject => subject.trim()).filter(Boolean))].slice(0, 30)
+  if (!list.length) return MODEL_TOOLS
+  return MODEL_TOOLS.map(tool => {
+    const fields = SUBJECT_FIELDS[tool.name as ToolName]
+    if (!fields) return tool
+    const schema = structuredClone(tool.inputSchema) as Record<string, unknown>
+    const properties = schema.properties as Record<string, Record<string, unknown>>
+    for (const field of fields) {
+      const [head, child] = field.split('.') as [string, string | undefined]
+      const prop = properties[head]
+      if (!prop) continue
+      if (!child) { properties[head] = withSubjectEnum(prop, list); continue }
+      const items = prop.items as Record<string, unknown> | undefined
+      const itemProps = items?.properties as Record<string, Record<string, unknown>> | undefined
+      if (itemProps?.[child]) itemProps[child] = withSubjectEnum(itemProps[child], list)
+    }
+    return { ...tool, inputSchema: schema }
+  })
+}
+
+/** Names models reach for instead of the real tool (add_test was the three.dev failure). */
+const TOOL_ALIASES: Record<string, ToolName> = {
+  add_test: 'create_test', log_test: 'create_test', record_test: 'create_test', save_test: 'create_test', new_test: 'create_test',
+  add_test_result: 'create_test', log_test_result: 'create_test', add_test_score: 'create_test', log_test_score: 'create_test',
+  create_test_entry: 'create_test', add_test_entry: 'create_test', add_mock: 'create_test', add_mock_test: 'create_test', create_mock_test: 'create_test', log_mock: 'create_test',
+  add_task: 'create_task', create_daily_task: 'create_task', add_daily_task: 'create_task', log_task: 'create_task', add_study_task: 'create_task',
+  add_mistake: 'create_mistake', log_mistake: 'create_mistake', record_mistake: 'create_mistake',
+  add_goal: 'create_weekly_goal', create_goal: 'create_weekly_goal', add_weekly_goal: 'create_weekly_goal', set_weekly_goal: 'create_weekly_goal',
+  complete_revision: 'mark_revision_complete', mark_revision_done: 'mark_revision_complete', finish_revision: 'mark_revision_complete',
+  edit_test: 'update_test', edit_task: 'update_task', remove_test: 'delete_test', remove_task: 'delete_task', remove_mistake: 'delete_mistake',
+  get_dashboard: 'get_dashboard_summary', get_summary: 'get_dashboard_summary', get_tests: 'get_test_history', list_tests: 'get_test_history',
+  get_tasks: 'get_daily_tasks', list_tasks: 'get_daily_tasks', search_chapters: 'find_chapters', find_chapter: 'find_chapters', get_chapters: 'find_chapters',
+  get_mistakes: 'get_mistake_summary', get_revisions: 'get_revision_due', get_weak_chapters: 'get_weak_areas'
+}
+
+export function resolveToolName(raw: string): ToolName | null {
+  const name = raw.trim().replace(/^(functions|stracker|tools?)[._:]/i, '').replace(/[\s.-]+/g, '_').toLowerCase()
+  if (name in toolSchemas) return name as ToolName
+  if (TOOL_ALIASES[name]) return TOOL_ALIASES[name]
+  const swapped = name.replace(/^(add|log|record|save|new)_/, 'create_').replace(/^(edit|change|modify)_/, 'update_').replace(/^remove_/, 'delete_')
+  return swapped in toolSchemas ? swapped as ToolName : null
+}
+
+const KEY_ALIASES: Record<string, string> = {
+  date: 'test_date', test_date: 'test_date', exam_date: 'test_date', type: 'test_type', test_type: 'test_type',
+  marks: 'marks_obtained', score: 'marks_obtained', obtained_marks: 'marks_obtained', marks_scored: 'marks_obtained', scored: 'marks_obtained', obtained: 'marks_obtained',
+  total: 'total_marks', max_marks: 'total_marks', maximum_marks: 'total_marks', out_of: 'total_marks', full_marks: 'total_marks',
+  correct_count: 'correct', correct_answers: 'correct', correct_questions: 'correct',
+  wrong_count: 'wrong', incorrect: 'wrong', incorrect_count: 'wrong', wrong_answers: 'wrong',
+  skipped_count: 'skipped', unattempted: 'skipped', not_attempted: 'skipped', skipped_questions: 'skipped',
+  time_taken_minutes: 'time_minutes', time_taken: 'time_minutes', duration_minutes: 'time_minutes', duration: 'time_minutes', minutes: 'time_minutes', time: 'time_minutes',
+  negative: 'negative_marks', negative_marking: 'negative_marks',
+  subject_breakdown: 'subject_scores', subject_wise: 'subject_scores', subject_wise_scores: 'subject_scores', subject_marks: 'subject_scores', subjects: 'subject_scores', scores: 'subject_scores', breakdown: 'subject_scores'
+}
+const TASK_KEY_ALIASES: Record<string, string> = { date: 'task_date', minutes: 'estimated_minutes', duration: 'estimated_minutes', duration_minutes: 'estimated_minutes', time_minutes: 'estimated_minutes' }
+const SCORE_KEY_ALIASES: Record<string, string> = { name: 'subject', marks: 'marks_obtained', score: 'marks_obtained', obtained: 'marks_obtained', scored: 'marks_obtained', total: 'total_marks', max: 'total_marks', max_marks: 'total_marks', out_of: 'total_marks', full_marks: 'total_marks' }
+const NUMERIC_KEYS = new Set(['marks_obtained','total_marks','correct','wrong','skipped','negative_marks','time_minutes','estimated_minutes','limit','days','target','progress_value'])
+
+function parseMaybeJson(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const text = value.trim()
+  if (!/^[[{]/.test(text)) return value
+  try { return JSON.parse(text) } catch { return value }
+}
+
+function numeric(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const text = value.trim().replace(/,/g, '')
+  return /^-?\d+(\.\d+)?$/.test(text) ? Number(text) : value
+}
+
+function testType(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const text = value.toLowerCase().replace(/[_-]+/g, ' ').trim()
+  if (/\b(full|mock|grand|complete|whole|all subjects?)\b/.test(text)) return 'Full Mock'
+  if (/\bpyq|previous year/.test(text)) return 'PYQ Practice'
+  if (/\bchapter/.test(text)) return 'Chapter Test'
+  if (/\bsubject/.test(text)) return 'Subject Test'
+  return value
+}
+
+/** Canonical spelling of a subject from the student's exam list (case-insensitive), or null. */
+export function canonicalSubject(value: string, subjects: readonly string[]): string | null {
+  const key = value.trim().toLowerCase()
+  if (!key) return null
+  const exact = subjects.find(subject => subject.toLowerCase() === key)
+  if (exact) return exact
+  const short: Record<string, string> = { maths: 'mathematics', math: 'mathematics', mathematics: 'maths', bio: 'biology', phy: 'physics', chem: 'chemistry' }
+  const alt = short[key]
+  return alt ? subjects.find(subject => subject.toLowerCase() === alt) ?? null : null
+}
+
+function checkSubject(value: unknown, subjects: readonly string[]): unknown {
+  if (typeof value !== 'string' || !subjects.length) return value
+  const canonical = canonicalSubject(value, subjects)
+  if (canonical) return canonical
+  throw new ApiError(400, 'invalid_tool_input', `"${value.slice(0, 40)}" is not one of the student\u2019s subjects (${subjects.join(', ')}). Use one of those, or leave the subject out.`)
+}
+
+/**
+ * Accept the shapes models actually send: another tool name for the same action, arguments as a
+ * JSON string, numbers as strings, near-miss keys (date, subject_breakdown, time_taken_minutes…),
+ * and a lower-case subject. Keys the tool does not have are dropped instead of failing the call.
+ * Subjects are checked against the student's exam subjects so none is invented.
+ */
+export function normalizeToolCall(call: NormalizedToolCall, subjects: readonly string[] = []): NormalizedToolCall {
+  const name = resolveToolName(call.name)
+  if (!name) {
+    throw new ApiError(400, 'unknown_tool', `There is no tool named ${String(call.name).slice(0, 60)}. Use one of: ${(Object.keys(toolSchemas) as ToolName[]).join(', ')}.`)
+  }
+  const raw = parseMaybeJson(call.arguments)
+  const input = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {}
+  const allowed = new Set(Object.keys(((MODEL_TOOLS.find(tool => tool.name === name)?.inputSchema as { properties?: Record<string, unknown> }).properties) ?? {}))
+  const aliases = name === 'create_task' || name === 'update_task' ? TASK_KEY_ALIASES : KEY_ALIASES
+  const args: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(input)) {
+    const lower = key.toLowerCase()
+    const target = allowed.has(lower) ? lower : aliases[lower] && allowed.has(aliases[lower]!) ? aliases[lower]! : null
+    if (!target || (target in args && !allowed.has(lower))) continue
+    args[target] = NUMERIC_KEYS.has(target) ? numeric(value) : value
+  }
+  if ('test_type' in args) args.test_type = testType(args.test_type)
+  if ('subject' in args && args.subject !== null) {
+    if (typeof args.subject === 'string' && /^(none|null|all|all subjects|full|-|)$/i.test(args.subject.trim())) args.subject = null
+    else args.subject = checkSubject(args.subject, subjects)
+  }
+  if ('subject_scores' in args) {
+    const list = parseMaybeJson(args.subject_scores)
+    if (Array.isArray(list)) {
+      args.subject_scores = list.map(item => {
+        if (!item || typeof item !== 'object') return item
+        const score: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(item as Record<string, unknown>)) {
+          const lower = key.toLowerCase()
+          const target = ['subject','marks_obtained','total_marks'].includes(lower) ? lower : SCORE_KEY_ALIASES[lower]
+          if (target && !(target in score)) score[target] = target === 'subject' ? value : numeric(value)
+        }
+        if ('subject' in score) score.subject = checkSubject(score.subject, subjects)
+        return score
+      })
+    } else if (list && typeof list === 'object') {
+      // {"Physics": 40, "Chemistry": 45} without totals: keep the subjects, totals still needed.
+      args.subject_scores = Object.entries(list as Record<string, unknown>).map(([subject, marks]) => ({ subject: checkSubject(subject, subjects), marks_obtained: numeric(marks) }))
+    } else {
+      delete args.subject_scores
+    }
+  }
+  if (name === 'create_test' && Array.isArray(args.subject_scores)) {
+    // The split is optional. With the overall score in hand, an incomplete split (a subject without
+    // its total) or a split on a non-mock test is dropped rather than turned into a question.
+    const scores = args.subject_scores as Array<Record<string, unknown>>
+    const overall = typeof args.marks_obtained === 'number' && typeof args.total_marks === 'number'
+    const incomplete = scores.some(score => !score || typeof score.marks_obtained !== 'number' || typeof score.total_marks !== 'number')
+    if (!scores.length || (overall && (incomplete || args.test_type !== 'Full Mock'))) delete args.subject_scores
+  }
+  return { ...call, name, arguments: args }
+}
 
 function formatZodError(error: z.ZodError): string {
   return error.issues.slice(0, 4).map(issue => `${issue.path.join('.') || 'input'}: ${issue.message}`).join('; ')
@@ -372,12 +583,16 @@ function makeDisplay(name: ToolName, input: Record<string, unknown>, data?: Reco
   switch (name) {
     case 'create_test': {
       add('Test',input.title); add('Subject',input.subject ?? 'Full mock / all subjects'); add('Date',input.test_date)
+      add('Test type',input.test_type)
       if (Array.isArray(input.subject_scores) && input.subject_scores.length) {
+        if (input.marks_obtained != null) add('Score',`${input.marks_obtained} / ${input.total_marks}`)
         for (const score of input.subject_scores as Array<Record<string,unknown>>) add(`${String(score.subject)} score`,`${score.marks_obtained ?? '—'} / ${score.total_marks ?? '—'}`)
       } else {
         add('Total marks',input.total_marks)
         if (input.marks_obtained != null) add('Score',`${input.marks_obtained} / ${input.total_marks}`)
       }
+      add('Correct',input.correct); add('Wrong',input.wrong); add('Skipped',input.skipped)
+      if (input.time_minutes != null) add('Time',`${input.time_minutes} minutes`)
       break
     }
     case 'update_test': add('Test',data?.title ?? input.id); add('Chapter',data?.chapter); addUpdates(input,['id','expected_updated_at','chapter_id']); break
@@ -498,10 +713,14 @@ async function preflightAction(client: SupabaseClient, userId: string, name: Too
       if (!isFullMock && (typeof input.total_marks !== 'number' || input.total_marks < 1)) {
         throw new ApiError(400,'invalid_tool_input','A non-mock test needs its positive total marks before it can be added.')
       }
-      if (isFullMock && (input.marks_obtained != null || input.total_marks != null)) {
-        throw new ApiError(400,'invalid_tool_input','For a Full Mock, provide subject scores instead of one overall score or total.')
+      if (input.marks_obtained != null && (input.total_marks == null || Number(input.marks_obtained) > Number(input.total_marks))) {
+        throw new ApiError(400,'invalid_tool_input','Marks obtained cannot be more than the total marks. Ask the student to check the score.')
       }
-      const scores = Array.isArray(input.subject_scores) ? input.subject_scores as Record<string,unknown>[] : []
+      let scores = Array.isArray(input.subject_scores) ? input.subject_scores as Record<string,unknown>[] : []
+      const hasOverall = input.marks_obtained != null && input.total_marks != null
+      // A Full Mock saves with its overall score alone, or with a complete subject split (the
+      // overall is then the sum). A partial split next to an overall score is dropped, never asked for.
+      if (isFullMock && scores.length && hasOverall && !fullMockComplete(scores)) { scores = []; input.subject_scores = [] }
       const seen = new Set<string>()
       for (const score of scores) {
         const parsedScore = subjectScoreInputSchema.safeParse(score)
@@ -513,11 +732,19 @@ async function preflightAction(client: SupabaseClient, userId: string, name: Too
       }
       if (scores.length && !isFullMock) throw new ApiError(400,'invalid_tool_input','Per-subject scores can only be added to a Full Mock.')
       const completeMock = isFullMock && fullMockComplete(scores)
-      const aggregateMarks = completeMock ? scores.reduce((sum,score) => sum + Number(score.marks_obtained ?? 0),0) : null
-      const aggregateTotal = completeMock ? scores.reduce((sum,score) => sum + Number(score.total_marks ?? 0),0) : null
+      let aggregateMarks = completeMock ? scores.reduce((sum,score) => sum + Number(score.marks_obtained ?? 0),0) : null
+      let aggregateTotal = completeMock ? scores.reduce((sum,score) => sum + Number(score.total_marks ?? 0),0) : null
       if (completeMock && (aggregateMarks === null || aggregateTotal === null || aggregateMarks > aggregateTotal || aggregateTotal > 9_999_999)) {
         throw new ApiError(400,'invalid_tool_input','The combined Full Mock score is outside Stracker’s supported marks range.')
       }
+      if (completeMock && hasOverall && (Number(input.marks_obtained) !== aggregateMarks || Number(input.total_marks) !== aggregateTotal)) {
+        throw new ApiError(400,'invalid_tool_input',`The subject marks add up to ${aggregateMarks}/${aggregateTotal}, but the overall score is ${String(input.marks_obtained)}/${String(input.total_marks)}. Ask the student which one is right.`)
+      }
+      if (isFullMock && !completeMock && !scores.length) {
+        aggregateMarks = (input.marks_obtained as number | null) ?? null
+        aggregateTotal = (input.total_marks as number | null) ?? null
+      }
+      if (isFullMock) { input.marks_obtained = aggregateMarks; input.total_marks = aggregateTotal }
       record = {
         id:createId(),title:input.title,test_date:input.test_date,test_type:input.test_type,
         subject,chapter_id:chapterId,
@@ -820,9 +1047,10 @@ export async function prepareToolCall(
   taskId: string,
   provider: { providerId: string; modelId: string },
   adminClient: SupabaseClient,
-  conversationId: string
+  conversationId: string,
+  subjects: readonly string[] = []
 ): Promise<{ kind: 'read'; result: unknown } | { kind: 'confirmation'; action: ActionPreview }> {
-  if (!(call.name in toolSchemas)) throw new ApiError(400,'unknown_tool','The requested Stracker tool is not available.')
+  call = normalizeToolCall(call, subjects)
   const name = call.name as ToolName
   const tool = getTool(name)
   const parsed = tool.schema.safeParse(call.arguments)

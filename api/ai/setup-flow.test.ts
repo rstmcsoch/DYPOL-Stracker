@@ -226,17 +226,19 @@ describe('chat reliability', () => {
     expect(db.ai_provider_configs![0]).toMatchObject({ enabled: true })
   })
 
-  it('a plain greeting is sent without the tool list (faster first token)', async () => {
+  it('a plain greeting still gets every tool (no intent filtering) and a short thinking budget', async () => {
     await connectedProvider()
     const bodies: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => { bodies.push(String(init.body)); return sse('Hello!') }))
     const { runAssistant } = await import('../_lib/agent.js')
     const result = await runAssistant(input('Hello'))
     expect(result).toMatchObject({ status: 'completed', content: 'Hello!' })
-    expect(bodies[0]).not.toContain('functionDeclarations')
+    expect(bodies[0]).toContain('functionDeclarations')
+    expect(bodies[0]).toContain('"create_test"')
+    expect(JSON.parse(bodies[0]!).generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
   })
 
-  it('a long personal note is answered as plain text, without the tool catalog', async () => {
+  it('a long personal note gets the full catalog too, with the larger answer budget', async () => {
     await connectedProvider()
     const essay = 'sometimes i think maybe change stream but they already paid fees and bought books so no. just need some real method that works for someone like me who gets low always and confidence is gone. '.repeat(12)
     const bodies: string[] = []
@@ -245,8 +247,179 @@ describe('chat reliability', () => {
     const result = await runAssistant(input(essay))
     expect(result.status).toBe('completed')
     expect(result.content).toContain('one chapter')
-    expect(bodies[0]).not.toContain('functionDeclarations')
+    expect(bodies[0]).toContain('functionDeclarations')
     expect(bodies[0]).toContain('2200')
+  })
+})
+
+/**
+ * t160: the exact three.dev transcripts (NEET student: Physics, Chemistry, Botany, Zoology).
+ * Mocked provider and in-memory database only: nothing is written for any real student, and
+ * every write stops at a pending confirm card.
+ */
+describe('Stracker AI never refuses supported work (three.dev transcripts)', () => {
+  const NEET = ['Physics', 'Chemistry', 'Botany', 'Zoology']
+  const DETAILS = 'Weekly mock test 17 it was today  and it was full test I got 150 out of 180. Correct are 30, wrong are 13 and remaining skipped out of 45 questions due to time management. It takes around 90min'
+  const TRANSCRIPT: Array<{ role: 'user' | 'assistant'; content: string }> = [
+    { role: 'user', content: 'Add a test' },
+    { role: 'assistant', content: 'Sure! To add your test, please share:\n\n- **Title** (e.g., "Cell Biology Chapter Test")\n- **Date**\n- **Test type** (Chapter Test, Subject Test, Full Mock, or PYQ Practice)\n- **Subject** (Physics, Chemistry, Botany, or Zoology)\n- **Total marks**\n- **Your score** (marks obtained, or correct/wrong/skipped)\n\nOptional: time taken, chapter, negative marks, or notes — leave those out if you\'d like.' },
+    { role: 'user', content: DETAILS },
+    { role: 'assistant', content: 'For a Full Mock, Stracker needs the subject-wise breakdown. Could you tell me your marks in each subject (out of that subject\'s total)?' },
+    { role: 'user', content: '40, 50, 35, 25' },
+    { role: 'assistant', content: 'Thanks! Those four numbers (40, 50, 35, 25) sum to 150, matching your total. To save the Full Mock correctly, I need the **maximum marks for each subject**.' },
+    { role: 'user', content: '45 for each' },
+    { role: 'assistant', content: 'I notice Chemistry shows **50/45**, which isn\'t possible if each subject is out of 45. Could you confirm the Chemistry score?' }
+  ]
+  // The model's real call from request 01a1de68-a34c: invented tool name, string numbers, other keys.
+  const ADD_TEST_ARGS = {
+    title: 'Weekly mock test 17', date: '2026-11-15', test_type: 'Full Mock', marks_obtained: '150', total_marks: '180',
+    subject_breakdown: '[{"subject": "Physics", "marks": 40, "total": 45}, {"subject": "Chemistry", "marks": 45, "total": 45}, {"subject": "Botany", "marks": 35, "total": 45}, {"subject": "Zoology", "marks": 30, "total": 45}]',
+    time_taken_minutes: '90', correct_count: '30', wrong_count: '13', skipped_count: '2', notes: 'Time management issues - 2 questions skipped'
+  }
+  const sse = (text: string) => new Response(`data: {"candidates":[{"content":{"parts":[{"text":${JSON.stringify(text)}}]}}]}\n\n`, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+  const toolCall = (name: string, args: Record<string, unknown>) => new Response(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ functionCall: { name, args } }] } }] })}\n\n`, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+  async function neetStudent() {
+    const saved = await call(await providers(), 'POST', { providerId: 'gemini', modelId: 'gemini-2.5-flash', apiKey: 'AIza-test-key-1234' })
+    await call(await testConnection(), 'POST', { configId: (saved.json.provider as Row).id })
+    db.app_settings = [{ user_id: USER, exam_id: 'neet', exam_year: 2027 }]
+    db.exam_catalog = [{ id: 'neet', name: 'NEET UG', subjects: NEET }]
+  }
+  const events: Array<{ event: string; data: Record<string, unknown> }> = []
+  const input = (message: string, priorMessages = TRANSCRIPT) => ({
+    userId: USER, conversationId: crypto.randomUUID(), taskId: crypto.randomUUID(), message, pageContext: null, priorMessages,
+    userClient: adminClient as never, adminClient: adminClient as never, signal: new AbortController().signal,
+    emit: (event: string, data: Record<string, unknown>) => { events.push({ event, data }) }
+  })
+  const replies = (...list: Array<() => Response>) => {
+    const bodies: string[] = []
+    let index = 0
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => { bodies.push(String(init.body)); const next = list[Math.min(index, list.length - 1)]!; index += 1; return next() }))
+    return bodies
+  }
+  const declared = (body: string) => (JSON.parse(body).tools?.[0]?.functionDeclarations ?? []) as Array<{ name: string; parameters: Record<string, unknown> }>
+  beforeEach(() => { events.length = 0 })
+
+  it('"Sorry, 40, 45, 35, 30" ends in a prepared create_test confirm card (add_test call, string numbers, other keys)', async () => {
+    await neetStudent()
+    const bodies = replies(() => toolCall('add_test', ADD_TEST_ARGS))
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input('Sorry, 40, 45, 35, 30'))
+    // Every tool was offered on a turn that has no write words in it.
+    const names = declared(bodies[0]!).map(tool => tool.name)
+    expect(names).toHaveLength(29)
+    for (const name of ['create_test', 'update_test', 'create_task', 'create_mistake', 'update_settings']) expect(names).toContain(name)
+    expect(result.status).toBe('waiting')
+    expect(result.action?.toolName).toBe('create_test')
+    const fields = Object.fromEntries((result.action?.fields ?? []).map(field => [field.label, field.value]))
+    expect(fields).toMatchObject({ Test: 'Weekly mock test 17', 'Test type': 'Full Mock', Score: '150 / 180', 'Physics score': '40 / 45', 'Chemistry score': '45 / 45', 'Botany score': '35 / 45', 'Zoology score': '30 / 45', Correct: '30', Wrong: '13', Skipped: '2', Time: '90 minutes' })
+    expect(events.some(item => item.event === 'confirmation')).toBe(true)
+    const pending = db.ai_pending_actions![0]!
+    expect(pending).toMatchObject({ tool_name: 'create_test' })
+    expect(pending.input).toMatchObject({ marks_obtained: 150, total_marks: 180, test_type: 'Full Mock', correct: 30, wrong: 13, skipped: 2, time_minutes: 90 })
+    expect((pending.input as Row).subject_scores).toHaveLength(4)
+    // Nothing was saved: the write waits for the student's confirmation.
+    expect(rpcCalls.some(item => item.name === 'ai_create_test_with_scores')).toBe(false)
+  })
+
+  it('the details turn: a Full Mock with only the overall score is prepared at once (no subject-split questions)', async () => {
+    await neetStudent()
+    const bodies = replies(() => toolCall('create_test', { title: 'Weekly mock test 17', test_date: '2026-11-15', test_type: 'Full Mock', subject: null, marks_obtained: 150, total_marks: 180, correct: 30, wrong: 13, skipped: 2, time_minutes: 90 }))
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input(DETAILS, TRANSCRIPT.slice(0, 2)))
+    expect(bodies).toHaveLength(1)
+    expect(result.status).toBe('waiting')
+    const fields = Object.fromEntries((result.action?.fields ?? []).map(field => [field.label, field.value]))
+    expect(fields).toMatchObject({ 'Test type': 'Full Mock', Score: '150 / 180', 'Total marks': '180' })
+  })
+
+  it('a split that does not add up to the overall score is sent back to the model, never saved', async () => {
+    await neetStudent()
+    const bodies = replies(
+      () => toolCall('create_test', { title: 'Mock 18', test_date: '2026-11-15', test_type: 'Full Mock', marks_obtained: 140, total_marks: 180, subject_scores: [{ subject: 'Physics', marks_obtained: 40, total_marks: 45 }, { subject: 'Chemistry', marks_obtained: 45, total_marks: 45 }, { subject: 'Botany', marks_obtained: 35, total_marks: 45 }, { subject: 'Zoology', marks_obtained: 30, total_marks: 45 }] }),
+      () => sse('Your subjects add up to 150, not 140. Which is right?')
+    )
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input('Mock 18 today: 140/180, Physics 40/45, Chemistry 45/45, Botany 35/45, Zoology 30/45', []))
+    expect(bodies[1]).toContain('add up to 150/180')
+    expect(result.status).toBe('completed')
+    expect(db.ai_pending_actions ?? []).toHaveLength(0)
+  })
+
+  it('gives the model the exam subjects and rejects an invented one before any card', async () => {
+    await neetStudent()
+    const bodies = replies(
+      () => toolCall('create_test', { title: 'Bio test', test_date: '2026-11-15', test_type: 'Subject Test', subject: 'Biology', marks_obtained: 60, total_marks: 90 }),
+      () => sse('Was that Botany or Zoology?')
+    )
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input('I got 60/90 in my bio test today, add it', []))
+    const createTest = declared(bodies[0]!).find(tool => tool.name === 'create_test')!
+    expect(JSON.stringify(createTest.parameters)).toContain('"enum":["Physics","Chemistry","Botany","Zoology"]')
+    expect(JSON.parse(bodies[0]!).systemInstruction.parts[0].text).toContain('Their subjects: Physics, Chemistry, Botany, Zoology.')
+    expect(bodies[1]).toContain('is not one of the student')
+    expect(result).toMatchObject({ status: 'completed', content: 'Was that Botany or Zoology?' })
+    expect(db.ai_pending_actions ?? []).toHaveLength(0)
+  })
+
+  it('a reply that declines supported work gets one corrective round and then prepares the card', async () => {
+    await neetStudent()
+    const bodies = replies(
+      () => sse('I can\'t do that here yet — you can add it from the Tests tab.'),
+      () => toolCall('create_test', { title: 'Weekly mock test 17', test_date: '2026-11-15', test_type: 'Full Mock', subject: null, marks_obtained: 150, total_marks: 180 })
+    )
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input('Sorry, 40, 45, 35, 30'))
+    expect(bodies).toHaveLength(2)
+    expect(bodies[1]).toContain('Stracker note: you can do this')
+    expect(events.some(item => item.event === 'reset')).toBe(true)
+    expect(result.status).toBe('waiting')
+    expect(result.action?.toolName).toBe('create_test')
+  })
+
+  it('never shows "can\'t do that here" for supported work, even if the model insists', async () => {
+    await neetStudent()
+    replies(() => sse('I can\'t do that here yet — you can add it from the Tests tab.'))
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input('Sorry, 40, 45, 35, 30'))
+    expect(result.status).toBe('completed')
+    expect(result.content).not.toMatch(/can't do that/)
+    expect(result.content.length).toBeGreaterThan(10)
+  })
+
+  it('an empty reply is retried once with more room, then answered', async () => {
+    await neetStudent()
+    const bodies = replies(() => sse(''), () => sse('Here is your plan for today.'))
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input('What should I study today?', []))
+    expect(bodies).toHaveLength(2)
+    expect(JSON.parse(bodies[1]!).generationConfig.maxOutputTokens).toBeGreaterThan(JSON.parse(bodies[0]!).generationConfig.maxOutputTokens)
+    expect(result).toMatchObject({ status: 'completed', content: 'Here is your plan for today.' })
+  })
+
+  it('two empty replies end in a short clear message, never a blank bubble', async () => {
+    await neetStudent()
+    const bodies = replies(() => sse(''))
+    const { runAssistant } = await import('../_lib/agent.js')
+    const result = await runAssistant(input('What should I study today?', []))
+    expect(bodies).toHaveLength(2)
+    expect(result.status).toBe('completed')
+    expect(result.content).toMatch(/didn’t get a reply/)
+  })
+
+  it('a bare "Add a test" replies instantly with the checklist and never calls the model', async () => {
+    await neetStudent()
+    const bodies = replies(() => sse('should not be called'))
+    const { runAssistant } = await import('../_lib/agent.js')
+    const started = performance.now()
+    const result = await runAssistant(input('Add a test', []))
+    const elapsed = performance.now() - started
+    expect(bodies).toHaveLength(0)
+    expect(result.status).toBe('completed')
+    for (const part of ['**Title**', '**Date**', '**Type**', 'Full Mock', '**Subject** (Physics, Chemistry, Botany or Zoology)', 'full test', '**Marks obtained**', '**total marks**']) expect(result.content).toContain(part)
+    expect(elapsed).toBeLessThan(250)
+    // Stored like any assistant reply and does not use a daily Stracker AI slot.
+    expect((db.ai_messages ?? []).some(row => row.role === 'assistant' && String(row.content).includes('**Title**'))).toBe(true)
+    expect(rpcCalls.some(item => item.name === 'ai_take_daily_slot')).toBe(false)
   })
 })
 

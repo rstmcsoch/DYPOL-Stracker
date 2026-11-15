@@ -69,6 +69,33 @@ export function isOpenAIReasoningModel(modelId: string): boolean {
   return /^(o\d|gpt-5|gpt-6)/i.test(modelId)
 }
 
+function hostOf(url: string): string {
+  try { return new URL(url).hostname.toLowerCase() } catch { return '' }
+}
+
+/**
+ * Keep thinking short: Stracker's answers are a tool call or a few lines, and long hidden
+ * reasoning was most of the 5–20 s wait (and, when it used the whole budget, an empty reply).
+ * OpenRouter normalises `reasoning` for every model it serves (nemotron, Qwen, Gemini, Claude…)
+ * and ignores it for models without reasoning; `exclude` keeps the thoughts out of the stream.
+ * OpenAI's own reasoning models take `reasoning_effort`.
+ */
+export function openAIReasoningControls(config: Pick<ProviderCall, 'providerId' | 'modelId'>, base: string): Record<string, unknown> {
+  const host = hostOf(base)
+  if (host === 'openrouter.ai' || host.endsWith('.openrouter.ai')) return { reasoning: { effort: 'low', exclude: true } }
+  if (config.providerId === 'openai' && isOpenAIReasoningModel(config.modelId) && !/^o1-(mini|preview)/i.test(config.modelId)) return { reasoning_effort: 'low' }
+  return {}
+}
+
+/** Small thinking budget for Gemini models that think by default (2.5 and 3); others are left alone. */
+export function geminiThinkingConfig(modelId: string): Record<string, unknown> | null {
+  const id = modelId.toLowerCase()
+  if (/^gemini-3/.test(id)) return { thinkingLevel: 'low' }
+  if (/^gemini-2\.5-pro/.test(id)) return { thinkingBudget: 128 }
+  if (/^gemini-2\.5-flash/.test(id)) return { thinkingBudget: 0 }
+  return null
+}
+
 /** Gemini 3 models expect the default temperature; lowering it can cause repetitive tool loops. */
 function isGemini3(modelId: string): boolean {
   return /^gemini-3/i.test(modelId)
@@ -224,6 +251,7 @@ async function callOpenAICompatible(config: ProviderCall): Promise<ProviderCompl
     ...(config.providerId === 'openai' || reasoning ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens })
   }
   if (!reasoning) body.temperature = 0.3
+  Object.assign(body, openAIReasoningControls(config, base))
   // DeepSeek thinking mode requires reasoning_content to be echoed back on every later turn when
   // tools are present. Stracker's tool loop does not carry it, so the documented switch-off is used.
   if (config.providerId === 'deepseek') body.thinking = { type: 'disabled' }
@@ -435,6 +463,8 @@ async function callGoogle(config: ProviderCall): Promise<ProviderCompletion> {
   const base = 'https://generativelanguage.googleapis.com/v1beta'
   const generationConfig: Record<string, unknown> = { maxOutputTokens: config.maxOutputTokens ?? 1200 }
   if (!isGemini3(config.modelId)) generationConfig.temperature = 0.3
+  const thinking = geminiThinkingConfig(config.modelId)
+  if (thinking) generationConfig.thinkingConfig = thinking
   // Gemma models on the Gemini API accept neither a system instruction nor function declarations:
   // put the instructions in the first user turn and answer without tools.
   const gemma = /^gemma-/i.test(config.modelId)
