@@ -160,10 +160,10 @@ describe('Stracker AI floating window on phones', () => {
     expect(entry.trim().split('\n').at(-1)).toBe("@import './styles/ai-mobile.css';")
     expect(css).not.toMatch(/ai-large-workspace|ai-workspace-backdrop/)
   })
-  it('keeps the message box at 16px (no iOS zoom), ~40px taps and rounder corners', () => {
+  it('keeps the message box at 16px (no iOS zoom), 40px+ taps and rounder corners', () => {
     expect(css).toMatch(/\.ai-composer textarea \{[^}]*font-size: 16px !important/)
-    expect(css).toMatch(/\.ai-send-button \{ width: 40px; height: 40px;/)
-    expect(css).toMatch(/\.ai-window-tools \.icon-button \{[^}]*height: 40px/)
+    expect(css).toMatch(/\.ai-send-button \{ width: 45px; height: 45px;/)
+    expect(css).toMatch(/\.ai-window-tools \.icon-button \{[^}]*height: 45px/)
     expect(css).toContain('border-radius: 18px 20px 16px 19px')
     // Sits above the lightning button, never over it.
     expect(css).toContain('bottom: calc(var(--fab-bottom) + var(--fab-size) + 12px)')
