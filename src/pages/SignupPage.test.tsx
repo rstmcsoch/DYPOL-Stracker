@@ -27,7 +27,7 @@ vi.mock('../lib/disposable-email', async importOriginal => {
     createDisposableEmailPrecheck: () => actual.createDisposableEmailPrecheck((email: string) => isDisposableEmail(email))
   }
 })
-vi.mock('../components/public/PublicHeader', () => ({ PublicBrand: () => <span>Stracker</span> }))
+vi.mock('../components/public/PublicHeader', () => ({ PublicBrand: () => <span>Stracker</span>, PublicThemeToggle: () => null }))
 
 const { default: SignupPage } = await import('./SignupPage')
 

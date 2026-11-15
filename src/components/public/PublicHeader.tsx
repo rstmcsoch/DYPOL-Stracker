@@ -28,7 +28,7 @@ export function PublicBrand({ compact = false }: { compact?: boolean }) {
 }
 
 /** Homepage-only switch: its state never reaches AppearanceContext or account settings. */
-function PublicThemeToggle({ theme, onToggle }: { theme: PublicTheme; onToggle: () => void }) {
+export function PublicThemeToggle({ theme, onToggle }: { theme: PublicTheme; onToggle: () => void }) {
   const isDark = theme === 'dark'
   const action = isDark ? 'Switch to light mode' : 'Switch to night mode'
   const label = isDark ? 'Night mode on' : 'Light mode on'

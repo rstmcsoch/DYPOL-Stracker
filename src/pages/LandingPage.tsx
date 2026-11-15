@@ -79,7 +79,7 @@ export default function LandingPage() {
   usePageMeta(t('public.meta.title'), t('public.meta.description'))
   useHomeMotion(rootRef)
 
-  return <div ref={rootRef} className="pub-page pub-home" id="top" data-public-theme={publicTheme} data-owner-accent={ownerAccent ? '' : undefined} data-owner-font={ownerFont !== 'identity' ? ownerFont : undefined} style={ownerAccent}>
+  return <div ref={rootRef} className="pub-page pub-home pub-hp" id="top" data-public-theme={publicTheme} data-owner-accent={ownerAccent ? '' : undefined} data-owner-font={ownerFont !== 'identity' ? ownerFont : undefined} style={ownerAccent}>
     <a className="pub-skip-link" href="#main">Skip to content</a>
     <div className="hp-ambient" aria-hidden="true"><span id="px1" /><span id="px2" /><span id="px3" /></div>
     <div className="hp-progress" aria-hidden="true"><span className="hp-progress-fill" /></div>

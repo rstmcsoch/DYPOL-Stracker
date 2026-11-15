@@ -6,6 +6,7 @@ import { useSiteText } from '../../contexts/SiteContentContext'
 import { useOptionalUser } from '../../contexts/AuthContext'
 import { accentStyle, usePublicTheme } from '../../lib/public-theme'
 import { usePageMeta } from '../../lib/head'
+import '../../styles/home.css'
 
 /**
  * Footer, header and sibling links are client-side navigations, so the browser would keep the
@@ -54,8 +55,9 @@ export function PublicPageShell({ title, description, children }: { title: strin
   usePageMeta(`${title} · Stracker by DYPOL LABS`, description)
   usePublicPageTop()
 
-  return <div className="pub-page pub-subpage" id="top" data-public-theme={theme} data-owner-accent={ownerAccent ? '' : undefined} data-owner-font={ownerFont !== 'identity' ? ownerFont : undefined} style={ownerAccent}>
+  return <div className="pub-page pub-subpage pub-hp" id="top" data-public-theme={theme} data-owner-accent={ownerAccent ? '' : undefined} data-owner-font={ownerFont !== 'identity' ? ownerFont : undefined} style={ownerAccent}>
     <a className="pub-skip-link" href="#main">Skip to content</a>
+    <div className="hp-ambient" aria-hidden="true"><span id="px1" /><span id="px2" /><span id="px3" /></div>
     <PublicHeader theme={theme} onThemeToggle={toggleTheme} sectionPrefix="/" signedIn={Boolean(user)} />
     <main id="main" className="pub-main pub-doc-main">{children}</main>
     <PublicFooter sectionPrefix="/" />
