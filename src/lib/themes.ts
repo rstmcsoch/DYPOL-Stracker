@@ -23,9 +23,9 @@ export const COLOR_THEME_OPTIONS: readonly ColorThemeOption[] = [
   {
     value: 'default',
     label: 'Default',
-    description: 'The classic Stracker warm paper and chalkboard.',
-    light: ['#fffdf7', '#526c9a', '#ca8547'],
-    dark: ['#2b312d', '#a9bfdc', '#f0b174']
+    description: 'The Stracker homepage look: cream paper, navy ink, electric blue and sunshine yellow.',
+    light: ['#fffdf6', '#2f5cff', '#ffd84d'],
+    dark: ['#1e2536', '#93aaff', '#ffd84d']
   },
   {
     value: 'sunset-blaze',
