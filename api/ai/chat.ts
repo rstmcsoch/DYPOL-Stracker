@@ -132,10 +132,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       conversationTitle === 'New conversation'
         ? adminClient.from('ai_conversations').update({ title:currentMessage.replace(/\s+/g,' ').slice(0,72) || 'New conversation',updated_at:new Date().toISOString() }).eq('user_id',userId).eq('id',conversationId)
         : Promise.resolve(null),
-      adminClient.from('ai_messages').select('id,role,content').eq('user_id',userId).eq('conversation_id',conversationId).order('created_at',{ascending:true}).limit(40)
+      adminClient.from('ai_messages').select('id,role,content').eq('user_id',userId).eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(40)
     ])
     if (historyError) throw new ApiError(503,'conversation_unavailable','Conversation context could not be loaded. Try again.')
-    const prior = (priorRows ?? []).filter((row:Record<string,unknown>) => row.id !== currentMessageId && (row.role === 'user' || row.role === 'assistant')).slice(-32) as Array<{role:'user'|'assistant';content:string}>
+    // Newest 40 rows, back in time order (ascending + limit returned the oldest 40 in long chats).
+    const prior = [...(priorRows ?? [])].reverse().filter((row:Record<string,unknown>) => row.id !== currentMessageId && (row.role === 'user' || row.role === 'assistant')).slice(-32) as Array<{role:'user'|'assistant';content:string}>
     const { data: task, error: taskError } = await adminClient.from('ai_tasks').insert({
       user_id:userId,conversation_id:conversationId,request_id:body.requestId,task_type:/\b(add|create|delete|remove|update|record|mark|complete|change|set)\b/i.test(currentMessage) ? 'action' : /\b(analy[sz]|compare|weak|average|performance|test|revision|mistake|task|study)\b/i.test(currentMessage) ? 'analytics' : 'general',status:'running',progress:'Thinking…'
     }).select('id').single()
