@@ -378,6 +378,16 @@
 
 /* ------------------------------------------------------------- responsive */
 
+.auth-hp .auth-back { white-space: nowrap; }
+
+/* Tablets: one centred column so the intro never squeezes beside the card. */
+@media (min-width: 641px) and (max-width: 900px) {
+  .auth-hp .auth-content { grid-template-columns: minmax(0, 1fr); gap: 28px; width: min(100%, 560px); }
+  .auth-hp .auth-intro { max-width: none; text-align: center; }
+  .auth-hp .auth-kicker { margin-inline: auto; }
+  .auth-hp .auth-intro > p { margin-inline: auto; }
+}
+
 @media (max-width: 640px) {
   .auth-hp .auth-kicker { margin-inline: auto; padding: 4px 10px; }
   .auth-hp .auth-doodle-note { padding: 6px 10px; }
@@ -388,8 +398,9 @@
   .auth-hp .pub-theme-toggle { padding: 4px 5px; box-shadow: 2px 2px 0 var(--ah-hard); }
   .auth-hp .pub-theme-toggle .theme-toggle-copy { display: none; }
 }
-@media (max-width: 360px) {
-  .auth-hp .auth-back { padding-inline: 10px; }
+@media (max-width: 400px) {
+  .auth-hp .auth-back { gap: 4px; padding-inline: 10px; font-size: .8125rem; }
+  .auth-hp .auth-header-actions { gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
