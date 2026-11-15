@@ -206,7 +206,6 @@ export function AiSection() {
   const t = useSiteText
   const [exampleRef, stage] = useChatSequence()
   return <section id="ai" className="hp-section hp-section-ai" aria-labelledby="ai-title">
-    <span className="hp-doodle hp-doodle-ai" data-px="14" aria-hidden="true">✦</span>
     <div className="hp-shell hp-ai">
       <div className="hp-ai-copy" data-reveal="">
         <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {t('public.ai.eyebrow')}</p>

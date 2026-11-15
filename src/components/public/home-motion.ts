@@ -9,6 +9,9 @@ import { useEffect, type RefObject } from 'react'
  * Nothing in this file affects the notebook or the Control Center.
  */
 
+/** Largest scroll-parallax offset for a decorative doodle, in px. */
+const PARALLAX_MAX = 40
+
 export function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -98,7 +101,16 @@ export function useHomeMotion(rootRef: RefObject<HTMLElement | null>) {
 
       if (!reduce) {
         blobs.forEach((blob, index) => { if (blob) blob.style.transform = `translate3d(0, ${(y * (blobSpeed[index] ?? 0)).toFixed(1)}px, 0)` })
-        if (y < vh * 1.5) doodles.forEach(node => { node.style.translate = `0 ${(y * (Number(node.dataset.px) || 0) * .35).toFixed(1)}px` })
+        // Gentle parallax, measured against each doodle's own section and capped, so a doodle can
+        // never drift past its section (an uncapped offset once grew the page below the footer).
+        doodles.forEach(node => {
+          const host = node.closest('section') ?? node.parentElement
+          if (!host) return
+          const box = host.getBoundingClientRect()
+          if (box.bottom < -vh || box.top > vh * 2) return
+          const shift = (vh / 2 - (box.top + box.height / 2)) * (Number(node.dataset.px) || 0) / 100
+          node.style.translate = `0 ${Math.max(-PARALLAX_MAX, Math.min(PARALLAX_MAX, shift)).toFixed(1)}px`
+        })
         if (wordmark && wordWindow) {
           const rect = wordWindow.getBoundingClientRect()
           if (rect.top < vh + 200) {

@@ -354,7 +354,7 @@ field('public', 'Footer', 'Brand', 'public.footer.tagline', 'Tagline', 'text', '
 field('public', 'Footer', 'Brand', 'public.footer.copyright', 'Copyright line (after the year)', 'text', 'DYPOL LABS · Stracker', { maxLength: 120, help: 'The year is added automatically: “© 2026 …”.' })
 field('public', 'Footer', 'Column headings', 'public.footer.group_product.title', 'Column heading: Product', 'text', 'Product', { maxLength: 40 })
 field('public', 'Footer', 'Column headings', 'public.footer.group_account.title', 'Column heading: Account', 'text', 'Account', { maxLength: 40 })
-field('public', 'Footer', 'Column headings', 'public.footer.group_information.title', 'Column heading: Information', 'text', 'Information', { maxLength: 40 })
+field('public', 'Footer', 'Column headings', 'public.footer.group_information.title', 'Column heading: Legal', 'text', 'Legal', { maxLength: 40 })
 field('public', 'Footer', 'Column headings', 'public.footer.group_brand.title', 'Column heading: Brand', 'text', 'Brand', { maxLength: 40 })
 
 /* Public website appearance. Presets only: every accent ships tuned light and dark values. */
