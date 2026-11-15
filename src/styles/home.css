@@ -360,7 +360,6 @@ html[data-app-font='active'] .pub-page.pub-home :where(*) {
   transition: none !important;
 }
 .hp-doodle-features { top: 32px; right: 5%; transform: rotate(8deg); }
-.hp-doodle-ai { top: 40px; left: 4%; transform: rotate(-6deg); }
 
 /* Pastel tones shared by cards. */
 .pub-home .hp-tone-blue   { --hp-tone: var(--hp-blue);     --hp-tone-ink: var(--hp-blue-ink); }
@@ -1189,12 +1188,21 @@ html[data-app-font='active'] .pub-home .pub-footer-wordmark {
 }
 
 /* The wordmark keeps its Sora capitals and its own size through the font routing above. */
+/* The wordmark is set in Patrick Hand, B's handwritten display face, through the font routing above. */
 :root .pub-page.pub-home .pub-footer-wordmark {
-  --font-public: 'Sora', sans-serif;
-  --hp-fw: 700;
+  --font-public: var(--hp-hand);
+  --hp-fw: 400;
   --hp-fs: var(--pub-wordmark-size);
-  --hp-lh: .84;
+  --hp-lh: .9;
+  letter-spacing: .02em;
 }
+.pub-home .pub-footer-wordmark-window { --pub-wordmark-size: clamp(3.5rem, 23vw, 22rem); }
+
+/* The page ends at the footer: nothing decorative may extend the document, and the
+   app-wide ruled body backdrop never shows on the homepage (grain only). */
+.pub-page.pub-home { overflow: clip; }
+body:has(> #root > .pub-home)::before,
+body:has(.pub-home)::before { display: none; }
 
 /* Phones: full-width closing actions and a quiet copyright row. */
 @media (max-width: 480px) {

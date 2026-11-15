@@ -94,3 +94,28 @@ describe('homepage redesign scope', () => {
     expect(container.querySelector('#dypol-labs')).not.toBeNull()
   })
 })
+
+describe('homepage page end and footer', () => {
+  it('keeps decorations from extending the page and hides the ruled body backdrop', () => {
+    expect(homeCss).toMatch(/\.pub-page\.pub-home \{ overflow: clip; \}/)
+    expect(homeCss).toContain('body:has(.pub-home)::before { display: none; }')
+    const motion = readFileSync(`${process.cwd()}/src/components/public/home-motion.ts`, 'utf8')
+    expect(motion).toContain('PARALLAX_MAX')
+  })
+
+  it('labels the information column Legal', () => {
+    const { container } = render(<MemoryRouter initialEntries={['/']}><LandingPage /></MemoryRouter>)
+    const headings = [...container.querySelectorAll('footer h2, footer h3, footer h4, footer p, footer strong')].map(node => node.textContent?.trim())
+    expect(headings).toContain('Legal')
+    expect(headings).not.toContain('Information')
+  })
+})
+
+
+describe('homepage decorations', () => {
+  it('has no four-point sparkle decoration', () => {
+    const { container } = render(<MemoryRouter initialEntries={['/']}><LandingPage /></MemoryRouter>)
+    const decorative = [...container.querySelectorAll('[aria-hidden="true"]')].map(node => node.textContent ?? '')
+    expect(decorative.some(text => text.includes('✦'))).toBe(false)
+  })
+})
