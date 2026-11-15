@@ -18,7 +18,7 @@ import {
   getAccuracy, getAttemptRate, getChapterPerformance, getMarksTrend, getMistakeCounts,
   getNegativeMarkImpact, getOverallTestAverage, getOverallTestScore, getSubjectPerformance
 } from '../lib/analytics'
-import { prettyDate } from '../lib/date'
+import { cachedDateFormat, prettyDate } from '../lib/date'
 import { fmtDuration, fmtNumber } from '../lib/format'
 import { makeStudyBars, makeStudyHeatmap } from '../lib/study-aggregation'
 import { subjectColor } from '../lib/exams/subjects'
@@ -28,12 +28,12 @@ import { subjectColor } from '../lib/exams/subjects'
 function chartDate(value: number | string): string {
   const date = typeof value === 'number' ? new Date(value) : new Date(`${String(value).slice(0, 10)}T12:00:00`)
   if (Number.isNaN(date.getTime())) return String(value)
-  return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(date)
+  return cachedDateFormat('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(date)
 }
 function chartDateLong(value: number | string): string {
   const date = typeof value === 'number' ? new Date(value) : new Date(`${String(value).slice(0, 10)}T12:00:00`)
   if (Number.isNaN(date.getTime())) return String(value)
-  return new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).format(date)
+  return cachedDateFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).format(date)
 }
 const chartColors = { accent: 'var(--accent)', overall: 'var(--chart-overall)', green: 'var(--green)', orange: 'var(--subject-maths)', red: 'var(--red)', muted: 'var(--muted)' }
 

@@ -137,6 +137,12 @@ a.text-button:active {
   box-shadow: inherit;
 }
 
+/* Tabs: an instant pressed tint (no motion) so a tap is acknowledged on the same frame. */
+[role='tab']:active:not([aria-selected='true']) {
+  background: var(--paper-muted);
+  color: var(--ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .button,
   .icon-button,
