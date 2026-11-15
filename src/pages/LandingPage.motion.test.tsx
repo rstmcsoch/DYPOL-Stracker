@@ -82,7 +82,7 @@ describe('homepage redesign scope', () => {
   it('scopes every homepage rule to the signed-out page', () => {
     const rules = homeCss.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@keyframes[^{]+\{(?:[^{}]*\{[^}]*\})*[^}]*\}/g, '').replace(/:(?:where|is|not)\([^()]*(?:\([^()]*\)[^()]*)*\)/g, '')
     const selectors = [...rules.matchAll(/(^|[{}])\s*([^{}@]+)\{/g)].map(match => match[2]!.trim()).filter(Boolean)
-    const unscoped = selectors.flatMap(group => group.split(',').map(part => part.trim())).filter(part => part && !/\.pub-home|\.hp-|^(?:from|to|\d+%)/.test(part))
+    const unscoped = selectors.flatMap(group => group.split(',').map(part => part.trim())).filter(part => part && !/\.pub-hp|\.hp-|^(?:from|to|\d+%)/.test(part))
     expect(unscoped).toEqual([])
   })
 
@@ -97,8 +97,8 @@ describe('homepage redesign scope', () => {
 
 describe('homepage page end and footer', () => {
   it('keeps decorations from extending the page and hides the ruled body backdrop', () => {
-    expect(homeCss).toMatch(/\.pub-page\.pub-home \{ overflow: clip; \}/)
-    expect(homeCss).toContain('body:has(.pub-home)::before { display: none; }')
+    expect(homeCss).toMatch(/\.pub-page\.pub-hp \{ overflow: clip; \}/)
+    expect(homeCss).toContain('body:has(.pub-hp)::before { display: none; }')
     const motion = readFileSync(`${process.cwd()}/src/components/public/home-motion.ts`, 'utf8')
     expect(motion).toContain('PARALLAX_MAX')
   })

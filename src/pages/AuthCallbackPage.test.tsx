@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 const getSession = vi.fn()
 const exchangeCodeForSession = vi.fn()
 vi.mock('../lib/supabase', () => ({ supabase: { auth: { getSession, exchangeCodeForSession } }, supabaseConfigured: true, localPreviewEnabled: false }))
-vi.mock('../components/public/PublicHeader', () => ({ PublicBrand: () => <span>Stracker</span> }))
+vi.mock('../components/public/PublicHeader', () => ({ PublicBrand: () => <span>Stracker</span>, PublicThemeToggle: () => null }))
 
 const { default: AuthCallbackPage } = await import('./AuthCallbackPage')
 const { OAUTH_NEXT_KEY } = await import('../lib/google-auth')
