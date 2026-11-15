@@ -585,6 +585,5 @@ body.modal-open .quick-action-area { display: none; }
 .drawer-sync { flex: none; }
 
 @media (max-width: 960px) {
-  /* The quick-action pair always floats above the bottom bar, never behind it. */
-  .quick-action-area { z-index: 65; }
+  /* The quick-action pair always floats above the bottom bar (z-index 62 > 60), never behind it. */
 }

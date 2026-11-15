@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { clearAIDraft } from '../components/ai/aiDraft'
 import type { AIProviderConfig } from '../lib/ai/catalog'
 import { redactPotentialSecrets } from '../lib/ai/sanitize'
 import { createId } from '../lib/id'
@@ -241,6 +242,8 @@ export function AIProvider({ children }: { children:ReactNode }) {
     } catch { /* Task history is optional when the backend is unavailable. */ }
   },[user,apiFetch])
 
+  // The unsent composer draft belongs to one account: drop it when the account changes or signs out.
+  useEffect(() => () => clearAIDraft(),[user?.id])
   useEffect(() => {
     if (!user) {
       resetProviders(); setRecentConversations([]); setRecentTasks([]); setConversationId(null); setMessages([]); setActiveTask(null)

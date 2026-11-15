@@ -18,6 +18,8 @@ const AIMarkdown = lazy(loadMarkdown)
 import { useScrollExpanded } from '../../lib/ui/scroll-expand'
 import { useExit } from '../../lib/ui/use-exit'
 import { isSafeAppPath } from '../../lib/safe-path'
+import { clearAIDraft, useAIDraft } from './aiDraft'
+import { useOutsideMinimize } from './outsideMinimize'
 
 const SUGGESTIONS = [
   'How am I doing in each subject?',
@@ -167,7 +169,8 @@ function ChatComposer({ compact=false }: { compact?:boolean }) {
   const { configured,active,ownAdded } = useActiveAI()
   const location = useLocation()
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const [value,setValue] = useState('')
+  // The unsent text lives outside the composer so minimise/restore/expand never lose it.
+  const [value,setValue] = useAIDraft()
   const send = (event?:FormEvent) => {
     event?.preventDefault()
     if (isBusy) { if (activeTask?.cancellable !== false) stopTask(); return }
@@ -211,7 +214,10 @@ function HistorySidebar({ onSelect,hidden=false }: { onSelect:()=>void;hidden?:b
   </aside>
 }
 
-export function AIExperience() {
+/** Open layers that handle Escape themselves; while any is open, Escape is left to them. */
+const ESCAPE_OWNERS = '.dialog-backdrop, .onboarding-backdrop, .mobile-sheet-backdrop, .overflow-menu, .quick-action-menu'
+
+export function AIExperience({ hideLauncher=false }: { hideLauncher?:boolean }) {
   const { panelOpen,minimized,largeOpen,openPanel,restorePanel,minimizePanel,closePanel,expandPanel,collapseLarge,conversationTitle,conversationId,clearConversation,newConversation,isBusy } = useAI()
   const launcherExpanded = useScrollExpanded()
   // Exit animations: the floating window fades/scales out before close or minimise; the large
@@ -219,9 +225,16 @@ export function AIExperience() {
   const floatingExit = useExit(170)
   const largeExit = useExit(170)
   const largeExitFn = largeExit.exit
-  const closeAnimated = () => (largeOpen ? largeExit : floatingExit).exit(closePanel)
+  // Closing ends this draft; minimising (button, outside click, Escape) keeps it.
+  const closeAnimated = () => (largeOpen ? largeExit : floatingExit).exit(() => { clearAIDraft(); closePanel() })
   const minimizeAnimated = () => (largeOpen ? largeExit : floatingExit).exit(minimizePanel)
   const collapseAnimated = () => largeExit.exit(collapseLarge)
+  // A plain click/tap outside the assistant minimises it (never closes): the conversation, any
+  // running task and the unsent draft all stay. Drags, text selections, clicks inside the window
+  // or on its launcher, and clicks on other open layers (dialogs, menus, toasts) are ignored.
+  const minimizeRef = useRef(minimizeAnimated)
+  useEffect(() => { minimizeRef.current = minimizeAnimated })
+  useOutsideMinimize(panelOpen || largeOpen, () => minimizeRef.current())
   const { backendStatus,messages,activeTask } = useAI()
   const { configured,active } = useActiveAI()
   // Hide "Add your own model" only while the chat is actually served by the student's own model.
@@ -266,6 +279,21 @@ export function AIExperience() {
     document.body.classList.add('modal-open')
     return () => { clearTimeout(timer); document.removeEventListener('keydown',onKey); document.body.classList.remove('modal-open'); previous?.focus?.() }
   },[largeOpen,collapseLarge,largeExitFn])
+  // Escape in the floating window minimises it (the large workspace keeps its own Escape: close
+  // history, then return to the floating window). Left alone while another layer owns Escape.
+  const floatingOpen = panelOpen && !largeOpen
+  useEffect(() => {
+    if (!floatingOpen) return
+    const onKey = (event:globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return
+      if (document.querySelector(ESCAPE_OWNERS)) return
+      const hadFocus = Boolean(document.activeElement?.closest('.ai-floating-window'))
+      minimizeRef.current()
+      if (hadFocus) window.setTimeout(() => document.querySelector<HTMLElement>('.ai-launcher')?.focus(),220)
+    }
+    document.addEventListener('keydown',onKey)
+    return () => document.removeEventListener('keydown',onKey)
+  },[floatingOpen])
 
   const content = <>
     <header className="ai-window-header"><div className="ai-window-brand"><span className="ai-brand-mark"><Sparkles size={16} /></span><div><strong>Stracker AI</strong><span>{conversationId ? conversationTitle : configured ? `Ready${active ? ` · ${active.name}` : ''}` : 'Your study copilot'}</span></div></div><div className="ai-window-tools">{conversationId && <IconButton label="Start a new conversation" onClick={() => newConversation()} disabled={isBusy}><MessageSquarePlus size={16} /></IconButton>}{!largeOpen && <IconButton label="Conversation history and workspace" onClick={() => { setHistoryOpen(true); expandPanel() }}><History size={16} /></IconButton>}{largeOpen && <button ref={historyToggleRef} type="button" className="icon-button" aria-label={historyOpen ? 'Hide recent chats' : 'Show recent chats'} aria-expanded={historyOpen} onClick={() => setHistoryOpen(open => !open)}><History size={16} /></button>}{largeOpen && <IconButton label="Close workspace" onClick={collapseAnimated}><Minimize2 size={16} /></IconButton>}{!largeOpen && <IconButton label="Open large workspace" onClick={expandPanel}><Maximize2 size={16} /></IconButton>}<IconButton label="Minimize assistant; task continues" onClick={minimizeAnimated}><Minus size={17} /></IconButton><IconButton label="Close assistant; task continues" onClick={closeAnimated}><X size={18} /></IconButton></div></header>
@@ -275,11 +303,11 @@ export function AIExperience() {
       : <><div className="ai-compact-titlebar"><span>{conversationId ? conversationTitle : 'Ask about your studies'}</span><span className="ai-compact-titlebar-actions">{!servedByOwn && <button type="button" className="ai-add-own-model" onClick={() => navigate(ADD_OWN_MODEL_PATH)} title="Add your own AI model"><Plus size={10} /> Add your own model</button>}{configured && <span className="ai-ready-dot">Ready</span>}</span></div><ConversationMessages compact /><ChatComposer compact /></>}
   </>
   return <>
-    {!panelOpen && !largeOpen && <div className={`ai-launcher-wrap ${minimized ? 'ai-launcher-minimized' : ''} ${minimized || launcherExpanded ? 'ai-launcher-expanded' : ''}`}>
+    {!panelOpen && !largeOpen && <div className={`ai-launcher-wrap ${minimized ? 'ai-launcher-minimized' : ''} ${minimized || launcherExpanded ? 'ai-launcher-expanded' : ''} ${hideLauncher ? 'ai-launcher-hidden' : ''}`} aria-hidden={hideLauncher || undefined} inert={hideLauncher || undefined}>
       <button className={`ai-launcher ${isBusy ? 'ai-launcher-active' : ''}`} onClick={minimized ? restorePanel : openPanel} aria-label={minimized ? 'Restore AI Assistant; task continues' : 'Ask Stracker'} aria-expanded={false}><Sparkles size={20} aria-hidden="true" /><span className="ai-launcher-label" aria-hidden="true">{minimized ? 'Restore' : 'Ask Stracker'}</span>{isBusy && <i aria-label="AI task active" />}</button>
     </div>}
     {panelOpen && !largeOpen && <section className="ai-floating-window" aria-label="Stracker AI Assistant" data-state={floatingExit.state} onAnimationEnd={floatingExit.onAnimationEnd}><div className="ai-floating-shell">{content}</div></section>}
-    {largeOpen && <div className="ai-workspace-backdrop" data-state={largeExit.state} onAnimationEnd={largeExit.onAnimationEnd} onMouseDown={event => { if (event.target === event.currentTarget) collapseAnimated() }}><section className="ai-large-workspace" role="dialog" aria-modal="true" aria-label="Stracker AI workspace"><div className="ai-large-shell">{content}</div></section></div>}
+    {largeOpen && <div className="ai-workspace-backdrop" data-state={largeExit.state} onAnimationEnd={largeExit.onAnimationEnd}><section className="ai-large-workspace" role="dialog" aria-modal="true" aria-label="Stracker AI workspace"><div className="ai-large-shell">{content}</div></section></div>}
     {clearConfirmOpen && <Dialog title="Clear this conversation?" subtitle="This removes the saved messages from your Stracker account. It does not change your study data or provider settings." onClose={() => !clearing && setClearConfirmOpen(false)} className="dialog-narrow"><div className="dialog-actions"><Button variant="secondary" onClick={() => setClearConfirmOpen(false)} disabled={clearing}>Keep conversation</Button><Button variant="danger" loading={clearing} onClick={() => { if (clearing) return; setClearing(true); void clearConversation().then(() => { setClearConfirmOpen(false); notify('Conversation cleared.') }).catch(error => notify(error instanceof Error ? error.message : 'Conversation could not be cleared.', 'error')).finally(() => setClearing(false)) }}><Trash2 size={15} /> Clear conversation</Button></div></Dialog>}
   </>
 }
