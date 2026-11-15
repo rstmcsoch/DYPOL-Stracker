@@ -427,3 +427,59 @@ html[data-app-font='active'] .app-shell .ai-typing-indicator i { background: var
 html[data-app-font='active'] .app-shell .ai-launcher-active > i { background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent); }
 html[data-app-font='active'] .app-shell .ai-window-header { background: linear-gradient(90deg, color-mix(in srgb, var(--accent-light) 60%, var(--paper-soft)), var(--paper)); }
 html[data-app-font='active'] .app-shell .ai-settings-card { background: linear-gradient(135deg, color-mix(in srgb, var(--accent-light) 50%, var(--paper)), var(--paper) 58%); }
+
+/* ------------------------------------------------ Home grid cleanup (t156)
+   1. Today's plan stretches to the height of the right-hand stack, so the left
+      column no longer ends early with a dead gap; its empty state sits centred.
+   2. The Today / This week time split is one clean segmented strip instead of three
+      squeezed tiles with coloured side borders; a small subject-coloured dot keeps
+      the Lecture / Practice / Revision colour cue.
+   3. The snapshot cards use an explicit grid (4 across from 1440px, 2×2 on
+      laptops and tablets, 1 column on phones), so the exam card never sits alone. */
+html[data-app-font='active'] .app-shell .dashboard-grid { align-items: stretch; }
+html[data-app-font='active'] .app-shell .today-plan-block { display: flex; flex-direction: column; }
+html[data-app-font='active'] .app-shell .today-plan-card { display: flex; flex: 1 1 auto; flex-direction: column; }
+html[data-app-font='active'] .app-shell .today-plan-card > .empty-state { flex: 1 1 auto; }
+html[data-app-font='active'] .app-shell .today-plan-card .paper-clip { display: none; }
+
+html[data-app-font='active'] .app-shell .jee-snapshot .jee-split {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper-soft);
+}
+html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 9px 10px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item + .jee-split-item { border-left: 1px solid var(--line); }
+html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item.other { border-left: 0; border-top: 1px solid var(--line); }
+html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item > svg { display: none; }
+html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item > span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); white-space: nowrap; }
+html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item[class*='split-'] > span::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--dot, var(--muted)); }
+html[data-app-font='active'] .app-shell .jee-snapshot .split-lecture { --dot: var(--subject-physics); }
+html[data-app-font='active'] .app-shell .jee-snapshot .split-practice { --dot: var(--subject-chemistry); }
+html[data-app-font='active'] .app-shell .jee-snapshot .split-revision { --dot: var(--subject-maths); }
+html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item strong { font-size: 18px; }
+
+html[data-app-font='active'] .app-shell .jee-snapshot { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+@media (min-width: 1440px) {
+  html[data-app-font='active'] .app-shell .jee-snapshot { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 519px) {
+  html[data-app-font='active'] .app-shell .jee-snapshot { grid-template-columns: minmax(0, 1fr); }
+}
+/* Narrow cards: the split strip becomes three tidy rows (label left, time right). */
+@media (min-width: 1440px) and (max-width: 1679px), (max-width: 380px) {
+  html[data-app-font='active'] .app-shell .jee-snapshot .jee-split { grid-template-columns: minmax(0, 1fr); }
+  html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item { flex-direction: row; align-items: center; justify-content: space-between; padding: 7px 10px; }
+  html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item + .jee-split-item { border-left: 0; border-top: 1px solid var(--line); }
+  html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item strong { font-size: 16px; }
+}
