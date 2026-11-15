@@ -1,5 +1,5 @@
 import { plannerTaskHref, shouldIgnoreShortcut, wrapIndex } from '../lib/shortcuts'
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Activity, AlarmClock, AlertTriangle, BookOpen, CalendarDays, Check,
@@ -28,6 +28,8 @@ import { ContactLink } from './public/ContactLink'
 import { InfoLinks } from './public/InfoLinks'
 import { GroupedChapterOptions } from './GroupedChapterOptions'
 import { showsBrandFooter } from '../lib/brand-footer'
+import { preloadAppRoutesWhenIdle, preloadRoute } from '../lib/route-preload'
+import { isPlainClick, navMatches, setPendingNav, usePendingNav } from '../lib/nav-pending'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
 interface NavigationGroup { caption: string; items: NavigationItem[] }
@@ -95,6 +97,10 @@ export function AppFrame() {
   const [quickActionsOpen, setQuickActionsOpen] = useState(false)
 
   useEffect(() => { setDrawerOpen(false) }, [location.pathname])
+  // The route has committed, so the real NavLink state takes over from the tap highlight.
+  useEffect(() => { setPendingNav(null) }, [location.pathname, location.search])
+  // Warm the other tabs' code in idle time once the shell is on screen.
+  useEffect(() => preloadAppRoutesWhenIdle(), [])
   useEffect(() => {
     if (!drawerOpen) return
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setDrawerOpen(false) }
@@ -246,21 +252,45 @@ export function AppFrame() {
   </>
 }
 
+/**
+ * Shared tap behaviour for the sidebar, drawer and bottom bar: start fetching the page's code on
+ * hover/focus/press, and move the highlight on tap instead of after the next page has rendered.
+ */
+function useFastNav(to: string, exact: boolean | undefined, onClick?: () => void) {
+  const pending = usePendingNav()
+  const warm = () => preloadRoute(to)
+  return {
+    activeFor: (isActive: boolean) => pending === null ? isActive : navMatches(to, pending, exact),
+    handlers: {
+      onPointerEnter: warm,
+      onPointerDown: warm,
+      onFocus: warm,
+      onClick: (event: ReactMouseEvent<HTMLAnchorElement>) => {
+        if (isPlainClick(event)) setPendingNav(to)
+        onClick?.()
+      }
+    }
+  }
+}
+
 function NavItem({ to, label, icon: Icon, exact, onClick }: NavigationItem & { onClick?: () => void }) {
-  return <NavLink to={to} end={exact} onClick={onClick} className={({ isActive }) => `nav-link type-nav ${isActive ? 'active' : ''}`}>
+  const { activeFor, handlers } = useFastNav(to, exact, onClick)
+  return <NavLink to={to} end={exact} {...handlers} className={({ isActive }) => `nav-link type-nav ${activeFor(isActive) ? 'active' : ''}`}>
     <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
   </NavLink>
 }
 
 function MobileNavItem({ item }: { item: NavigationItem }) {
   const Icon = item.icon
-  return <NavLink to={item.to} end={item.exact} className={({ isActive }) => `mobile-nav-item type-nav ${isActive ? 'active' : ''}`}>
+  const { activeFor, handlers } = useFastNav(item.to, item.exact)
+  return <NavLink to={item.to} end={item.exact} {...handlers} className={({ isActive }) => `mobile-nav-item type-nav ${activeFor(isActive) ? 'active' : ''}`}>
     <Icon size={20} strokeWidth={1.8} /><span>{item.label === 'Mistake notebook' ? 'Mistakes' : item.label}</span>
   </NavLink>
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
-  return <NavLink className={`brand ${compact ? 'brand-compact' : ''}`} to="/" aria-label="Stracker home">
+  const warm = () => preloadRoute('/')
+  return <NavLink className={`brand ${compact ? 'brand-compact' : ''}`} to="/" aria-label="Stracker home" onPointerEnter={warm} onPointerDown={warm} onFocus={warm} onClick={event => { if (isPlainClick(event)) setPendingNav('/') }}>
     <span className="brand-mark"><span>S</span><i>✳</i></span><span className="brand-type type-brand">Stracker<small className="type-overline">STUDY HOME</small></span>
   </NavLink>
 }

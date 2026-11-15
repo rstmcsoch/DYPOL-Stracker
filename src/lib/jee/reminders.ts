@@ -1,5 +1,5 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
-import { indiaDate, plusDays } from '../date.js'
+import { cachedDateFormat, indiaDate, plusDays } from '../date.js'
 import { pyqCompletion } from './progress.js'
 import type { AppData, BacklogItem, ReminderKind } from '../../types/index.js'
 
@@ -74,7 +74,7 @@ const FIRED_KEY = 'stracker:reminders-fired'
 export function shouldFireToday(reminderTime: string, now: Date, storage: Pick<Storage, 'getItem' | 'setItem'> | null = typeof localStorage !== 'undefined' ? localStorage : null): boolean {
   const day = indiaDate(now)
   const [hours, minutes] = reminderTime.split(':').map(Number)
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now)
+  const parts = cachedDateFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now)
   const hh = Number(parts.find(part => part.type === 'hour')?.value ?? 0)
   const mm = Number(parts.find(part => part.type === 'minute')?.value ?? 0)
   if (hh * 60 + mm < (hours ?? 0) * 60 + (minutes ?? 0)) return false

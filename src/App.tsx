@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react'
+import { routeLoaders } from './lib/route-preload'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -22,24 +23,24 @@ const LoginPage = lazy(() => import('./pages/LoginPage'))
 const SignupPage = lazy(() => import('./pages/SignupPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
-const SyllabusPage = lazy(() => import('./pages/SyllabusPage'))
-const TestsPage = lazy(() => import('./pages/TestsPage'))
-const MistakesPage = lazy(() => import('./pages/MistakesPage'))
-const RetryPage = lazy(() => import('./pages/RetryPage'))
-const PlannerPage = lazy(() => import('./pages/PlannerPage'))
-const RevisionPage = lazy(() => import('./pages/RevisionPage'))
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
-const WeakAreasPage = lazy(() => import('./pages/WeakAreasPage'))
-const BackupPage = lazy(() => import('./pages/BackupPage'))
-const SettingsPage = lazy(() => import('./pages/SettingsPage'))
-const ProfilePage = lazy(() => import('./pages/ProfilePage'))
-const FocusPage = lazy(() => import('./pages/FocusPage'))
-const PracticePage = lazy(() => import('./pages/PracticePage'))
-const PyqPage = lazy(() => import('./pages/PyqPage'))
-const BacklogPage = lazy(() => import('./pages/BacklogPage'))
-const MockAnalysisPage = lazy(() => import('./pages/MockAnalysisPage'))
-const DecksPage = lazy(() => import('./pages/DecksPage'))
-const StudyNowPage = lazy(() => import('./pages/StudyNowPage'))
+const SyllabusPage = lazy(routeLoaders['/syllabus'])
+const TestsPage = lazy(routeLoaders['/tests'])
+const MistakesPage = lazy(routeLoaders['/mistakes'])
+const RetryPage = lazy(routeLoaders['/retry'])
+const PlannerPage = lazy(routeLoaders['/planner'])
+const RevisionPage = lazy(routeLoaders['/revision'])
+const AnalyticsPage = lazy(routeLoaders['/analytics'])
+const WeakAreasPage = lazy(routeLoaders['/weak-areas'])
+const BackupPage = lazy(routeLoaders['/backup'])
+const SettingsPage = lazy(routeLoaders['/settings'])
+const ProfilePage = lazy(routeLoaders['/profile'])
+const FocusPage = lazy(routeLoaders['/focus'])
+const PracticePage = lazy(routeLoaders['/practice'])
+const PyqPage = lazy(routeLoaders['/pyqs'])
+const BacklogPage = lazy(routeLoaders['/backlog'])
+const MockAnalysisPage = lazy(routeLoaders['/mock-analysis'])
+const DecksPage = lazy(routeLoaders['/decks'])
+const StudyNowPage = lazy(routeLoaders['/study-now'])
 // Private operations console: lazy-loaded so its code and styles never reach the public or
 // notebook bundles, and are not even downloaded by a visitor without a Stracker session.
 const ControlPanelApp = lazy(() => import('./control/ControlPanelApp'))
@@ -167,7 +168,7 @@ function AppRoutes() {
   </Suspense>
 }
 
-const HomePage = lazy(() => import('./pages/HomePage'))
+const HomePage = lazy(routeLoaders['/'])
 function AppHome() { return <HomePage /> }
 
 export default function App() {

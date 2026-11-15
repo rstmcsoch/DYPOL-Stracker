@@ -1,6 +1,13 @@
+const numberFormatters = new Map<number, Intl.NumberFormat>()
+
 export function fmtNumber(value: number | null | undefined, digits = 0): string {
   if (value == null || !Number.isFinite(value)) return '—'
-  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: digits }).format(value)
+  let formatter = numberFormatters.get(digits)
+  if (!formatter) {
+    formatter = new Intl.NumberFormat('en-IN', { maximumFractionDigits: digits })
+    numberFormatters.set(digits, formatter)
+  }
+  return formatter.format(value)
 }
 
 export function fmtDuration(minutes: number): string {
