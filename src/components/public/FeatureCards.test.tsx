@@ -10,7 +10,7 @@ afterEach(cleanup)
 
 function titles(overrides: Record<string, string>) {
   const { container } = render(<SiteContentProvider overrides={overrides}><FeatureSection /></SiteContentProvider>)
-  return { container, list: [...container.querySelectorAll('.feature-entry h3')].map(node => node.textContent) }
+  return { container, list: [...container.querySelectorAll('.hp-feature h3')].map(node => node.textContent) }
 }
 
 describe('owner feature card order, visibility and icons', () => {
@@ -18,14 +18,14 @@ describe('owner feature card order, visibility and icons', () => {
     const { list, container } = titles({})
     expect(list).toHaveLength(8)
     expect(list[0]).toBe(SITE_CONTENT_DEFAULTS['public.features.item_1.title'])
-    expect(container.querySelector('.feature-toggle')).not.toBeNull()
+    expect(container.querySelector('.hp-feature-toggle')).not.toBeNull()
   })
 
   it('reorders and hides cards, renumbering what is shown', () => {
     const { list, container } = titles({ 'public.features.order': '3,1' })
     expect(list).toEqual([SITE_CONTENT_DEFAULTS['public.features.item_3.title'], SITE_CONTENT_DEFAULTS['public.features.item_1.title']])
-    expect([...container.querySelectorAll('.feature-index')].map(node => node.textContent)).toEqual(['01', '02'])
-    expect(container.querySelector('.feature-toggle')).toBeNull()
+    expect([...container.querySelectorAll('.hp-feature-index')].map(node => node.textContent)).toEqual(['01', '02'])
+    expect(container.querySelector('.hp-feature-toggle')).toBeNull()
   })
 
   it('falls back to the full default order for an invalid stored value', () => {
@@ -50,9 +50,9 @@ describe('owner feature card order, visibility and icons', () => {
 
   it('shows an optional card image only when one is set', () => {
     const url = 'https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/public/homepage-media/site/image/0f8fad5b-d9cb-469f-a165-70867728950e.webp'
-    expect(titles({}).container.querySelector('.feature-image')).toBeNull()
+    expect(titles({}).container.querySelector('.hp-feature-image')).toBeNull()
     cleanup()
-    const img = titles({ 'public.features.item_2.image': url }).container.querySelector('.feature-image')
+    const img = titles({ 'public.features.item_2.image': url }).container.querySelector('.hp-feature-image')
     expect(img?.getAttribute('src')).toBe(url)
     expect(img?.getAttribute('alt')).toBe(SITE_CONTENT_DEFAULTS['public.features.item_2.title'])
     expect(validateFieldValue(fieldDefinition('public.features.item_2.image')!, 'https://evil.example/a.png').ok).toBe(false)
@@ -60,10 +60,10 @@ describe('owner feature card order, visibility and icons', () => {
 
   it('reorders, adds and re-icons principle items', () => {
     const { container } = render(<SiteContentProvider overrides={{}}><PrincipleSection /></SiteContentProvider>)
-    expect(container.querySelectorAll('.principle-list > li')).toHaveLength(6)
+    expect(container.querySelectorAll('.hp-principle-list > li')).toHaveLength(6)
     cleanup()
     const second = render(<SiteContentProvider overrides={{ 'public.principles.order': '7,2', 'public.principles.item_7.title': 'Exam-agnostic' }}><PrincipleSection /></SiteContentProvider>)
-    expect([...second.container.querySelectorAll('.principle-list strong')].map(node => node.textContent)).toEqual(['Exam-agnostic', SITE_CONTENT_DEFAULTS['public.principles.item_2.title']])
+    expect([...second.container.querySelectorAll('.hp-principle-list strong')].map(node => node.textContent)).toEqual(['Exam-agnostic', SITE_CONTENT_DEFAULTS['public.principles.item_2.title']])
     expect(validateFieldValue(fieldDefinition('public.principles.item_1.icon')!, 'target').ok).toBe(true)
   })
 

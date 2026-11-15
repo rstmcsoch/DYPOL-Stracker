@@ -74,6 +74,8 @@ function PromoVideoBody() {
   const [muted, setMuted] = useState(true)
   const [autoplayBlocked, setAutoplayBlocked] = useState(false)
   const [failed, setFailed] = useState(false)
+  /* Read from the loaded file itself, so the badge can never state a length the clip does not have. */
+  const [duration, setDuration] = useState<number | null>(null)
 
   /* Track the visitor's motion preference live, not just at mount. */
   useEffect(() => {
@@ -220,6 +222,7 @@ function PromoVideoBody() {
             onPlay={() => { setPlaying(true); setAutoplayBlocked(false) }}
             onPause={() => setPlaying(false)}
             onTimeUpdate={onProgress}
+            onLoadedMetadata={event => { const seconds = event.currentTarget.duration; setDuration(Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds) : null) }}
             onError={() => { if (!failed) track('video_error', { video: 'promo' }); setFailed(true) }}
           >
             {armed && customVideo && <source src={customVideo} type="video/mp4" />}
@@ -227,6 +230,7 @@ function PromoVideoBody() {
             {armed && <source src={ORIGINAL_SOURCE} type="video/mp4" />}
           </video>
           <div className="promo-veil" aria-hidden="true" />
+          <span className="promo-badge" aria-hidden="true">{duration ? `Stracker · ${duration}s preview` : 'Stracker preview'}</span>
           {failed ? (
             <p className="promo-fallback">The preview video couldn’t load on this connection.</p>
           ) : (

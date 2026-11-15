@@ -62,7 +62,7 @@ describe('homepage feature disclosure', () => {
 
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(toggle.getAttribute('aria-controls')).toBe('feature-list')
-    expect(container.querySelectorAll('.feature-entry')).toHaveLength(8)
+    expect(container.querySelectorAll('.hp-feature')).toHaveLength(8)
 
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')

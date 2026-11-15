@@ -96,10 +96,13 @@ describe('public navigation integrity', () => {
 })
 
 describe('homepage honesty', () => {
-  it('contains no fake controls inside the illustrative notebook page', () => {
+  it('keeps the illustrative notebook page a clearly labelled, local-only sample', () => {
     const preview = readFileSync(`${publicDir}NotebookPreview.tsx`, 'utf8')
-    expect(preview).not.toMatch(/<button/)
-    expect(preview).not.toMatch(/<input/)
+    // The only controls are the sample task ticks: local state, announced as toggles, never saved.
+    expect(preview).not.toMatch(/<input|<form|fetch\(|supabase|localStorage/i)
+    expect([...preview.matchAll(/<button/g)]).toHaveLength(1)
+    expect(preview).toContain('aria-pressed')
+    expect(preview).toContain('Sample workspace')
     expect(preview).toContain('aria-hidden="true"')
     expect(preview).toContain('<figcaption')
   })
