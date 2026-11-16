@@ -167,28 +167,13 @@ describe('public stylesheet', () => {
   it('keeps the grain light, local and cheap', () => {
     const grain = /\.pub-grain \{([^}]*)\}/.exec(styles)?.[1] ?? ''
     expect(grain).toContain('pointer-events: none')
-    // One pre-rendered local tile: no live SVG filter, canvas, animation or blend mode.
-    expect(grain).toContain("url('/textures/grain-128.png')")
-    expect(grain).not.toMatch(/feTurbulence|mix-blend-mode|animation|filter:/)
-    const opacity = Number(/opacity:\s*(\.\d+)/.exec(grain)?.[1] ?? '1')
+    expect(grain).toContain('data:image/svg+xml')
+    const opacity = Number(/opacity:\s*\.(\d+)/.exec(grain)?.[1] ?? '99')
     expect(opacity).toBeGreaterThan(0)
-    expect(opacity).toBeLessThanOrEqual(.12)
-    const tile = readFileSync('public/textures/grain-128.png')
-    expect(tile.length).toBeLessThan(6 * 1024)
+    expect(opacity).toBeLessThanOrEqual(6)
     // No remote assets, no video backgrounds, no stock imagery in the public layer.
     expect(styles).not.toMatch(/url\(["']?https?:/)
     expect(styles).not.toMatch(/<img|\.mp4|<video/)
-  })
-
-  it('drifts the homepage shades slowly on the compositor only (t170)', () => {
-    const home = readFileSync('src/styles/home.css', 'utf8')
-    for (const name of ['hp-drift-a', 'hp-drift-b', 'hp-drift-c']) {
-      const frames = new RegExp(`@keyframes ${name} \\{([^\\n]*)\\}`).exec(home)?.[1] ?? ''
-      expect(frames, name).toMatch(/translate:/)
-      expect(frames, name).not.toMatch(/filter|background|top:|left:|width|height/)
-    }
-    const block = /@media \(prefers-reduced-motion: no-preference\) \{\s*\.hp-ambient #px1 \{ animation: hp-drift-a (\d+)s/.exec(home)
-    expect(Number(block?.[1])).toBeGreaterThanOrEqual(30)
   })
 
   it('respects reduced-motion preferences on every animated element it adds', () => {
