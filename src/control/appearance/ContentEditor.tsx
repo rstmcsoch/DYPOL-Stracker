@@ -60,7 +60,8 @@ export interface ContentEditorValue {
   busy: boolean
 }
 
-const ContentEditorContext = createContext<ContentEditorValue | null>(null)
+/** Exported so the Live Site Editor can drive the same field components with its own state. */
+export const ContentEditorContext = createContext<ContentEditorValue | null>(null)
 
 /** Converts an API failure into a plain message, keeping server-provided field errors. */
 function failure(error: unknown): ActionResult {

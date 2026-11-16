@@ -15,7 +15,7 @@ export function PublicFooter({ sectionPrefix = '' }: { sectionPrefix?: '' | '/' 
   const t = useSiteText
   const onHome = sectionPrefix === ''
   const at = (anchor: string) => `${sectionPrefix}${anchor}`
-  return <footer className="pub-footer">
+  return <footer className="pub-footer" data-se-region="footer">
     <div className="pub-footer-inner">
       <div className="pub-footer-brand">
         <PublicBrand compact />

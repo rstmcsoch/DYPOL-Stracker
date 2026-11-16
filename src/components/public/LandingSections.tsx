@@ -22,11 +22,12 @@ function lines(value: string): string[] {
 const TONES = ['blue', 'mint', 'orange', 'pink', 'violet', 'sky', 'teal', 'yellow'] as const
 const tone = (index: number) => TONES[index % TONES.length]
 
-function SectionHead({ id, eyebrow, title, lede, center = false }: { id: string; eyebrow: string; title: ReactNode; lede?: ReactNode; center?: boolean }) {
+/** `keys` names the registry prefix (e.g. `public.loop`) so the Live Site Editor can type into the text. */
+function SectionHead({ id, eyebrow, title, lede, center = false, keys }: { id: string; eyebrow: string; title: ReactNode; lede?: ReactNode; center?: boolean; keys?: string }) {
   return <div className={`hp-head${center ? ' hp-head-center' : ''}`} data-reveal="">
-    <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {eyebrow}</p>
-    <h2 id={`${id}-title`} className="hp-h2">{title}</h2>
-    {lede && <p className="hp-lede">{lede}</p>}
+    <p className="hp-eyebrow"><span aria-hidden="true">✎</span> <span data-se-key={keys && `${keys}.eyebrow`}>{eyebrow}</span></p>
+    <h2 id={`${id}-title`} className="hp-h2" data-se-key={keys && `${keys}.title`}>{title}</h2>
+    {lede && <p className="hp-lede" data-se-key={keys && `${keys}.lede`}>{lede}</p>}
   </div>
 }
 
@@ -41,7 +42,7 @@ export function StudyLoopSection() {
   const LOOP_STEPS = steps
   return <section id="why-stracker" className="hp-section" aria-labelledby="why-stracker-title" {...useBlockAttrs()}>
     <div className="hp-shell">
-      <SectionHead id="why-stracker" eyebrow={t('public.loop.eyebrow')} title={t('public.loop.title')} lede={t('public.loop.lede')} />
+      <SectionHead id="why-stracker" eyebrow={t('public.loop.eyebrow')} keys="public.loop" title={t('public.loop.title')} lede={t('public.loop.lede')} />
       <ol className="hp-loop">
         {LOOP_STEPS.map((item, index) => <li className={`hp-loop-step hp-tone-${tone(index)}`} key={`${index}-${item.step}`} data-reveal="" style={{ ['--d' as string]: `${index * 60}ms` }}>
           <span className="hp-loop-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
@@ -78,7 +79,7 @@ export function FeatureSection() {
   return <section id="features" className="hp-section hp-section-band" aria-labelledby="features-title" {...useBlockAttrs()}>
     <span className="hp-doodle hp-doodle-features" data-px="12" aria-hidden="true">✎</span>
     <div className="hp-shell">
-      <SectionHead id="features" eyebrow={t('public.features.eyebrow')} title={t('public.features.title')} lede={t('public.features.lede')} />
+      <SectionHead id="features" eyebrow={t('public.features.eyebrow')} keys="public.features" title={t('public.features.title')} lede={t('public.features.lede')} />
       <ol id="feature-list" className={`hp-features${expanded ? ' is-expanded' : ''}`}>
         {order.map((n, index) => {
           const icon = FEATURE_ICONS[t(`public.features.item_${n}.icon`)] ?? <Sparkles size={20} />
@@ -132,10 +133,10 @@ export function PrincipleSection() {
   return <section className="hp-section" aria-labelledby="principle-title" {...useBlockAttrs()}>
     <div className="hp-shell hp-principles">
       <div className="hp-principles-copy" data-reveal="">
-        <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {t('public.principles.eyebrow')}</p>
-        <h2 id="principle-title" className="hp-h2">{t('public.principles.title')}</h2>
-        <p className="hp-lede">{t('public.principles.body')}</p>
-        <p className="hp-note-card"><Compass size={16} aria-hidden="true" /> <span>{t('public.principles.note')}</span></p>
+        <p className="hp-eyebrow"><span aria-hidden="true">✎</span> <span data-se-key="public.principles.eyebrow">{t('public.principles.eyebrow')}</span></p>
+        <h2 id="principle-title" className="hp-h2" data-se-key="public.principles.title">{t('public.principles.title')}</h2>
+        <p className="hp-lede" data-se-key="public.principles.body">{t('public.principles.body')}</p>
+        <p className="hp-note-card"><Compass size={16} aria-hidden="true" /> <span data-se-key="public.principles.note">{t('public.principles.note')}</span></p>
       </div>
       <ul className="hp-principle-list">
         {principleOrder.map((n, index) => <li key={n} className={`hp-tone-${tone(index)}`} data-reveal="">
@@ -155,7 +156,7 @@ export function HowItWorksSection() {
   const t = useSiteText
   return <section id="how-it-works" className="hp-section hp-section-band" aria-labelledby="how-it-works-title" {...useBlockAttrs()}>
     <div className="hp-shell hp-shell-narrow">
-      <SectionHead id="how-it-works" eyebrow={t('public.how.eyebrow')} title={t('public.how.title')} lede={t('public.how.lede')} center />
+      <SectionHead id="how-it-works" eyebrow={t('public.how.eyebrow')} keys="public.how" title={t('public.how.title')} lede={t('public.how.lede')} center />
       <div className="hp-steps">
         <span className="hp-steps-line" aria-hidden="true"><span className="hp-steps-fill" /></span>
         <ol className="hp-step-list">
@@ -206,9 +207,9 @@ export function AiSection() {
   return <section id="ai" className="hp-section hp-section-ai" aria-labelledby="ai-title" {...useBlockAttrs()}>
     <div className="hp-shell hp-ai">
       <div className="hp-ai-copy" data-reveal="">
-        <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {t('public.ai.eyebrow')}</p>
-        <h2 id="ai-title" className="hp-h2">{t('public.ai.title')}</h2>
-        <p className="hp-lede">{t('public.ai.lede')}</p>
+        <p className="hp-eyebrow"><span aria-hidden="true">✎</span> <span data-se-key="public.ai.eyebrow">{t('public.ai.eyebrow')}</span></p>
+        <h2 id="ai-title" className="hp-h2" data-se-key="public.ai.title">{t('public.ai.title')}</h2>
+        <p className="hp-lede" data-se-key="public.ai.lede">{t('public.ai.lede')}</p>
         <dl className="hp-ai-facts">
           {[1, 2, 3, 4].map(n => <div key={n} className={`hp-tone-${tone(n - 1)}`}>
             <dt>{t(`public.ai.fact_${n}.term`)}</dt>
@@ -240,7 +241,7 @@ export function PrivacySection() {
   const t = useSiteText
   return <section id="privacy" className="hp-section hp-section-band" aria-labelledby="privacy-title" {...useBlockAttrs()}>
     <div className="hp-shell">
-      <SectionHead id="privacy" eyebrow={t('public.privacy.eyebrow')} title={t('public.privacy.title')} lede={t('public.privacy.lede')} />
+      <SectionHead id="privacy" eyebrow={t('public.privacy.eyebrow')} keys="public.privacy" title={t('public.privacy.title')} lede={t('public.privacy.lede')} />
       <div className="hp-privacy" data-reveal="">
         <dl className="hp-privacy-list">
           {[1, 2, 3, 4, 5, 6].map(n => <div key={n}>
@@ -263,10 +264,10 @@ export function DypolSection() {
       <div className="hp-dypol" data-reveal="">
         <div className="dypol-mark" aria-hidden="true"><span>S</span><i>✎</i></div>
         <div className="hp-dypol-copy">
-          <h2 id="dypol-title">{t('public.dypol.title')}</h2>
-          <p>{t('public.dypol.body')}</p>
+          <h2 id="dypol-title" data-se-key="public.dypol.title">{t('public.dypol.title')}</h2>
+          <p data-se-key="public.dypol.body">{t('public.dypol.body')}</p>
         </div>
-        <span className="hp-dypol-tag">{t('public.dypol.tag')}</span>
+        <span className="hp-dypol-tag" data-se-key="public.dypol.tag">{t('public.dypol.tag')}</span>
       </div>
     </div>
   </section>
@@ -281,9 +282,9 @@ export function FinalCta() {
       <div className="hp-final" data-reveal="">
         <span className="hp-tape hp-tape-top" aria-hidden="true" />
         <span className="hp-final-doodle" aria-hidden="true">✎</span>
-        <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {t('public.final.eyebrow')}</p>
-        <h2 id="final-title" className="hp-h2 hp-final-title">{t('public.final.title')} <em className="hp-highlight">{t('public.final.title_emphasis')}</em></h2>
-        <p className="hp-lede">{t('public.final.body')}</p>
+        <p className="hp-eyebrow"><span aria-hidden="true">✎</span> <span data-se-key="public.final.eyebrow">{t('public.final.eyebrow')}</span></p>
+        <h2 id="final-title" className="hp-h2 hp-final-title"><span data-se-key="public.final.title">{t('public.final.title')}</span> <em className="hp-highlight" data-se-key="public.final.title_emphasis">{t('public.final.title_emphasis')}</em></h2>
+        <p className="hp-lede" data-se-key="public.final.body">{t('public.final.body')}</p>
         <div className="hp-cta-row hp-cta-row-center">
           <SiteLink className="hp-btn hp-btn-primary hp-btn-lg" href={t('public.final.cta_primary.href')}>{t('public.final.cta_primary.label')} <ArrowRight size={17} aria-hidden="true" /></SiteLink>
           <SiteLink className="hp-btn hp-btn-secondary hp-btn-lg" href={t('public.final.cta_secondary.href')}>{t('public.final.cta_secondary.label')}</SiteLink>
