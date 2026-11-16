@@ -55,7 +55,7 @@ export function NotebookPreview() {
       <span className="hp-tape hp-tape-top" aria-hidden="true" />
       <div className="hp-sheet-head">
         <div>
-          <p className="hp-kicker"><span className="hp-kicker-icon" aria-hidden="true"><NotebookPen size={13} /></span> Sample workspace · Adaptable to your preparation</p>
+          <p className="hp-kicker"><span className="hp-kicker-icon" aria-hidden="true"><NotebookPen size={13} /></span> Sample workspace · JEE PCM</p>
           <p className="hp-sheet-title">Today&rsquo;s page · example</p>
         </div>
         <span className="hp-pill hp-pill-yellow"><Flame size={14} aria-hidden="true" /> example · {SAMPLE.streakDays}-day streak</span>
@@ -117,7 +117,7 @@ export function NotebookPreview() {
       </div>
     </div>
     <figcaption className="hp-figure-caption">
-      <Pencil size={14} aria-hidden="true" /> <span>A sample page with example subjects — your own exam&rsquo;s subjects and chapters take their place.</span>
+      <Pencil size={14} aria-hidden="true" /> <span>An illustrative JEE PCM example. Your own exam&rsquo;s subjects and chapters take their place.</span>
     </figcaption>
     <span className="hp-sticker" aria-hidden="true">your page, every day →</span>
   </figure>

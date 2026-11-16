@@ -105,13 +105,13 @@ field('public', PUBLIC_SEO, 'Document', 'public.meta.description', 'Meta descrip
   { maxLength: 300, help: 'Used by search engines and link previews.' })
 
 field('public', 'Header', 'Navigation', 'public.header.features.label', 'Section link: Features', 'text', 'Features', { maxLength: 40 })
-field('public', 'Header', 'Navigation', 'public.header.how.label', 'Section link: How It Works', 'text', 'How It Works', { maxLength: 40 })
+field('public', 'Header', 'Navigation', 'public.header.how.label', 'Section link: Study Loop', 'text', 'Study Loop', { maxLength: 40 })
 field('public', 'Header', 'Navigation', 'public.header.ai.label', 'Section link: AI Assistant', 'text', 'AI Assistant', { maxLength: 40 })
 field('public', 'Header', 'Navigation', 'public.header.privacy.label', 'Section link: Privacy', 'text', 'Privacy', { maxLength: 40 })
 field('public', 'Header', 'Account buttons', 'public.header.login.label', 'Log in button', 'text', 'Log In', { maxLength: 30 })
 field('public', 'Header', 'Account buttons', 'public.header.signup.label', 'Sign up button', 'text', 'Sign Up', { maxLength: 30 })
 
-field('public', HOME, 'Hero', 'public.hero.eyebrow', 'Eyebrow line', 'text', 'BUILT FOR EVERY MAJOR EXAM · STUDY SMARTER', { maxLength: 90 })
+field('public', HOME, 'Hero', 'public.hero.eyebrow', 'Eyebrow line', 'text', 'A STUDY NOTEBOOK FOR EXAM PREPARATION', { maxLength: 90 })
 field('public', HOME, 'Hero', 'public.hero.title', 'Heading (first part)', 'text', 'Your exam preparation, organized in', { maxLength: 120, help: 'The main heading is this text followed by the emphasised part below.' })
 field('public', HOME, 'Hero', 'public.hero.title_emphasis', 'Heading (emphasised part)', 'text', 'one serious study notebook.', { maxLength: 80 })
 field('public', HOME, 'Hero', 'public.hero.lede', 'Introduction', 'multiline',
@@ -121,12 +121,14 @@ field('public', HOME, 'Hero', 'public.hero.image', 'Hero image (optional)', 'med
   help: 'Replaces the notebook illustration beside the heading. Leave empty to keep the illustration.'
 })
 field('public', HOME, 'Hero', 'public.hero.image_alt', 'Hero image description', 'text', 'Stracker study notebook on a laptop', { maxLength: 140, help: 'Read aloud by screen readers when a hero image is set.' })
-field('public', HOME, 'Hero', 'public.hero.pillars', 'Highlight chips (one per line)', 'multiline', 'Syllabus\nTests\nMistakes\nRevision\nAnalytics', { maxLength: 300 })
+field('public', HOME, 'Hero', 'public.hero.pillars', 'Highlight chips (one per line)', 'multiline', 'Syllabus\nTests\nMistakes\nRevision\nAnalytics', {
+  maxLength: 300, help: 'No longer shown: the hero chips were removed in the November 2026 refresh. Kept so saved text is not lost.'
+})
 field('public', HOME, 'Hero', 'public.hero.cta_primary.label', 'Primary button label', 'text', 'Start with Stracker', { maxLength: 60 })
 field('public', HOME, 'Hero', 'public.hero.cta_primary.href', 'Primary button destination', 'link', '/signup')
 field('public', HOME, 'Hero', 'public.hero.cta_secondary.label', 'Secondary button label', 'text', 'Log In', { maxLength: 60 })
 field('public', HOME, 'Hero', 'public.hero.cta_secondary.href', 'Secondary button destination', 'link', '/login')
-field('public', HOME, 'Hero', 'public.hero.scroll.label', 'Scroll link label', 'text', 'Explore how it works', { maxLength: 60 })
+field('public', HOME, 'Hero', 'public.hero.scroll.label', 'Scroll link label', 'text', 'See the study loop', { maxLength: 60 })
 field('public', HOME, 'Hero', 'public.hero.meta', 'Footnote line', 'text', 'Private to your account · Works on phone, tablet and desktop · Installable', { maxLength: 160 })
 
 field('public', HOME, 'Study loop', 'public.loop.eyebrow', 'Eyebrow line', 'text', 'BUILT FOR SERIOUS EXAM PREPARATION', { maxLength: 90 })
@@ -150,11 +152,11 @@ field('public', HOME, 'Features', 'public.features.footnote', 'Footnote', 'multi
 const FEATURES: Array<{ title: string; summary: string; points: string[] }> = [
   {
     title: 'Syllabus Notebook',
-    summary: 'Your subjects, papers and chapters, kept like a real register.',
+    summary: 'Start from your exam’s setup and build your own chapter list, from scratch if you like.',
     points: [
-      'Subjects set by the exam you pick, with chapters you can add, edit and reorder',
-      'Status and priority for each chapter: Not Started, Studying, Done or Revised',
-      'Chapter notes, formula notes, search and custom ordering in one place'
+      'Pick your exam for its subjects; JEE also starts with a ready chapter list. Add, edit and reorder your own chapters',
+      'A status for every chapter — Not Started, Studying, Done or Revised — plus a priority',
+      'Chapter notes, formula notes, search and your own ordering in one place'
     ]
   },
   {
@@ -163,16 +165,16 @@ const FEATURES: Array<{ title: string; summary: string; points: string[] }> = [
     points: [
       'Chapter tests, subject tests, full mocks and PYQ practice in one journal',
       'Marks with correct, wrong and skipped counts',
-      'Chapter or subject breakdowns, filters and sorting across test history'
+      'Subject and chapter breakdowns turn each paper into performance data, not just a score'
     ]
   },
   {
     title: 'Mistake + Retry Notebook',
-    summary: 'Where a wrong answer turns into a fixed one.',
+    summary: 'Where a wrong answer turns into revision material.',
     points: [
       'File each mistake against its chapter and error type',
       'Keep solution notes and an optional private question photo',
-      'Pending and retried states verify that the fix really stuck'
+      'A mistake stays on the retry list until a retry shows the fix really stuck'
     ]
   },
   {
@@ -186,11 +188,11 @@ const FEATURES: Array<{ title: string; summary: string; points: string[] }> = [
   },
   {
     title: 'Daily Planning + Goals',
-    summary: 'A finishable daily plan connected to the syllabus.',
+    summary: 'A finishable daily plan tied to your syllabus.',
     points: [
-      'Dated tasks with subject, chapter, time estimate and priority',
+      'Dated tasks linked to a subject and chapter, with a time estimate and priority',
       'Reorder tasks as the day changes shape',
-      'Weekly goals and progress filled by the work you record'
+      'Weekly goals filled by the work you record, so the day and the syllabus tell one story'
     ]
   },
   {
@@ -204,20 +206,20 @@ const FEATURES: Array<{ title: string; summary: string; points: string[] }> = [
   },
   {
     title: 'Analytics',
-    summary: 'What the record says, with the working shown.',
+    summary: 'Signals instead of vibes, computed from what you recorded.',
     points: [
       'Subject signals measured against your own weak and strong thresholds',
-      'Chapter and test trends instead of one flattering number',
+      'Chapter and test trends instead of one flattering number — shown even when the news is bad',
       'Study time, mistake types, weak chapters and untested chapters in view'
     ]
   },
   {
     title: 'AI Assistant',
-    summary: 'Optional, and always on your own provider account.',
+    summary: 'Optional help that reads your notebook. You approve every change.',
     points: [
-      'Bring your own key for Gemini, OpenAI, Anthropic, DeepSeek, Qwen or compatible endpoints',
-      'Ask questions grounded in your syllabus, tests, mistakes, revisions and analytics',
-      'Writes are previewed first; credentials stay server-side and AI can stay switched off'
+      'Use Stracker AI’s built-in models within a daily limit, or connect your own provider',
+      'Ask questions answered from your own syllabus, tests, mistakes, revisions and analytics',
+      'Changes are previewed before you approve them, and the notebook works fully without AI'
     ]
   }
 ]
@@ -303,12 +305,12 @@ STEPS.forEach(([title, body], index) => {
 
 field('public', HOME, 'Stracker AI', 'public.ai.eyebrow', 'Eyebrow line', 'text', 'STRACKER AI', { maxLength: 90 })
 field('public', HOME, 'Stracker AI', 'public.ai.title', 'Heading', 'text', 'AI that reads your notebook.', { maxLength: 120 })
-field('public', HOME, 'Stracker AI', 'public.ai.lede', 'Introduction', 'multiline', 'An optional second pair of eyes on your data. It uses your own provider account and never changes anything without your OK.')
+field('public', HOME, 'Stracker AI', 'public.ai.lede', 'Introduction', 'multiline', 'An optional second pair of eyes on your notebook. It answers from your own records and never changes anything without your OK.')
 const AI_FACTS: Array<[string, string]> = [
-  ['Your key, your provider', 'Connect Gemini, OpenAI, Anthropic, DeepSeek, Qwen, or any OpenAI- or Anthropic-compatible endpoint with your own API credentials. DYPOL does not supply or proxy a model key, so provider usage is billed by your provider, not by us.'],
-  ['Handled server-side', 'A saved key goes straight to the Stracker backend, where it is stored as authenticated AES-256-GCM ciphertext. It is never returned to the browser and never appears anywhere on this page.'],
-  ['Grounded in your notebook', 'Supported tools read your own syllabus, tests, mistakes, revisions and analytics, and answer with those figures. Writes — including deletes — are previewed first and applied only after you confirm.'],
-  ['Entirely optional', 'Everything else in Stracker works with AI switched off. Stracker AI needs an internet connection and the deployed backend, and it is not available in the device-only local preview.']
+  ['Built in, or bring your own', 'Start with Stracker AI’s built-in models, which have a daily limit, or connect your own Gemini, OpenAI, Anthropic, DeepSeek, Qwen or compatible provider. Usage on your own key is billed by your provider.'],
+  ['Protected credentials', 'Provider keys you add are encrypted and kept on Stracker’s server. They are never returned to the browser, and you can test, switch off or remove them at any time.'],
+  ['Grounded in your notebook', 'Stracker AI reads your own syllabus, tests, mistakes, revisions and analytics and answers with those figures. Any change, including a delete, is previewed first and saved only after you approve it.'],
+  ['Entirely optional', 'Your whole study notebook works without AI. Stracker AI only needs an internet connection when you choose to use it.']
 ]
 AI_FACTS.forEach(([term, body], index) => {
   const section = `Facts · ${index + 1}`
@@ -316,25 +318,25 @@ AI_FACTS.forEach(([term, body], index) => {
   field('public', HOME, section, `public.ai.fact_${index + 1}.body`, 'Description', 'multiline', body, { maxLength: 400 })
 })
 field('public', HOME, 'Stracker AI', 'public.ai.cta.label', 'Button label', 'text', 'Explore Stracker AI', { maxLength: 60 })
-field('public', HOME, 'Stracker AI', 'public.ai.cta.note', 'Note beside the button', 'text', 'Sign in, then open Settings → AI Assistant to connect a provider.', { maxLength: 200 })
+field('public', HOME, 'Stracker AI', 'public.ai.cta.note', 'Note beside the button', 'text', 'Sign in to use it, or connect your own provider in Settings → AI Assistant.', { maxLength: 200 })
 
 field('public', HOME, 'Privacy', 'public.privacy.eyebrow', 'Eyebrow line', 'text', 'PRIVACY & SECURITY', { maxLength: 90 })
 field('public', HOME, 'Privacy', 'public.privacy.title', 'Heading', 'text', 'Your preparation stays yours.', { maxLength: 120 })
-field('public', HOME, 'Privacy', 'public.privacy.lede', 'Introduction', 'multiline', 'Your records stay yours: your account, your rows, nothing shared.')
+field('public', HOME, 'Privacy', 'public.privacy.lede', 'Introduction', 'multiline', 'Your study records belong to your account. Nothing is published or shared.')
 const PRIVACY: Array<[string, string]> = [
-  ['Account-scoped data', 'Every notebook table is tied to your signed-in account, and row-level security policies in Postgres allow only that account to read or change its own rows.'],
-  ['Authenticated access', 'The browser holds only the public Supabase key. No policy grants the anonymous role access to study data — a signed-in session is required.'],
-  ['Private study records', 'There is no public profile, feed, share link or leaderboard. Your chapters, tests, mistakes and results are never published anywhere.'],
-  ['Private mistake images', 'Question photos live in a private storage bucket whose policies require the owner’s user ID in the path, and are served through signed, expiring links.'],
-  ['Server-side AI credentials', 'AI provider keys are encrypted with AES-256-GCM before storage, kept in the backend only, and never sent back to the browser.'],
-  ['Yours to take with you', 'Backups export the whole notebook as JSON, and test history as CSV, whenever you want it — no lock-in and no export paywall.']
+  ['Private account data', 'Your notebook belongs to your account. Your study records are not visible to other students.'],
+  ['No public competition', 'No public profiles, study feeds or leaderboards. Your preparation stays private.'],
+  ['Private question photos', 'Question photos you save with a mistake stay private to your account.'],
+  ['Protected AI credentials', 'AI provider keys you add are encrypted and protected. They are never returned to the browser.'],
+  ['You approve AI changes', 'Stracker AI can analyse your notebook, but any change is previewed before you approve it. The whole notebook works without AI.'],
+  ['Yours to take with you', 'Export the whole notebook as a backup, and your test history as CSV, whenever you want — no lock-in and no export paywall.']
 ]
 PRIVACY.forEach(([title, body], index) => {
   const section = `Privacy points · ${index + 1}`
   field('public', HOME, section, `public.privacy.item_${index + 1}.title`, 'Item title', 'text', title, { maxLength: 80 })
   field('public', HOME, section, `public.privacy.item_${index + 1}.body`, 'Item description', 'multiline', body, { maxLength: 400 })
 })
-field('public', HOME, 'Privacy', 'public.privacy.foot', 'Footnote', 'multiline', 'No ads, no third-party trackers, and only the public key in the browser.')
+field('public', HOME, 'Privacy', 'public.privacy.foot', 'Footnote', 'multiline', 'No ads and no third-party trackers.')
 
 field('public', HOME, 'DYPOL LABS', 'public.dypol.title', 'Heading', 'text', 'Stracker by DYPOL LABS', { maxLength: 120 })
 field('public', HOME, 'DYPOL LABS', 'public.dypol.body', 'Paragraph', 'multiline', 'A DYPOL LABS product: an organised preparation system for serious aspirants across school, entrance, competitive and professional exams — practical tools that do one job well and keep your data yours.')
@@ -353,7 +355,7 @@ field('public', HOME, 'Final call to action', 'public.final.note', 'Note', 'mult
 field('public', 'Footer', 'Brand', 'public.footer.tagline', 'Tagline', 'text', 'A focused digital study notebook for exam preparation.', { maxLength: 160 })
 field('public', 'Footer', 'Brand', 'public.footer.copyright', 'Copyright line (after the year)', 'text', 'DYPOL LABS · Stracker', { maxLength: 120, help: 'The year is added automatically: “© 2026 …”.' })
 field('public', 'Footer', 'Column headings', 'public.footer.group_product.title', 'Column heading: Product', 'text', 'Product', { maxLength: 40 })
-field('public', 'Footer', 'Column headings', 'public.footer.group_account.title', 'Column heading: Account', 'text', 'Account', { maxLength: 40 })
+field('public', 'Footer', 'Column headings', 'public.footer.group_account.title', 'Column heading: Account', 'text', 'Account', { maxLength: 40, help: 'No longer shown: the footer account column was removed in the November 2026 refresh.' })
 field('public', 'Footer', 'Column headings', 'public.footer.group_information.title', 'Column heading: Legal', 'text', 'Legal', { maxLength: 40 })
 field('public', 'Footer', 'Column headings', 'public.footer.group_brand.title', 'Column heading: Brand', 'text', 'Brand', { maxLength: 40 })
 
@@ -423,7 +425,7 @@ field('public', HOME, PROMO, 'public.promo.position', 'Position on wide screens'
 })
 field('public', 'Footer', 'Links', 'public.footer.features.label', 'Link label: Features', 'text', 'Features', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.ai.label', 'Link label: AI Assistant', 'text', 'AI Assistant', { maxLength: 40 })
-field('public', 'Footer', 'Links', 'public.footer.how.label', 'Link label: How It Works', 'text', 'How It Works', { maxLength: 40 })
+field('public', 'Footer', 'Links', 'public.footer.how.label', 'Link label: Study Loop', 'text', 'Study Loop', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.login.label', 'Link label: Log In', 'text', 'Log In', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.signup.label', 'Link label: Sign Up', 'text', 'Sign Up', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.reset.label', 'Link label: Reset password', 'text', 'Reset password', { maxLength: 40 })

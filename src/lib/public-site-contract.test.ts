@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import * as registryModule from './site-content/registry'
 
 /**
  * Public-site contract.
@@ -88,9 +89,11 @@ describe('public navigation integrity', () => {
   })
 
   it('keeps the advertised navigation sections in the header and the footer', () => {
-    for (const section of ['#features', '#how-it-works', '#ai', '#privacy']) {
+    // "Study Loop" (#why-stracker) replaced "How It Works", whose section now ships hidden.
+    for (const section of ['#features', '#why-stracker', '#ai', '#privacy']) {
       expect(publicSources).toContain(`href: '${section}'`)
     }
+    expect(publicSources).not.toContain(`href: '#how-it-works'`)
     expect(readFileSync(`${publicDir}PublicFooter.tsx`, 'utf8')).toContain('new Date().getFullYear()')
   })
 })
@@ -107,19 +110,23 @@ describe('homepage honesty', () => {
     expect(preview).toContain('<figcaption')
   })
 
-  it('claims no AI inference that DYPOL does not provide', () => {
+  it('describes Stracker AI as it ships: built-in models with a daily limit, or your own provider', () => {
     // Copy lives in the editable content registry; the component only renders it.
     const sections = readFileSync(`${srcDir}lib/site-content/registry.ts`, 'utf8')
-    expect(sections).toContain('DYPOL does not supply or proxy a model key')
-    expect(sections).toContain('with AI switched off')
-    expect(sections).not.toMatch(/unlimited ai|free ai|free inference/i)
+    expect(sections).toContain('built-in models, which have a daily limit')
+    expect(sections).toContain('works without AI')
+    expect(sections).not.toMatch(/unlimited ai|free ai|free inference|DYPOL does not supply/i)
   })
 
-  it('keeps the privacy section to claims the architecture supports', () => {
-    const sections = readFileSync(`${srcDir}lib/site-content/registry.ts`, 'utf8')
-    expect(sections).not.toMatch(/military-grade|bank-level|unhackable/i)
-    expect(sections).toContain('row-level security')
-    expect(sections).toContain('AES-256-GCM')
+  it('keeps homepage privacy copy jargon-free and the technical detail on the Privacy Policy', () => {
+    const { SITE_CONTENT_DEFAULTS } = registryModule
+    const homepage = Object.entries(SITE_CONTENT_DEFAULTS).filter(([key]) => /^public\.(privacy|ai)\./.test(key)).map(([, value]) => value).join('\n')
+    expect(homepage).not.toMatch(/military-grade|bank-level|unhackable/i)
+    expect(homepage).not.toMatch(/row-level|postgres|anonymous role|supabase|public key|AES-256|ciphertext/i)
+    const policy = readFileSync(`${srcDir}lib/site-content/info-page-defaults.ts`, 'utf8')
+    expect(policy).toContain('row-level security')
+    expect(policy).toContain('AES-256-GCM')
+    expect(policy).toContain('anonymous role')
   })
 
   it('never renders a provider secret or service key on the public surface', () => {

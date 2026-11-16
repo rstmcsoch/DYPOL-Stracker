@@ -12,7 +12,8 @@ export type PublicTheme = 'light' | 'dark'
  */
 export const PUBLIC_SECTIONS = [
   { href: '#features', key: 'public.header.features.label' },
-  { href: '#how-it-works', key: 'public.header.how.label' },
+  // The registry key keeps its historical name; the link now opens the five-step study loop.
+  { href: '#why-stracker', key: 'public.header.how.label' },
   { href: '#ai', key: 'public.header.ai.label' },
   { href: '#privacy', key: 'public.header.privacy.label' }
 ] as const
@@ -49,7 +50,7 @@ export function PublicThemeToggle({ theme, onToggle }: { theme: PublicTheme; onT
     </span>
     <span className="theme-toggle-copy">
       <strong>{isDark ? 'Night' : 'Light'}</strong>
-      <small>Theme</small>
+      <small>theme</small>
     </span>
   </button>
 }

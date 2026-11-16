@@ -206,13 +206,50 @@ describe('promo video player behaviour', () => {
     }
   })
 
-  it('shows a quiet fallback line instead of dead controls when the media fails', async () => {
-    const { video } = renderPlayer()
+  it('never shows an error message: a failed player becomes a static poster without controls', async () => {
+    const { video, container } = renderPlayer()
     await act(async () => {
       video.dispatchEvent(new window.Event('error', { bubbles: true }))
     })
 
-    expect(screen.getByText(/couldn’t load/)).toBeTruthy()
+    expect(screen.queryByText(/couldn|could not|error|failed/i)).toBeNull()
     expect(screen.queryByRole('button', { name: /preview video|preview sound/ })).toBeNull()
+    const poster = container.querySelector('img.promo-poster')
+    expect(poster?.classList.contains('is-shown')).toBe(true)
+    expect(poster?.getAttribute('src')).toBe('/videos/stracker-ad1-poster.jpg')
+  })
+
+  it('treats one failed source as a fallback, not a failure (the next source plays)', async () => {
+    const { video, container } = renderPlayer()
+    await act(async () => { FakeIntersectionObserver.loader()?.emit({ isIntersecting: true, intersectionRatio: 0 }) })
+    const sources = [...video.querySelectorAll('source')]
+    expect(sources.map(source => source.getAttribute('src'))).toEqual(['/videos/stracker-ad1-web.mp4', '/videos/Stracker%20Ad1.mp4'])
+    // The web cut fails; React bubbles that <source> error to the <video>'s handler.
+    await act(async () => { sources[0]!.dispatchEvent(new window.Event('error')) })
+    expect(screen.getByRole('button', { name: 'Play the preview video' })).toBeTruthy()
+    expect(container.querySelector('img.promo-poster.is-shown')).toBeNull()
+    // Only when the last candidate fails too does the poster take over.
+    await act(async () => { sources[1]!.dispatchEvent(new window.Event('error')) })
+    expect(screen.queryByRole('button', { name: /preview video/ })).toBeNull()
+    expect(container.querySelector('img.promo-poster.is-shown')).not.toBeNull()
+  })
+
+  it('reloads once after a dropped connection before giving up', async () => {
+    const { video } = renderPlayer()
+    const load = vi.spyOn(window.HTMLMediaElement.prototype, 'load')
+    load.mockClear()
+    Object.defineProperty(video, 'error', { configurable: true, value: { code: 2 } })
+    await act(async () => { video.dispatchEvent(new window.Event('error')) })
+    expect(load).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: /preview video/ })).toBeTruthy()
+    await act(async () => { video.dispatchEvent(new window.Event('error')) })
+    expect(screen.queryByRole('button', { name: /preview video/ })).toBeNull()
+  })
+
+  it('removes the whole section when neither the video nor the poster can load', async () => {
+    const { video, container } = renderPlayer()
+    await act(async () => { video.dispatchEvent(new window.Event('error')) })
+    await act(async () => { container.querySelector('img.promo-poster')!.dispatchEvent(new window.Event('error')) })
+    expect(container.querySelector('.pub-section-promo')).toBeNull()
   })
 })

@@ -9,7 +9,7 @@
  * Keep every statement true of the running product; do not add contact details, addresses,
  * company registration, user counts or certifications that do not exist.
  */
-export const INFO_PAGES_LAST_UPDATED = '14 November 2026'
+export const INFO_PAGES_LAST_UPDATED = '16 November 2026'
 
 export const DEFAULT_PRIVACY_BODY = `Last updated: ${INFO_PAGES_LAST_UPDATED}
 
@@ -42,6 +42,14 @@ When you first sign in you choose your exam and, if you want, your exam date, di
 - your settings, such as exam tracks, revision intervals, reminders, theme and fonts.
 
 These records are saved in your account in Stracker's Supabase database. Row-level security means each record can be read or changed only by the signed-in account that owns it. Mistake images go to a private storage folder that belongs to your account.
+
+## How your data is protected: the technical details
+
+- Every notebook table in the Postgres database has row-level security policies that let only the signed-in account that owns a row read or change it.
+- The browser holds only Supabase's public (anon) key. No policy gives the anonymous role access to study data, so reading or writing a notebook always needs a signed-in session.
+- Question photos are stored in a private storage bucket. Its policies require your own user ID in the file path, so only your signed-in account can upload, open or delete them.
+- AI provider keys you add are encrypted on Stracker's server with AES-256-GCM before they are stored. The browser only ever sees a masked hint, never the key.
+- There is no public profile, feed, share link or leaderboard, so nothing you record is published.
 
 ## What stays on your device
 
@@ -176,7 +184,7 @@ Stracker by DYPOL LABS is a digital study notebook for students preparing for an
 
 ## Who Stracker is for
 
-Stracker is not built for one exam. Students choose their exam when they start, and the notebook adapts its subjects, syllabus and marking defaults. The list includes JEE Main and Advanced, MHT CET, BITSAT, VITEEE, COMEDK UGET, WBJEE, KCET, NEET UG, CUET UG, CLAT, NDA, CA Foundation, Intermediate and Final, CS Executive and Professional, CMA, GATE, CAT, UPSC Civil Services, SSC CGL, IBPS PO, SBI PO, and school Classes 9, 10, 11 and 12.
+Stracker is not built for one exam. Students choose their exam when they start, and the notebook adapts its subjects and, where they are available, its marking defaults. JEE notebooks also start with a ready chapter list; for every other exam you build your own chapter list. The list includes JEE Main and Advanced, MHT CET, BITSAT, VITEEE, COMEDK UGET, WBJEE, KCET, NEET UG, CUET UG, CLAT, NDA, CA Foundation, Intermediate and Final, CS Executive and Professional, CMA, GATE, CAT, UPSC Civil Services, SSC CGL, IBPS PO, SBI PO, and school Classes 9, 10, 11 and 12.
 
 ## What you can do in Stracker
 

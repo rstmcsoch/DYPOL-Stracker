@@ -60,8 +60,12 @@ export interface SiteDocument {
   tokens?: Record<string, string>
 }
 
-/** One registered Stracker section: its block type, stable id and layer label. */
-export interface BuiltinSection { type: string; id: string; label: string; anchor?: string }
+/**
+ * One registered Stracker section: its block type, stable id and layer label.
+ * `hiddenByDefault` sections ship hidden (they stay in the layer list, so the owner can show
+ * them again in the Live Site Editor) and are re-added hidden when a stored page lacks them.
+ */
+export interface BuiltinSection { type: string; id: string; label: string; anchor?: string; hiddenByDefault?: boolean }
 
 /** Registered Stracker sections per page, in their shipped order. */
 export const BUILTIN_SECTIONS: Record<SitePageId, readonly BuiltinSection[]> = {
@@ -71,8 +75,10 @@ export const BUILTIN_SECTIONS: Record<SitePageId, readonly BuiltinSection[]> = {
     { type: 'stracker.stats', id: 'home-stats', label: 'Statistics' },
     { type: 'stracker.loop', id: 'home-loop', label: 'Study loop', anchor: 'why-stracker' },
     { type: 'stracker.features', id: 'home-features', label: 'Feature cards', anchor: 'features' },
-    { type: 'stracker.principles', id: 'home-principles', label: 'Principles' },
-    { type: 'stracker.how', id: 'home-how', label: 'How it works', anchor: 'how-it-works' },
+    // Retired from the shipped homepage (Nov 2026): their unique points now live in the feature
+    // cards. Kept registered and restorable, hidden unless the owner shows them again.
+    { type: 'stracker.principles', id: 'home-principles', label: 'Principles', hiddenByDefault: true },
+    { type: 'stracker.how', id: 'home-how', label: 'How it works', anchor: 'how-it-works', hiddenByDefault: true },
     { type: 'stracker.ai', id: 'home-ai', label: 'Stracker AI', anchor: 'ai' },
     { type: 'stracker.privacy', id: 'home-privacy', label: 'Privacy section', anchor: 'privacy' },
     { type: 'stracker.dypol', id: 'home-dypol', label: 'DYPOL LABS', anchor: 'dypol-labs' },
@@ -93,9 +99,14 @@ export function builtinFor(page: SitePageId, id: string): BuiltinSection | undef
   return BUILTIN_SECTIONS[page].find(section => section.id === id)
 }
 
-/** The page as it ships: every registered section, in order, nothing hidden. */
+/** A registered section as a block in its shipped state (hidden when `hiddenByDefault`). */
+function shippedBlock(section: BuiltinSection): SiteBlock {
+  return section.hiddenByDefault ? { id: section.id, type: section.type, hidden: true } : { id: section.id, type: section.type }
+}
+
+/** The page as it ships: every registered section, in order; `hiddenByDefault` ones hidden. */
 export function defaultPage(page: SitePageId): SitePage {
-  return { blocks: BUILTIN_SECTIONS[page].map(section => ({ id: section.id, type: section.type })) }
+  return { blocks: BUILTIN_SECTIONS[page].map(shippedBlock) }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,7 +116,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Lenient structural read used while rendering: anything malformed is dropped, registered
  * sections that are missing (for example a section added to the code later) are put back at
- * their shipped position, and a registered section is never rendered twice. Editor blocks
+ * their shipped position — hidden if they ship hidden, never silently re-shown — and a registered section is never rendered twice. Editor blocks
  * are passed through untouched here; their props are validated by the block renderer chunk
  * before they are drawn.
  */
@@ -130,7 +141,7 @@ export function resolvePage(document: unknown, page: SitePageId): SitePage {
     // Insert after the previous registered section that is present, else at the start.
     const previous = builtins.slice(0, index).reverse().find(candidate => seen.has(candidate.id))
     const at = previous ? blocks.findIndex(block => block.id === previous.id) + 1 : 0
-    blocks.splice(at, 0, { id: section.id, type: section.type })
+    blocks.splice(at, 0, shippedBlock(section))
     seen.add(section.id)
   })
   return { blocks }

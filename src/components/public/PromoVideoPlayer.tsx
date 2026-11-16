@@ -1,5 +1,5 @@
 import { useBlockAttrs } from './page-block'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { useSiteText } from '../../contexts/SiteContentContext'
 import { track } from '../../lib/telemetry/client'
@@ -23,7 +23,15 @@ import { track } from '../../lib/telemetry/client'
  *  - a blocked autoplay attempt falls back to the poster plus the play button
  *    instead of retrying and spamming the console;
  *  - `prefers-reduced-motion` visitors get the poster and play button rather
- *    than ambient playback, but may still start the video themselves.
+ *    than ambient playback, but may still start the video themselves;
+ *  - one source failing is not a failure: the browser moves on to the next
+ *    `<source>`. Only the last source failing, or a media error on the element
+ *    itself that survives one reload, counts. (React bubbles a `<source>`'s
+ *    error to the `<video>`'s onError, which used to mark a healthy player as
+ *    failed when only the first candidate missed.)
+ *  - a failed player never shows an error message: the poster stays as a
+ *    static preview without controls, and if the poster cannot load either the
+ *    whole section is removed so no empty frame sits above the final CTA.
  */
 
 const WEB_SOURCE = '/videos/stracker-ad1-web.mp4'
@@ -78,6 +86,8 @@ function PromoVideoBody() {
   const [muted, setMuted] = useState(true)
   const [autoplayBlocked, setAutoplayBlocked] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [posterFailed, setPosterFailed] = useState(false)
+  const reloaded = useRef(false)
 
   /* Track the visitor's motion preference live, not just at mount. */
   useEffect(() => {
@@ -197,6 +207,29 @@ function PromoVideoBody() {
 
   const toggleMute = () => { if (muted) engage(); setMuted(current => !current) }
 
+  const markFailed = () => {
+    if (!failed) track('video_error', { video: 'promo' })
+    setFailed(true)
+    setPlaying(false)
+  }
+  /* Errors from a <source> reach here through React's synthetic bubbling: ignore them (the
+     browser tries the next source; the last one reports on its own). A real media error on the
+     element — e.g. the connection dropped mid-download — gets one quiet reload first. */
+  const onVideoError = (event: SyntheticEvent<HTMLVideoElement>) => {
+    if (event.target !== event.currentTarget) return
+    const video = event.currentTarget
+    if (!reloaded.current && video.error?.code === 2 /* MEDIA_ERR_NETWORK */) {
+      reloaded.current = true
+      video.load()
+      return
+    }
+    markFailed()
+  }
+  /* The browser only reaches the last <source> after every earlier one failed. */
+  const onLastSourceError = () => markFailed()
+
+  if (failed && posterFailed) return null
+
   return (
     <section {...blockAttrs} className={`pub-section pub-section-promo promo-size-${size} promo-aspect-${aspect} promo-pos-${position}`} aria-labelledby="promo-title">
       {headingVisible ? (
@@ -224,17 +257,26 @@ function PromoVideoBody() {
             onPlay={() => { setPlaying(true); setAutoplayBlocked(false) }}
             onPause={() => setPlaying(false)}
             onTimeUpdate={onProgress}
-            onError={() => { if (!failed) track('video_error', { video: 'promo' }); setFailed(true) }}
+            onError={onVideoError}
           >
             {armed && customVideo && <source src={customVideo} type="video/mp4" />}
             {armed && <source src={WEB_SOURCE} type="video/mp4" />}
-            {armed && <source src={ORIGINAL_SOURCE} type="video/mp4" />}
+            {armed && <source src={ORIGINAL_SOURCE} type="video/mp4" onError={onLastSourceError} />}
           </video>
+          {/* Static preview: covers the player once it has failed, and tells us if the poster
+              itself is unreachable (then the section is removed instead of showing a blank frame). */}
+          <img
+            className={`promo-poster${failed ? ' is-shown' : ''}`}
+            src={posterSrc}
+            alt=""
+            aria-hidden="true"
+            decoding="async"
+            loading="lazy"
+            onError={() => setPosterFailed(true)}
+          />
           <div className="promo-veil" aria-hidden="true" />
           <span className="promo-badge" aria-hidden="true">{PROMO_BADGE}</span>
-          {failed ? (
-            <p className="promo-fallback">The preview video couldn’t load on this connection.</p>
-          ) : (
+          {failed ? null : (
             <>
               <button
                 type="button"

@@ -425,6 +425,15 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
   box-shadow: 3px 3px 0 var(--hp-hard);
 }
 .pub-hp .pub-theme-toggle:hover { transform: translateY(-1px); }
+/* Wide screens: one readable line ("Light theme") instead of a cramped two-line stack.
+   Narrower headers keep hiding the caption (rules below and in public.css). */
+@media (min-width: 1121px) {
+  .pub-hp .pub-theme-toggle { gap: 10px; padding: 4px 14px 4px 6px; }
+  .pub-hp .pub-theme-toggle .theme-toggle-copy { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+  .pub-hp .pub-theme-toggle .theme-toggle-copy strong { font:600 .875rem/1 var(--font-body); letter-spacing: 0; }
+  .pub-hp .pub-theme-toggle .theme-toggle-copy small { font:500 .875rem/1 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--hp-ink-soft); }
+}
+.pub-hp .pub-theme-toggle:focus-visible { outline: 3px solid var(--hp-accent-solid); outline-offset: 3px; }
 .pub-hp .pub-header-actions { gap: 10px; }
 .pub-hp .pub-header .button,
 .pub-hp .pub-menu .button {
@@ -474,7 +483,9 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
   .hp-hero-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
 }
 .hp-hero-copy { position: relative; z-index: 2; min-width: 0; }
-.hp-hero-lede { --hp-fs: clamp(1.02rem, 1.5vw, 1.125rem); --hp-lh: 1.65; max-width: 36rem; margin: 20px 0 0; color: var(--hp-ink-soft); }
+.hp-hero-lede { --hp-fs: clamp(1.02rem, 1.5vw, 1.125rem); --hp-lh: 1.65; max-width: 36rem; margin: clamp(20px, 2.4vw, 28px) 0 0; color: var(--hp-ink-soft); }
+/* Headline → copy → buttons get room to breathe now that the chips are gone. */
+.hp-hero-copy .hp-cta-row { margin-top: clamp(28px, 3.2vw, 40px); }
 
 .hp-highlight { background-repeat: no-repeat; }
 /* The highlighter stroke draws itself once on load (A's scribble idea, without extra markup). */
@@ -484,38 +495,23 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
   animation: hp-hl .9s .35s cubic-bezier(.3, .7, .2, 1) forwards;
 }
 
-.hp-pillars { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
-.hp-pillars li {
-  --hp-fw: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 36px;
-  padding: 6px 14px;
-  border: 1px solid var(--hp-line-strong);
-  border-radius: 999px;
-  background: var(--hp-card);
-  font-size: .875rem;
-  transition: transform .2s ease, background-color .2s ease;
-}
-.hp-pillars li svg { color: var(--hp-accent-text); }
-.hp-pillars li:hover { transform: translateY(-2px); background: color-mix(in srgb, var(--hp-yellow) 40%, var(--hp-card)); }
-
-.hp-hero-scroll { --hp-fs: .9rem; margin: 26px 0 0; }
+/* Secondary: quieter than the buttons, still a 44px target. */
+.hp-hero-scroll { --hp-fs: .875rem; margin: 6px 0 0; }
 .hp-hero-scroll a {
-  --hp-fw: 600;
+  --hp-fw: 500;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  color: var(--hp-ink);
+  color: var(--hp-ink-soft);
   text-decoration: underline;
-  text-decoration-color: var(--hp-yellow);
-  text-decoration-thickness: 4px;
+  text-decoration-color: color-mix(in srgb, var(--hp-yellow) 80%, transparent);
+  text-decoration-thickness: 2px;
   text-underline-offset: 5px;
 }
+.hp-hero-scroll a:hover { color: var(--hp-ink); }
 .hp-hero-scroll svg { animation: hp-bob 1.8s ease-in-out infinite; }
-.hp-hero-meta { --hp-fs: .875rem; --hp-lh: 1.5; display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; color: var(--hp-ink-faint); }
+.hp-hero-meta { --hp-fs: .875rem; --hp-lh: 1.5; display: flex; align-items: flex-start; gap: 8px; margin: 20px 0 0; color: var(--hp-ink-faint); }
 .hp-hero-meta svg { flex: none; margin-top: .25em; }
 
 /* Floating academic doodles: outer span follows the pointer, inner span the scroll. */
@@ -975,6 +971,8 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
 .hp-privacy-list dd { margin-top: 8px; color: var(--hp-ink-soft); font-size: .875rem; line-height: 1.6; }
 .hp-privacy-foot { --hp-fs: .9rem; --hp-lh: 1.5; --hp-fw: 600; display: flex; align-items: flex-start; gap: 8px; margin: 26px 0 0; padding-top: 20px; border-top: 1px dashed var(--hp-line-strong); }
 .hp-privacy-foot svg { flex: none; margin-top: .2em; color: var(--hp-accent-text); }
+.hp-privacy-policy-link { --hp-fw: 500; color: var(--hp-accent-text); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.hp-privacy-policy-link:hover { color: var(--hp-ink); }
 
 /* ----------------------------------------------------------- DYPOL */
 
@@ -1015,6 +1013,9 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
 /* ------------------------------------------------------ promo video */
 
 .pub-hp .pub-section-promo { position: relative; z-index: 1; padding-block: var(--hp-pad); }
+/* Without its visible heading the player sits between two padded sections: trim its own
+   padding so no tall empty band opens above the final call to action. */
+.pub-hp .pub-section-promo:not(:has(.promo-head)) { padding-block: clamp(20px, 3vw, 40px) clamp(4px, 1vw, 12px); }
 .pub-hp .pub-section-promo .pub-shell { width: min(100%, var(--hp-shell)); padding-inline: var(--hp-gutter); }
 .pub-hp .pub-section-promo .promo-head { text-align: center; margin-inline: auto; max-width: 46rem; }
 .pub-hp .pub-section-promo .promo-head h2 { --font-public: var(--hp-hand); font-size: clamp(2.2rem, 4.8vw, 3.5rem); line-height: 1.02; margin-top: 12px; }
@@ -1095,15 +1096,18 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
   .pub-hp .pub-footer-inner { grid-template-columns: minmax(16rem, 1fr) minmax(0, 2.4fr); gap: clamp(40px, 5vw, 72px); }
 }
 .pub-hp .pub-footer-brand p { --hp-fs: .9rem; --hp-lh: 1.6; max-width: 30ch; margin-top: 14px; color: var(--hp-ink-soft); }
-/* Four equal columns; labels never break mid-label. */
+/* Three equal columns (Product · Information · Brand); labels never break mid-label. */
 .pub-hp .pub-footer-nav {
   display: grid;
-  grid-template-columns: repeat(4, minmax(max-content, 1fr));
+  grid-template-columns: repeat(3, minmax(max-content, 1fr));
   gap: 28px clamp(20px, 3vw, 40px);
   align-items: start;
 }
 @media (max-width: 760px) {
-  .pub-hp .pub-footer-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 20px; }
+  .pub-hp .pub-footer-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 16px; }
+}
+@media (max-width: 359px) {
+  .pub-hp .pub-footer-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .pub-hp .pub-footer-group { min-width: 0; }
 .pub-hp .pub-footer-group h2 {

@@ -11,8 +11,8 @@ afterEach(cleanup)
 
 describe('information page text format', () => {
   it('turns plain text into headings, lists, the date and paragraphs', () => {
-    expect(infoBlocks('Last updated: 14 November 2026\n\nIntro.\n\n## What we keep\n\n- one\n- two\n\n## What we keep')).toEqual([
-      { kind: 'updated', text: 'Last updated: 14 November 2026' },
+    expect(infoBlocks('Last updated: 16 November 2026\n\nIntro.\n\n## What we keep\n\n- one\n- two\n\n## What we keep')).toEqual([
+      { kind: 'updated', text: 'Last updated: 16 November 2026' },
       { kind: 'paragraph', text: 'Intro.' },
       { kind: 'heading', text: 'What we keep', id: 'what-we-keep' },
       { kind: 'list', items: ['one', 'two'] },
@@ -47,7 +47,7 @@ describe('built-in page text is specific to Stracker and invents nothing', () =>
   it('renders the Privacy Policy with a table of contents and anchored headings', () => {
     render(<MemoryRouter><SiteContentProvider overrides={{}}><InfoPage kind="privacy" /></SiteContentProvider></MemoryRouter>)
     expect(screen.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeTruthy()
-    expect(screen.getByText('Last updated: 14 November 2026')).toBeTruthy()
+    expect(screen.getByText('Last updated: 16 November 2026')).toBeTruthy()
     const toc = screen.getByRole('navigation', { name: 'On this page' })
     expect(toc.querySelectorAll('a').length).toBeGreaterThan(8)
     expect(screen.getByRole('heading', { level: 2, name: /^AI observability with three\.dev$/ }).id).toBe(`ai-observability-with-three${'-'}dev`)

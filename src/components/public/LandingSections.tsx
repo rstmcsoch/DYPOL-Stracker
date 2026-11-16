@@ -4,9 +4,11 @@ import {
   ListChecks, LockKeyhole, NotebookPen, Repeat2, Shield, ShieldCheck, Sparkles, Target,
   TrendingUp, Timer
 } from 'lucide-react'
-import { useSiteText } from '../../contexts/SiteContentContext'
+import { useSiteText, useSiteValues } from '../../contexts/SiteContentContext'
+import { infoPageBody } from '../../lib/site-content/info-pages'
 import { parseOrder } from '../../lib/site-content/content'
 import { fieldDefinition } from '../../lib/site-content/registry'
+import { Link } from 'react-router-dom'
 import { SiteLink } from './SiteLink'
 import { prefersReducedMotion } from './home-motion'
 import { useFeatureOrder } from './feature-order'
@@ -256,6 +258,8 @@ const PRIVACY_INDEXES = [1, 2, 3, 4, 5, 6]
 
 export function PrivacySection() {
   const t = useSiteText
+  // The written policy holds the technical detail; with no policy written, /privacy shows this section.
+  const hasPolicy = infoPageBody(useSiteValues(), 'privacy') !== ''
   const docItems = documentItems(useBlockProps().items)
   const points = docItems
     ? docItems.map(item => ({ key: `d${item.index}`, title: item.text('title'), body: item.text('body'), edit: (field: string) => ({ 'data-se-prop': `items.${item.index}.${field}` }) }))
@@ -270,7 +274,7 @@ export function PrivacySection() {
             <dd {...point.edit('body')}>{point.body}</dd>
           </div>)}
         </dl>
-        <p className="hp-privacy-foot"><LockKeyhole size={15} aria-hidden="true" /> {t('public.privacy.foot')}</p>
+        <p className="hp-privacy-foot"><LockKeyhole size={15} aria-hidden="true" /> <span>{t('public.privacy.foot')}{hasPolicy && <> <Link className="hp-privacy-policy-link" to="/privacy">Read the technical details in the Privacy Policy</Link></>}</span></p>
       </div>
     </div>
   </section>
