@@ -91,6 +91,7 @@ export function useHomeMotion(rootRef: RefObject<HTMLElement | null>) {
     const penTrack = q('.hp-pencil')
     const steps = q('.hp-steps')
     const stepFill = q('.hp-steps-fill')
+    const stepLine = q('.hp-steps-line')
     const wordmark = q('.pub-footer-wordmark')
     const wordWindow = q('.pub-footer-wordmark-window')
     // Promo frame scale-on-scroll fallback, only where CSS scroll-driven animations are missing.
@@ -114,6 +115,13 @@ export function useHomeMotion(rootRef: RefObject<HTMLElement | null>) {
 
       if (steps && stepFill) {
         const rect = steps.getBoundingClientRect()
+        // End the line at the centre of the last number so nothing trails below it.
+        const lastNumber = steps.querySelector<HTMLElement>('.hp-step:last-child .hp-step-number')
+        if (stepLine && lastNumber) {
+          const numberRect = lastNumber.getBoundingClientRect()
+          const bottom = Math.max(0, rect.bottom - (numberRect.top + numberRect.height / 2))
+          stepLine.style.bottom = `${bottom.toFixed(1)}px`
+        }
         const fill = rect.height ? clamp01((vh * .62 - rect.top) / rect.height) : 0
         stepFill.style.transform = `scaleY(${reduce ? 1 : fill.toFixed(3)})`
         steps.querySelectorAll<HTMLElement>('.hp-step').forEach(step => {
