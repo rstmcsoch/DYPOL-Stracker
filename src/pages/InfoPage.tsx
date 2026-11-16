@@ -5,6 +5,7 @@ import { useSiteContentSettled, useSiteValues } from '../contexts/SiteContentCon
 import { CONTACT_PAGE_PATH, INFO_PAGE_PATHS, infoBlocks, infoPageAvailable, infoPageBody, type InfoBlock, type InfoPageKind } from '../lib/site-content/info-pages'
 import { PublicPageShell } from '../components/public/PublicPageShell'
 import NotFoundPage from './NotFoundPage'
+import { BlockRoot, PageLayout } from '../components/public/PageLayout'
 
 const PRIVACY_ITEM_COUNT = 6
 
@@ -78,11 +79,13 @@ export default function InfoPage({ kind }: { kind: InfoPageKind }) {
   }
 
   return <PublicPageShell title={TITLES[kind]} description={DESCRIPTIONS[kind]}>
-    <div className="pub-shell pub-doc-shell">
-      <article className="pub-doc-card" role="region" aria-labelledby="info-title">
-        {content}
-        <SiblingLinks current={kind} />
-      </article>
-    </div>
+    <PageLayout page={kind} sections={{
+      'stracker.doc': () => <BlockRoot className="pub-shell pub-doc-shell">
+        <article className="pub-doc-card" role="region" aria-labelledby="info-title">
+          {content}
+          <SiblingLinks current={kind} />
+        </article>
+      </BlockRoot>
+    }} />
   </PublicPageShell>
 }

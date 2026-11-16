@@ -19,6 +19,7 @@ import { SITE_CONTENT_DEFAULTS } from '../lib/site-content/registry'
  */
 
 const CACHE_KEY = 'stracker-site-content-cache-v1'
+const DOCUMENT_CACHE_KEY = 'stracker-site-document-cache-v1'
 
 function readCache(): SiteOverrides {
   if (typeof window === 'undefined') return {}
@@ -35,6 +36,49 @@ function writeCache(overrides: SiteOverrides) {
     window.localStorage.setItem(CACHE_KEY, JSON.stringify(overrides))
   } catch {
     // Storage may be unavailable (private mode, quota). The live values still apply.
+  }
+}
+
+function readDocumentCache(): unknown {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(DOCUMENT_CACHE_KEY)
+    return raw ? JSON.parse(raw) as unknown : null
+  } catch {
+    return null
+  }
+}
+
+function writeDocumentCache(document: unknown) {
+  try {
+    if (document) window.localStorage.setItem(DOCUMENT_CACHE_KEY, JSON.stringify(document))
+    else window.localStorage.removeItem(DOCUMENT_CACHE_KEY)
+  } catch {
+    // Display-only cache; ignore storage failures.
+  }
+}
+
+/**
+ * Published copy plus the Live Site Editor page document (null when none is published).
+ * The document is kept raw here and validated by the page renderer before use. If the
+ * document column cannot be read, the copy alone is still returned.
+ */
+export async function fetchPublishedSite(): Promise<{ overrides: SiteOverrides; document: unknown } | null> {
+  if (!supabase) return null
+  try {
+    const { data, error } = await supabase
+      .from('site_content_published')
+      .select('content, document')
+      .eq('id', 1)
+      .maybeSingle()
+    if (error) {
+      const overrides = await fetchPublishedOverrides()
+      return overrides === null ? null : { overrides, document: null }
+    }
+    const row = data as { content?: unknown; document?: unknown } | null
+    return { overrides: sanitizeStoredOverrides(row?.content), document: row?.document ?? null }
+  } catch {
+    return null
   }
 }
 
@@ -58,28 +102,60 @@ export async function fetchPublishedOverrides(): Promise<SiteOverrides | null> {
 }
 
 const SiteContentContext = createContext<SiteValues>(SITE_CONTENT_DEFAULTS)
+/** Raw Live Site Editor document (published, or the draft in owner previews); null = as shipped. */
+const SiteDocumentContext = createContext<unknown>(null)
 /** True once the published copy has been read (or could not be), so pages can tell "not set" from "not loaded yet". */
 const SiteContentSettledContext = createContext<boolean>(true)
 
-export function SiteContentProvider({ children, overrides }: { children: ReactNode; overrides?: SiteOverrides }) {
+export function SiteContentProvider({ children, overrides, document, withDocument = false }: {
+  children: ReactNode
+  overrides?: SiteOverrides
+  /** Owner preview / editor canvas: render exactly this document (never fetched). */
+  document?: unknown
+  /** Public pages: also read the published page document. The notebook does not need it. */
+  withDocument?: boolean
+}) {
   const [published, setPublished] = useState<SiteOverrides>(() => (overrides ? {} : readCache()))
+  const [publishedDocument, setPublishedDocument] = useState<unknown>(() => (overrides || !withDocument ? null : readDocumentCache()))
   const [settled, setSettled] = useState(Boolean(overrides))
 
   useEffect(() => {
     if (overrides) return undefined
     let cancelled = false
-    void fetchPublishedOverrides().then(result => {
-      if (cancelled) return
-      setSettled(true)
-      if (result === null) return
-      setPublished(result)
-      writeCache(result)
-    })
+    if (withDocument) {
+      void fetchPublishedSite().then(result => {
+        if (cancelled) return
+        setSettled(true)
+        if (result === null) return
+        setPublished(result.overrides)
+        writeCache(result.overrides)
+        setPublishedDocument(result.document)
+        writeDocumentCache(result.document)
+      })
+    } else {
+      void fetchPublishedOverrides().then(result => {
+        if (cancelled) return
+        setSettled(true)
+        if (result === null) return
+        setPublished(result)
+        writeCache(result)
+      })
+    }
     return () => { cancelled = true }
-  }, [overrides])
+  }, [overrides, withDocument])
 
   const values = useMemo(() => resolveSiteValues(overrides ?? published), [overrides, published])
-  return <SiteContentSettledContext.Provider value={settled || Boolean(overrides)}><SiteContentContext.Provider value={values}>{children}</SiteContentContext.Provider></SiteContentSettledContext.Provider>
+  const activeDocument = overrides ? (document ?? null) : publishedDocument
+  return <SiteContentSettledContext.Provider value={settled || Boolean(overrides)}>
+    <SiteContentContext.Provider value={values}>
+      <SiteDocumentContext.Provider value={activeDocument}>{children}</SiteDocumentContext.Provider>
+    </SiteContentContext.Provider>
+  </SiteContentSettledContext.Provider>
+}
+
+/** The raw page document for the current provider (null = the page as shipped). */
+export function useSiteDocument(): unknown {
+  return useContext(SiteDocumentContext)
 }
 
 /** Display text for a registered key. Unknown keys render as an empty string, never as the key. */

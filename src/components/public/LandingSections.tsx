@@ -10,6 +10,8 @@ import { fieldDefinition } from '../../lib/site-content/registry'
 import { SiteLink } from './SiteLink'
 import { prefersReducedMotion } from './home-motion'
 import { useFeatureOrder } from './feature-order'
+import { stringRecords, useBlockAttrs, useBlockProps } from './page-block'
+import { DEFAULT_LOOP_STEPS } from '../../lib/site-editor/blocks-spec'
 
 /** Splits a one-item-per-line field into clean list entries. */
 function lines(value: string): string[] {
@@ -30,26 +32,22 @@ function SectionHead({ id, eyebrow, title, lede, center = false }: { id: string;
 
 /* ------------------------------------------------------------ the study loop */
 
-/** Step names and the link captions are structural: they name the pages they point to. */
-const LOOP_STEPS = [
-  { step: 'Learn', link: 'Syllabus notebook' },
-  { step: 'Test', link: 'Test journal' },
-  { step: 'Analyse', link: 'Analytics' },
-  { step: 'Revise', link: 'Revision desk' },
-  { step: 'Repeat', link: 'Planner + Focus' }
-]
 
 export function StudyLoopSection() {
   const t = useSiteText
-  return <section id="why-stracker" className="hp-section" aria-labelledby="why-stracker-title">
+  // Steps can be edited, added, hidden or reordered in the Live Site Editor. A step without its
+  // own text uses the registry copy for its position (public.loop.step_N.body) as shipped.
+  const steps = stringRecords(useBlockProps().steps, ['step', 'link', 'body']) ?? DEFAULT_LOOP_STEPS
+  const LOOP_STEPS = steps
+  return <section id="why-stracker" className="hp-section" aria-labelledby="why-stracker-title" {...useBlockAttrs()}>
     <div className="hp-shell">
       <SectionHead id="why-stracker" eyebrow={t('public.loop.eyebrow')} title={t('public.loop.title')} lede={t('public.loop.lede')} />
       <ol className="hp-loop">
-        {LOOP_STEPS.map((item, index) => <li className={`hp-loop-step hp-tone-${tone(index)}`} key={item.step} data-reveal="" style={{ ['--d' as string]: `${index * 60}ms` }}>
+        {LOOP_STEPS.map((item, index) => <li className={`hp-loop-step hp-tone-${tone(index)}`} key={`${index}-${item.step}`} data-reveal="" style={{ ['--d' as string]: `${index * 60}ms` }}>
           <span className="hp-loop-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
           <h3>{item.step}</h3>
-          <p>{t(`public.loop.step_${index + 1}.body`)}</p>
-          <span className="hp-loop-chip">{item.link}</span>
+          <p data-se-prop={`steps.${index}.body`}>{item.body || t(`public.loop.step_${index + 1}.body`)}</p>
+          {item.link && <span className="hp-loop-chip">{item.link}</span>}
           <span className="hp-loop-arrow" aria-hidden="true">{index < LOOP_STEPS.length - 1 ? '→' : '↻'}</span>
         </li>)}
       </ol>
@@ -77,7 +75,7 @@ export function FeatureSection() {
   const order = useFeatureOrder()
   const collapsible = order.length > 4
 
-  return <section id="features" className="hp-section hp-section-band" aria-labelledby="features-title">
+  return <section id="features" className="hp-section hp-section-band" aria-labelledby="features-title" {...useBlockAttrs()}>
     <span className="hp-doodle hp-doodle-features" data-px="12" aria-hidden="true">✎</span>
     <div className="hp-shell">
       <SectionHead id="features" eyebrow={t('public.features.eyebrow')} title={t('public.features.title')} lede={t('public.features.lede')} />
@@ -131,7 +129,7 @@ export function PrincipleSection() {
   const t = useSiteText
   const principleOrder = parseOrder(t('public.principles.order'), PRINCIPLE_COUNT)
     ?? Array.from({ length: Math.min(6, PRINCIPLE_COUNT) }, (_, index) => index + 1)
-  return <section className="hp-section" aria-labelledby="principle-title">
+  return <section className="hp-section" aria-labelledby="principle-title" {...useBlockAttrs()}>
     <div className="hp-shell hp-principles">
       <div className="hp-principles-copy" data-reveal="">
         <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {t('public.principles.eyebrow')}</p>
@@ -155,7 +153,7 @@ const HOW_STEP_INDEXES = [1, 2, 3, 4]
 
 export function HowItWorksSection() {
   const t = useSiteText
-  return <section id="how-it-works" className="hp-section hp-section-band" aria-labelledby="how-it-works-title">
+  return <section id="how-it-works" className="hp-section hp-section-band" aria-labelledby="how-it-works-title" {...useBlockAttrs()}>
     <div className="hp-shell hp-shell-narrow">
       <SectionHead id="how-it-works" eyebrow={t('public.how.eyebrow')} title={t('public.how.title')} lede={t('public.how.lede')} center />
       <div className="hp-steps">
@@ -205,7 +203,7 @@ function useChatSequence() {
 export function AiSection() {
   const t = useSiteText
   const [exampleRef, stage] = useChatSequence()
-  return <section id="ai" className="hp-section hp-section-ai" aria-labelledby="ai-title">
+  return <section id="ai" className="hp-section hp-section-ai" aria-labelledby="ai-title" {...useBlockAttrs()}>
     <div className="hp-shell hp-ai">
       <div className="hp-ai-copy" data-reveal="">
         <p className="hp-eyebrow"><span aria-hidden="true">✎</span> {t('public.ai.eyebrow')}</p>
@@ -240,7 +238,7 @@ export function AiSection() {
 
 export function PrivacySection() {
   const t = useSiteText
-  return <section id="privacy" className="hp-section hp-section-band" aria-labelledby="privacy-title">
+  return <section id="privacy" className="hp-section hp-section-band" aria-labelledby="privacy-title" {...useBlockAttrs()}>
     <div className="hp-shell">
       <SectionHead id="privacy" eyebrow={t('public.privacy.eyebrow')} title={t('public.privacy.title')} lede={t('public.privacy.lede')} />
       <div className="hp-privacy" data-reveal="">
@@ -260,7 +258,7 @@ export function PrivacySection() {
 
 export function DypolSection() {
   const t = useSiteText
-  return <section id="dypol-labs" className="hp-section hp-section-tight" aria-labelledby="dypol-title">
+  return <section id="dypol-labs" className="hp-section hp-section-tight" aria-labelledby="dypol-title" {...useBlockAttrs()}>
     <div className="hp-shell">
       <div className="hp-dypol" data-reveal="">
         <div className="dypol-mark" aria-hidden="true"><span>S</span><i>✎</i></div>
@@ -278,7 +276,7 @@ export function DypolSection() {
 
 export function FinalCta() {
   const t = useSiteText
-  return <section className="hp-section" aria-labelledby="final-title">
+  return <section className="hp-section" aria-labelledby="final-title" {...useBlockAttrs()}>
     <div className="hp-shell hp-shell-narrow">
       <div className="hp-final" data-reveal="">
         <span className="hp-tape hp-tape-top" aria-hidden="true" />

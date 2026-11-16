@@ -10,22 +10,25 @@ import {
   validateOverrides,
   type SiteOverrides
 } from '../../../src/lib/site-content/content.js'
+import { checkSiteDocument, problemsToErrors } from '../../../src/lib/site-editor/validate.js'
 
 /**
  * Owner-only management of website and user-panel copy.
  *
  * Routes (dispatched by api/control/appearance.ts; rewritten from /api/control/appearance-*):
  *   GET  state     draft, published and recent versions (owner only; drafts never go public)
- *   PUT  draft     replace the unpublished draft with validated sparse overrides
+ *   PUT  draft     replace the unpublished draft with validated sparse overrides and, from the
+ *                  Live Site Editor, the validated page document (with a revision check)
  *   POST discard   delete the draft so the published copy is shown again
  *   POST publish   publish the validated draft atomically      (aal2 + fresh TOTP)
  *   POST restore   publish an earlier version as a new version (aal2 + fresh TOTP)
  *
  * Writes never touch accounts, roles, study data, the audit trail, or code. A publish or
- * restore only changes the three site_content_* tables through site_content_commit.
+ * restore only changes the three site_content_* tables through site_content_commit_document,
+ * which publishes the copy and the page document together as one version.
  */
 
-const DRAFT_BODY_LIMIT = 64_000
+const DRAFT_BODY_LIMIT = 320_000
 const VERSION_LIST_LIMIT = 20
 
 const publishBody = z.object({
@@ -38,7 +41,11 @@ const restoreBody = z.object({
 }).strict()
 
 const draftBody = z.object({
-  overrides: z.record(z.string().max(120), z.unknown())
+  overrides: z.record(z.string().max(120), z.unknown()),
+  /** Live Site Editor page document; omitted by the classic editor (the stored one is kept). */
+  document: z.unknown().optional(),
+  /** Revision check: the draft `updatedAt` the editor loaded (null = it saw no draft). */
+  expectedUpdatedAt: z.string().max(40).nullable().optional()
 }).strict()
 
 const SITE_TARGET = { targetType: 'site_content', targetId: 'site' } as const
@@ -53,10 +60,22 @@ function countChanges(before: SiteOverrides, after: SiteOverrides): number {
   return diffSiteValues(resolveSiteValues(before), resolveSiteValues(after)).length
 }
 
+/** Strictly validated document, null for "as shipped", or field errors. */
+function checkDocument(raw: unknown): { ok: true; document: Record<string, unknown> | null } | { ok: false; errors: Record<string, string> } {
+  if (raw === null || raw === undefined) return { ok: true, document: null }
+  const { document, problems } = checkSiteDocument(raw)
+  if (problems.length) return { ok: false, errors: problemsToErrors(problems) }
+  return { ok: true, document: document as unknown as Record<string, unknown> }
+}
+
+function sameDocument(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+}
+
 async function readDraft(context: ControlContext): Promise<Row | null> {
   const { data, error } = await context.admin
     .from('site_content_draft')
-    .select('content, schema_version, updated_at, updated_by')
+    .select('content, document, schema_version, updated_at, updated_by')
     .eq('id', 1)
     .maybeSingle()
   if (error) throw new ApiError(503, 'content_unavailable', 'The draft could not be read. Nothing was changed.')
@@ -66,7 +85,7 @@ async function readDraft(context: ControlContext): Promise<Row | null> {
 async function readPublished(context: ControlContext): Promise<Row | null> {
   const { data, error } = await context.admin
     .from('site_content_published')
-    .select('content, schema_version, version, published_at, published_by')
+    .select('content, document, schema_version, version, published_at, published_by')
     .eq('id', 1)
     .maybeSingle()
   if (error) throw new ApiError(503, 'content_unavailable', 'The published copy could not be read. Nothing was changed.')
@@ -76,7 +95,7 @@ async function readPublished(context: ControlContext): Promise<Row | null> {
 async function readVersion(context: ControlContext, version: number): Promise<Row | null> {
   const { data, error } = await context.admin
     .from('site_content_versions')
-    .select('version, content, action, restored_from, note, created_at')
+    .select('version, content, document, action, restored_from, note, created_at')
     .eq('version', version)
     .maybeSingle()
   if (error) throw new ApiError(503, 'content_unavailable', 'The version could not be read. Nothing was changed.')
@@ -103,12 +122,14 @@ export async function stateHandler(req: ApiRequest, res: ApiResponse): Promise<v
       draft: {
         exists: Boolean(draft),
         overrides: asOverrides(draft?.content),
+        document: draft ? (draft.document ?? null) : (published?.document ?? null),
         updatedAt: (draft?.updated_at as string | undefined) ?? null,
         updatedByYou: ownerFlag(context, draft?.updated_by)
       },
       published: {
         version: typeof published?.version === 'number' ? published.version : 0,
         overrides: asOverrides(published?.content),
+        document: published?.document ?? null,
         publishedAt: (published?.published_at as string | undefined) ?? null,
         publishedByYou: ownerFlag(context, published?.published_by)
       },
@@ -137,14 +158,35 @@ export async function draftHandler(req: ApiRequest, res: ApiResponse): Promise<v
       return
     }
 
+    const documentChecked = checkDocument(parsed.data.document)
+    if (!documentChecked.ok) {
+      sendJson(res, 422, { error: 'invalid_document', message: 'Some blocks need attention. Nothing was saved.', errors: documentChecked.errors })
+      return
+    }
+
+    const current = await readDraft(context)
+    // Revision check: never silently overwrite a draft someone saved after this editor loaded.
+    if (parsed.data.expectedUpdatedAt !== undefined) {
+      const currentAt = (current?.updated_at as string | undefined) ?? null
+      const expected = parsed.data.expectedUpdatedAt
+      const same = currentAt === expected || (currentAt !== null && expected !== null && Date.parse(currentAt) === Date.parse(expected))
+      if (!same) {
+        sendJson(res, 409, { error: 'draft_conflict', message: 'The draft was changed in another tab or by another administrator. Reload to see the latest draft; nothing was saved.', currentUpdatedAt: currentAt })
+        return
+      }
+    }
+
     const updatedAt = new Date().toISOString()
-    const { error } = await context.admin.from('site_content_draft').upsert({
+    const row: Record<string, unknown> = {
       id: 1,
       content: checked.overrides,
       schema_version: SITE_CONTENT_SCHEMA_VERSION,
       updated_at: updatedAt,
       updated_by: context.userId
-    }, { onConflict: 'id' })
+    }
+    if (parsed.data.document !== undefined) row.document = documentChecked.document
+    else if (!current) row.document = (await readPublished(context))?.document ?? null
+    const { error } = await context.admin.from('site_content_draft').upsert(row, { onConflict: 'id' })
     if (error) throw new ApiError(503, 'content_unavailable', 'The draft could not be saved. Nothing was changed; try again.')
 
     sendJson(res, 200, { ok: true, updatedAt, fieldsChanged: Object.keys(checked.overrides).length })
@@ -176,15 +218,24 @@ export async function publishHandler(req: ApiRequest, res: ApiResponse): Promise
       return
     }
 
+    const draftDocument = checkDocument(draft.document)
+    if (!draftDocument.ok) {
+      await recordAuditEvent(context.admin, { requestId: context.requestId, actorId: context.userId, actorRole: context.role, action: 'content.publish', ...SITE_TARGET, outcome: 'failed', severity: 'warning', errorCode: 'document_invalid', summary: { fields: Object.keys(draftDocument.errors).length } })
+      sendJson(res, 422, { error: 'invalid_document', message: 'Some blocks no longer validate. Fix them and save again; nothing was published.', errors: draftDocument.errors })
+      return
+    }
+
     const published = await readPublished(context)
     const before = asOverrides(published?.content)
-    const changed = countChanges(before, checked.overrides)
+    const documentChanged = !sameDocument(published?.document, draftDocument.document)
+    const changed = countChanges(before, checked.overrides) + (documentChanged ? 1 : 0)
     if (changed === 0) throw new ApiError(409, 'no_changes', 'The draft is identical to the published copy. Nothing was published.')
 
-    const { data: newVersion, error } = await context.admin.rpc('site_content_commit', {
+    const { data: newVersion, error } = await context.admin.rpc('site_content_commit_document', {
       p_actor: context.userId,
       p_action: 'publish',
       p_content: checked.overrides,
+      p_document: draftDocument.document,
       p_schema_version: SITE_CONTENT_SCHEMA_VERSION,
       p_restored_from: null,
       p_note: parsed.data.note ?? ''
@@ -205,7 +256,7 @@ export async function publishHandler(req: ApiRequest, res: ApiResponse): Promise
       ...SITE_TARGET,
       outcome: 'success',
       severity: 'notice',
-      summary: { before: published?.version ?? 0, after: version, changed }
+      summary: { before: published?.version ?? 0, after: version, changed, layout: documentChanged }
     })
     sendJson(res, 200, { ok: true, version, changed, publishedAt: new Date().toISOString(), auditRecorded })
   })
@@ -223,17 +274,21 @@ export async function restoreHandler(req: ApiRequest, res: ApiResponse): Promise
     const checked = validateOverrides(source.content)
     if (!checked.ok) throw new ApiError(422, 'invalid_content', 'That version no longer validates against the current editor, so it cannot be restored. Nothing was changed.')
 
+    const sourceDocument = checkDocument(source.document)
+    if (!sourceDocument.ok) throw new ApiError(422, 'invalid_content', 'That version’s page layout no longer validates against the current editor, so it cannot be restored. Nothing was changed.')
+
     const published = await readPublished(context)
     const before = asOverrides(published?.content)
-    const changed = countChanges(before, checked.overrides)
+    const changed = countChanges(before, checked.overrides) + (sameDocument(published?.document, sourceDocument.document) ? 0 : 1)
     if (changed === 0 && (published?.version ?? 0) !== 0) {
       throw new ApiError(409, 'no_changes', 'The live site already shows this version. Nothing was changed.')
     }
 
-    const { data: newVersion, error } = await context.admin.rpc('site_content_commit', {
+    const { data: newVersion, error } = await context.admin.rpc('site_content_commit_document', {
       p_actor: context.userId,
       p_action: 'restore',
       p_content: checked.overrides,
+      p_document: sourceDocument.document,
       p_schema_version: SITE_CONTENT_SCHEMA_VERSION,
       p_restored_from: parsed.data.version,
       p_note: parsed.data.note ?? ''

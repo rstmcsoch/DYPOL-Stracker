@@ -44,7 +44,7 @@ function hasControlCharacter(value: string): boolean {
 /** One plain email address after mailto: (no extra recipients, subject, body or other parameters). */
 const MAILTO_LINK = /^mailto:[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/
 
-function validateLink(value: string, allowMailto = false): string | null {
+export function validateLink(value: string, allowMailto = false): string | null {
   if (allowMailto && /^mailto:/i.test(value)) {
     return MAILTO_LINK.test(value) ? null : 'Use mailto: followed by one email address, with nothing after it.'
   }
