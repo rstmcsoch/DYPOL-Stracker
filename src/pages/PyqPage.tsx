@@ -12,11 +12,13 @@ import { PYQ_EXAMS } from '../types'
 import { isJeeSettings } from '../lib/jee/exam'
 import { examName } from '../lib/exams/catalog'
 import { currentSubjectCatalog } from '../lib/exams/subjects'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 type ExamFilter = 'all' | PYQExam
 type StatusFilter = 'all' | 'pending' | 'done'
 
 export default function PyqPage() {
+  const sl = usePageSlots('pyqs')
   const { data, upsert, upsertMany } = useData()
   const { notify } = useToast()
   const navigate = useNavigate()
@@ -103,22 +105,22 @@ export default function PyqPage() {
   const hasWindow = years.length > 0
 
   return <div className="content-page pyq-page">
-    <PageHeader
+    <PageHeader layoutId="pyqs.header"
       title="PYQ tracker"
       subtitle="Mark past papers done per chapter."
       action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} /> Year range</Button>}
     />
 
-    <section className={`jee-stat-grid ${examList.length === 2 ? 'two' : 'one'}`} aria-label="PYQ completion overall">
+    {!sl.hidden('summary') && <section {...sl.attrs('summary')} className={`jee-stat-grid ${examList.length === 2 ? 'two' : 'one'}`} aria-label="PYQ completion overall">
       {overall.map(item => <NotebookCard key={item.exam} className="jee-stat">
         <span>{pyqLabel(item.exam)} PYQs</span>
         <strong>{item.done}/{item.total}<small> years</small></strong>
         <Meter value={item.percent} label={`${pyqLabel(item.exam)} PYQ completion`} tone={item.exam === 'Main' ? 'blue' : 'orange'} />
         <small>{item.percent === null ? 'Set a year range in Settings' : `${Math.round(item.percent)}% complete across all chapters`}</small>
       </NotebookCard>)}
-    </section>
+    </section>}
 
-    <NotebookCard className="jee-filter-card">
+    <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
       <div className="jee-filter-grid">
         <label className="jee-search"><Search size={16} aria-hidden="true" /><input type="search" placeholder="Find a chapter" value={search} onChange={event => setSearch(event.target.value)} aria-label="Find a chapter" /></label>
         <SubjectSelect value={subject} onChange={value => setSubject(value as Subject | 'all')} />

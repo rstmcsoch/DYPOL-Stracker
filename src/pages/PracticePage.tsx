@@ -11,10 +11,12 @@ import { aggregatePractice, PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL } from '../lib/jee/
 import { practiceStudySessionId } from '../lib/jee/ids'
 import { validatePractice, type PracticeFormInput, type PracticeValue } from '../lib/jee/forms'
 import { PRACTICE_SOURCES, type AppData, type Chapter, type PracticeSession, type PracticeSource, type Subject, type StudySession } from '../types'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 type Period = '7' | '30' | '90' | 'all'
 
 export default function PracticePage() {
+  const sl = usePageSlots('practice')
   const { data, upsert, remove } = useData()
   const { notify } = useToast()
   const [params, setParams] = useSearchParams()
@@ -59,20 +61,20 @@ export default function PracticePage() {
   }
 
   return <div className="content-page practice-page">
-    <PageHeader
+    <PageHeader layoutId="practice.header"
       title="Practice log"
       subtitle="DPPs, modules and sheets — not counted as tests."
       action={<Button onClick={() => openCreate()}><Plus size={16} /> Log practice</Button>}
     />
 
-    <section className="jee-stat-grid" aria-label="Practice summary">
+    {!sl.hidden('summary') && <section {...sl.attrs('summary')} className="jee-stat-grid" aria-label="Practice summary">
       <NotebookCard className="jee-stat"><span>Questions attempted</span><strong>{overall.attempted.toLocaleString('en-IN')}</strong><small>{overall.sessions} block{overall.sessions === 1 ? '' : 's'} in view</small></NotebookCard>
       <NotebookCard className="jee-stat"><span>Accuracy</span><strong><Pct value={overall.accuracy} digits={1} /></strong><small>{overall.correct} correct · {overall.incorrect} incorrect{overall.skipped ? ` · ${overall.skipped} skipped` : ''}</small></NotebookCard>
       <NotebookCard className="jee-stat"><span>Recent accuracy</span><strong><Pct value={overall.recentAccuracy} digits={1} /></strong><small>last three blocks</small></NotebookCard>
       <NotebookCard className="jee-stat"><span>Practice volume</span><strong>{minutesLabel(overall.timeMinutes)}</strong><small>time recorded in view</small></NotebookCard>
-    </section>
+    </section>}
 
-    <NotebookCard className="jee-filter-card">
+    <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
       <div className="jee-filter-grid">
         <SubjectSelect value={subject} onChange={value => { setSubject(value as Subject | 'all'); setChapterFilter('') }} />
         <ChapterSelect chapters={subjectChapters} value={chapterFilter} onChange={setChapterFilter} allowNone noneLabel="All chapters" subject={subject} label="Chapter" />

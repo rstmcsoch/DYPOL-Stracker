@@ -9,6 +9,7 @@ import type { StudyActivity, Subject } from '../types'
 import { STUDY_ACTIVITIES } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
 import { formatClock, formatStudiedDuration, isFocusMode, loggableMinutes } from '../lib/focus-timer'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 const MODES: { name: FocusMode; minutes: number; label: string; icon: React.ReactNode }[] = [
   { name: 'Pomodoro', minutes: 25, label: 'Focus', icon: <Focus size={15} /> },
@@ -18,6 +19,7 @@ const MODES: { name: FocusMode; minutes: number; label: string; icon: React.Reac
 ]
 
 export default function FocusPage() {
+  const sl = usePageSlots('focus')
   const timer = useFocus()
   const focusSubjects = useExamSubjects(timer.subject)
   const { running: timerRunning, pause: pauseTimer, start: startTimer } = timer
@@ -75,14 +77,14 @@ export default function FocusPage() {
 
   return <div className="focus-page" data-mode={timer.mode.toLowerCase().replace(' ', '-') }>
     <div className="focus-vignette" aria-hidden="true" />
-    <header className="focus-topbar"><button className="focus-exit" onClick={requestExit}><ArrowLeft size={17} /> Exit focus</button><div className="focus-wordmark"><span className="focus-mark">S</span><span>Stracker <i>focus mode</i></span></div><div className="focus-top-note"><span className={timer.running ? 'focus-live-dot live' : 'focus-live-dot'} />{timer.running ? 'BLOCK IN PROGRESS' : 'DISTRACTION-FREE SPACE'}</div></header>
+    <header {...sl.attrs('topbar')} className="focus-topbar"><button className="focus-exit" onClick={requestExit}><ArrowLeft size={17} /> Exit focus</button><div className="focus-wordmark"><span className="focus-mark">S</span><span>Stracker <i>focus mode</i></span></div><div className="focus-top-note"><span className={timer.running ? 'focus-live-dot live' : 'focus-live-dot'} />{timer.running ? 'BLOCK IN PROGRESS' : 'DISTRACTION-FREE SPACE'}</div></header>
     <main className="focus-main">
-      <div className="focus-prelude"><span className="focus-star">✳</span><span className="eyebrow">MAKE THIS MOMENT COUNT</span><span className="focus-star">✦</span></div>
+      {!sl.hidden('prelude') && <div {...sl.attrs('prelude')} className="focus-prelude"><span className="focus-star">✳</span><span className="eyebrow">{sl.text('prelude', 'label', 'MAKE THIS MOMENT COUNT')}</span><span className="focus-star">✦</span></div>}
       <h1>{timer.mode === 'Pomodoro' || timer.mode === 'Custom' ? 'One thing at a time.' : 'Take the pause.'}</h1>
       <p className="focus-subtitle">{subtitle}</p>
       <div className="focus-mode-selector" role="group" aria-label="Timer mode">{MODES.map(mode => <button key={mode.name} className={timer.mode === mode.name ? 'selected' : ''} onClick={() => requestMode(mode.name)} disabled={timer.running} aria-pressed={timer.mode === mode.name}>{mode.icon}<span>{mode.label}</span>{mode.name !== 'Custom' && <small>{timer.durations[mode.name]}m</small>}</button>)}</div>
       {timer.mode === 'Custom' && <label className="custom-time-control">Custom focus minutes <input type="number" min="1" max="180" step="1" value={timer.durations.Custom} disabled={timer.running} onChange={event => { const minutes = event.currentTarget.valueAsNumber; if (Number.isFinite(minutes) && Number.isInteger(minutes)) timer.setCustomMinutes(minutes) }} /></label>}
-      <div className={`focus-clock-wrap ${timer.running ? 'is-running' : ''} ${timer.finished ? 'is-finished' : ''}`}>
+      <div {...sl.attrs('clock')} className={`focus-clock-wrap ${timer.running ? 'is-running' : ''} ${timer.finished ? 'is-finished' : ''}`}>
         <span className="focus-clock-orbit orbit-one" aria-hidden="true" /><span className="focus-clock-orbit orbit-two" aria-hidden="true" />
         <ProgressRing value={timer.progress} size={332} color="var(--focus-accent)" label={<span className="focus-clock" aria-live="off">{clock}</span>} />
         <div className="focus-clock-caption">{timer.finished ? <><Check size={15} /> BLOCK COMPLETE</> : timer.running ? 'STAY WITH THIS PAGE' : unsaved ? 'PAUSED' : 'READY WHEN YOU ARE'}</div>
@@ -91,7 +93,7 @@ export default function FocusPage() {
       <div className="focus-primary-actions">{timer.running ? <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.pause}><Pause size={18} /> Pause <kbd>Space</kbd></Button> : <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.start}><Play size={17} fill="currentColor" /> {timer.finished ? 'Start another block' : timer.remainingSeconds < timer.focusMinutes * 60 ? 'Resume focus' : 'Begin focus'} <kbd>Space</kbd></Button>}
         {unsaved && <button className="focus-reset-button focus-end-button" onClick={() => setConfirmEnd({ then: 'stay' })} aria-label="End focus block"><Square size={14} /> End</button>}
         {!unsaved && (timer.running || timer.finished || timer.remainingSeconds < timer.focusMinutes * 60) && <button className="focus-reset-button" onClick={timer.reset} aria-label="Reset timer"><RotateCcw size={16} /> Reset</button>}</div>
-      <div className="focus-context-card"><div className="focus-context-head"><BookOpen size={15} /><span>KEEP THIS BLOCK GROUNDED</span><span className="context-free-note">Optional</span></div><div className="focus-context-fields">
+      <div {...sl.attrs('context')} className="focus-context-card"><div className="focus-context-head"><BookOpen size={15} /><span>KEEP THIS BLOCK GROUNDED</span><span className="context-free-note">Optional</span></div><div className="focus-context-fields">
         <label><span>Activity</span><select value={timer.activity} disabled={timer.running} onChange={event => timer.setActivity(event.target.value as StudyActivity)} aria-describedby="focus-activity-note">{STUDY_ACTIVITIES.map(item => <option key={item} value={item}>{item}</option>)}</select><small id="focus-activity-note" className="jee-small jee-muted">Lecture, practice, revision — tracked separately.</small></label>
         <label><span>Subject</span><select value={timer.subject ?? ''} disabled={timer.running} onChange={event => chooseSubject(event.target.value)}><option value="">Choose a subject</option>{focusSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></label>
         <div className="focus-picker-field"><span id="focus-chapter-label">Chapter</span>
@@ -110,7 +112,7 @@ export default function FocusPage() {
       {chapterPickerOpen && <ChapterSearchPicker chapters={availableChapters} selectedId={timer.chapterId} onClose={() => setChapterPickerOpen(false)} onChoose={chapterId => { timer.setChapter(chapterId); setChapterPickerOpen(false) }} />}
       {taskPickerOpen && <TaskLinkPicker tasks={data.tasks.filter(task => task.task_date === indiaToday())} linkedId={timer.taskId} onClose={() => setTaskPickerOpen(false)} onChoose={taskId => { timer.setTask(taskId); setTaskPickerOpen(false) }} />}
       </div>
-      <div className="focus-footer-note"><Sparkles size={14} /> Your timer keeps going if you step away — Home shows it until you end the block. Ending early lets you save the time you studied.</div>
+      {!sl.hidden('footnote') && <div {...sl.attrs('footnote')} className="focus-footer-note"><Sparkles size={14} /> Your timer keeps going if you step away — Home shows it until you end the block. Ending early lets you save the time you studied.</div>}
     </main>
     {confirmEnd && <EndBlockDialog seconds={timer.liveElapsed} onSave={() => resolveEnd(true)} onDiscard={() => resolveEnd(false)} onKeep={() => setConfirmEnd(null)} exiting={confirmEnd.then === 'exit'} />}
     <footer className="focus-bottom"><span>Stracker <strong>by DYPOL LABS</strong></span><span>Press <kbd>Esc</kbd> to exit · <kbd>Space</kbd> to pause or resume</span></footer>

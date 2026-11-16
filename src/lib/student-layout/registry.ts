@@ -147,13 +147,72 @@ const SHELL: ComponentDef[] = [
   { id: 'shell.quick-actions', page: 'shell', label: 'Quick actions button', kind: 'control', parent: 'shell', caps: caps({ required: true, hideable: false, reorderable: false, interactive: true }) }
 ]
 
-/** Pages registered at page level in this phase: their root can be styled, never removed. */
-const PAGE_ROOTS: ComponentDef[] = STUDENT_PAGES
-  .filter(page => page.id !== 'home' && page.id !== 'shell')
-  .map(page => ({ id: page.id, page: page.id, label: page.label, kind: 'page' as const, parent: null, caps: caps({ required: true, hideable: false, reorderable: false, dataBound: true, interactive: true }),
-    data: { records: 'The student’s own records on this page' } }))
+interface PageSpec {
+  header?: { title: string; subtitle?: string; eyebrow?: string }
+  /** Top-level sections: [key, label, data-bound, optional (may be hidden), static text]. */
+  sections: ReadonlyArray<[string, string, boolean, boolean, Record<string, TextField>?]>
+}
 
-export const COMPONENTS: readonly ComponentDef[] = [...SHELL, ...HOME, ...PAGE_ROOTS]
+/**
+ * Per-page parts. Headers carry the page's static title/subtitle (exact shipped wording);
+ * sections are styled, resized and (when optional) hidden. Section order on these pages is
+ * fixed: their layout is part of how each page works.
+ */
+const PAGE_SPECS: Record<Exclude<StudentPageId, 'home' | 'shell'>, PageSpec> = {
+  focus: { sections: [
+    ['topbar', 'Top bar', true, false],
+    ['prelude', 'Motto line', false, true, { label: text('Motto', 'MAKE THIS MOMENT COUNT', 60) }],
+    ['clock', 'Timer', true, false],
+    ['context', 'Block details', true, false],
+    ['footnote', 'Footer note', false, true]
+  ] },
+  backlog: { header: { title: 'Backlog', subtitle: 'Skipped lectures, unsolved DPPs and topics to revisit.' }, sections: [['summary', 'Summary cards', true, true], ['filters', 'Filters', true, false]] },
+  practice: { header: { title: 'Practice log', subtitle: 'DPPs, modules and sheets — not counted as tests.' }, sections: [['summary', 'Summary cards', true, true], ['filters', 'Filters', true, false]] },
+  syllabus: { header: { title: 'Syllabus' }, sections: [['board', 'Syllabus board', true, false]] },
+  'weak-areas': { header: { title: 'Weak areas', subtitle: 'Averages of the last three usable results.' }, sections: [
+    ['rule', 'Threshold banner', true, true], ['overview', 'Overview cards', true, false], ['tested', 'Tested chapters', true, false], ['untested', 'Untested chapters', true, false], ['legend', 'Classification footer', true, true]
+  ] },
+  pyqs: { header: { title: 'PYQ tracker', subtitle: 'Mark past papers done per chapter.' }, sections: [['summary', 'Completion cards', true, true], ['filters', 'Filters', true, false]] },
+  tests: { header: { title: 'Test history' }, sections: [['summary', 'Summary cards', true, true], ['board', 'Test history list', true, false]] },
+  'mock-analysis': { header: { title: 'Mock analysis', subtitle: 'Recorded, classified and derived data, kept separate.' }, sections: [['filters', 'Test picker', true, false], ['analysis', 'Analysis grid', true, false]] },
+  mistakes: { header: { title: 'Mistake notebook' }, sections: [['overview', 'Overview cards', true, true], ['board', 'Mistake list', true, false]] },
+  retry: { header: { title: 'Retry list' }, sections: [['intro', 'Intro cards', true, true], ['board', 'Retry list', true, false]] },
+  analytics: { header: { title: 'Analytics', subtitle: 'Only from data you entered.' }, sections: [['kpis', 'Key numbers', true, false], ['insights', 'Insight cards', true, true]] },
+  revision: { header: { title: 'Revision desk' }, sections: [['columns', 'Due and overdue columns', true, false], ['completed', 'Recently completed', true, true]] },
+  decks: { header: { title: 'Formula & flashcards', subtitle: 'Rate each card Again, Hard, Good or Easy; Good and Easy move it up your revision ladder.' }, sections: [['summary', 'Due cards', true, true], ['filters', 'Deck picker', true, false]] },
+  'study-now': { header: { title: 'Study now', subtitle: 'Your most urgent item, and why.' }, sections: [['exam-mode', 'Exam Mode card', true, false], ['tracks', 'Track readiness', true, false]] },
+  planner: { header: { title: 'Planner' }, sections: [['grid', 'Planner board', true, false]] },
+  settings: { header: { title: 'Settings' }, sections: [['tabs', 'Settings tabs', false, false], ['panels', 'Settings panels', true, false]] },
+  profile: { header: { title: 'Profile', eyebrow: 'PROFILE' }, sections: [['card', 'Profile card', true, false]] },
+  backup: { header: { title: 'Export & backup', subtitle: 'Download, import or report your data.' }, sections: [['exports', 'Export cards', false, false], ['report', 'Report builder', true, false], ['import', 'Import section', false, false], ['security', 'Security note', false, true]] }
+}
+
+const PAGE_PARTS: ComponentDef[] = STUDENT_PAGES
+  .filter(page => page.id !== 'home' && page.id !== 'shell')
+  .flatMap(page => {
+    const spec = PAGE_SPECS[page.id as keyof typeof PAGE_SPECS]
+    const header: ComponentDef[] = spec.header ? [{
+      id: `${page.id}.header`, page: page.id, label: 'Page header', kind: 'section', parent: page.id, caps: caps({ required: true, hideable: false, reorderable: false, interactive: true }),
+      text: {
+        title: text('Page title', spec.header.title, 40),
+        ...(spec.header.subtitle ? { subtitle: text('Info tip text', spec.header.subtitle, 160) } : {}),
+        ...(spec.header.eyebrow ? { eyebrow: text('Eyebrow', spec.header.eyebrow, 40) } : {})
+      },
+      note: 'Its action button keeps its real behaviour.'
+    }] : []
+    const sections: ComponentDef[] = spec.sections.map(([key, label, dataBound, optional, texts]) => ({
+      id: `${page.id}.${key}`, page: page.id, label, kind: 'section' as const, parent: page.id,
+      caps: caps({ required: !optional, hideable: optional, reorderable: false, dataBound, interactive: dataBound }),
+      ...(texts ? { text: texts } : {}),
+      ...(dataBound ? { data: { records: 'Values from the student’s own records' } } : {})
+    }))
+    const root: ComponentDef = { id: page.id, page: page.id, label: page.label, kind: 'page', parent: null,
+      caps: caps({ required: true, hideable: false, reorderable: false, dataBound: true, interactive: true }),
+      children: [...header, ...sections].map(item => item.id), data: { records: 'The student’s own records on this page' } }
+    return [root, ...header, ...sections]
+  })
+
+export const COMPONENTS: readonly ComponentDef[] = [...SHELL, ...HOME, ...PAGE_PARTS]
 export const COMPONENT_MAP: ReadonlyMap<string, ComponentDef> = new Map(COMPONENTS.map(def => [def.id, def]))
 
 /** Sidebar groups and their routes, in shipped order (mirrors AppShell navGroups). */

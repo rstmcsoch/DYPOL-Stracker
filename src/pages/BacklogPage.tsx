@@ -11,6 +11,7 @@ import { isAwake } from '../lib/jee/reminders'
 import { backlogChapterChange, backlogSubjectChange, validateBacklog, type BacklogFormInput, type BacklogValue } from '../lib/jee/forms'
 import { BACKLOG_TYPES, type BacklogItem, type BacklogType, type Priority, type Subject, type AppData } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 type GroupBy = 'due' | 'subject' | 'type' | 'priority'
 type TypeFilter = 'all' | BacklogType
@@ -18,6 +19,7 @@ type TypeFilter = 'all' | BacklogType
 const PRIORITY_RANK: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 }
 
 export default function BacklogPage() {
+  const sl = usePageSlots('backlog')
   const { data, upsert, remove } = useData()
   const { notify } = useToast()
   const [params, setParams] = useSearchParams()
@@ -106,19 +108,19 @@ export default function BacklogPage() {
   const counts = { due: dueNow.length, snoozed: snoozed.length }
 
   return <div className="content-page backlog-page">
-    <PageHeader
+    <PageHeader layoutId="backlog.header"
       title="Backlog"
       subtitle="Skipped lectures, unsolved DPPs and topics to revisit."
       action={<Button onClick={() => { setCreating(true); if (params.get('add')) setParams({}, { replace: true }) }}><Plus size={16} /> Add item</Button>}
     />
-    <section className="jee-stat-grid" aria-label="Backlog summary">
+    {!sl.hidden('summary') && <section {...sl.attrs('summary')} className="jee-stat-grid" aria-label="Backlog summary">
       <NotebookCard className="jee-stat"><span>Due now</span><strong>{counts.due}</strong><small>{overdueCount ? `${overdueCount} overdue` : 'nothing overdue'}</small></NotebookCard>
       <NotebookCard className="jee-stat"><span>Open</span><strong>{active.length}</strong><small>active items</small></NotebookCard>
       <NotebookCard className="jee-stat"><span>Snoozed</span><strong>{counts.snoozed}</strong><small>waiting to come back</small></NotebookCard>
       <NotebookCard className="jee-stat"><span>Cleared</span><strong>{data.backlogItems.filter(item => item.status === 'done').length}</strong><small>completed</small></NotebookCard>
-    </section>
+    </section>}
 
-    <NotebookCard className="jee-filter-card">
+    <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
       <ChipFilter<TypeFilter> label="Type" value={typeFilter} onChange={setTypeFilter} options={[{ value: 'all', label: 'All' }, ...BACKLOG_TYPES.map(type => ({ value: type, label: type === 'DPP' ? 'Unsolved DPPs' : type === 'Lecture' ? 'Skipped lectures' : 'Come back to' }))]} />
       <div className="jee-filter-grid">
         <SubjectSelect value={subject} onChange={value => setSubject(value as Subject | 'all')} />

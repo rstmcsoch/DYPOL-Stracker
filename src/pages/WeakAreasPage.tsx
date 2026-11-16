@@ -8,10 +8,12 @@ import { practiceByChapter, PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL, type PracticeAggre
 import { Meter, Pct } from '../components/jee/shared'
 import type { Chapter, Subject } from '../types'
 import { useReportSubjects } from '../lib/exams/useExamSubjects'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 const MOBILE_VISIBLE_LIMIT = 8
 
 export default function WeakAreasPage() {
+  const sl = usePageSlots('weak-areas')
   const subjectList = useReportSubjects()
   const { data } = useData()
   const navigate = useNavigate()
@@ -36,9 +38,9 @@ export default function WeakAreasPage() {
   const pageClass = `content-page weak-page${showAllTestedMobile ? ' mobile-tested-expanded' : ''}`
 
   return <div className={pageClass}>
-    <PageHeader title="Weak areas" subtitle="Averages of the last three usable results." doodle={<Target size={19} />} action={<label className="weak-subject-select"><span>Subject</span><select value={subject} onChange={event => { setSubject(event.target.value as 'all' | Subject); setShowAllTestedMobile(false); setShowUntested(false) }}><option value="all">All subjects</option>{subjectList.map(item => <option key={item}>{item}</option>)}</select></label>} />
-    <div className="weak-rule-banner"><span className="rule-pencil">✎</span><p>Current bands: <strong>Weak &lt; {data.settings.weak_threshold}%</strong><span>·</span><strong>Okay {data.settings.weak_threshold}–{data.settings.strong_threshold}%</strong><span>·</span><strong>Strong &gt; {data.settings.strong_threshold}%</strong></p><button onClick={() => navigate('/settings')}>Adjust in Settings ↗</button></div>
-    <div className="weak-overview-grid"><NotebookCard className="weak-overview-item weak-tint"><div><span className="weak-overview-icon"><TriangleAlert size={17} /></span><span className="eyebrow">NEEDS ANOTHER LOOK</span></div><strong>{weak.length}</strong><small>chapter{weak.length === 1 ? '' : 's'} below the weak-area threshold</small></NotebookCard><NotebookCard className="weak-overview-item dropping-tint"><div><span className="weak-overview-icon"><TrendingDown size={17} /></span><span className="eyebrow">DROPPING</span></div><strong>{dropCount}</strong><small>latest result fell by {data.settings.dropping_threshold} points or more</small></NotebookCard><NotebookCard className="weak-overview-item untested-tint"><div><span className="weak-overview-icon"><Target size={17} /></span><span className="eyebrow">NO BASELINE YET</span></div><strong>{untested.length}</strong><small>untested · not classified as weak</small></NotebookCard><NotebookCard className="weak-overview-item strong-tint"><div><span className="weak-overview-icon"><TrendingUp size={17} /></span><span className="eyebrow">FEELING STEADY</span></div><strong>{strong.length}</strong><small>chapter{strong.length === 1 ? '' : 's'} at or above the strong threshold</small></NotebookCard></div>
+    <PageHeader layoutId="weak-areas.header" title="Weak areas" subtitle="Averages of the last three usable results." doodle={<Target size={19} />} action={<label className="weak-subject-select"><span>Subject</span><select value={subject} onChange={event => { setSubject(event.target.value as 'all' | Subject); setShowAllTestedMobile(false); setShowUntested(false) }}><option value="all">All subjects</option>{subjectList.map(item => <option key={item}>{item}</option>)}</select></label>} />
+    {!sl.hidden('rule') && <div {...sl.attrs('rule')} className="weak-rule-banner"><span className="rule-pencil">✎</span><p>Current bands: <strong>Weak &lt; {data.settings.weak_threshold}%</strong><span>·</span><strong>Okay {data.settings.weak_threshold}–{data.settings.strong_threshold}%</strong><span>·</span><strong>Strong &gt; {data.settings.strong_threshold}%</strong></p><button onClick={() => navigate('/settings')}>Adjust in Settings ↗</button></div>}
+    <div {...sl.attrs('overview')} className="weak-overview-grid"><NotebookCard className="weak-overview-item weak-tint"><div><span className="weak-overview-icon"><TriangleAlert size={17} /></span><span className="eyebrow">NEEDS ANOTHER LOOK</span></div><strong>{weak.length}</strong><small>chapter{weak.length === 1 ? '' : 's'} below the weak-area threshold</small></NotebookCard><NotebookCard className="weak-overview-item dropping-tint"><div><span className="weak-overview-icon"><TrendingDown size={17} /></span><span className="eyebrow">DROPPING</span></div><strong>{dropCount}</strong><small>latest result fell by {data.settings.dropping_threshold} points or more</small></NotebookCard><NotebookCard className="weak-overview-item untested-tint"><div><span className="weak-overview-icon"><Target size={17} /></span><span className="eyebrow">NO BASELINE YET</span></div><strong>{untested.length}</strong><small>untested · not classified as weak</small></NotebookCard><NotebookCard className="weak-overview-item strong-tint"><div><span className="weak-overview-icon"><TrendingUp size={17} /></span><span className="eyebrow">FEELING STEADY</span></div><strong>{strong.length}</strong><small>chapter{strong.length === 1 ? '' : 's'} at or above the strong threshold</small></NotebookCard></div>
 
     {practiceWeak.length > 0 && <section className="weak-section" aria-label="Practice signal"><SectionHeading title="Practice is flagging these" note="From your DPP and module log. Needs 20+ questions per chapter." />
       <NotebookCard className="practice-signal-board">{practiceWeak.map(({ chapter, agg }) => <div key={chapter.id} className="practice-signal-row">
@@ -48,7 +50,7 @@ export default function WeakAreasPage() {
       </div>)}</NotebookCard></section>}
     {dropCount > 0 && <NotebookCard className="dropping-alert"><span className="dropping-mark"><ArrowDownRight size={18} /></span><div><strong>A dip worth checking</strong><p>{tested.filter(item => item.dropping).map(item => `${item.chapter.name} (${Math.round(item.results[1]?.percentage ?? 0)}% → ${Math.round(item.latest ?? 0)}%)`).join(' · ')}</p></div><span>Compare the paper, not just the score.</span></NotebookCard>}
 
-    <section className="weak-section"><SectionHeading title="Tested chapters" note={`${tested.length} chapter${tested.length === 1 ? '' : 's'} with usable scores`} />
+    <section {...sl.attrs('tested')} className="weak-section"><SectionHeading title="Tested chapters" note={`${tested.length} chapter${tested.length === 1 ? '' : 's'} with usable scores`} />
       <NotebookCard className="weak-table-board">
         {tested.length === 0 ? <EmptyState icon={<Target size={24} />} title="No usable chapter results yet." action={<Button variant="secondary" size="sm" onClick={() => navigate('/tests?add=1')}>Add a chapter test</Button>} /> : <div className="weak-table-scroll"><table className="weak-table" id="weak-tested-table"><thead><tr><th>CHAPTER</th><th>LAST 3 RESULTS</th><th>AVERAGE</th><th>LATEST</th><th>TREND</th><th>READING</th></tr></thead><tbody>{tested.map((item, index) => {
           const dropping = item.dropping
@@ -60,7 +62,7 @@ export default function WeakAreasPage() {
       </NotebookCard>
     </section>
 
-    <section className="weak-section untested-section" aria-labelledby="untested-heading"><SectionHeading title="Untested chapters" note="A baseline is missing — not a reason to assume weakness." action={<StatusBadge tone="muted">{untested.length} untested</StatusBadge>} />
+    <section {...sl.attrs('untested')} className="weak-section untested-section" aria-labelledby="untested-heading"><SectionHeading title="Untested chapters" note="A baseline is missing — not a reason to assume weakness." action={<StatusBadge tone="muted">{untested.length} untested</StatusBadge>} />
       {untested.length === 0 ? <NotebookCard className="untested-board"><EmptyState icon={<Target size={23} />} title={data.chapters.length ? 'Every chapter has a recorded result.' : 'No chapters yet.'} /></NotebookCard> : <NotebookCard className="untested-board">
         <div className="untested-toggle-row">
           <p id="untested-heading">These chapters have no usable score yet. They are not classified as weak — give one a first test to start its baseline.</p>
@@ -86,6 +88,6 @@ export default function WeakAreasPage() {
       </NotebookCard>}
     </section>
 
-    <div className="weak-classification-footer"><div><span>✳</span><p>Weak = below the adjustable threshold. Okay = between thresholds. Strong = above. <strong>No usable score means Untested.</strong></p></div><button onClick={() => navigate('/analytics')}>See full analytics <ArrowUpRight size={15} /></button></div>
+    {!sl.hidden('legend') && <div {...sl.attrs('legend')} className="weak-classification-footer"><div><span>✳</span><p>Weak = below the adjustable threshold. Okay = between thresholds. Strong = above. <strong>No usable score means Untested.</strong></p></div><button onClick={() => navigate('/analytics')}>See full analytics <ArrowUpRight size={15} /></button></div>}
   </div>
 }

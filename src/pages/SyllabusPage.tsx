@@ -12,6 +12,7 @@ import { ChapterStageEditor } from '../components/jee/ChapterStageEditor'
 import { useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
 import { subjectColor, subjectSlug } from '../lib/exams/subjects'
 import { stableChapterOrder } from '../lib/syllabus-order'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 const STATUSES: ChapterStatus[] = ['Not Started', 'Studying', 'Done', 'Revised']
 const PRIORITIES: Priority[] = ['High', 'Medium', 'Low']
@@ -19,6 +20,7 @@ const PRIORITIES: Priority[] = ['High', 'Medium', 'Low']
 type StrengthFilter = 'all' | 'Weak' | 'Okay' | 'Strong'
 
 export default function SyllabusPage() {
+  const sl = usePageSlots('syllabus')
   const subjectList = useReportSubjects()
   const examSubjectList = useExamSubjects()
   const { data, upsert, upsertMany, remove } = useData()
@@ -251,9 +253,9 @@ export default function SyllabusPage() {
   const stripCounts = subjectCounts.filter(item => item.total > 0)
 
   return <div className="content-page syllabus-page">
-    <PageHeader title="Syllabus" doodle={<span>✎</span>} action={<Button onClick={() => setCreateSubject(examSubjectList[0] ?? 'Physics')}><Plus size={17} /> Add chapter</Button>} />
+    <PageHeader layoutId="syllabus.header" title="Syllabus" doodle={<span>✎</span>} action={<Button onClick={() => setCreateSubject(examSubjectList[0] ?? 'Physics')}><Plus size={17} /> Add chapter</Button>} />
     {stripCounts.length > 0 && <div className="syllabus-progress-strip">{stripCounts.map(item => <NotebookCard key={item.subject} className={`subject-progress-card subject-progress-${subjectSlug(item.subject)}`}><div className="subject-progress-top"><SubjectBadge subject={item.subject} withMark /><span><strong>{item.complete}</strong> / {item.total} done</span></div><ProgressBar value={item.total ? item.complete / item.total * 100 : 0} color={item.color} /><span className="subject-progress-foot">{item.total ? Math.round(item.complete / item.total * 100) : 0}% mapped</span></NotebookCard>)}</div>}
-    <NotebookCard className="syllabus-board">
+    <NotebookCard {...sl.attrs('board')} className="syllabus-board">
       <div className="board-heading"><div><span className="handwriting-label">Your study map</span><p>{data.chapters.length} chapter{data.chapters.length === 1 ? '' : 's'} across {stripCounts.length} subject{stripCounts.length === 1 ? '' : 's'}.</p></div><span className="board-doodle" aria-hidden="true">✳</span></div>
       <div className="syllabus-filters">
         <div className="search-field syllabus-search"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Find a chapter or note…" aria-label="Search chapters and notes" />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div>

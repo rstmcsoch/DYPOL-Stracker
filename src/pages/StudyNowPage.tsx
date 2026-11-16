@@ -7,8 +7,10 @@ import { useData } from '../contexts/DataContext'
 import { indiaToday } from '../lib/date'
 import { allTrackReadiness, countdownLabel, currentExamMode, trackLabels } from '../lib/jee/exam'
 import { computeReminders, REMINDER_LABEL } from '../lib/jee/reminders'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 export default function StudyNowPage() {
+  const sl = usePageSlots('study-now')
   const { data } = useData()
   const navigate = useNavigate()
   const today = indiaToday()
@@ -17,11 +19,11 @@ export default function StudyNowPage() {
   const labels = trackLabels(data.settings)
   const reminders = computeReminders(data, today)
   return <div className="content-page study-now-page">
-    <PageHeader title="Study now" subtitle="Your most urgent item, and why." />
+    <PageHeader layoutId="study-now.header" title="Study now" subtitle="Your most urgent item, and why." />
     <StudyNowCard />
 
     <SectionHeading title="Exam Mode" note={mode.reason} action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} /> Exam settings</Button>} />
-    <NotebookCard className="jee-exam-mode">
+    <NotebookCard {...sl.attrs('exam-mode')} className="jee-exam-mode">
       <div className="jee-exam-mode-head">
         <StatusBadge tone={mode.active ? 'weak' : 'muted'}>{mode.active ? 'On' : 'Off'}</StatusBadge>
         <strong>{mode.label ?? 'No active track'}</strong>
@@ -31,7 +33,7 @@ export default function StudyNowPage() {
     </NotebookCard>
 
     <SectionHeading title="Track readiness" note="Each track is measured against its own PYQs." />
-    <div className="jee-track-grid">
+    <div {...sl.attrs('tracks')} className="jee-track-grid">
       {tracks.map(track => <NotebookCard key={track.track} className="jee-track-card">
         <div className="jee-track-head"><strong>{labels[track.track]}</strong><span className="jee-muted">{countdownLabel(track.daysLeft)}</span></div>
         <div className="jee-track-percent"><Pct value={track.percent} /></div>

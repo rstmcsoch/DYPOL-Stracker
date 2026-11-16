@@ -13,6 +13,7 @@ import type { Subject, TestRecord, TestType, TestSubjectScore, TestChapterLink }
 import { useCurrentExam, useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
 import { FULL_MOCK_SCOPE_HINT, keepEnteredScores } from '../lib/test-form'
 import { defaultTotalFor, fullMockDefaults, markingSchemeFor, scoreSubjectBase, type JeeFullPattern } from '../lib/exams/marking'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 type SortKey = 'date' | 'score' | 'title'
 type TestFieldErrors = Record<string, string>
@@ -48,6 +49,7 @@ function subjectScoreMax(totalText: string): number {
 }
 
 export default function TestsPage() {
+  const sl = usePageSlots('tests')
   const subjectList = useReportSubjects()
   const { data, upsert, upsertMany, remove } = useData()
   const { notify } = useToast()
@@ -244,9 +246,9 @@ export default function TestsPage() {
   }
 
   return <div className="content-page tests-page">
-    <PageHeader title="Test history" doodle={<ChartNoAxesCombined size={20} />} action={<Button onClick={() => { setEditing(null); setPresetChapterId(null); setCreating(true) }}><Plus size={17} /> Add test</Button>} />
-    <div className="test-summary-grid"><NotebookCard className="test-summary-card"><span>TESTS LOGGED</span><strong>{data.tests.length}</strong><small>Across every practice type</small></NotebookCard><NotebookCard className="test-summary-card"><span>AVERAGE SCORE</span><strong>{averageScore === null ? '—' : `${Math.round(averageScore)}%`}</strong><small>{average.count ? `Mean of ${average.count} usable test result${average.count === 1 ? '' : 's'}; one test counts once` : 'No usable scores in this view'}</small></NotebookCard><NotebookCard className="test-summary-card"><span>ACCURACY</span><strong>{accuracy.rate === null ? '—' : `${Math.round(accuracy.rate)}%`}</strong><small>{accuracy.correct}/{accuracy.attempted || '—'} correct / attempted</small></NotebookCard><NotebookCard className="test-summary-card"><span>ATTEMPT RATE</span><strong>{attempt.rate === null ? '—' : `${Math.round(attempt.rate)}%`}</strong><small>{attempt.attempted}/{attempt.total || '—'} attempted / total</small></NotebookCard></div>
-    <NotebookCard className="test-history-board">
+    <PageHeader layoutId="tests.header" title="Test history" doodle={<ChartNoAxesCombined size={20} />} action={<Button onClick={() => { setEditing(null); setPresetChapterId(null); setCreating(true) }}><Plus size={17} /> Add test</Button>} />
+    {!sl.hidden('summary') && <div {...sl.attrs('summary')} className="test-summary-grid"><NotebookCard className="test-summary-card"><span>TESTS LOGGED</span><strong>{data.tests.length}</strong><small>Across every practice type</small></NotebookCard><NotebookCard className="test-summary-card"><span>AVERAGE SCORE</span><strong>{averageScore === null ? '—' : `${Math.round(averageScore)}%`}</strong><small>{average.count ? `Mean of ${average.count} usable test result${average.count === 1 ? '' : 's'}; one test counts once` : 'No usable scores in this view'}</small></NotebookCard><NotebookCard className="test-summary-card"><span>ACCURACY</span><strong>{accuracy.rate === null ? '—' : `${Math.round(accuracy.rate)}%`}</strong><small>{accuracy.correct}/{accuracy.attempted || '—'} correct / attempted</small></NotebookCard><NotebookCard className="test-summary-card"><span>ATTEMPT RATE</span><strong>{attempt.rate === null ? '—' : `${Math.round(attempt.rate)}%`}</strong><small>{attempt.attempted}/{attempt.total || '—'} attempted / total</small></NotebookCard></div>}
+    <NotebookCard {...sl.attrs('board')} className="test-history-board">
       <div className="test-board-top"><div><span className="handwriting-label">Every attempt matters</span><p>{sortedTests.length} test{sortedTests.length === 1 ? '' : 's'} in view</p></div><div className="test-board-doodle" aria-hidden="true">∿✦</div></div>
       <div className="test-filter-row">
         <div className="search-field"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search title, notes or chapter…" aria-label="Search tests" />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div>

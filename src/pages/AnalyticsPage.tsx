@@ -22,6 +22,7 @@ import { cachedDateFormat, prettyDate } from '../lib/date'
 import { fmtDuration, fmtNumber } from '../lib/format'
 import { makeStudyBars, makeStudyHeatmap } from '../lib/study-aggregation'
 import { subjectColor } from '../lib/exams/subjects'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 
 /** Calendar ticks for the time-based trend axis, in the Indian format Stracker uses. */
@@ -83,6 +84,7 @@ function saveTrendRange(userId: string, range: string) {
 }
 
 export default function AnalyticsPage() {
+  const sl = usePageSlots('analytics')
   const { data } = useData()
   const { user } = useAuth()
   const { notify } = useToast()
@@ -146,10 +148,10 @@ export default function AnalyticsPage() {
   }
 
   return <div className="content-page analytics-page">
-    <PageHeader title="Analytics" subtitle="Only from data you entered." doodle={<Activity size={20} />} action={<Button variant="secondary" onClick={downloadChartCsv}><BarChart3 size={16} /> Export trend CSV</Button>} />
+    <PageHeader layoutId="analytics.header" title="Analytics" subtitle="Only from data you entered." doodle={<Activity size={20} />} action={<Button variant="secondary" onClick={downloadChartCsv}><BarChart3 size={16} /> Export trend CSV</Button>} />
     <WeeklyReportCard />
     <LearningPipelineCard />
-    <div className="analytics-kpi-grid"><NotebookCard className="analytics-kpi"><span><Activity size={15} /> TESTS LOGGED</span><strong>{data.tests.length}</strong><small>{overallAverage.count} with usable test results</small></NotebookCard><NotebookCard className="analytics-kpi"><span><BookOpen size={15} /> SYLLABUS</span><strong>{totalChapters ? <>{doneChapters}<span className="kpi-denominator">/{totalChapters}</span></> : '—'}</strong><small>{totalChapters ? `${Math.round(doneChapters / totalChapters * 100)}% chapters completed` : 'No chapters saved'}</small></NotebookCard><NotebookCard className="analytics-kpi"><span><Clock3 size={15} /> STUDY HOURS</span><strong>{fmtNumber(data.sessions.reduce((sum, session) => sum + session.duration_minutes, 0) / 60, 1)}</strong><small>{data.sessions.length} logged focus session{data.sessions.length === 1 ? '' : 's'}</small></NotebookCard><NotebookCard className="analytics-kpi"><span><Target size={15} /> TEST AVERAGE</span><strong>{averageScore === null ? '—' : `${Math.round(averageScore)}%`}</strong><small>{overallAverage.count ? `Mean of ${overallAverage.count} usable test result${overallAverage.count === 1 ? '' : 's'}; one test counts once` : 'Add a scored test to begin'}</small></NotebookCard></div>
+    <div {...sl.attrs('kpis')} className="analytics-kpi-grid"><NotebookCard className="analytics-kpi"><span><Activity size={15} /> TESTS LOGGED</span><strong>{data.tests.length}</strong><small>{overallAverage.count} with usable test results</small></NotebookCard><NotebookCard className="analytics-kpi"><span><BookOpen size={15} /> SYLLABUS</span><strong>{totalChapters ? <>{doneChapters}<span className="kpi-denominator">/{totalChapters}</span></> : '—'}</strong><small>{totalChapters ? `${Math.round(doneChapters / totalChapters * 100)}% chapters completed` : 'No chapters saved'}</small></NotebookCard><NotebookCard className="analytics-kpi"><span><Clock3 size={15} /> STUDY HOURS</span><strong>{fmtNumber(data.sessions.reduce((sum, session) => sum + session.duration_minutes, 0) / 60, 1)}</strong><small>{data.sessions.length} logged focus session{data.sessions.length === 1 ? '' : 's'}</small></NotebookCard><NotebookCard className="analytics-kpi"><span><Target size={15} /> TEST AVERAGE</span><strong>{averageScore === null ? '—' : `${Math.round(averageScore)}%`}</strong><small>{overallAverage.count ? `Mean of ${overallAverage.count} usable test result${overallAverage.count === 1 ? '' : 's'}; one test counts once` : 'Add a scored test to begin'}</small></NotebookCard></div>
 
     {data.tests.length === 0 && <SamplePreviewCard onAddTest={() => navigate('/tests?add=1')} />}
 
@@ -180,7 +182,7 @@ export default function AnalyticsPage() {
       {renderCard('target')}
     </div>
 
-    <div className="analytics-insight-row"><NotebookCard className="analytics-insight-card"><span className="insight-pencil">✎</span><div><span className="eyebrow">CHAPTER SIGNALS</span><p><strong>{chapterRows.filter(item => item.classification === 'Untested').length}</strong> untested · <strong>{chapterRows.filter(item => item.classification === 'Weak').length}</strong> weak · <strong>{chapterRows.filter(item => item.dropping).length}</strong> dropping</p></div><button onClick={() => navigate('/weak-areas')}>See weak areas ↗</button></NotebookCard></div>
+    {!sl.hidden('insights') && <div {...sl.attrs('insights')} className="analytics-insight-row"><NotebookCard className="analytics-insight-card"><span className="insight-pencil">✎</span><div><span className="eyebrow">CHAPTER SIGNALS</span><p><strong>{chapterRows.filter(item => item.classification === 'Untested').length}</strong> untested · <strong>{chapterRows.filter(item => item.classification === 'Weak').length}</strong> weak · <strong>{chapterRows.filter(item => item.dropping).length}</strong> dropping</p></div><button onClick={() => navigate('/weak-areas')}>See weak areas ↗</button></NotebookCard></div>}
   </div>
 }
 

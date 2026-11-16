@@ -15,6 +15,7 @@ import { MAX_INPUT_DATE, MIN_INPUT_DATE, isValidInputDate } from '../lib/date-in
 import { fmtDuration, fmtNumber } from '../lib/format'
 import type { DailyTask, GoalType, Priority, Subject, WeeklyGoal } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 const goalTypes: { type: GoalType; title: string; unit: string }[] = [
   { type: 'study_hours', title: 'Study hours', unit: 'hours' }, { type: 'tests', title: 'Tests', unit: 'tests' },
@@ -25,6 +26,7 @@ const monday = (date: string) => format(startOfWeek(parseISO(`${date}T12:00:00`)
 const weekDays = (start: string) => Array.from({ length: 7 }, (_, index) => format(addDays(parseISO(`${start}T12:00:00`), index), 'yyyy-MM-dd'))
 
 export default function PlannerPage() {
+  const sl = usePageSlots('planner')
   const { data, upsert, upsertMany, remove } = useData()
   const { notify } = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -137,8 +139,8 @@ export default function PlannerPage() {
   const doneTotal = tasks.filter(task => task.is_completed).length
 
   return <div className="content-page planner-page">
-    <PageHeader title="Planner" doodle={<CalendarDays size={19} />} action={<Button onClick={() => { setEditingTask(null); setTaskDialog(true) }}><Plus size={17} /> Add task</Button>} />
-    <div className="planner-main-grid">
+    <PageHeader layoutId="planner.header" title="Planner" doodle={<CalendarDays size={19} />} action={<Button onClick={() => { setEditingTask(null); setTaskDialog(true) }}><Plus size={17} /> Add task</Button>} />
+    <div {...sl.attrs('grid')} className="planner-main-grid">
       <div className="planner-primary">
         <NotebookCard className="week-card">
           <div className="week-card-head"><div><span className="handwriting-label">This week, on paper</span><p>{prettyDate(weekStart, { day: 'numeric', month: 'short' })} – {prettyDate(format(endOfWeek(parseISO(`${weekStart}T12:00:00`), { weekStartsOn: 1 }), 'yyyy-MM-dd'), { day: 'numeric', month: 'short', year: 'numeric' })}</p></div><div className="week-arrows"><button onClick={() => moveWeek(-1)} aria-label="Previous week"><ArrowLeft size={17} /></button><button onClick={() => selectWeek(monday(indiaToday()))}>This week</button><button onClick={() => moveWeek(1)} aria-label="Next week"><ArrowRight size={17} /></button><input type="date" className="planner-jump-date" aria-label="Jump to date" title="Jump to any date" min={MIN_INPUT_DATE} max={MAX_INPUT_DATE} value={selectedDate} onChange={event => jumpToDate(event.target.value)} /></div></div>

@@ -4,6 +4,7 @@ import { useExit } from '../lib/ui/use-exit'
 import { ArrowUpRight, Check, Info, LoaderCircle, MoreHorizontal, Sparkles, X } from 'lucide-react'
 import type { Subject } from '../types'
 import { subjectSlug } from '../lib/exams/subjects'
+import { useLayoutSlot } from '../lib/student-layout/use-layout'
 
 export function Button({
   children, variant = 'primary', size = 'md', className = '', loading = false, type = 'button', ...props
@@ -26,12 +27,15 @@ export function NotebookCard({ children, className = '', accent, style, ...props
 }
 
 export function PageHeader({
-  eyebrow, title, subtitle, action, doodle, layoutAttrs
-}: { eyebrow?: string; title: string; subtitle?: string; action?: ReactNode; doodle?: ReactNode; layoutAttrs?: Record<string, string> }) {
-  return <div className="page-header" {...layoutAttrs}>
+  eyebrow, title, subtitle, action, doodle, layoutAttrs, layoutId
+}: { eyebrow?: string; title: string; subtitle?: string; action?: ReactNode; doodle?: ReactNode; layoutAttrs?: Record<string, string>; layoutId?: string }) {
+  // `layoutId`: registered Student Dashboard Editor header; only static wording is overridable.
+  const slot = useLayoutSlot(layoutId ?? '')
+  const attrs = layoutId ? slot.attrs : layoutAttrs
+  return <div className="page-header" {...attrs}>
     <div className="page-header-copy">
-      {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-      <h1 className="type-h1">{title}{doodle && <span className="title-doodle" aria-hidden="true">{doodle}</span>}{subtitle && <InfoTip text={subtitle} />}</h1>
+      {eyebrow && <div className="eyebrow">{layoutId ? slot.text('eyebrow', eyebrow) : eyebrow}</div>}
+      <h1 className="type-h1">{layoutId ? slot.text('title', title) : title}{doodle && <span className="title-doodle" aria-hidden="true">{doodle}</span>}{subtitle && <InfoTip text={layoutId ? slot.t('subtitle', subtitle) : subtitle} />}</h1>
     </div>
     {action && <div className="page-header-action">{action}</div>}
   </div>

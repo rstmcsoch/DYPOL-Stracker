@@ -42,3 +42,32 @@ describe('student layout edits', () => {
     expect(compactLayout(clearStyles(doc, 'home.tip', 'mobile')).components?.['home.tip']?.responsive).toBeUndefined()
   })
 })
+
+describe('navigation and tokens', () => {
+  it('reorders groups and items and compacts back to the default', async () => {
+    const { moveNavGroup, moveNavItem, navGroupsOf, navItemsOf, toggleNavHidden } = await import('./layout-ops')
+    const moved = moveNavGroup(EMPTY_LAYOUT, 'tests', -1)!
+    expect(navGroupsOf(moved).slice(0, 3)).toEqual(['study', 'tests', 'syllabus'])
+    expect(checkStudentLayout(moved).problems).toEqual([])
+    expect(moveNavGroup(moved, 'tests', 1)!.nav).toBeUndefined()
+    expect(moveNavGroup(EMPTY_LAYOUT, 'study', -1)).toBeNull()
+    const item = moveNavItem(EMPTY_LAYOUT, 'study', '/backlog', -1)!
+    expect(navItemsOf(item, 'study')).toEqual(['/', '/backlog', '/focus', '/practice'])
+    expect(checkStudentLayout(item).problems).toEqual([])
+    const hidden = toggleNavHidden(EMPTY_LAYOUT, '/pyqs')!
+    expect(hidden.nav?.hidden).toEqual(['/pyqs'])
+    expect(toggleNavHidden(hidden, '/pyqs')!.nav).toBeUndefined()
+    expect(toggleNavHidden(EMPTY_LAYOUT, '/')).toBeNull()
+    expect(toggleNavHidden(EMPTY_LAYOUT, '/settings')).toBeNull()
+    expect(toggleNavHidden(EMPTY_LAYOUT, '/control-panel')).toBeNull()
+  })
+
+  it('sets and clears tokens that the validator accepts', async () => {
+    const { setToken } = await import('./layout-ops')
+    const doc = setToken(setToken(EMPTY_LAYOUT, 'light:accent', '#225588'), 'radius', '14px')
+    expect(doc.tokens).toEqual({ 'light:accent': '#225588', radius: '14px' })
+    expect(checkStudentLayout(doc).problems).toEqual([])
+    expect(checkStudentLayout(setToken(EMPTY_LAYOUT, 'accent', '#225588')).problems.length).toBeGreaterThan(0)
+    expect(setToken(setToken(doc, 'light:accent', null), 'radius', null).tokens).toBeUndefined()
+  })
+})
