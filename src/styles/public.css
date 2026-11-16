@@ -1617,8 +1617,28 @@ html[data-app-font='active'] .pub-page .pub-footer-wordmark {
 .pub-section-promo.promo-aspect-square { --promo-ratio: 1; --promo-aspect: 1 / 1; }
 .pub-section-promo.promo-aspect-landscape { --promo-ratio: 1.7778; --promo-aspect: 16 / 9; }
 .pub-section-promo .promo-video-frame {
-  width: min(100%, calc(var(--promo-height-budget) * var(--promo-ratio) * var(--promo-scale)));
+  /* 1.05: the resting frame is 5% larger than the original presets (t166). */
+  width: min(100%, calc(var(--promo-height-budget) * var(--promo-ratio) * var(--promo-scale) * 1.05));
   aspect-ratio: var(--promo-aspect);
+  container-type: inline-size;
+  transform-origin: 50% 50%;
+}
+
+/* Scroll-linked reveal: the frame grows from 65% to its full size while it enters the viewport
+   (top edge at the bottom of the screen → whole frame visible; a frame taller than the screen
+   reaches 100% once it fills it), then stays at 100% and reverses on the way back up.
+   Its layout box is always the full size, so nothing around it moves; only `transform` animates,
+   which runs on the compositor. Browsers without scroll-driven animations get the same effect
+   from home-motion.ts; reduced-motion visitors get the static full-size frame. */
+@keyframes promo-grow { from { transform: scale(.65); } to { transform: scale(1); } }
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .pub-section-promo .promo-video-frame {
+      animation: promo-grow linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 100%;
+    }
+  }
 }
 .pub-section-promo.promo-aspect-landscape .promo-video-frame { max-width: 960px; }
 .pub-section-promo .promo-head { margin-bottom: clamp(18px, 3vw, 28px); }

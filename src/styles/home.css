@@ -1033,19 +1033,22 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
 }
 .pub-hp .promo-play-toggle:hover,
 .pub-hp .promo-mute-toggle:hover { background: var(--hp-yellow); }
+/* Centred along the bottom edge, clear of the centred play button and the top-right mute button. */
 .pub-hp .promo-badge {
   position: absolute;
-  left: 14px;
+  left: 50%;
   bottom: 16px;
   z-index: 2;
-  max-width: calc(100% - 84px);
-  padding: 4px 12px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 4px clamp(6px, 4cqi, 12px);
   border: 1px solid #1c2433;
   border-radius: 999px;
   color: #1c2433;
   background: #ffffff;
   --font-public: var(--hp-hand);
-  font-size: 1rem;
+  /* Shrinks with a narrow frame so the full label always fits on one line. */
+  font-size: clamp(.5rem, 6.2cqi, 1rem);
   line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;

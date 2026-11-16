@@ -42,6 +42,25 @@ export function burstConfetti(host: HTMLElement, count: number) {
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value))
 
+/** Smallest scale of the promo frame, when its top edge is at the bottom of the viewport. */
+export const PROMO_START_SCALE = .65
+
+export function supportsViewTimeline(): boolean {
+  return typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('animation-timeline', 'view()')
+}
+
+/**
+ * Same curve as the CSS `animation-range: entry` version: 65% when the frame's top touches the
+ * viewport bottom, 100% once the whole frame is visible (or, for a frame taller than the
+ * viewport, once it fills it), and 100% from then on.
+ */
+export function promoScale(top: number, height: number, viewport: number): number {
+  const end = Math.max(0, viewport - height)
+  const span = viewport - end
+  const progress = span > 0 ? clamp01((viewport - top) / span) : 1
+  return PROMO_START_SCALE + (1 - PROMO_START_SCALE) * progress
+}
+
 export function useHomeMotion(rootRef: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const root = rootRef.current
@@ -74,6 +93,10 @@ export function useHomeMotion(rootRef: RefObject<HTMLElement | null>) {
     const stepFill = q('.hp-steps-fill')
     const wordmark = q('.pub-footer-wordmark')
     const wordWindow = q('.pub-footer-wordmark-window')
+    // Promo frame scale-on-scroll fallback, only where CSS scroll-driven animations are missing.
+    // (Looked up lazily: the owner-controlled section can mount after this effect.)
+    const promoFallback = !reduce && !supportsViewTimeline()
+    let promoFrame: HTMLElement | null = null
     const navLinks = Array.from(root.querySelectorAll<HTMLAnchorElement>('.pub-nav-link[href^="#"]'))
     const navTargets = navLinks.map(link => document.getElementById(link.hash.slice(1)))
 
@@ -97,6 +120,17 @@ export function useHomeMotion(rootRef: RefObject<HTMLElement | null>) {
           const stepRect = step.getBoundingClientRect()
           step.classList.toggle('is-reached', reduce || stepRect.top < vh * .62)
         })
+      }
+
+      if (promoFallback && !promoFrame?.isConnected) {
+        promoFrame = q('.pub-section-promo .promo-video-frame')
+        if (promoFrame) promoFrame.style.willChange = 'transform'
+      }
+      const promoBox = promoFrame?.parentElement
+      if (promoFrame && promoBox) {
+        // Measured on the untransformed parent (same box as the frame) so the scale never feeds back.
+        const rect = promoBox.getBoundingClientRect()
+        if (rect.top < vh * 2 && rect.bottom > -vh) promoFrame.style.transform = `scale(${promoScale(rect.top, rect.height, vh).toFixed(4)})`
       }
 
       if (!reduce) {
@@ -142,6 +176,7 @@ export function useHomeMotion(rootRef: RefObject<HTMLElement | null>) {
       window.removeEventListener('scroll', request)
       window.removeEventListener('resize', request)
       navLinks.forEach(link => { link.classList.remove('is-active'); link.removeAttribute('aria-current') })
+      if (promoFrame) { promoFrame.style.transform = ''; promoFrame.style.willChange = '' }
     })
     frame()
 
