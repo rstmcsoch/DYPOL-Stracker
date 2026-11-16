@@ -15,3 +15,4 @@
 .se-student .le-nav-row.is-hidden > span:first-child { opacity: .5; text-decoration: line-through; }
 .se-student .le-token .le-inline { align-items: center; gap: 8px; }
 .se-student .le-token input[type='color'] { width: 44px; height: 36px; padding: 0; border: 0; background: none; }
+.se-student .le-view-state { max-width: 220px; }
