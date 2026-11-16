@@ -172,6 +172,26 @@
       "destination": "/api/control/operations?route=media"
     },
     {
+      "source": "/api/control/student-layout-state",
+      "destination": "/api/control/operations?route=sl-state"
+    },
+    {
+      "source": "/api/control/student-layout-draft",
+      "destination": "/api/control/operations?route=sl-draft"
+    },
+    {
+      "source": "/api/control/student-layout-discard",
+      "destination": "/api/control/operations?route=sl-discard"
+    },
+    {
+      "source": "/api/control/student-layout-publish",
+      "destination": "/api/control/operations?route=sl-publish"
+    },
+    {
+      "source": "/api/control/student-layout-restore",
+      "destination": "/api/control/operations?route=sl-restore"
+    },
+    {
       "source": "/api/control/exams",
       "destination": "/api/control/operations?route=exams"
     },

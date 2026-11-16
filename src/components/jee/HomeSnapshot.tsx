@@ -16,7 +16,7 @@ import type { ActivityMinutes } from '../../lib/jee/study-time'
  * split, streak with its rule, raw vs weighted progress, PYQ and practice numbers, the
  * exam countdown for the active track, and any reminders that apply right now.
  */
-export function HomeSnapshot() {
+export function HomeSnapshot({ layoutAttrs }: { layoutAttrs?: Record<string, string> } = {}) {
   const { data } = useData()
   const navigate = useNavigate()
   const today = indiaToday()
@@ -34,7 +34,7 @@ export function HomeSnapshot() {
   const jee = isJeeSettings(data.settings)
   const reminders = computeReminders(data, today)
 
-  return <section className="jee-snapshot" aria-label="Study snapshot">
+  return <section className="jee-snapshot" aria-label="Study snapshot" {...layoutAttrs}>
     <NotebookCard className="jee-snap-card jee-snap-study">
       <div className="jee-snap-head"><span className="eyebrow">TODAY</span><button type="button" className="jee-link" onClick={() => navigate('/focus')}>Focus <ArrowUpRight size={13} aria-hidden="true" /></button></div>
       <SplitRow minutes={todayMinutes} empty="Nothing recorded yet today" />

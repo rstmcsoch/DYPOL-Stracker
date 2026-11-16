@@ -4,6 +4,7 @@ import auditHandler from '../_lib/control-routes/audit.js'
 import useraccessHandler from '../_lib/control-routes/user-access.js'
 import { draftHandler, discardHandler, publishHandler, restoreHandler, stateHandler } from '../_lib/control-routes/appearance.js'
 import { mediaUploadHandler } from '../_lib/control-routes/media.js'
+import { studentLayoutDiscardHandler, studentLayoutDraftHandler, studentLayoutPublishHandler, studentLayoutRestoreHandler, studentLayoutStateHandler } from '../_lib/control-routes/student-layout.js'
 import { examsHandler } from '../_lib/control-routes/exams.js'
 import { analyticsIngestHandler } from '../_lib/control-routes/analytics-ingest.js'
 import { analyticsHandler } from '../_lib/control-routes/analytics.js'
@@ -22,6 +23,12 @@ const handlers: Record<string, Handler> = {
   publish: publishHandler,
   restore: restoreHandler,
   media: mediaUploadHandler,
+  // Student Dashboard Editor (separate draft/publish/version tables from the public site).
+  'sl-state': studentLayoutStateHandler,
+  'sl-draft': studentLayoutDraftHandler,
+  'sl-discard': studentLayoutDiscardHandler,
+  'sl-publish': studentLayoutPublishHandler,
+  'sl-restore': studentLayoutRestoreHandler,
   exams: examsHandler,
   // Public write-only event intake for first-party analytics (no auth; allowlisted, rate limited).
   'analytics-ingest': analyticsIngestHandler,

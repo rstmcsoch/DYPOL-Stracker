@@ -15,7 +15,7 @@ export function useStudyNow(): StudyNowResult {
 }
 
 /** The signature recommendation. Reasons are shown by default in compact mode and always available behind "Why?". */
-export function StudyNowCard({ compact = false }: { compact?: boolean }) {
+export function StudyNowCard({ compact = false, layoutAttrs }: { compact?: boolean; layoutAttrs?: Record<string, string> }) {
   const result = useStudyNow()
   const navigate = useNavigate()
   const [showWhy, setShowWhy] = useState(false)
@@ -32,7 +32,7 @@ export function StudyNowCard({ compact = false }: { compact?: boolean }) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [showWhy, whyButtonId])
-  return <NotebookCard className="study-now-card accent-blue" aria-labelledby="study-now-heading">
+  return <NotebookCard className="study-now-card accent-blue" aria-labelledby="study-now-heading" {...layoutAttrs}>
     <div className="study-now-top">
       <span className="study-now-kicker"><Compass size={15} aria-hidden="true" /> PLANNING</span>
       {result.examMode && <StatusBadge tone="weak"><Flame size={12} aria-hidden="true" /> Exam Mode{result.examLabel ? ` · ${result.examLabel}` : ''}</StatusBadge>}

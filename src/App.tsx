@@ -10,6 +10,7 @@ import { SiteContentProvider } from './contexts/SiteContentContext'
 import { DataProvider } from './contexts/DataContext'
 import { AIProvider } from './contexts/AIContext'
 import { FocusProvider } from './contexts/FocusContext'
+import { StudentLayoutProvider } from './contexts/StudentLayoutContext'
 import { ToastProvider } from './contexts/ToastContext'
 import { AppFrame } from './components/AppShell'
 import { AccountNoticeGate } from './components/AccountNoticeGate'
@@ -78,7 +79,7 @@ function ProtectedApp() {
     <AIProvider>
       <AppearanceProvider>
         <FocusProvider key={user.id}>
-          <AppFrame />
+          <StudentLayoutProvider><AppFrame /></StudentLayoutProvider>
         </FocusProvider>
       </AppearanceProvider>
     </AIProvider>

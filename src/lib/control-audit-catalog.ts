@@ -65,6 +65,18 @@ export const AUDIT_ACTIONS: readonly AuditActionDefinition[] = [
     group: 'Appearance',
     sentence: { success: 'Restored an earlier published version', denied: 'Restore refused', failed: 'Restore failed' }
   },
+  {
+    action: 'student_layout.publish',
+    label: 'Student dashboard layout published',
+    group: 'Appearance',
+    sentence: { success: 'Published the student dashboard layout', denied: 'Publishing the student dashboard layout refused', failed: 'Publishing the student dashboard layout failed' }
+  },
+  {
+    action: 'student_layout.restore',
+    label: 'Student dashboard layout restored',
+    group: 'Appearance',
+    sentence: { success: 'Restored an earlier student dashboard layout', denied: 'Restoring a student dashboard layout refused', failed: 'Restoring a student dashboard layout failed' }
+  },
   { action: 'exam.create', label: 'Exam added', group: 'Exams', sentence: { success: 'Added exam {target}', denied: 'Adding exam {target} refused', failed: 'Adding exam {target} failed' } },
   { action: 'exam.update', label: 'Exam edited', group: 'Exams', sentence: { success: 'Edited exam {target}', denied: 'Editing exam {target} refused', failed: 'Editing exam {target} failed' } },
   { action: 'exam.hide', label: 'Exam removed', group: 'Exams', sentence: { success: 'Removed exam {target} from the list', denied: 'Removing exam {target} refused', failed: 'Removing exam {target} failed' } },
