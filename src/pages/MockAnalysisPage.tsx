@@ -11,8 +11,10 @@ import { categoryTotals, checkLostMarks, mockInsights, mockSummary, subjectTimeR
 import { validateErrorLog, type ErrorLogFormInput, type ErrorLogValue } from '../lib/jee/forms'
 import { ERROR_CATEGORIES, type AppData, type ErrorCategory, type Subject, type TestErrorLog, type TestRecord, type TestTimeEntry } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 export default function MockAnalysisPage() {
+  const sl = usePageSlots('mock-analysis')
   const { data, upsert, upsertMany, remove } = useData()
   const { notify } = useToast()
   const navigate = useNavigate()
@@ -42,12 +44,12 @@ export default function MockAnalysisPage() {
   }
 
   return <div className="content-page mock-analysis-page">
-    <PageHeader
+    <PageHeader layoutId="mock-analysis.header"
       title="Mock analysis"
       subtitle="Recorded, classified and derived data, kept separate."
     />
 
-    <NotebookCard className="jee-filter-card">
+    <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
       <label className="jee-select"><span>Test</span>
         <select value={selected.id} onChange={event => choose(event.target.value)}>
           {tests.map(test => <option key={test.id} value={test.id}>{prettyDate(test.test_date)} · {test.title} · {test.test_type}</option>)}
@@ -61,7 +63,7 @@ export default function MockAnalysisPage() {
       </div>
     </NotebookCard>
 
-    <section className="jee-analysis-grid">
+    <section {...sl.attrs('analysis')} className="jee-analysis-grid">
       <div className="jee-analysis-col">
         <SectionHeading title="Recorded time & attempts" note="Only what you entered. Missing values stay blank." action={<Button variant="secondary" size="sm" onClick={() => setTiming(true)}><Clock3 size={15} /> {hasRecordedTime ? 'Edit' : 'Add'} time</Button>} />
         <NotebookCard>

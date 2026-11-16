@@ -11,11 +11,13 @@ import { createId } from '../lib/id'
 import type { Mistake, MistakeType, Subject } from '../types'
 import { useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
 import { mistakeSubjectOptions } from '../lib/exams/subjects'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 const MISTAKE_TYPES: MistakeType[] = ['Concept', 'Silly', 'Calculation', 'Time', 'Guess']
 const mistakeSchema = z.object({ chapter_id: z.string().uuid(), mistake_type: z.enum(['Concept','Silly','Calculation','Time','Guess']), question_note: z.string().trim().min(1).max(10000), solution_note: z.string().max(10000) })
 
 export default function MistakesPage() {
+  const sl = usePageSlots('mistakes')
   const subjectList = useReportSubjects()
   const { data, upsert, remove } = useData()
   const { notify } = useToast()
@@ -71,9 +73,9 @@ export default function MistakesPage() {
   }
 
   return <div className="content-page mistakes-page">
-    <PageHeader title="Mistake notebook" doodle={<span>✎</span>} action={<Button onClick={() => { setEditing(null); setDialogOpen(true) }}><CirclePlus size={17} /> Add a mistake</Button>} />
-    <div className="mistake-overview-row"><NotebookCard className="mistake-stat-note"><div className="mistake-stat-icon"><NotebookPen size={18} /></div><div><strong>{data.mistakes.length}</strong><span>notes in your notebook</span></div><span className="note-corner-doodle">✦</span></NotebookCard><NotebookCard className="mistake-stat-note retry-stat"><div className="mistake-stat-icon"><RotateCcw size={18} /></div><div><strong>{data.mistakes.filter(item => item.retry_later && item.retry_status === 'pending').length}</strong><span>ready to retry</span></div><button onClick={() => navigate('/retry')}>Open retry list <ArrowUpRight size={14} /></button></NotebookCard><NotebookCard className="mistake-stat-note mistake-stat-help"><AlertTriangle size={17} /><p>Record the <em>why</em> as carefully as the answer. Patterns emerge with practice.</p></NotebookCard></div>
-    <NotebookCard className="mistake-board">
+    <PageHeader layoutId="mistakes.header" title="Mistake notebook" doodle={<span>✎</span>} action={<Button onClick={() => { setEditing(null); setDialogOpen(true) }}><CirclePlus size={17} /> Add a mistake</Button>} />
+    {!sl.hidden('overview') && <div {...sl.attrs('overview')} className="mistake-overview-row"><NotebookCard className="mistake-stat-note"><div className="mistake-stat-icon"><NotebookPen size={18} /></div><div><strong>{data.mistakes.length}</strong><span>notes in your notebook</span></div><span className="note-corner-doodle">✦</span></NotebookCard><NotebookCard className="mistake-stat-note retry-stat"><div className="mistake-stat-icon"><RotateCcw size={18} /></div><div><strong>{data.mistakes.filter(item => item.retry_later && item.retry_status === 'pending').length}</strong><span>ready to retry</span></div><button onClick={() => navigate('/retry')}>Open retry list <ArrowUpRight size={14} /></button></NotebookCard><NotebookCard className="mistake-stat-note mistake-stat-help"><AlertTriangle size={17} /><p>Record the <em>why</em> as carefully as the answer. Patterns emerge with practice.</p></NotebookCard></div>}
+    <NotebookCard {...sl.attrs('board')} className="mistake-board">
       <div className="mistake-toolbar"><div className="search-field"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search question notes…" aria-label="Search mistake notes" />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div><select aria-label="Filter subject" value={subject} onChange={event => setSubject(event.target.value as 'all' | Subject)}><option value="all">All subjects</option>{subjectList.map(item => <option key={item}>{item}</option>)}</select><select aria-label="Filter mistake type" value={type} onChange={event => setType(event.target.value as 'all' | MistakeType)}><option value="all">All mistake types</option>{MISTAKE_TYPES.map(item => <option key={item}>{item}</option>)}</select><select aria-label="Filter retry status" value={retryFilter} onChange={event => setRetryFilter(event.target.value as 'all' | 'retry' | 'resolved')}><option value="all">All entries</option><option value="retry">Retry list</option><option value="resolved">Retried</option></select></div>
       {filtered.length === 0 ? <EmptyState icon={<NotebookPen size={25} />} title={data.mistakes.length ? 'No notes match.' : 'No mistakes logged yet.'} action={<Button variant="secondary" size="sm" onClick={() => data.mistakes.length ? (setSearch(''), setSubject('all'), setType('all'), setRetryFilter('all')) : setDialogOpen(true)}>{data.mistakes.length ? 'Clear filters' : <><CirclePlus size={15} /> Add your first note</>}</Button>} /> : <div className="mistake-card-grid">{filtered.map(mistake => {
         const chapter = data.chapters.find(item => item.id === mistake.chapter_id)

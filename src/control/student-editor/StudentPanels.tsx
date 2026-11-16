@@ -47,7 +47,7 @@ export function LayersPanel({ page, document, selected, actions }: { page: Stude
   return <div className="le-layers">
     <ul className="le-layers__list" role="tree" aria-label="Page parts">{render(root, 0, [root])}</ul>
     <p className="le-hint">Only presentation can change here. Parts marked <Lock size={10} aria-hidden="true" /> data show each student’s own records, which stay live and are never editable. Required parts cannot be hidden.</p>
-    {page !== 'home' && page !== 'shell' && <p className="le-hint">This page is editable at page level (spacing, width, colours) in this version; its individual cards follow in the next update.</p>}
+    {page !== 'home' && page !== 'shell' && <p className="le-hint">Page sections keep their functional order; you can restyle them, edit the page title and info tip, and hide optional sections. Section contents are live student data.</p>}
   </div>
 }
 

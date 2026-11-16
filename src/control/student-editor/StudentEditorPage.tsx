@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ArrowLeft, Eye, FileStack, History, Layers, Maximize2, Minimize2, Monitor, Moon, MousePointer2, RefreshCw, Save, Settings2, Smartphone, Sun, Tablet, Undo2, Redo2, Upload, X
+  ArrowLeft, Eye, FileStack, History, Image, Layers, Palette, Maximize2, Minimize2, Monitor, Moon, MousePointer2, RefreshCw, Save, Settings2, Smartphone, Sun, Tablet, Undo2, Redo2, Upload, X
 } from 'lucide-react'
 import { Button } from '../ui'
 import { controlFetch } from '../api'
@@ -10,9 +10,10 @@ import { APPEARANCE_QUERY_KEY, type AppearanceState } from '../appearance/Conten
 import { COMPONENT_MAP, STUDENT_PAGES, type StudentPageId } from '../../lib/student-layout/registry'
 import { layoutProblemsToErrors } from '../../lib/student-layout/validate'
 import { PREVIEW_SCENARIOS, type PreviewScenarioId } from './fixtures'
-import { clearStyles, moveBy, resetComponent, setProp, setStyle, setText, toggleHidden, toggleLocked, configOf, type Device } from './layout-ops'
+import { clearStyles, moveBy, resetComponent, setProp, setStyle, setText, toggleHidden, toggleLocked, configOf, moveNavGroup, moveNavItem, setToken, toggleNavHidden, type Device } from './layout-ops'
 import { HistoryPanel, LayersPanel, PagesPanel } from './StudentPanels'
 import { StudentInspector } from './StudentInspector'
+import { AssetsPanel, NavigationEditor, TokensPanel } from './ShellPanels'
 import { LOCKED_TEXT } from './editor-model'
 import { STUDENT_CANVAS_PATH, isStudentCanvasMessage, type StudentCanvasMessage, type StudentCanvasState } from './protocol'
 import { useStudentEditorState, type SaveStatus } from './useStudentEditorState'
@@ -33,9 +34,10 @@ const VIEWPORTS: Record<Viewport, { label: string; width: number; icon: typeof M
   tablet: { label: 'Tablet portrait 820', width: 820, icon: Tablet },
   mobile: { label: 'Phone 390', width: 390, icon: Smartphone }
 }
-type LeftTab = 'layers' | 'pages' | 'history'
+type LeftTab = 'layers' | 'pages' | 'theme' | 'assets' | 'history'
 const LEFT_TABS: Array<{ id: LeftTab; label: string; icon: typeof Layers }> = [
-  { id: 'layers', label: 'Layers', icon: Layers }, { id: 'pages', label: 'Pages', icon: FileStack }, { id: 'history', label: 'History', icon: History }
+  { id: 'layers', label: 'Layers', icon: Layers }, { id: 'pages', label: 'Pages', icon: FileStack }, { id: 'theme', label: 'Theme', icon: Palette },
+  { id: 'assets', label: 'Assets', icon: Image }, { id: 'history', label: 'History', icon: History }
 ]
 const STATUS_TEXT: Record<SaveStatus, string> = {
   loading: 'Loading…', saved: 'Draft saved', unsaved: 'Unsaved changes', saving: 'Saving draft…', invalid: 'Fix highlighted settings', error: 'Not saved — will retry', conflict: 'Draft changed elsewhere'
@@ -178,7 +180,11 @@ export default function StudentEditorPage() {
     toggleLocked: () => selected && actions.toggleLocked(selected),
     reset: () => selected && guard(selected, () => { if (update(doc => resetComponent(doc, selected))) flash('Reset to the shipped design. Undo brings your changes back.') }),
     select: id => actions.select(id)
-  }} />
+  }} extraContent={selected === 'shell.sidebar' ? <NavigationEditor document={working} disabled={isLocked('shell.sidebar')} actions={{
+    moveGroup: (group, delta) => guard('shell.sidebar', () => { update(doc => moveNavGroup(doc, group, delta)) }),
+    moveItem: (group, route, delta) => guard('shell.sidebar', () => { update(doc => moveNavItem(doc, group, route, delta)) }),
+    toggleHidden: route => guard('shell.sidebar', () => { if (!update(doc => toggleNavHidden(doc, route))) flash('Home and Settings always stay in the menu.') })
+  }} /> : undefined} />
 
   const leftPanel = <>
     <div className="le-panel__tabs" role="tablist" aria-label="Editor panels">
@@ -187,6 +193,8 @@ export default function StudentEditorPage() {
     <div className="le-panel__body">
       {leftTab === 'layers' && <LayersPanel page={page} document={working} selected={selected} actions={{ ...actions, select: id => { actions.select(id); setSheet(null) } }} />}
       {leftTab === 'pages' && <PagesPanel page={page} document={working} onPage={goPage} />}
+      {leftTab === 'theme' && <TokensPanel tokens={working.tokens ?? {}} errors={errors} onChange={(key, value, coalesce) => { update(doc => setToken(doc, key, value), coalesce && `token.${coalesce}`) }} />}
+      {leftTab === 'assets' && <AssetsPanel />}
       {leftTab === 'history' && <HistoryPanel versions={editor.query.data?.versions ?? []} publishedVersion={editor.query.data?.published.version ?? 0} draftExists={Boolean(editor.query.data?.draft.exists)}
         onRestore={editor.restore} onDiscard={editor.discardDraft} />}
     </div>

@@ -21,6 +21,7 @@ import { ExamSelectionSection } from '../components/jee/ExamSelectionSection'
 import { ListChecks } from 'lucide-react'
 import type { AppSettings, ExtraExam, Profile, ThemeMode } from '../types'
 import { availableTracks, chosenExamTitle, isJeeSettings, trackLabels } from '../lib/jee/exam'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 type SettingsTab = 'account' | 'exam' | 'appearance' | 'rhythm' | 'data'
 
@@ -45,6 +46,7 @@ const sameSettingValue = (left: unknown, right: unknown): boolean =>
   Object.is(left, right) || JSON.stringify(left) === JSON.stringify(right)
 
 export default function SettingsPage() {
+  const sl = usePageSlots('settings')
   const { data, upsert, updateSettings } = useData()
   const jeeExam = isJeeSettings(data.settings)
   const examTitle = chosenExamTitle(data.settings)
@@ -298,9 +300,9 @@ export default function SettingsPage() {
   const auto = draft.theme === 'auto'
   const selectedReadingFont = readingFontOption(draft.interface_font)
   return <div className="content-page settings-page">
-    <PageHeader title="Settings" doodle={<SlidersHorizontal size={19} />} />
+    <PageHeader layoutId="settings.header" title="Settings" doodle={<SlidersHorizontal size={19} />} />
 
-    <div className="settings-tabs-wrap">
+    <div {...sl.attrs('tabs')} className="settings-tabs-wrap">
       <div className="settings-tabs" role="tablist" aria-label="Settings sections" onKeyDown={onTablistKeyDown}>
         {TABS.map(tab => {
           const active = activeTab === tab.id
@@ -323,7 +325,7 @@ export default function SettingsPage() {
       </div>
     </div>
 
-    <div className="settings-tab-panels">
+    <div {...sl.attrs('panels')} className="settings-tab-panels">
       {activeTab === 'account' && <div className="settings-panel" role="tabpanel" id="settings-panel-account" aria-labelledby="settings-tab-account">
         <form className="settings-form" noValidate onSubmit={event => void saveTab('account', event)}>
           <fieldset className="settings-form-fields" disabled={savingTab === 'account'}>

@@ -7,8 +7,10 @@ import { indiaDate, indiaToday, plusDays, prettyDate } from '../lib/date'
 import { completeRevision as completeRevisionAction } from '../lib/revision-actions'
 import { revisionIntervalDays, revisionIntervalLabel } from '../lib/revision-labels'
 import type { Revision } from '../types'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 export default function RevisionPage() {
+  const sl = usePageSlots('revision')
   const { data, upsert, upsertMany } = useData()
   const { notify } = useToast()
   const [showCompleted, setShowCompleted] = useState(false)
@@ -40,11 +42,11 @@ export default function RevisionPage() {
   }
 
   return <div className="content-page revision-page">
-    <PageHeader title="Revision desk" doodle={<span className="revision-title-doodle">↻</span>} action={<div className="revision-total-pill"><AlarmClock size={16} /><strong>{overdue.length + dueToday.length}</strong><span>need attention</span></div>} />
+    <PageHeader layoutId="revision.header" title="Revision desk" doodle={<span className="revision-title-doodle">↻</span>} action={<div className="revision-total-pill"><AlarmClock size={16} /><strong>{overdue.length + dueToday.length}</strong><span>need attention</span></div>} />
     {overdue.length > 0 && <RevisionSection title="Overdue" note="Oldest first." tone="overdue" icon={<Clock3 size={17} />} revisions={overdue} data={data} onComplete={complete} onSnooze={snooze} />}
-    <div className="revision-two-column"><RevisionSection title="Due today" note={dueToday.length ? `${dueToday.length} ready for a quick recall pass.` : 'Nothing due today. Keep progressing.'} tone="today" icon={<CalendarClock size={17} />} revisions={dueToday} data={data} onComplete={complete} onSnooze={snooze} /><RevisionSection title="Tomorrow" note="A little peek at what’s coming." tone="tomorrow" icon={<Sparkles size={17} />} revisions={dueTomorrow} data={data} onComplete={complete} onSnooze={snooze} /></div>
+    <div {...sl.attrs('columns')} className="revision-two-column"><RevisionSection title="Due today" note={dueToday.length ? `${dueToday.length} ready for a quick recall pass.` : 'Nothing due today. Keep progressing.'} tone="today" icon={<CalendarClock size={17} />} revisions={dueToday} data={data} onComplete={complete} onSnooze={snooze} /><RevisionSection title="Tomorrow" note="A little peek at what’s coming." tone="tomorrow" icon={<Sparkles size={17} />} revisions={dueTomorrow} data={data} onComplete={complete} onSnooze={snooze} /></div>
     <RevisionSection title="Coming up" note="Scheduled next." tone="upcoming" icon={<ArrowRight size={17} />} revisions={upcoming} data={data} onComplete={complete} onSnooze={snooze} limit={10} />
-    <NotebookCard className="revision-completed-toggle"><div><span className="completed-stamp"><CheckCheck size={16} /></span><span><strong>Recently completed</strong><small>{completed.length} revision{completed.length === 1 ? '' : 's'} in your record</small></span></div><button onClick={() => setShowCompleted(value => !value)} aria-expanded={showCompleted}>{showCompleted ? 'Hide' : 'Show'} <span aria-hidden="true">{showCompleted ? '↑' : '↓'}</span></button></NotebookCard>
+    {!sl.hidden('completed') && <NotebookCard {...sl.attrs('completed')} className="revision-completed-toggle"><div><span className="completed-stamp"><CheckCheck size={16} /></span><span><strong>Recently completed</strong><small>{completed.length} revision{completed.length === 1 ? '' : 's'} in your record</small></span></div><button onClick={() => setShowCompleted(value => !value)} aria-expanded={showCompleted}>{showCompleted ? 'Hide' : 'Show'} <span aria-hidden="true">{showCompleted ? '↑' : '↓'}</span></button></NotebookCard>}
     {showCompleted && <NotebookCard className="completed-revisions-board">{completed.length ? completed.map(revision => <RevisionRow key={revision.id} revision={revision} data={data} completed />) : <EmptyState icon={<CheckCheck size={23} />} title="No finished revisions yet." />}</NotebookCard>}
   </div>
 }

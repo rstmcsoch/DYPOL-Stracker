@@ -7,20 +7,22 @@ import { useData } from '../contexts/DataContext'
 import { indiaToday } from '../lib/date'
 import { chosenExamTitle, isJeeSettings } from '../lib/jee/exam'
 import { computeStreaks } from '../lib/jee/study-time'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 /**
  * Student profile: identity, the exam choices, and study rhythm at a glance.
  * Settings stays one tap away (gear, top right) and opens the full Settings page.
  */
 export default function ProfilePage() {
+  const sl = usePageSlots('profile')
   const { user } = useAuth()
   const { data } = useData()
   const name = data.settings.owner_name || data.profile?.display_name || user?.displayName || 'Your notebook'
   const examTitle = isJeeSettings(data.settings) ? `JEE ${data.settings.exam_year ?? ''}`.trim() : chosenExamTitle(data.settings)
   const streak = computeStreaks(data, indiaToday())
   return <div className="content-page profile-page">
-    <PageHeader eyebrow="PROFILE" title="Profile" action={<Link className="profile-gear" to="/settings" aria-label="Open settings" title="Settings"><Settings size={20} aria-hidden="true" /></Link>} />
-    <NotebookCard className="profile-card">
+    <PageHeader layoutId="profile.header" eyebrow="PROFILE" title="Profile" action={<Link className="profile-gear" to="/settings" aria-label="Open settings" title="Settings"><Settings size={20} aria-hidden="true" /></Link>} />
+    <NotebookCard {...sl.attrs('card')} className="profile-card">
       <div className="profile-identity">
         <span className="avatar-mark profile-avatar" aria-hidden="true">{(name.trim()[0] ?? 'S').toUpperCase()}</span>
         <div className="profile-identity-copy">

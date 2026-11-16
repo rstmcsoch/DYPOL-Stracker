@@ -9,3 +9,9 @@
 .se-student .le-synthetic { padding: 3px 10px; border-radius: 999px; background: #12151c; color: #fff; font: 700 11px/16px system-ui, sans-serif; letter-spacing: .06em; white-space: nowrap; }
 .se-student .le-layer__tag { display: inline-flex; gap: 2px; align-items: center; }
 .se-student .le-scenario { max-width: 220px; }
+.se-student .le-nav-groups, .se-student .le-nav-items { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.se-student .le-nav-items { padding-inline-start: 12px; }
+.se-student .le-nav-row { justify-content: space-between; align-items: center; min-height: 40px; }
+.se-student .le-nav-row.is-hidden > span:first-child { opacity: .5; text-decoration: line-through; }
+.se-student .le-token .le-inline { align-items: center; gap: 8px; }
+.se-student .le-token input[type='color'] { width: 44px; height: 36px; padding: 0; border: 0; background: none; }

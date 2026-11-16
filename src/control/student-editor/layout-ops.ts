@@ -1,4 +1,4 @@
-import { COMPONENT_MAP, STUDENT_LAYOUT_SCHEMA_VERSION } from '../../lib/student-layout/registry'
+import { COMPONENT_MAP, NAV_ALWAYS_VISIBLE, NAV_GROUPS, STUDENT_LAYOUT_SCHEMA_VERSION } from '../../lib/student-layout/registry'
 import { checkStudentLayout, type ComponentConfig, type StudentLayoutDocument } from '../../lib/student-layout/validate'
 
 /**
@@ -129,4 +129,74 @@ export function moveBy(doc: StudentLayoutDocument, id: string, delta: -1 | 1): S
 /** Resets a component's presentation (labels, options, styles, visibility) to the shipped one. */
 export function resetComponent(doc: StudentLayoutDocument, id: string): StudentLayoutDocument {
   return withConfig(doc, id, () => ({}))
+}
+
+/* ---------------------------------------------------------------- Navigation */
+
+type Nav = NonNullable<StudentLayoutDocument['nav']>
+function withNav(doc: StudentLayoutDocument, recipe: (nav: Nav) => Nav): StudentLayoutDocument {
+  const nav = recipe({ ...(doc.nav ?? {}) })
+  const out: StudentLayoutDocument = { ...doc, nav }
+  if (nav.groups && nav.groups.every((id, index) => id === NAV_GROUPS[index]?.id)) delete nav.groups
+  if (nav.items) {
+    for (const [group, list] of Object.entries(nav.items)) {
+      const defaults = NAV_GROUPS.find(entry => entry.id === group)?.routes ?? []
+      if (list.every((route, index) => route === defaults[index])) delete nav.items[group]
+    }
+    if (!Object.keys(nav.items).length) delete nav.items
+  }
+  if (nav.hidden && !nav.hidden.length) delete nav.hidden
+  if (!Object.keys(nav).length) delete out.nav
+  return out
+}
+
+export function navGroupsOf(doc: StudentLayoutDocument): string[] {
+  const ids = NAV_GROUPS.map(group => group.id)
+  const order = doc.nav?.groups
+  return order && order.length === ids.length && order.every(id => ids.includes(id)) ? [...order] : ids
+}
+export function navItemsOf(doc: StudentLayoutDocument, group: string): string[] {
+  const defaults = [...(NAV_GROUPS.find(entry => entry.id === group)?.routes ?? [])]
+  const order = doc.nav?.items?.[group]
+  return order && order.length === defaults.length && order.every(route => defaults.includes(route)) ? [...order] : defaults
+}
+
+export function moveNavGroup(doc: StudentLayoutDocument, group: string, delta: -1 | 1): StudentLayoutDocument | null {
+  const list = navGroupsOf(doc)
+  const from = list.indexOf(group)
+  const to = from + delta
+  if (from < 0 || to < 0 || to >= list.length) return null
+  ;[list[from], list[to]] = [list[to]!, list[from]!]
+  return withNav(doc, nav => ({ ...nav, groups: list }))
+}
+
+export function moveNavItem(doc: StudentLayoutDocument, group: string, route: string, delta: -1 | 1): StudentLayoutDocument | null {
+  const list = navItemsOf(doc, group)
+  const from = list.indexOf(route)
+  const to = from + delta
+  if (from < 0 || to < 0 || to >= list.length) return null
+  ;[list[from], list[to]] = [list[to]!, list[from]!]
+  return withNav(doc, nav => ({ ...nav, items: { ...(nav.items ?? {}), [group]: list } }))
+}
+
+/** Home and Settings are the only sidebar way to reach them, so they never hide. */
+export function toggleNavHidden(doc: StudentLayoutDocument, route: string): StudentLayoutDocument | null {
+  if (NAV_ALWAYS_VISIBLE.includes(route) || !NAV_GROUPS.some(group => group.routes.includes(route))) return null
+  return withNav(doc, nav => {
+    const hidden = new Set(nav.hidden ?? [])
+    if (hidden.has(route)) hidden.delete(route)
+    else hidden.add(route)
+    return { ...nav, hidden: [...hidden] }
+  })
+}
+
+/* -------------------------------------------------------------------- Tokens */
+
+export function setToken(doc: StudentLayoutDocument, key: string, value: string | null): StudentLayoutDocument {
+  const tokens = { ...(doc.tokens ?? {}) }
+  if (value) tokens[key] = value
+  else delete tokens[key]
+  const out: StudentLayoutDocument = { ...doc, tokens }
+  if (!Object.keys(tokens).length) delete out.tokens
+  return out
 }

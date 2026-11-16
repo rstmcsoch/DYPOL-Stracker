@@ -35,6 +35,25 @@ export function useLayoutSlot(id: string) {
   }
 }
 
+/**
+ * Slots for the registered sections of one student page (`<page>.<key>`): attributes,
+ * visibility and static labels, without one hook call per section. Same rules as
+ * useLayoutSlot: nothing changes in the DOM unless a layout is published or editing.
+ */
+export function usePageSlots(page: string) {
+  const { document, editing } = useStudentLayout()
+  const marked = Boolean(document) || editing
+  const config = (key: string): ComponentConfig | undefined => document?.components?.[`${page}.${key}`]
+  return {
+    attrs: (key: string) => (marked ? { 'data-sl': `${page}.${key}`, ...(editing && config(key)?.hidden ? { 'data-sl-hidden': '' } : {}) } : {}),
+    hidden: (key: string) => !editing && config(key)?.hidden === true,
+    text: (key: string, field: string, fallback: string): ReactNode => {
+      const value = config(key)?.text?.[field] ?? fallback
+      return editing ? <span data-sl-text={`${page}.${key}:${field}`}>{value}</span> : value
+    }
+  }
+}
+
 /** Children of a registered container in the published order (shipped order otherwise). */
 export function useLayoutOrder<T extends string>(containerId: string, defaults: readonly T[]): readonly T[] {
   const { document } = useStudentLayout()

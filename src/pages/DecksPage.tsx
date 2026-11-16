@@ -10,10 +10,12 @@ import { indiaToday, prettyDate } from '../lib/date'
 import { reviewCard, dueCards, ratingPreview, RATING_LABELS } from '../lib/jee/cards'
 import { CARD_RATINGS, type CardKind, type CardRating, type Chapter, type StudyCard } from '../types'
 import { useReportSubjects } from '../lib/exams/useExamSubjects'
+import { usePageSlots } from '../lib/student-layout/use-layout'
 
 type KindFilter = 'all' | CardKind
 
 export default function DecksPage() {
+  const sl = usePageSlots('decks')
   const deckSubjects = useReportSubjects()
   const { data, upsert, remove, upsertMany } = useData()
   const { notify } = useToast()
@@ -68,19 +70,19 @@ export default function DecksPage() {
   }
 
   return <div className="content-page decks-page">
-    <PageHeader
+    <PageHeader layoutId="decks.header"
       title="Formula & flashcards"
       subtitle="Rate each card Again, Hard, Good or Easy; Good and Easy move it up your revision ladder."
       action={<Button onClick={() => setEditing('new')} disabled={data.chapters.length === 0}><Plus size={16} /> New card</Button>}
     />
 
-    <section className="jee-stat-grid" aria-label="Due cards">
+    {!sl.hidden('summary') && <section {...sl.attrs('summary')} className="jee-stat-grid" aria-label="Due cards">
       <NotebookCard className="jee-stat"><span>Due overall</span><strong>{dueOverall.length}</strong><small>{subject === 'all' ? 'across all chapters' : `across ${subject}`}</small></NotebookCard>
       <NotebookCard className="jee-stat"><span>Due in this chapter</span><strong>{chapterDue.length}</strong><small>{chapter?.name ?? 'Pick a chapter'}</small></NotebookCard>
       <NotebookCard className="jee-stat"><span>Cards</span><strong>{data.studyCards.length}</strong><small>formulas and flashcards</small></NotebookCard>
-    </section>
+    </section>}
 
-    <NotebookCard className="jee-filter-card">
+    <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
       <div className="jee-filter-grid">
         <label className="jee-select"><span>Subject</span><select value={subject} onChange={event => setSubject(event.target.value)}><option value="all">All subjects</option>{deckSubjects.map(item => <option key={item}>{item}</option>)}</select></label>
         <ChapterSelect chapters={data.chapters} value={chapterId} onChange={setChapterId} subject={subject} label="Chapter" />

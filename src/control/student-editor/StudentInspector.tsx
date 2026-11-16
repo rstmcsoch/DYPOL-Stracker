@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useId, useState } from 'react'
 import { Eye, EyeOff, Lock, RotateCcw, Unlock } from 'lucide-react'
 import { Button } from '../ui'
@@ -88,8 +89,8 @@ export interface InspectorActions {
   select: (id: string) => void
 }
 
-export function StudentInspector({ id, document, device, setDevice, errors, actions }: {
-  id: string | null; document: StudentLayoutDocument; device: Device; setDevice: (device: Device) => void; errors: Record<string, string>; actions: InspectorActions
+export function StudentInspector({ id, document, device, setDevice, errors, actions, extraContent }: {
+  id: string | null; document: StudentLayoutDocument; device: Device; setDevice: (device: Device) => void; errors: Record<string, string>; actions: InspectorActions; extraContent?: ReactNode
 }) {
   const [tab, setTab] = useState<Tab>('content')
   const def = id ? COMPONENT_MAP.get(id) : undefined
@@ -135,6 +136,7 @@ export function StudentInspector({ id, document, device, setDevice, errors, acti
           <h4 className="le-subhead"><Lock size={13} aria-hidden="true" /> Live student data</h4>
           <ul>{Object.entries(def.data).map(([key, label]) => <li key={key} className="le-locked__row"><Lock size={13} aria-hidden="true" /><span><strong>{label}</strong><span className="le-hint">{LOCKED_TEXT}</span></span></li>)}</ul>
         </div>}
+        {extraContent}
       </>}
       {tab === 'style' && styleFor(['Typography', 'Colours', 'Appearance'])}
       {tab === 'layout' && <>
