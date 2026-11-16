@@ -1,5 +1,6 @@
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import { MemoryRouter, Route, Routes, UNSAFE_LocationContext, useLocation, useNavigate } from 'react-router-dom'
+import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { IsolatedMemoryRouter } from './canvas-router'
 import { AppFrame } from '../../components/AppShell'
 import { SiteContentProvider } from '../../contexts/SiteContentContext'
 import { StudentLayoutProvider } from '../../contexts/StudentLayoutContext'
@@ -93,8 +94,8 @@ export default function StudentCanvasPage() {
 
   if (!state || !fixture) return <p className="cc-preview-message">Loading the synthetic student preview…</p>
   const startPath = state.page === 'shell' ? '/' : pathFor(state.page)
-  return <UNSAFE_LocationContext.Provider value={null as never}>
-    <MemoryRouter key={`${state.scenario}-${state.theme}`} initialEntries={[startPath]}>
+  return <Fragment key={`${state.scenario}-${state.theme}`}>
+    <IsolatedMemoryRouter initialPath={startPath}>
       <RouteSync page={state.page} onPage={page => sendRef.current({ type: 'sl:page', page })} />
       <SiteContentProvider overrides={state.siteOverrides ?? {}}>
         <PreviewProviders fixture={fixture}>
@@ -109,6 +110,6 @@ export default function StudentCanvasPage() {
           </StudentLayoutProvider>
         </PreviewProviders>
       </SiteContentProvider>
-    </MemoryRouter>
-  </UNSAFE_LocationContext.Provider>
+    </IsolatedMemoryRouter>
+  </Fragment>
 }

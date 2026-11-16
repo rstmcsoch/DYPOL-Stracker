@@ -1,5 +1,14 @@
-import { COMPONENT_MAP } from '../../lib/student-layout/registry'
+import { COMPONENT_MAP, STUDENT_PAGES, type StudentPageId } from '../../lib/student-layout/registry'
 import type { StudentCanvasMessage, StudentCanvasState } from './protocol'
+
+const NAV_SCOPES = '[data-sl="shell.sidebar"], [data-sl="shell.mobile-nav"], .sidebar, .mobile-drawer, .mobile-nav'
+/** Shell controls that only open or close the phone menu keep working in edit mode. */
+const PASS_THROUGH = '.mobile-menu-btn, .mobile-drawer-backdrop, .mobile-drawer-head button'
+function pageForHref(href: string | null): StudentPageId | null {
+  if (!href || !href.startsWith('/')) return null
+  const path = href.split(/[?#]/)[0]
+  return STUDENT_PAGES.find(page => page.path === path)?.id ?? null
+}
 
 /**
  * Selection layer for the Student Dashboard Editor canvas. In edit mode clicks select the
@@ -122,9 +131,14 @@ export function attachStudentOverlay(send: (message: StudentCanvasMessage) => vo
     const node = event.target instanceof Element ? event.target : null
     if (!node || toolbar.contains(node)) return
     if (editing && editing.contains(node)) return
+    if (node.closest(PASS_THROUGH)) return
     event.preventDefault()
     event.stopPropagation()
     if (editing) commitEdit(true)
+    // Menu links still change page in edit mode, so every student page can be reached and edited.
+    const link = node.closest('a[href]')
+    const navPage = link && link.closest(NAV_SCOPES) ? pageForHref(link.getAttribute('href')) : null
+    if (navPage) { send({ type: 'sl:page', page: navPage }); return }
     const data = node.closest('[data-sl-data]')
     if (data) showTip(LOCK_TEXT, data)
     const target = node.closest('[data-sl]')
