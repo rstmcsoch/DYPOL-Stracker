@@ -86,4 +86,23 @@ describe('Live Site Editor workspace', () => {
     expect(await screen.findByText('Stracker section')).toBeTruthy()
     expect(document.querySelector('[data-field-key="public.final.title"]')).toBeTruthy()
   })
+
+  it('editing a card list moves it into the document once, with the old slots reset', async () => {
+    mocks.controlFetch.mockImplementation((path: string) => {
+      if (path === 'appearance-state') return Promise.resolve({ ...STATE, published: { ...STATE.published, overrides: { 'public.features.item_1.title': 'Owner title' } } })
+      if (path === 'appearance-draft') return Promise.resolve({ ok: true, updatedAt: '2026-11-16T10:00:00Z' })
+      return Promise.resolve({ ok: true })
+    })
+    mount()
+    const layers = await screen.findByRole('tree', { name: 'Page layers' })
+    fireEvent.click(within(layers).getByText('Feature cards'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Hide Owner title' }))
+    await waitFor(() => expect(mocks.controlFetch).toHaveBeenCalledWith('appearance-draft', expect.objectContaining({ method: 'PUT' })), { timeout: 5000 })
+    const call = mocks.controlFetch.mock.calls.find(([path]) => path === 'appearance-draft')!
+    const body = (call[1] as { body: { overrides: Record<string, string>; document: { pages: { home: { blocks: Array<{ id: string; props?: { items?: Array<{ title: string; hidden: boolean }> } }> } } } } }).body
+    const items = body.document.pages.home.blocks.find(block => block.id === 'home-features')!.props!.items!
+    expect(items).toHaveLength(8)
+    expect(items[0]).toMatchObject({ title: 'Owner title', hidden: true })
+    expect(Object.keys(body.overrides).some(key => key.startsWith('public.features.item_'))).toBe(false)
+  }, 10_000)
 })

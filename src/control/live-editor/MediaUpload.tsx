@@ -1,33 +1,25 @@
 import { useRef, useState } from 'react'
-import { ImagePlus, Trash2, Video } from 'lucide-react'
+import { ImagePlus, Library, Trash2, Video } from 'lucide-react'
 import { Button } from '../ui'
-import { controlFetch } from '../api'
-import { supabase } from '../../lib/supabase'
 import { MEDIA_LIMITS, type MediaKind } from '../../lib/site-content/media'
-
-type UploadTicket = { ok: true; bucket: string; path: string; token: string; publicUrl: string }
+import { uploadMedia, useMediaLibrary } from './media-library'
 
 /**
- * Upload through the existing owner media flow: the API checks permission, type and size and
- * issues a one-time signed upload into the `homepage-media` bucket; only those URLs validate.
+ * A media value: upload through the existing owner media flow, or pick an earlier upload from
+ * the library. Only URLs of files uploaded into the site's own bucket validate.
  */
-export function MediaUpload({ kind, value, onChange, label }: { kind: MediaKind; value: string; onChange: (url: string) => void; label: string }) {
+export function MediaUpload({ kind, value, onChange, label, onAlt }: { kind: MediaKind; value: string; onChange: (url: string) => void; label: string; onAlt?: (alt: string) => void }) {
   const limits = MEDIA_LIMITS[kind]
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  const [picking, setPicking] = useState(false)
 
   const upload = async (file: File) => {
     setProblem(null)
-    if (!limits.mimes.includes(file.type)) { setProblem(kind === 'image' ? 'Choose a JPEG, PNG or WebP image.' : 'Choose an MP4 video.'); return }
-    if (file.size > limits.maxBytes) { setProblem(`Keep the file under ${Math.round(limits.maxBytes / 1_048_576)} MB.`); return }
-    if (!supabase) { setProblem('Uploads are unavailable in this environment.'); return }
     setBusy(true)
     try {
-      const ticket = await controlFetch<UploadTicket>('appearance-media', { method: 'POST', body: { kind, mime: file.type, bytes: file.size } })
-      const { error } = await supabase.storage.from(ticket.bucket).uploadToSignedUrl(ticket.path, ticket.token, file, { contentType: file.type })
-      if (error) throw new Error('The upload did not finish. Try again.')
-      onChange(ticket.publicUrl)
+      onChange(await uploadMedia(kind, file))
     } catch (error) {
       setProblem(error instanceof Error ? error.message : 'The upload did not finish. Try again.')
     } finally {
@@ -47,8 +39,31 @@ export function MediaUpload({ kind, value, onChange, label }: { kind: MediaKind;
       <Button size="sm" onClick={() => fileRef.current?.click()} disabled={busy}>
         {kind === 'image' ? <ImagePlus size={14} aria-hidden="true" /> : <Video size={14} aria-hidden="true" />} {busy ? 'Uploading…' : value ? 'Replace' : 'Upload'}
       </Button>
+      <Button size="sm" variant="ghost" aria-expanded={picking} onClick={() => setPicking(open => !open)} disabled={busy}><Library size={14} aria-hidden="true" /> Library</Button>
       {value && <Button size="sm" variant="ghost" onClick={() => onChange('')} disabled={busy}><Trash2 size={14} aria-hidden="true" /> Remove</Button>}
     </div>
+    {picking && <MediaPicker kind={kind} current={value} onPick={(url, alt) => { onChange(url); if (alt && onAlt) onAlt(alt); setPicking(false) }} />}
     {problem && <p className="le-error" role="alert">{problem}</p>}
+  </div>
+}
+
+function MediaPicker({ kind, current, onPick }: { kind: MediaKind; current: string; onPick: (url: string, alt: string) => void }) {
+  const library = useMediaLibrary()
+  const [query, setQuery] = useState('')
+  const needle = query.trim().toLowerCase()
+  const assets = library.assets.filter(asset => asset.kind === kind && (!needle || `${asset.name} ${asset.alt}`.toLowerCase().includes(needle)))
+  return <div className="le-picker">
+    <input className="cc-input" type="search" placeholder={`Search ${kind === 'image' ? 'images' : 'videos'}`} aria-label="Search the library" value={query} onChange={event => setQuery(event.target.value)} />
+    {library.query.isLoading && <p className="le-hint">Loading the library…</p>}
+    {library.query.isError && <p className="le-error">The library could not be loaded.</p>}
+    {!library.query.isLoading && !assets.length && <p className="le-hint">No {kind === 'image' ? 'images' : 'videos'} yet. Upload one, or add files in the Assets panel.</p>}
+    <ul className="le-asset-grid is-compact">
+      {assets.map(asset => <li key={asset.path}>
+        <button type="button" className={`le-asset${asset.url === current ? ' is-active' : ''}`} onClick={() => onPick(asset.url, asset.alt)} title={asset.name || asset.alt || 'Untitled'}>
+          {asset.kind === 'image' ? <img src={asset.url} alt="" loading="lazy" /> : <video src={asset.url} preload="metadata" muted />}
+          <span>{asset.name || asset.alt || 'Untitled'}</span>
+        </button>
+      </li>)}
+    </ul>
   </div>
 }

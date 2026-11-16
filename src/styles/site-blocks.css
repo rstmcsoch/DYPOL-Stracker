@@ -140,3 +140,8 @@
 .pub-hp .sb-banner { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 14px; padding: 10px var(--hp-gutter); background: var(--hp-tone, var(--hp-yellowbg)); color: var(--hp-ink); text-align: center; font-size: .95rem; }
 
 @media (prefers-reduced-motion: reduce) { .pub-hp .sb-accordion-item button svg { transition: none; } }
+
+.pub-hp .sb-image-crop { display: block; overflow: hidden; border-radius: calc(var(--hp-radius) - 4px); }
+.pub-hp .sb-image .sb-image-crop > img { border: 0; box-shadow: none; rotate: none; border-radius: 0; }
+.pub-hp .sb-image.frame-card .sb-image-crop { border: 1.5px solid var(--hp-line); box-shadow: var(--hp-soft-shadow); }
+.pub-hp .sb-image.frame-tape .sb-image-crop { border: 6px solid var(--hp-card); box-shadow: var(--hp-soft-shadow); rotate: -1deg; }

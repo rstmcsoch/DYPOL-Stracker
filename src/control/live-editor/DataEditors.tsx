@@ -118,3 +118,34 @@ export function ChartEditor({ value, onChange }: { value: ChartValue; onChange: 
     {single && <p className="le-hint">{value.kind === 'progress' ? 'Each data point is one bar out of the max value.' : 'Pie and donut charts use the first series; each data point is one slice.'}</p>}
   </div>
 }
+
+/**
+ * Focal point and crop for an image: tap/click the preview to set the point the crop keeps
+ * (stored as whole percentages), and zoom in to crop tighter around it.
+ */
+export function FocalPicker({ src, x, y, zoom, onPoint, onZoom }: { src: string; x: number; y: number; zoom: number; onPoint: (x: number, y: number) => void; onZoom: (zoom: number, coalesce?: string) => void }) {
+  const pick = (event: { clientX: number; clientY: number; currentTarget: HTMLElement }) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const clamp = (value: number) => Math.max(0, Math.min(100, Math.round(value)))
+    onPoint(clamp(((event.clientX - rect.left) / rect.width) * 100), clamp(((event.clientY - rect.top) / rect.height) * 100))
+  }
+  return <div className="le-focal">
+    <span className="le-field__label">Focal point and crop</span>
+    {src
+      ? <div className="le-focal__frame" role="button" tabIndex={0} aria-label={`Focal point ${x}% across, ${y}% down. Click the image to move it; arrow keys nudge it.`} onClick={pick}
+        onKeyDown={event => {
+          const step = event.shiftKey ? 10 : 2
+          const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }
+          const delta = moves[event.key]
+          if (!delta) return
+          event.preventDefault()
+          onPoint(Math.max(0, Math.min(100, x + delta[0])), Math.max(0, Math.min(100, y + delta[1])))
+        }}>
+        <img src={src} alt="" draggable={false} />
+        <span className="le-focal__dot" style={{ left: `${x}%`, top: `${y}%` }} aria-hidden="true" />
+      </div>
+      : <p className="le-hint">Upload an image first.</p>}
+    <label className="le-inline">Zoom <input type="range" min={100} max={300} step={5} value={zoom} onChange={event => onZoom(Number(event.target.value), 'zoom')} aria-label="Crop zoom" /> {zoom}%</label>
+    <p className="le-hint">With fit set to “cover”, the crop keeps this point in view on every screen size.</p>
+  </div>
+}

@@ -50,4 +50,24 @@ describe('homepage page document', () => {
     expect(container.querySelector('[data-sb="bad"]')?.textContent).toBe('')
     expect(container.querySelector('script')).toBeNull()
   })
+
+  it('renders card lists from document items (hidden ones skipped) and counts modules from them', () => {
+    const blocks = BUILTIN_SECTIONS.home.map(section => ({ id: section.id, type: section.type })) as Array<Record<string, unknown>>
+    blocks.find(block => block.id === 'home-features')!.props = { items: [
+      { icon: 'target', title: 'Doc feature one', summary: 'S1', points: ['P1'], image: '', alt: '', hidden: false },
+      { icon: 'timer', title: 'Doc feature hidden', summary: 'S2', points: [], image: '', alt: '', hidden: true },
+      { icon: 'timer', title: 'Doc feature two', summary: 'S3', points: [], image: '', alt: '', hidden: false }
+    ] }
+    blocks.find(block => block.id === 'home-how')!.props = { items: [{ title: 'Only step', body: 'Do it', hidden: false }] }
+    blocks.find(block => block.id === 'home-privacy')!.props = { items: [{ title: 'Private point', body: 'Body', hidden: false }] }
+    blocks.find(block => block.id === 'home-principles')!.props = { items: [{ icon: 'check', title: 'Doc principle', body: 'Body', hidden: false }] }
+    const container = renderWith({ schemaVersion: 1, pages: { home: { blocks } } })
+    expect([...container.querySelectorAll('#feature-list > li h3')].map(node => node.textContent)).toEqual(['Doc feature one', 'Doc feature two'])
+    expect(container.querySelector('#feature-list [data-se-prop="items.2.title"]')).not.toBeNull()
+    expect(container.querySelectorAll('.hp-step-list > li')).toHaveLength(1)
+    expect(screen.getByText('Private point')).toBeTruthy()
+    expect(screen.getByText('Doc principle')).toBeTruthy()
+    // The stats strip's {modules} counts the visible document items.
+    expect(container.querySelector('[data-sb="home-stats"] strong')?.textContent).toBe('2')
+  })
 })

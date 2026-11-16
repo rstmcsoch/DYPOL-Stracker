@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft, Eye, Layers, Maximize2, Minimize2, Monitor, MousePointer2, PanelRight, Plus, Redo2, RefreshCw, Save, Settings2, Smartphone,
-  Tablet, Undo2, Upload, X, FileStack, Palette
+  Tablet, Undo2, Upload, X, FileStack, Palette, Images
 } from 'lucide-react'
 import { Button } from '../ui'
 import { ContentEditorContext, type ContentEditorValue } from '../appearance/ContentEditor'
@@ -17,9 +17,12 @@ import {
 } from './doc-ops'
 import { Inspector } from './Inspector'
 import { AddPanel, LayersPanel, PagesPanel, TokensPanel } from './Panels'
+import { AssetsPanel, type MediaTarget } from './AssetsPanel'
+import { BLOCK_SPECS } from '../../lib/site-editor/blocks-spec'
+import { registryFieldsFor } from './registry-map'
 import { LinkDatalist } from './PropFields'
 import { CANVAS_PATH, isCanvasMessage, type CanvasMessage, type CanvasState, type Selection } from './protocol'
-import { effectiveProps, propSpecAt, stripMarkers } from './registry-map'
+import { adoptItems, effectiveProps, propSpecAt, stripMarkers } from './registry-map'
 import { useEditorState, type SaveStatus } from './useEditorState'
 import './live-editor.css'
 
@@ -36,9 +39,9 @@ const VIEWPORTS: Record<Exclude<Viewport, 'custom'>, { label: string; width: num
   tablet: { label: 'Tablet portrait 820', width: 820, icon: Tablet },
   mobile: { label: 'Phone 390', width: 390, icon: Smartphone }
 }
-type LeftTab = 'layers' | 'add' | 'pages' | 'theme'
+type LeftTab = 'layers' | 'add' | 'assets' | 'pages' | 'theme'
 const LEFT_TABS: Array<{ id: LeftTab; label: string; icon: typeof Layers }> = [
-  { id: 'layers', label: 'Layers', icon: Layers }, { id: 'add', label: 'Add', icon: Plus }, { id: 'pages', label: 'Pages', icon: FileStack }, { id: 'theme', label: 'Theme', icon: Palette }
+  { id: 'layers', label: 'Layers', icon: Layers }, { id: 'add', label: 'Add', icon: Plus }, { id: 'assets', label: 'Assets', icon: Images }, { id: 'pages', label: 'Pages', icon: FileStack }, { id: 'theme', label: 'Theme', icon: Palette }
 ]
 
 const STATUS_TEXT: Record<SaveStatus, string> = {
@@ -180,11 +183,14 @@ export default function LiveEditorPage() {
         } else if (message.prop && message.selection.kind === 'block') {
           const id = message.selection.id
           const path = message.prop
-          editDoc(doc => updateBlock(doc, page, id, block => {
-            const spec = propSpecAt(block, path)
-            const value = spec?.k === 'rich' ? message.value : stripMarkers(message.value).replace(/\n+/g, ' ')
-            return { ...block, props: setPath(effectiveProps(block), path, value) as Record<string, unknown> }
-          }))
+          update(current => {
+            const adopted = adoptItems(current, page, id)
+            return { ...adopted, document: updateBlock(adopted.document, page, id, block => {
+              const spec = propSpecAt(block, path)
+              const value = spec?.k === 'rich' ? message.value : stripMarkers(message.value).replace(/\n+/g, ' ')
+              return { ...block, props: setPath(effectiveProps(block), path, value) as Record<string, unknown> }
+            }) }
+          })
         }
         setEpoch(value => value + 1)
         break
@@ -244,6 +250,34 @@ export default function LiveEditorPage() {
     restore: async () => ({ ok: false, message: 'Restore from Appearance → Publishing.' }), busy: false
   }), [editor, working, setValue])
 
+  // Media slots of the selected element that a library file can fill.
+  const mediaTargets = useMemo<MediaTarget[]>(() => {
+    if (!working || !selection) return []
+    if (selectedBlock && !isBuiltinType(selectedBlock.type)) {
+      const props = BLOCK_SPECS[selectedBlock.type]?.props ?? {}
+      return Object.entries(props).flatMap(([key, spec]) => spec.k !== 'media' ? [] : [{
+        id: key, kind: spec.media, label: key === 'poster' ? 'poster' : key === 'src' ? spec.media : key, current: String(selectedBlock.props?.[key] ?? ''),
+        apply: (url: string, alt: string) => editDoc(doc => updateBlock(doc, page, selectedBlock.id, block => ({
+          ...block, props: { ...(block.props ?? {}), [key]: url, ...('alt' in props && alt && !block.props?.alt ? { alt } : {}) }
+        })))
+      }])
+    }
+    return registryFieldsFor(selection.id).filter(field => field.type === 'media').map(field => ({
+      id: field.key, kind: field.mediaKind ?? 'image', label: field.label.toLowerCase(), current: working.values[field.key] ?? '', apply: (url: string) => setValue(field.key, url)
+    }))
+  }, [working, selection, selectedBlock, editDoc, page, setValue])
+
+  const inWorkingCopy = useCallback((url: string) => Boolean(editor.working && (JSON.stringify(editor.working.values).includes(url) || JSON.stringify(editor.working.document).includes(url))), [editor.working])
+  const replaceEverywhere = useCallback((from: string, to: string) => {
+    const current = editor.working
+    if (!current || !from || from === to) return 0
+    const values = JSON.stringify(current.values)
+    const document = JSON.stringify(current.document)
+    const count = values.split(from).length - 1 + document.split(from).length - 1
+    if (count) update(state => ({ values: JSON.parse(JSON.stringify(state.values).split(from).join(to)), document: JSON.parse(JSON.stringify(state.document).split(from).join(to)) }))
+    return count
+  }, [editor.working, update])
+
   const docErrors = useMemo(() => ({ ...problemsToErrors(editor.problems), ...editor.serverErrors }), [editor.problems, editor.serverErrors])
 
   if (editor.query.isError && !working) return <div className="le-loading"><p>The editor could not load the site content.</p><Button onClick={() => void editor.query.refetch()}>Try again</Button> <Link to="/control-panel/appearance" className="cc-btn cc-btn--ghost cc-btn--md">Back to Appearance</Link></div>
@@ -259,6 +293,7 @@ export default function LiveEditorPage() {
     <div className="le-panel__body">
       {leftTab === 'layers' && <LayersPanel page={page} blocks={blocks} selection={selection} actions={{ ...actions, select: id => { selectBlock(id); setSheet(null) } }} />}
       {leftTab === 'add' && <AddPanel onAdd={addBlock} target={insertTarget} />}
+      {leftTab === 'assets' && <AssetsPanel targets={mediaTargets} targetName={selectedBlock ? blockLabel(selectedBlock, page) : selection?.kind === 'region' ? selection.id : null} inWorkingCopy={inWorkingCopy} replaceEverywhere={replaceEverywhere} />}
       {leftTab === 'pages' && <PagesPanel page={page} document={working.document} onPage={next => { setPage(next); setSelection(null); setSheet(null) }} />}
       {leftTab === 'theme' && <TokensPanel tokens={working.document.tokens ?? {}} errors={docErrors}
         onChange={(key, value, coalesce) => editDoc(doc => { const tokens = { ...(doc.tokens ?? {}) }; if (value) tokens[key] = value; else delete tokens[key]; return { ...doc, tokens } }, coalesce && `token.${coalesce}`)} />}
@@ -266,7 +301,11 @@ export default function LiveEditorPage() {
   </>
 
   const inspector = <Inspector page={page} selection={selection} block={selectedBlock} device={styleDevice} errors={docErrors} setDevice={setStyleDevice}
-    setProp={(key, value, coalesce) => selectedBlock && editDoc(doc => updateBlock(doc, page, selectedBlock.id, block => ({ ...block, props: { ...effectiveProps(block), [key]: value } })), coalesce)}
+    setProp={(key, value, coalesce) => selectedBlock && update(current => {
+      const adopted = adoptItems(current, page, selectedBlock.id)
+      return { ...adopted, document: updateBlock(adopted.document, page, selectedBlock.id, block => ({ ...block, props: { ...effectiveProps(block), [key]: value } })) }
+    }, coalesce)}
+    values={working.values}
     setStyle={(device, key, value, coalesce) => selectedBlock && editDoc(doc => setStyle(doc, page, selectedBlock.id, device, key, value), coalesce)}
     clearStyles={device => selectedBlock && editDoc(doc => clearStyles(doc, page, selectedBlock.id, device))}
     setMeta={patch => selectedBlock && editDoc(doc => updateBlock(doc, page, selectedBlock.id, block => {

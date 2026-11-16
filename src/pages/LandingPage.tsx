@@ -6,7 +6,7 @@ import { NotebookPreview } from '../components/public/NotebookPreview'
 import {
   AiSection, DypolSection, FeatureSection, FinalCta, HowItWorksSection, PrincipleSection, PrivacySection, StudyLoopSection
 } from '../components/public/LandingSections'
-import { useFeatureOrder } from '../components/public/feature-order'
+import { useFeatureCount } from '../components/public/feature-order'
 import { PromoVideoSection } from '../components/public/PromoVideoPlayer'
 import { useHomeMotion } from '../components/public/home-motion'
 import { usePageMeta } from '../lib/head'
@@ -36,7 +36,7 @@ const EXAM_SPEEDS: Record<string, string> = { slow: '70s', normal: '', fast: '26
  * no-ads promise already made in the privacy section.
  */
 function StatsStrip() {
-  const modules = useFeatureOrder().length
+  const modules = useFeatureCount()
   const props = useBlockProps()
   // `{modules}` stays a live count of the feature cards; every other value is owner text.
   const notes = (stringRecords(props.items, ['value', 'label']) ?? DEFAULT_STATS).map(note => ({

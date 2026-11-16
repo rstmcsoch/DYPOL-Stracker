@@ -40,6 +40,11 @@ export const CHART_KINDS = ['bar', 'line', 'pie', 'donut', 'progress'] as const
 export const CHART_COLORS = ['accent', 'blue', 'mint', 'orange', 'pink', 'violet', 'sky', 'teal', 'yellow', 'ink'] as const
 export const VALUE_FORMATS = ['number', 'decimal', 'percent', 'compact'] as const
 
+/** Icons the feature and principle cards can use (same set as the registry's feature icons). */
+export const FEATURE_ICON_VALUES = ['book-open', 'list-checks', 'notebook-pen', 'alarm-clock', 'calendar-check', 'timer', 'trending-up', 'sparkles', 'target', 'shield-check', 'compass', 'repeat'] as const
+/** Caps for the Stracker card lists edited as items. */
+export const SECTION_ITEM_CAPS = { features: 16, principles: 12, how: 8, privacy: 12 } as const
+
 export const TABLE_LIMITS = { columns: 12, rows: 100, cell: 300 } as const
 export const CHART_LIMITS = { labels: 24, series: 6, label: 40 } as const
 
@@ -99,7 +104,8 @@ const specs: BlockSpec[] = [
 
   // ------------------------------------------------------------------- media
   { type: 'image', label: 'Image', category: 'Media', hint: 'Uploaded image with alt text', keywords: 'picture photo logo illustration',
-    props: { src: { k: 'media', media: 'image', optional: true }, alt: text(200, true), caption: text(200, true), ratio: select('auto', '16:9', '4:3', '1:1', '3:4'), fit: select('cover', 'contain'), focus: select('center', 'top', 'bottom', 'left', 'right'), frame: select('none', 'card', 'tape') },
+    props: { src: { k: 'media', media: 'image', optional: true }, alt: text(200, true), caption: text(200, true), ratio: select('auto', '21:9', '16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16'), fit: select('cover', 'contain'), focus: select('center', 'top', 'bottom', 'left', 'right', 'custom'),
+      focusX: { k: 'number', min: 0, max: 100, int: true }, focusY: { k: 'number', min: 0, max: 100, int: true }, zoom: { k: 'number', min: 100, max: 300, int: true }, frame: select('none', 'card', 'tape') },
     defaults: () => ({ src: '', alt: '', caption: '', ratio: 'auto', fit: 'cover', focus: 'center', frame: 'card' }) },
   { type: 'gallery', label: 'Image gallery', category: 'Media', hint: 'Grid of images', keywords: 'images photos',
     props: { images: { k: 'list', max: 12, item: { src: { k: 'media', media: 'image', optional: true }, alt: text(200, true) } }, columns: { k: 'number', min: 1, max: 4, int: true } },
@@ -166,7 +172,16 @@ export const BLOCK_CATEGORIES: readonly BlockCategory[] = ['Layout', 'Text', 'Bu
 export const BUILTIN_PROP_SPECS: Record<string, Record<string, PropSpec>> = {
   'stracker.exams': { label: text(120, true), items: { k: 'strings', max: 40, itemMax: 40 }, speed: select('slow', 'normal', 'fast') },
   'stracker.stats': { items: { k: 'list', max: 6, item: { value: text(24), label: text(200) } } },
-  'stracker.loop': { steps: { k: 'list', max: 8, item: { step: text(40), link: text(60, true), body: rich(400, true) } } }
+  'stracker.loop': { steps: { k: 'list', max: 8, item: { step: text(40), link: text(60, true), body: rich(400, true) } } },
+  // Card lists that used to live in numbered registry slots. When `items` is present it is the
+  // single source for that list (the editor moves the slot values in and resets the slots).
+  'stracker.features': { items: { k: 'list', max: SECTION_ITEM_CAPS.features, item: {
+    icon: select(...FEATURE_ICON_VALUES), title: text(60), summary: text(200), points: { k: 'strings', max: 8, itemMax: 160 },
+    image: { k: 'media', media: 'image', optional: true }, alt: text(160, true), hidden: { k: 'bool' }
+  } } },
+  'stracker.principles': { items: { k: 'list', max: SECTION_ITEM_CAPS.principles, item: { icon: select('check', ...FEATURE_ICON_VALUES), title: text(80), body: text(300), hidden: { k: 'bool' } } } },
+  'stracker.how': { items: { k: 'list', max: SECTION_ITEM_CAPS.how, item: { title: text(80), body: text(300), hidden: { k: 'bool' } } } },
+  'stracker.privacy': { items: { k: 'list', max: SECTION_ITEM_CAPS.privacy, item: { title: text(80), body: text(400), hidden: { k: 'bool' } } } }
 }
 
 /** The shipped values of those lists (also the editor's starting point). */
