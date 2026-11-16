@@ -154,9 +154,25 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
 .hp-ambient #px1 { top: -140px; left: -140px; width: 560px; height: 560px; background: radial-gradient(circle, rgba(255, 216, 77, .34) 0, rgba(255, 216, 77, 0) 68%); }
 .hp-ambient #px2 { top: 28%; right: -200px; width: 620px; height: 620px; background: radial-gradient(circle, rgba(126, 232, 199, .28) 0, rgba(126, 232, 199, 0) 68%); }
 .hp-ambient #px3 { bottom: -18%; left: 18%; width: 660px; height: 660px; background: radial-gradient(circle, rgba(255, 143, 163, .22) 0, rgba(255, 143, 163, 0) 68%); }
-.pub-hp[data-public-theme='dark'] .hp-ambient #px1 { background: radial-gradient(circle, rgba(255, 216, 77, .12) 0, rgba(255, 216, 77, 0) 68%); }
-.pub-hp[data-public-theme='dark'] .hp-ambient #px2 { background: radial-gradient(circle, rgba(90, 200, 170, .13) 0, rgba(90, 200, 170, 0) 68%); }
-.pub-hp[data-public-theme='dark'] .hp-ambient #px3 { background: radial-gradient(circle, rgba(61, 102, 255, .16) 0, rgba(61, 102, 255, 0) 68%); }
+/* Dark mode (t171): the same three hues as light mode, at strengths tuned so the shades read about
+   as vivid on the dark page as they do on paper. Body text stays well above WCAG AA on top. */
+.pub-hp[data-public-theme='dark'] .hp-ambient #px1 { background: radial-gradient(circle, rgba(255, 216, 77, .18) 0, rgba(255, 216, 77, 0) 68%); }
+.pub-hp[data-public-theme='dark'] .hp-ambient #px2 { background: radial-gradient(circle, rgba(126, 232, 199, .18) 0, rgba(126, 232, 199, 0) 68%); }
+.pub-hp[data-public-theme='dark'] .hp-ambient #px3 { background: radial-gradient(circle, rgba(255, 143, 163, .2) 0, rgba(255, 143, 163, 0) 68%); }
+
+/* Slow ambient drift (t170): the three existing soft shades wander a little over 38–58 s
+   alternating loops, under the static grain. Only the individual `translate` and `scale`
+   properties animate, so it runs on the compositor with no main-thread work; it composes with
+   the scroll parallax home-motion.ts writes to `transform`. Browsers pause it in hidden tabs, and
+   reduced-motion visitors get the still layout. No colours change. */
+@keyframes hp-drift-a { from { translate: 0 0; scale: 1; } to { translate: 9vw 7vh; scale: 1.14; } }
+@keyframes hp-drift-b { from { translate: 0 0; scale: 1.08; } to { translate: -11vw -6vh; scale: .94; } }
+@keyframes hp-drift-c { from { translate: 0 0; scale: .96; } to { translate: 8vw -9vh; scale: 1.1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .hp-ambient #px1 { animation: hp-drift-a 46s ease-in-out infinite alternate; }
+  .hp-ambient #px2 { animation: hp-drift-b 58s ease-in-out -12s infinite alternate; }
+  .hp-ambient #px3 { animation: hp-drift-c 38s ease-in-out -20s infinite alternate; }
+}
 
 .pub-hp .pub-grain { z-index: 2; }
 
