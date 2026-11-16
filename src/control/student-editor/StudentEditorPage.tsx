@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ArrowLeft, Eye, FileStack, History, Image, Layers, Palette, Maximize2, Minimize2, Monitor, Moon, MousePointer2, RefreshCw, Save, Settings2, Smartphone, Sun, Tablet, Undo2, Redo2, Upload, X
+  ArrowLeft, Eye, SquareDashedMousePointer, FileStack, History, Image, Layers, Palette, Maximize2, Minimize2, Monitor, Moon, MousePointer2, RefreshCw, Save, Settings2, Smartphone, Sun, Tablet, Undo2, Redo2, Upload, X
 } from 'lucide-react'
 import { Button } from '../ui'
 import { controlFetch } from '../api'
@@ -13,6 +13,7 @@ import { PREVIEW_SCENARIOS, type PreviewScenarioId } from './fixtures'
 import { clearStyles, moveBy, resetComponent, setProp, setStyle, setText, toggleHidden, toggleLocked, configOf, moveNavGroup, moveNavItem, setToken, toggleNavHidden, type Device } from './layout-ops'
 import { HistoryPanel, LayersPanel, PagesPanel } from './StudentPanels'
 import { StudentInspector } from './StudentInspector'
+import type { CanvasViewState } from './canvas-states'
 import { AssetsPanel, NavigationEditor, TokensPanel } from './ShellPanels'
 import { LOCKED_TEXT } from './editor-model'
 import { STUDENT_CANVAS_PATH, isStudentCanvasMessage, type StudentCanvasMessage, type StudentCanvasState } from './protocol'
@@ -63,6 +64,8 @@ export default function StudentEditorPage() {
   const [publishOpen, setPublishOpen] = useState(false)
   const [note, setNote] = useState('')
   const [frameReady, setFrameReady] = useState(false)
+  const [interact, setInteract] = useState(true)
+  const [viewStates, setViewStates] = useState<CanvasViewState[]>([])
   const frameRef = useRef<HTMLIFrameElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [stage, setStage] = useState({ width: 1000, height: 700 })
@@ -103,8 +106,8 @@ export default function StudentEditorPage() {
 
   // ---- Canvas messaging ----
   const canvasState = useMemo<StudentCanvasState | null>(() => (working ? {
-    type: 'sl:state', page, scenario, theme, document: working, selected, mode, epoch, scrollTo, siteOverrides
-  } : null), [working, page, scenario, theme, selected, mode, epoch, scrollTo, siteOverrides])
+    type: 'sl:state', page, scenario, theme, document: working, selected, mode, epoch, scrollTo, siteOverrides, interact
+  } : null), [working, page, scenario, theme, selected, mode, epoch, scrollTo, siteOverrides, interact])
   useEffect(() => {
     const target = frameRef.current?.contentWindow
     if (frameReady && target && canvasState) target.postMessage(canvasState, window.location.origin)
@@ -115,6 +118,7 @@ export default function StudentEditorPage() {
   handlers.current = (message: StudentCanvasMessage) => {
     switch (message.type) {
       case 'sl:ready': setFrameReady(true); break
+      case 'sl:states': setViewStates(Array.isArray(message.states) ? message.states.filter(item => item && typeof item.key === 'string' && typeof item.label === 'string' && typeof item.group === 'string').slice(0, 200) : []); break
       case 'sl:select': setSelected(message.id && COMPONENT_MAP.has(message.id) ? message.id : null); break
       case 'sl:page': if (STUDENT_PAGES.some(entry => entry.id === message.page)) { setPage(message.page); setSelected(null) } break
       case 'sl:locked': flash(`${COMPONENT_MAP.get(message.id)?.data?.[message.key] ?? 'This value'}: ${LOCKED_TEXT}.`); break
@@ -208,6 +212,13 @@ export default function StudentEditorPage() {
         <select className="cc-input le-page-select" aria-label="Student page" value={page} onChange={event => goPage(event.target.value as StudentPageId)}>
           {STUDENT_PAGES.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
         </select>
+        {viewStates.length > 0 && <select className="cc-input le-view-state" aria-label="View state of this page" value="" title="Jump to a sub-tab, filter, toggle or dialog of this page"
+          onChange={event => { const key = event.target.value; if (key) frameRef.current?.contentWindow?.postMessage({ type: 'sl:activate', key }, window.location.origin) }}>
+          <option value="">View state…</option>
+          {[...new Set(viewStates.map(item => item.group))].map(group => <optgroup key={group} label={group}>
+            {viewStates.filter(item => item.group === group).map(item => <option key={item.key} value={item.key}>{item.active ? '● ' : ''}{item.label}</option>)}
+          </optgroup>)}
+        </select>}
         <span className={`le-status is-${editor.saveStatus}`} role="status" aria-live="polite">{STATUS_TEXT[editor.saveStatus]}{editor.problems.length ? ` (${editor.problems.length})` : ''}</span>
       </div>
       <div className="le-toolbar__group">
@@ -230,6 +241,8 @@ export default function StudentEditorPage() {
       </div>
       <div className="le-toolbar__group">
         <button type="button" className={`le-icon-btn${mode === 'preview' ? ' is-active' : ''}`} onClick={() => { setMode(mode === 'edit' ? 'preview' : 'edit'); setSelected(null) }} aria-pressed={mode === 'preview'} aria-label={mode === 'preview' ? 'Back to editing' : 'Preview'} title={mode === 'preview' ? 'Back to editing' : 'Preview (sample data reacts, nothing real is saved)'}>{mode === 'preview' ? <MousePointer2 size={18} /> : <Eye size={18} />}</button>
+        {mode === 'edit' && <button type="button" className={`le-icon-btn${interact ? '' : ' is-active'}`} onClick={() => setInteract(value => !value)} aria-pressed={!interact} aria-label="Select only"
+          title={interact ? 'Clicks run sub-tabs, filters and buttons (Alt or Shift + click selects). Turn on to make every click select.' : 'Select only: clicks select parts. Turn off to use sub-tabs and buttons.'}><SquareDashedMousePointer size={18} /></button>}
         <button type="button" className="le-icon-btn le-hide-xs" onClick={() => setFullscreen(value => !value)} aria-pressed={fullscreen} aria-label="Full screen canvas" title="Full screen canvas">{fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button>
         <button type="button" className="le-icon-btn le-hide-xs" onClick={() => setEpoch(value => value + 1)} aria-label="Reset sample student" title="Reset sample student"><RefreshCw size={18} /></button>
         <Button size="sm" onClick={() => void editor.save()} disabled={!editor.dirty || editor.saveStatus === 'saving'}><Save size={15} aria-hidden="true" /> <span className="le-hide-sm">Save draft</span></Button>

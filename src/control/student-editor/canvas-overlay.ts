@@ -1,7 +1,7 @@
 import { COMPONENT_MAP, STUDENT_PAGES, type StudentPageId } from '../../lib/student-layout/registry'
 import type { StudentCanvasMessage, StudentCanvasState } from './protocol'
+import { INTERACTIVE, NAV_SCOPES, activateViewState, collectViewStates } from './canvas-states'
 
-const NAV_SCOPES = '[data-sl="shell.sidebar"], [data-sl="shell.mobile-nav"], .sidebar, .mobile-drawer, .mobile-nav'
 /** Shell controls that only open or close the phone menu keep working in edit mode. */
 const PASS_THROUGH = '.mobile-menu-btn, .mobile-drawer-backdrop, .mobile-drawer-head button'
 function pageForHref(href: string | null): StudentPageId | null {
@@ -17,7 +17,7 @@ function pageForHref(href: string | null): StudentPageId | null {
  * In preview mode it stays out of the way so the synthetic page works normally.
  */
 
-export interface StudentOverlay { refresh: (state: StudentCanvasState) => void; detach: () => void }
+export interface StudentOverlay { refresh: (state: StudentCanvasState) => void; activate: (key: string) => void; detach: () => void }
 
 const LOCK_TEXT = '🔒 Live student data, not editable'
 
@@ -132,16 +132,24 @@ export function attachStudentOverlay(send: (message: StudentCanvasMessage) => vo
     if (!node || toolbar.contains(node)) return
     if (editing && editing.contains(node)) return
     if (node.closest(PASS_THROUGH)) return
+    const selectOnly = event.altKey || event.shiftKey || current()?.interact === false
+    const target = node.closest('[data-sl]')
+    // Sub-tabs, toggles, filters, expanders and dialog buttons keep working, so every state
+    // of a page can be reached and edited; the surrounding part is selected as well.
+    if (!selectOnly && node.closest(INTERACTIVE)) {
+      if (editing) commitEdit(true)
+      send({ type: 'sl:select', id: target?.getAttribute('data-sl') ?? null })
+      return
+    }
     event.preventDefault()
     event.stopPropagation()
     if (editing) commitEdit(true)
-    // Menu links still change page in edit mode, so every student page can be reached and edited.
+    // Links to student pages (menus and in-page links) change page in the canvas.
     const link = node.closest('a[href]')
-    const navPage = link && link.closest(NAV_SCOPES) ? pageForHref(link.getAttribute('href')) : null
-    if (navPage) { send({ type: 'sl:page', page: navPage }); return }
+    const linkPage = link && (!selectOnly || link.closest(NAV_SCOPES)) ? pageForHref(link.getAttribute('href')) : null
+    if (linkPage) { send({ type: 'sl:page', page: linkPage }); return }
     const data = node.closest('[data-sl-data]')
     if (data) showTip(LOCK_TEXT, data)
-    const target = node.closest('[data-sl]')
     send({ type: 'sl:select', id: target?.getAttribute('data-sl') ?? null })
   }
   const onDoubleClick = (event: MouseEvent) => {
@@ -199,18 +207,33 @@ export function attachStudentOverlay(send: (message: StudentCanvasMessage) => vo
   document.addEventListener('submit', onSubmit, true)
   window.addEventListener('scroll', onScroll, true)
   window.addEventListener('resize', onScroll)
+  let lastStates = ''
+  let statesFrame = 0
+  const reportStates = () => {
+    window.cancelAnimationFrame(statesFrame)
+    statesFrame = window.requestAnimationFrame(() => {
+      const states = collectViewStates()
+      const json = JSON.stringify(states)
+      if (json !== lastStates) { lastStates = json; send({ type: 'sl:states', states }) }
+    })
+  }
   const own = new Set<Node>([hover, selected, label, tip, toolbar, badge])
   const observer = new MutationObserver(mutations => {
-    if (!editing && mutations.some(mutation => !own.has(mutation.target) && !toolbar.contains(mutation.target))) refreshBoxes()
+    if (editing || !mutations.some(mutation => !own.has(mutation.target) && !toolbar.contains(mutation.target))) return
+    refreshBoxes()
+    reportStates()
   })
-  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style'] })
+  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'aria-selected', 'aria-pressed', 'aria-expanded', 'open'] })
 
   return {
     refresh: state => {
       if (state.scrollTo) find(state.scrollTo)?.scrollIntoView({ block: 'center' })
       refreshBoxes()
+      reportStates()
     },
+    activate: key => { if (activateViewState(key)) reportStates() },
     detach: () => {
+      window.cancelAnimationFrame(statesFrame)
       observer.disconnect()
       document.removeEventListener('pointermove', onPointerMove, true)
       document.removeEventListener('click', onClick, true)

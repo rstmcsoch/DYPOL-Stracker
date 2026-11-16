@@ -1,6 +1,7 @@
 import type { StudentPageId } from '../../lib/student-layout/registry'
 import type { StudentLayoutDocument } from '../../lib/student-layout/validate'
 import type { PreviewScenarioId } from './fixtures'
+import type { CanvasViewState } from './canvas-states'
 
 /**
  * Messages between the Student Dashboard Editor and its same-origin canvas iframe. Both
@@ -21,7 +22,12 @@ export interface StudentCanvasState {
   scrollTo?: string | null
   /** Published Navigation & labels overrides, so the sidebar shows the live labels. */
   siteOverrides?: Record<string, string>
+  /** false = "Select only": clicks select parts instead of running sub-tabs and buttons. */
+  interact?: boolean
 }
+
+/** Editor → canvas: run the control behind one in-page view state (sub-tab, filter, toggle). */
+export interface StudentCanvasActivate { type: 'sl:activate'; key: string }
 
 export type StudentCanvasMessage =
   | { type: 'sl:ready' }
@@ -31,6 +37,7 @@ export type StudentCanvasMessage =
   | { type: 'sl:page'; page: StudentPageId }
   | { type: 'sl:shortcut'; action: 'undo' | 'redo' | 'escape' | 'save' }
   | { type: 'sl:action'; action: 'up' | 'down' | 'hide' | 'parent' }
+  | { type: 'sl:states'; states: CanvasViewState[] }
 
 export const STUDENT_CANVAS_PATH = '/control-panel/preview/student-canvas'
 

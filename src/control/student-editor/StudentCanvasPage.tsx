@@ -12,7 +12,7 @@ import { buildPreviewFixture } from './fixtures'
 import { PreviewProviders } from './PreviewProviders'
 import { installPreviewGuard } from './canvas-guard'
 import { attachStudentOverlay, type StudentOverlay } from './canvas-overlay'
-import { isStudentCanvasMessage, type StudentCanvasMessage, type StudentCanvasState } from './protocol'
+import { isStudentCanvasMessage, type StudentCanvasActivate, type StudentCanvasMessage, type StudentCanvasState } from './protocol'
 import './student-canvas.css'
 
 /**
@@ -57,7 +57,9 @@ export default function StudentCanvasPage() {
     overlayRef.current = attachStudentOverlay(send, () => stateRef.current)
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || event.source !== parent || !isStudentCanvasMessage(event.data)) return
-      const data = event.data as unknown as StudentCanvasState
+      const message = event.data as unknown as StudentCanvasState | StudentCanvasActivate
+      if (message.type === 'sl:activate') { if (typeof message.key === 'string') overlayRef.current?.activate(message.key); return }
+      const data = message
       if (data.type !== 'sl:state') return
       stateRef.current = data
       setState(data)
