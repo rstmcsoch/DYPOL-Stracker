@@ -1,3 +1,4 @@
+import { useBlockAttrs } from './page-block'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { useSiteText } from '../../contexts/SiteContentContext'
@@ -49,6 +50,7 @@ export function PromoVideoSection() {
 const PROMO_ASPECTS: Record<string, string> = { '9:16': 'portrait', '4:5': 'tall', '1:1': 'square', '16:9': 'landscape' }
 
 function PromoVideoBody() {
+  const blockAttrs = useBlockAttrs()
   const headingVisible = useSiteText('public.promo.heading_visibility') === 'visible'
   const eyebrow = useSiteText('public.promo.eyebrow')
   const heading = useSiteText('public.promo.heading')
@@ -196,7 +198,7 @@ function PromoVideoBody() {
   const toggleMute = () => { if (muted) engage(); setMuted(current => !current) }
 
   return (
-    <section className={`pub-section pub-section-promo promo-size-${size} promo-aspect-${aspect} promo-pos-${position}`} aria-labelledby="promo-title">
+    <section {...blockAttrs} className={`pub-section pub-section-promo promo-size-${size} promo-aspect-${aspect} promo-pos-${position}`} aria-labelledby="promo-title">
       {headingVisible ? (
         <div className="pub-shell">
           <div className="pub-section-head promo-head">

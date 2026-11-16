@@ -37,7 +37,7 @@ describe('public site routes', () => {
     expect(app).toContain('<Route path="/" element={<RootRoute />}>')
     const root = /function RootRoute\(\) \{([\s\S]*?)\n\}/.exec(app)?.[1] ?? ''
     expect(root).toContain('if (loading)')
-    expect(root).toContain('if (!user) return <SiteGate kind="public"><SiteContentProvider><LandingPage /></SiteContentProvider></SiteGate>')
+    expect(root).toContain('if (!user) return <SiteGate kind="public"><SiteContentProvider withDocument><LandingPage /></SiteContentProvider></SiteGate>')
     expect(root).toContain('<Outlet />')
   })
 

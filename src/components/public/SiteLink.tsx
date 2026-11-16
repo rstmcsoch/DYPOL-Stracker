@@ -15,6 +15,7 @@ export function SiteLink({ href, className, children, ...rest }: {
 }) {
   if (href.startsWith('/')) return <Link className={className} to={href} {...rest}>{children}</Link>
   if (href.startsWith('#')) return <a className={className} href={href} {...rest}>{children}</a>
+  if (/^mailto:[^?&]+$/.test(href)) return <a className={className} href={href} {...rest}>{children}</a>
   if (href.startsWith('https://')) return <a className={className} href={href} rel="noopener noreferrer" {...rest}>{children}</a>
   return <Link className={className} to="/" {...rest}>{children}</Link>
 }

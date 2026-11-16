@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type DragEvent, type FormEvent } fr
 import { Link } from 'react-router-dom'
 import { ArrowRight, CheckCircle2, CloudUpload, FileText, ImageIcon, Link2, Plus, Send, Trash2, X } from 'lucide-react'
 import { PublicPageShell } from '../components/public/PublicPageShell'
+import { BlockRoot, PageLayout } from '../components/public/PageLayout'
 import { ReasonSelect } from '../components/contact/ReasonSelect'
 import { Button } from '../components/ui'
 import { useOptionalUser } from '../contexts/AuthContext'
@@ -208,7 +209,7 @@ export default function ContactPage() {
   }
 
   return <PublicPageShell title="Contact" description="Send a question, feature request, bug report, complaint, copyright notice or sponsorship proposal to the Stracker team at DYPOL LABS.">
-    <div className="pub-shell pub-doc-shell contact-shell">
+    <PageLayout page="contact" sections={{ 'stracker.contact': () => <BlockRoot className="pub-shell pub-doc-shell contact-shell">
       <header className="pub-doc-head contact-head">
         <p className="pub-eyebrow"><span aria-hidden="true">✎</span> STRACKER BY DYPOL LABS</p>
         <h1 id="contact-title">Contact the Stracker team</h1>
@@ -317,6 +318,6 @@ export default function ContactPage() {
             <p className="contact-privacy-note">By sending, you agree that DYPOL LABS stores this message to answer it, as described in the <Link to="/privacy">Privacy Policy</Link>.</p>
           </div>
         </form>}
-    </div>
+    </BlockRoot> }} />
   </PublicPageShell>
 }

@@ -13,8 +13,9 @@ import {
 /** Server contract for GET /api/control/appearance-state (see api/_lib/control-routes/appearance.ts). */
 export interface AppearanceState {
   schemaVersion: number
-  draft: { exists: boolean; overrides: SiteOverrides; updatedAt: string | null; updatedByYou: boolean }
-  published: { version: number; overrides: SiteOverrides; publishedAt: string | null; publishedByYou: boolean }
+  /** `document`: the Live Site Editor page document of the draft (falls back to the live one); null = as shipped. */
+  draft: { exists: boolean; overrides: SiteOverrides; document?: unknown; updatedAt: string | null; updatedByYou: boolean }
+  published: { version: number; overrides: SiteOverrides; document?: unknown; publishedAt: string | null; publishedByYou: boolean }
   versions: Array<{
     version: number
     action: 'publish' | 'restore'

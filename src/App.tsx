@@ -97,7 +97,7 @@ function RootRoute() {
   // Unknown addresses get an in-app 404 for visitors too, instead of silently showing the homepage.
   if (!user && !isKnownAppPath(location.pathname)) return <NotFoundPage signedIn={false} />
   // Published website and notebook copy is loaded once here, for both the homepage and the notebook.
-  if (!user) return <SiteGate kind="public"><SiteContentProvider><LandingPage /></SiteContentProvider></SiteGate>
+  if (!user) return <SiteGate kind="public"><SiteContentProvider withDocument><LandingPage /></SiteContentProvider></SiteGate>
   return <SiteContentProvider><Outlet /></SiteContentProvider>
 }
 
@@ -161,10 +161,10 @@ function AppRoutes() {
       {/* Google (OAuth, PKCE) returns here; the page finishes the code exchange and moves on. */}
       <Route path="/auth/callback" element={<SiteGate kind="auth"><AuthCallbackPage /></SiteGate>} />
       {/* Information pages and Contact, open to visitors and students alike. Text ships built in and is owner-editable. */}
-      <Route path="/privacy" element={<SiteGate kind="public"><SiteContentProvider><InfoPage kind="privacy" /></SiteContentProvider></SiteGate>} />
-      <Route path="/terms" element={<SiteGate kind="public"><SiteContentProvider><InfoPage kind="terms" /></SiteContentProvider></SiteGate>} />
-      <Route path="/about" element={<SiteGate kind="public"><SiteContentProvider><InfoPage kind="about" /></SiteContentProvider></SiteGate>} />
-      <Route path="/contact" element={<SiteGate kind="public"><SiteContentProvider><ContactPage /></SiteContentProvider></SiteGate>} />
+      <Route path="/privacy" element={<SiteGate kind="public"><SiteContentProvider withDocument><InfoPage kind="privacy" /></SiteContentProvider></SiteGate>} />
+      <Route path="/terms" element={<SiteGate kind="public"><SiteContentProvider withDocument><InfoPage kind="terms" /></SiteContentProvider></SiteGate>} />
+      <Route path="/about" element={<SiteGate kind="public"><SiteContentProvider withDocument><InfoPage kind="about" /></SiteContentProvider></SiteGate>} />
+      <Route path="/contact" element={<SiteGate kind="public"><SiteContentProvider withDocument><ContactPage /></SiteContentProvider></SiteGate>} />
       <Route path="*" element={<NotFoundPage signedIn={false} />} />
     </Routes>
   </Suspense>

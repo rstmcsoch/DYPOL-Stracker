@@ -725,7 +725,7 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
 .pub-hp[data-public-theme='dark'] .hp-exams { color: var(--hp-ink); background: #0d1018; }
 .hp-exams-label { --hp-fs: .75rem; --hp-lh: 1.3; --hp-fw: 700; flex: none; margin: 0; letter-spacing: .14em; text-transform: uppercase; opacity: .8; }
 .hp-exams-window { display: flex; flex: 1; min-width: 0; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
-.hp-exams-track { display: flex; flex: none; gap: 0; animation: hp-marquee 46s linear infinite; }
+.hp-exams-track { display: flex; flex: none; gap: 0; animation: hp-marquee var(--hp-exams-duration, 46s) linear infinite; }
 .hp-exams-window:hover .hp-exams-track { animation-play-state: paused; }
 .hp-exams-track li { --font-public: var(--hp-hand); display: inline-flex; align-items: center; gap: 18px; padding-right: 18px; font-size: 1.25rem; line-height: 1.3; white-space: nowrap; }
 .hp-exams-track li span { color: var(--hp-yellow); font-size: .9rem; }
