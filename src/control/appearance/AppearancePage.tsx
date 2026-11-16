@@ -1,5 +1,6 @@
 import { useRef } from 'react'
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { PencilRuler } from 'lucide-react'
 import { useCurrentTabInView } from '../useCurrentTabInView'
 import { CONSOLE_BASE } from '../policy'
 import { PageHeader } from '../pageParts'
@@ -25,7 +26,8 @@ export default function AppearancePage() {
   useCurrentTabInView(navRef)
   return (
     <>
-      <PageHeader title="Appearance" description="Edit the words visitors and members see, preview them, then publish. Drafts stay private until you publish." />
+      <PageHeader title="Appearance" description="Edit the words visitors and members see, preview them, then publish. Drafts stay private until you publish."
+        actions={<Link to={`${CONSOLE_BASE}/appearance/live-editor`} className="cc-btn cc-btn--primary cc-btn--md"><PencilRuler size={16} aria-hidden="true" /> Open Live Site Editor</Link>} />
       <ContentEditorProvider>
         <nav className="cc-tabs" aria-label="Appearance sections" ref={navRef}>
           {TABS.map(tab => (

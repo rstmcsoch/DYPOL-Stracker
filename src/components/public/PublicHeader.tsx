@@ -94,7 +94,7 @@ export function PublicHeader({ theme, onThemeToggle, sectionPrefix = '', signedI
     }
   }, [open])
 
-  return <header className="pub-header">
+  return <header className="pub-header" data-se-region="header">
     <div className="pub-header-inner">
       <PublicBrand />
       <nav className="pub-nav" aria-label="Stracker sections">
