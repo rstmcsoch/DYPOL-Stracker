@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom'
-import { PencilRuler } from 'lucide-react'
+import { LayoutDashboard, PencilRuler } from 'lucide-react'
 import { useCurrentTabInView } from '../useCurrentTabInView'
 import { CONSOLE_BASE } from '../policy'
 import { PageHeader } from '../pageParts'
@@ -27,7 +27,10 @@ export default function AppearancePage() {
   return (
     <>
       <PageHeader title="Appearance" description="Edit the words visitors and members see, preview them, then publish. Drafts stay private until you publish."
-        actions={<Link to={`${CONSOLE_BASE}/appearance/live-editor`} className="cc-btn cc-btn--primary cc-btn--md"><PencilRuler size={16} aria-hidden="true" /> Open Live Site Editor</Link>} />
+        actions={<>
+          <Link to={`${CONSOLE_BASE}/appearance/live-editor`} className="cc-btn cc-btn--primary cc-btn--md"><PencilRuler size={16} aria-hidden="true" /> Open Live Site Editor</Link>
+          <Link to={`${CONSOLE_BASE}/appearance/student-dashboard-editor`} className="cc-btn cc-btn--default cc-btn--md" title="Student Dashboard Editor: the signed-in student workspace, previewed with sample data"><LayoutDashboard size={16} aria-hidden="true" /> Open Student Dashboard Editor</Link>
+        </>} />
       <ContentEditorProvider>
         <nav className="cc-tabs" aria-label="Appearance sections" ref={navRef}>
           {TABS.map(tab => (

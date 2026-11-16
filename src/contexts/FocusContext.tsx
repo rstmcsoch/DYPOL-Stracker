@@ -48,20 +48,27 @@ function freshBlock(current: TimerState, mode: FocusMode = current.mode): TimerS
   }
 }
 
-export function FocusProvider({ children }: { children: ReactNode }) {
+/**
+ * `preview` (Student Dashboard Editor canvas only): start from the given simulated timer and
+ * keep it in memory, with no session storage and no unload prompt. Sessions it logs go to the
+ * surrounding (in-memory preview) data provider. Students always use the default.
+ */
+export function FocusProvider({ children, preview }: { children: ReactNode; preview?: { initial: TimerState } }) {
   const { upsert, data } = useData()
   const { user } = useAuth()
   const { notify } = useToast()
   const storageKey = `${KEY}:${user?.id ?? 'session'}`
-  const [timer, setTimer] = useState<TimerState>(() => restoreTimer(storageKey))
+  const persist = !preview
+  const [timer, setTimer] = useState<TimerState>(() => (preview ? preview.initial : restoreTimer(storageKey)))
   const timerRef = useRef(timer)
   const ending = useRef(false)
   const focusMinutes = timer.durations[timer.mode]
 
   useEffect(() => {
     timerRef.current = timer
+    if (!persist) return
     try { sessionStorage.setItem(storageKey, JSON.stringify(timer)) } catch { /* A blocked session store does not stop the timer. */ }
-  }, [timer, storageKey])
+  }, [timer, storageKey, persist])
 
   /** Block ids already written in this tab, so a double End/Save/completion cannot double-log. */
   const loggedBlocks = useRef(new Set<string>())
@@ -176,11 +183,11 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   // Closing the tab would drop the in-memory block; ask the browser to warn first.
   const unsavedNow = hasUnsavedFocus(timer)
   useEffect(() => {
-    if (!unsavedNow) return
+    if (!unsavedNow || !persist) return
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [unsavedNow])
+  }, [unsavedNow, persist])
 
   const setSubject = useCallback((subject: Subject | null) => setTimer(current => ({ ...current, subject })), [])
   const setChapter = useCallback((chapterId: string | null) => setTimer(current => ({ ...current, chapterId })), [])

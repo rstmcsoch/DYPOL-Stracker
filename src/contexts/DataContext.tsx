@@ -27,7 +27,7 @@ export type SyncState = 'loading' | 'syncing' | 'synced' | 'offline' | 'local' |
 type ImportCollections = Partial<{ [T in TableName]: RecordFor<T>[] }>
 interface RelatedUndoEntry { table: TableName; record: Record<string, unknown>; remove: boolean }
 interface UndoEntry { table: TableName; record: Record<string, unknown>; related: RelatedUndoEntry[]; expiresAt: number }
-interface DataContextValue {
+export interface DataContextValue {
   data: AppData
   loading: boolean
   syncState: SyncState
@@ -794,6 +794,14 @@ async function compressImage(file: File): Promise<string> {
   if (!context) throw new Error('Image compression is unavailable in this browser.')
   context.drawImage(source, 0, 0, canvas.width, canvas.height)
   return canvas.toDataURL('image/webp', 0.78)
+}
+
+/**
+ * Preview-only injection boundary (Student Dashboard Editor canvas): supplies an in-memory
+ * value instead of the real provider. Never used by the student app itself.
+ */
+export function DataPreviewProvider({ value, children }: { value: DataContextValue; children: ReactNode }) {
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }
 
 export function useData(): DataContextValue {

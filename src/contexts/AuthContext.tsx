@@ -22,7 +22,7 @@ export interface SignUpResult {
   needsEmailConfirmation: boolean
 }
 
-interface AuthContextValue {
+export interface AuthContextValue {
   user: AppUser | null
   loading: boolean
   error: string | null
@@ -295,6 +295,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }), [user, loading, error, suspension])
 
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+/** Preview-only injection boundary (editor canvas): a synthetic, signed-out-of-nothing user. */
+export function AuthPreviewProvider({ value, children }: { value: AuthContextValue; children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

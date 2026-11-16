@@ -50,6 +50,14 @@ export function OverviewTab() {
         </dl>
         <p className="cc-muted"><Link className="cc-link" to={`${CONSOLE_BASE}/appearance/publishing`}>Review, preview and publish →</Link></p>
       </Panel>
+      <Panel title="Student Dashboard Editor" description="Visually arrange, restyle and relabel the signed-in student workspace (Home, the shell and every student page), previewed with a synthetic sample student.">
+        <ul className="cc-muted" style={{ margin: "0 0 8px", paddingInlineStart: 18 }}>
+          <li>Presentation only: layout, order, visibility, labels, spacing, typography, colours, responsive styles.</li>
+          <li>Each student’s own data (dates, marks, scores, names, streaks, progress…) stays live, private and locked.</li>
+          <li>Drafts are private; publishing needs your authenticator code and applies to all student workspaces.</li>
+        </ul>
+        <p className="cc-muted"><Link className="cc-link" to={`${CONSOLE_BASE}/appearance/student-dashboard-editor`}>Open Student Dashboard Editor →</Link></p>
+      </Panel>
       <Panel title="Public website" description="Copy shown before sign-in: homepage, header, footer and page title.">
         <dl className="cc-dl">
           <div><dt>Editable items</dt><dd>{publicFields.length}</dd></div>

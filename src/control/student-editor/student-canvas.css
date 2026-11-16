@@ -1,0 +1,21 @@
+/* Student Dashboard Editor canvas (inside the editor iframe only). */
+.sl-ov, .sl-ov-label, .sl-ov-toolbar, .sl-ov-tip { position: fixed; top: 0; left: 0; z-index: 2147483000; display: none; pointer-events: none; }
+.sl-ov { border-radius: 6px; }
+.sl-ov-hover { outline: 1.5px dashed rgba(47, 92, 255, .75); outline-offset: -1px; }
+.sl-ov-selected { outline: 2px solid #2f5cff; outline-offset: -1px; box-shadow: 0 0 0 4px rgba(47, 92, 255, .18); }
+.sl-ov-label { padding: 2px 8px; border-radius: 6px; background: #2f5cff; color: #fff; font: 600 12px/18px system-ui, sans-serif; white-space: nowrap; }
+.sl-ov-toolbar { pointer-events: auto; gap: 2px; padding: 3px; border-radius: 10px; background: #12151c; box-shadow: 0 8px 24px rgba(0, 0, 0, .3); }
+.sl-ov-btn { min-width: 40px; height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: #fff; font: 600 15px/1 system-ui, sans-serif; cursor: pointer; }
+.sl-ov-btn:hover, .sl-ov-btn:focus-visible { background: rgba(255, 255, 255, .14); outline: none; }
+.sl-ov-btn:disabled { opacity: .35; cursor: default; }
+.sl-ov-tip { padding: 6px 10px; border-radius: 8px; background: #12151c; color: #fff; font: 600 12px/16px system-ui, sans-serif; white-space: nowrap; }
+.sl-badge { position: fixed; z-index: 2147483001; left: 50%; bottom: 10px; transform: translateX(-50%); padding: 4px 12px; border-radius: 999px; background: #12151c; color: #fff;
+  font: 700 11px/16px system-ui, sans-serif; letter-spacing: .08em; pointer-events: none; opacity: .88; white-space: nowrap; }
+html[data-sl-canvas='edit'] [data-sl] { cursor: pointer; }
+html[data-sl-canvas='edit'] [data-sl-text] { cursor: text; border-radius: 3px; }
+html[data-sl-canvas='edit'] [data-sl-text]:hover { outline: 1.5px dashed rgba(47, 92, 255, .6); outline-offset: 2px; }
+html[data-sl-canvas='edit'] [data-sl-data] { cursor: not-allowed; }
+html[data-sl-canvas='edit'] [data-sl-data]:hover { outline: 1.5px dotted rgba(120, 120, 120, .7); outline-offset: 2px; border-radius: 3px; }
+html[data-sl-canvas] [data-sl-hidden] { opacity: .35; filter: grayscale(1); }
+.sl-editing { outline: 2px solid #ffb020 !important; outline-offset: 2px; border-radius: 3px; cursor: text !important; caret-color: #2f5cff; }
+html[data-sl-canvas] { scroll-behavior: auto !important; }
