@@ -1,3 +1,4 @@
+import { T } from '../../lib/student-layout/T'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
@@ -42,7 +43,7 @@ export function ChapterStageEditor({ chapter }: { chapter: Chapter }) {
   }
 
   return <div className="jee-stage-editor" aria-label="Learning stages">
-    <div className="jee-stage-editor-head"><span className="eyebrow">LEARNING STAGES</span><span className="jee-muted jee-small">Any order</span></div>
+    <div className="jee-stage-editor-head"><span className="eyebrow"><T k="syllabus:learning-stages">{"LEARNING STAGES"}</T></span><span className="jee-muted jee-small"><T k="syllabus:any-order">{"Any order"}</T></span></div>
     <StagePipeline stages={stages} />
     <div className="jee-stage-toggles">
       {TOGGLEABLE.map(item => {

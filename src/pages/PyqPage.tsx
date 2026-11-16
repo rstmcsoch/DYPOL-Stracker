@@ -12,6 +12,7 @@ import { PYQ_EXAMS } from '../types'
 import { isJeeSettings } from '../lib/jee/exam'
 import { examName } from '../lib/exams/catalog'
 import { currentSubjectCatalog } from '../lib/exams/subjects'
+import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
 type ExamFilter = 'all' | PYQExam
@@ -108,13 +109,13 @@ export default function PyqPage() {
     <PageHeader layoutId="pyqs.header"
       title="PYQ tracker"
       subtitle="Mark past papers done per chapter."
-      action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} /> Year range</Button>}
+      action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} />{' '}<T k="pyqs:year-range">{"Year range"}</T></Button>}
     />
 
     {!sl.hidden('summary') && <section {...sl.attrs('summary')} className={`jee-stat-grid ${examList.length === 2 ? 'two' : 'one'}`} aria-label="PYQ completion overall">
       {overall.map(item => <NotebookCard key={item.exam} className="jee-stat">
         <span>{pyqLabel(item.exam)} PYQs</span>
-        <strong>{item.done}/{item.total}<small> years</small></strong>
+        <strong>{item.done}/{item.total}<small>{' '}<T k="pyqs:years">{"years"}</T></small></strong>
         <Meter value={item.percent} label={`${pyqLabel(item.exam)} PYQ completion`} tone={item.exam === 'Main' ? 'blue' : 'orange'} />
         <small>{item.percent === null ? 'Set a year range in Settings' : `${Math.round(item.percent)}% complete across all chapters`}</small>
       </NotebookCard>)}
@@ -125,25 +126,25 @@ export default function PyqPage() {
         <label className="jee-search"><Search size={16} aria-hidden="true" /><input type="search" placeholder="Find a chapter" value={search} onChange={event => setSearch(event.target.value)} aria-label="Find a chapter" /></label>
         <SubjectSelect value={subject} onChange={value => setSubject(value as Subject | 'all')} />
       </div>
-      {jee && <ChipFilter<ExamFilter> label="Exam" value={exam} onChange={setExam} options={[{ value: 'all', label: 'Both' }, { value: 'Main', label: 'JEE Main' }, { value: 'Advanced', label: 'JEE Advanced' }]} />}
-      <ChipFilter<StatusFilter> label="Status" value={status} onChange={setStatus} options={[{ value: 'all', label: 'All' }, { value: 'pending', label: 'Has pending years' }, { value: 'done', label: 'Complete' }]} />
+      {jee && <ChipFilter<ExamFilter> lk="pyqs" label="Exam" value={exam} onChange={setExam} options={[{ value: 'all', label: 'Both' }, { value: 'Main', label: 'JEE Main' }, { value: 'Advanced', label: 'JEE Advanced' }]} />}
+      <ChipFilter<StatusFilter> lk="pyqs" label="Status" value={status} onChange={setStatus} options={[{ value: 'all', label: 'All' }, { value: 'pending', label: 'Has pending years' }, { value: 'done', label: 'Complete' }]} />
     </NotebookCard>
 
-    {!hasWindow && <NotebookCard><EmptyState title="Set a PYQ year range in Settings." action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}>Open Settings</Button>} /></NotebookCard>}
+    {!hasWindow && <NotebookCard><EmptyState lk="pyqs:set-a-pyq-year-range-in-settings" title="Set a PYQ year range in Settings." action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><T k="pyqs:open-settings">{"Open Settings"}</T></Button>} /></NotebookCard>}
 
     {selected.size > 0 && <div className="jee-bulk-bar" role="region" aria-label="Bulk PYQ actions">
-      <span><strong>{selected.size}</strong> selected</span>
+      <span><strong>{selected.size}</strong>{' '}<T k="pyqs:selected">{"selected"}</T></span>
       <div className="jee-bulk-actions">
         {(!jee ? examList : exam === 'all' ? [...PYQ_EXAMS] : [exam]).map(item => <span key={item} className="jee-bulk-pair">
           <Button size="sm" variant="secondary" onClick={() => void bulk(item, true)} loading={bulkBusy}><CheckCheck size={14} /> {pyqLabel(item)}: all done</Button>
-          <Button size="sm" variant="quiet" onClick={() => void bulk(item, false)} disabled={bulkBusy}>Reset</Button>
+          <Button size="sm" variant="quiet" onClick={() => void bulk(item, false)} disabled={bulkBusy}><T k="pyqs:reset">{"Reset"}</T></Button>
         </span>)}
       </div>
-      <Button size="sm" variant="quiet" onClick={() => setSelected(new Set())} aria-label="Clear selection"><X size={14} /> Clear</Button>
+      <Button size="sm" variant="quiet" onClick={() => setSelected(new Set())} aria-label="Clear selection"><X size={14} />{' '}<T k="pyqs:clear">{"Clear"}</T></Button>
     </div>}
 
     <SectionHeading title="Chapters" note={`${chapters.length} shown · tap a year to toggle it · tick chapters to bulk-edit`} />
-    {chapters.length === 0 ? <NotebookCard><EmptyState icon={<Check size={22} />} title="No chapters match." /></NotebookCard> : <div className="jee-pyq-grid">
+    {chapters.length === 0 ? <NotebookCard><EmptyState lk="pyqs:no-chapters-match" icon={<Check size={22} />} title="No chapters match." /></NotebookCard> : <div className="jee-pyq-grid">
       {chapters.map(chapter => {
         const rows = exams.map(item => ({ exam: item, completion: pyqCompletion(data.pyqRecords, chapter.id, item, data.settings) }))
         const isSelected = selected.has(chapter.id)
@@ -158,8 +159,8 @@ export default function PyqPage() {
             <div className="jee-pyq-exam-head">
               <span>{pyqLabel(examValue)} PYQs: <b>{completion.done}/{completion.total}</b> complete{completion.percent !== null && <> — <b>{Math.round(completion.percent)}%</b></>}</span>
               <span className="jee-pyq-exam-actions">
-                <button type="button" onClick={() => void setAllForChapter(chapter, examValue, true)} disabled={completion.pendingYears.length === 0} aria-label={`Mark all ${pyqLabel(examValue)} years done for ${chapter.name}`}>All</button>
-                <button type="button" onClick={() => void setAllForChapter(chapter, examValue, false)} disabled={completion.doneYears.length === 0} aria-label={`Reset ${pyqLabel(examValue)} years for ${chapter.name}`}>Reset</button>
+                <button type="button" onClick={() => void setAllForChapter(chapter, examValue, true)} disabled={completion.pendingYears.length === 0} aria-label={`Mark all ${pyqLabel(examValue)} years done for ${chapter.name}`}><T k="pyqs:all">{"All"}</T></button>
+                <button type="button" onClick={() => void setAllForChapter(chapter, examValue, false)} disabled={completion.doneYears.length === 0} aria-label={`Reset ${pyqLabel(examValue)} years for ${chapter.name}`}><T k="pyqs:reset">{"Reset"}</T></button>
               </span>
             </div>
             <div className="jee-year-row" role="group" aria-label={`${pyqLabel(examValue)} years for ${chapter.name}`}>

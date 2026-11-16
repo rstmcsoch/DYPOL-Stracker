@@ -7,6 +7,7 @@ import { useData } from '../contexts/DataContext'
 import { indiaToday } from '../lib/date'
 import { chosenExamTitle, isJeeSettings } from '../lib/jee/exam'
 import { computeStreaks } from '../lib/jee/study-time'
+import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
 /**
@@ -32,12 +33,12 @@ export default function ProfilePage() {
         </div>
       </div>
       <div className="profile-stats" aria-label="Study rhythm">
-        <div className="profile-stat"><Flame size={15} aria-hidden="true" /><strong>{streak.current} day{streak.current === 1 ? '' : 's'}</strong><span>current streak</span></div>
-        <div className="profile-stat"><strong>{streak.longest} day{streak.longest === 1 ? '' : 's'}</strong><span>longest streak</span></div>
-        <div className="profile-stat"><strong>{streak.weeklyConsistency}/7</strong><span>active this week</span></div>
+        <div className="profile-stat"><Flame size={15} aria-hidden="true" /><strong>{streak.current} day{streak.current === 1 ? '' : 's'}</strong><span><T k="profile:current-streak">{"current streak"}</T></span></div>
+        <div className="profile-stat"><strong>{streak.longest} day{streak.longest === 1 ? '' : 's'}</strong><span><T k="profile:longest-streak">{"longest streak"}</T></span></div>
+        <div className="profile-stat"><strong>{streak.weeklyConsistency}/7</strong><span><T k="profile:active-this-week">{"active this week"}</T></span></div>
       </div>
     </NotebookCard>
     <ExamSelectionSection />
-    <p className="profile-settings-note">Theme, reading font, appearance and AI settings live under the gear at the top of this page.</p>
+    <p className="profile-settings-note"><T k="profile:theme-reading-font-appearance-and-ai-set">{"Theme, reading font, appearance and AI settings live under the gear at the top of this page."}</T></p>
   </div>
 }

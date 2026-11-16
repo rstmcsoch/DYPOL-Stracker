@@ -63,7 +63,8 @@ function entries(root: ParentNode = document): Entry[] {
     push('Show / hide', nameOf(control), open, () => (control as HTMLElement).click())
   })
   root.querySelectorAll('.page-header-action button, .page-header-action a[role="button"]').forEach(button => {
-    if (visible(button)) push('Open', nameOf(button), false, () => (button as HTMLElement).click())
+    // Exports and downloads are actions, not states of the page.
+    if (visible(button) && !/^(Export|Download|Print)/i.test(nameOf(button))) push('Open', nameOf(button), false, () => (button as HTMLElement).click())
   })
   root.querySelectorAll('select').forEach(node => {
     const select = node as HTMLSelectElement

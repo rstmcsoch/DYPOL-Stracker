@@ -13,6 +13,8 @@
  * and styles are editable.
  */
 
+import { PAGE_LABELS } from './labels.generated.js'
+
 export const STUDENT_LAYOUT_SCHEMA_VERSION = 1
 
 export type StudentPageId =
@@ -182,7 +184,7 @@ const PAGE_SPECS: Record<Exclude<StudentPageId, 'home' | 'shell'>, PageSpec> = {
   decks: { header: { title: 'Formula & flashcards', subtitle: 'Rate each card Again, Hard, Good or Easy; Good and Easy move it up your revision ladder.' }, sections: [['summary', 'Due cards', true, true], ['filters', 'Deck picker', true, false]] },
   'study-now': { header: { title: 'Study now', subtitle: 'Your most urgent item, and why.' }, sections: [['exam-mode', 'Exam Mode card', true, false], ['tracks', 'Track readiness', true, false]] },
   planner: { header: { title: 'Planner' }, sections: [['grid', 'Planner board', true, false]] },
-  settings: { header: { title: 'Settings' }, sections: [['tabs', 'Settings tabs', false, false], ['panels', 'Settings panels', true, false]] },
+  settings: { header: { title: 'Settings' }, sections: [['tabs', 'Settings tabs', false, false], ['panels', 'Settings panels', true, false], ['panel-account', 'Account tab', true, false], ['panel-exam', 'Exam tab', true, false], ['panel-appearance', 'Appearance tab', true, false], ['panel-rhythm', 'Study rhythm tab', true, false], ['panel-data', 'Data tab', true, false]] },
   profile: { header: { title: 'Profile', eyebrow: 'PROFILE' }, sections: [['card', 'Profile card', true, false]] },
   backup: { header: { title: 'Export & backup', subtitle: 'Download, import or report your data.' }, sections: [['exports', 'Export cards', false, false], ['report', 'Report builder', true, false], ['import', 'Import section', false, false], ['security', 'Security note', false, true]] }
 }
@@ -212,7 +214,19 @@ const PAGE_PARTS: ComponentDef[] = STUDENT_PAGES
     return [root, ...header, ...sections]
   })
 
-export const COMPONENTS: readonly ComponentDef[] = [...SHELL, ...HOME, ...PAGE_PARTS]
+/**
+ * Static wording of each page, its sub-tabs and dialogs (headings, button text, field labels,
+ * helper and empty-state text), generated from literal source strings only. One component per
+ * page, outside the section order; values are plain text, so a label can never show data.
+ */
+const PAGE_TEXT: ComponentDef[] = Object.entries(PAGE_LABELS).map(([page, labels]) => ({
+  id: `${page}.labels`, page: page as StudentPageId, label: 'Page text', kind: 'section' as const, parent: null,
+  caps: caps({ required: true, hideable: false, reorderable: false }),
+  text: Object.fromEntries(labels.map(([key, value]) => [key, text(value.length > 60 ? `${value.slice(0, 57)}…` : value, value, Math.min(240, Math.max(40, value.length * 2)))])),
+  note: 'Every static label on this page, including its sub-tabs and dialogs. Double-click a label on the canvas to edit it in place.'
+}))
+
+export const COMPONENTS: readonly ComponentDef[] = [...SHELL, ...HOME, ...PAGE_PARTS, ...PAGE_TEXT]
 export const COMPONENT_MAP: ReadonlyMap<string, ComponentDef> = new Map(COMPONENTS.map(def => [def.id, def]))
 
 /** Sidebar groups and their routes, in shipped order (mirrors AppShell navGroups). */

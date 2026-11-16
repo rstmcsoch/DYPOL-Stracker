@@ -1,3 +1,4 @@
+import { T } from '../../lib/student-layout/T'
 import { useEffect, useState } from 'react'
 import { Bell, BellOff, CalendarDays, Check } from 'lucide-react'
 import { Button, Field, NotebookCard } from '../ui'
@@ -57,22 +58,22 @@ export function ExamTracksSection() {
   }
 
   return <NotebookCard className="settings-section">
-    <div className="jee-settings-head"><CalendarDays size={18} aria-hidden="true" /><div><strong>Preparation tracks</strong><small className="jee-muted">One syllabus; tracks differ by date.</small></div></div>
+    <div className="jee-settings-head"><CalendarDays size={18} aria-hidden="true" /><div><strong><T k="settings:preparation-tracks">{"Preparation tracks"}</T></strong><small className="jee-muted"><T k="settings:one-syllabus-tracks-differ-by-date">{"One syllabus; tracks differ by date."}</T></small></div></div>
     <div className="settings-section-content">
       <div className="jee-track-settings">
         <div className="jee-track-setting readonly"><span>{TRACK_LABEL.main1}</span><small className="jee-muted">Date comes from “{jee ? 'JEE Main date' : `${TRACK_LABEL.main1} date`}” above.</small></div>
-        {jee && <div className="jee-track-setting readonly"><span>{TRACK_LABEL.advanced}</span><small className="jee-muted">Date comes from “JEE Advanced date” above.</small></div>}
+        {jee && <div className="jee-track-setting readonly"><span>{TRACK_LABEL.advanced}</span><small className="jee-muted"><T k="settings:date-comes-from-jee-advanced-date-above">{"Date comes from “JEE Advanced date” above."}</T></small></div>}
         {editable.map(track => <div key={track} className="jee-track-setting">
           <span>{TRACK_LABEL[track]}</span>
           <div className="form-grid two">
-            <Field label="Exam date"><DateInput label={`${TRACK_LABEL[track]} exam date`} value={drafts[track]?.exam_date ?? ''} onChange={value => setDrafts(current => ({ ...current, [track]: { target_score: current[track]?.target_score ?? '', exam_date: value } }))} /></Field>
-            <Field label="Target score (optional)"><input type="number" min="0" max="999999.99" step="0.01" value={drafts[track]?.target_score ?? ''} onChange={event => setDrafts(current => ({ ...current, [track]: { exam_date: current[track]?.exam_date ?? '', target_score: event.target.value } }))} /></Field>
+            <Field lk="settings:exam-date" label="Exam date"><DateInput label={`${TRACK_LABEL[track]} exam date`} value={drafts[track]?.exam_date ?? ''} onChange={value => setDrafts(current => ({ ...current, [track]: { target_score: current[track]?.target_score ?? '', exam_date: value } }))} /></Field>
+            <Field lk="settings:target-score-optional" label="Target score (optional)"><input type="number" min="0" max="999999.99" step="0.01" value={drafts[track]?.target_score ?? ''} onChange={event => setDrafts(current => ({ ...current, [track]: { exam_date: current[track]?.exam_date ?? '', target_score: event.target.value } }))} /></Field>
           </div>
         </div>)}
       </div>
       {error && <p className="field-error" role="alert">{error}</p>}
-      <div className="jee-section-save"><Button variant="secondary" size="sm" onClick={() => void save()} loading={saving}><Check size={14} /> Save track dates</Button></div>
-      <p className="jee-small jee-muted">Leave blank until dates are official.</p>
+      <div className="jee-section-save"><Button variant="secondary" size="sm" onClick={() => void save()} loading={saving}><Check size={14} />{' '}<T k="settings:save-track-dates">{"Save track dates"}</T></Button></div>
+      <p className="jee-small jee-muted"><T k="settings:leave-blank-until-dates-are-official">{"Leave blank until dates are official."}</T></p>
     </div>
   </NotebookCard>
 }
@@ -94,27 +95,27 @@ export function ReminderSettingsSection({ draft, patch, errors }: {
     setPermission(await Notification.requestPermission())
   }
   return <NotebookCard className="settings-section">
-    <div className="jee-settings-head">{draft.reminders_enabled ? <Bell size={18} aria-hidden="true" /> : <BellOff size={18} aria-hidden="true" />}<div><strong>Daily reminders</strong></div></div>
+    <div className="jee-settings-head">{draft.reminders_enabled ? <Bell size={18} aria-hidden="true" /> : <BellOff size={18} aria-hidden="true" />}<div><strong><T k="settings:daily-reminders">{"Daily reminders"}</T></strong></div></div>
     <div className="settings-section-content">
-      <label className="jee-toggle-row"><input type="checkbox" checked={draft.reminders_enabled} onChange={event => patch('reminders_enabled', event.target.checked)} /><span>Remind me once a day</span></label>
+      <label className="jee-toggle-row"><input type="checkbox" checked={draft.reminders_enabled} onChange={event => patch('reminders_enabled', event.target.checked)} /><span><T k="settings:remind-me-once-a-day">{"Remind me once a day"}</T></span></label>
       <div className="form-grid two">
-        <Field label="Time" hint="Type or paste a time, e.g. 8:30 pm. Arrow keys step 5 minutes."><TimeInput label="Reminder time" value={draft.reminder_time} disabled={!draft.reminders_enabled} error={errors.reminder_time} onChange={value => patch('reminder_time', value)} /></Field>
+        <Field lk="settings:l-time" lk2="settings:type-or-paste-a-time-e-g-8-30-pm-arrow-k" label="Time" hint="Type or paste a time, e.g. 8:30 pm. Arrow keys step 5 minutes."><TimeInput label="Reminder time" value={draft.reminder_time} disabled={!draft.reminders_enabled} error={errors.reminder_time} onChange={value => patch('reminder_time', value)} /></Field>
         <div className="jee-notif-permission">
-          <span className="field-label">Device notifications</span>
-          {permission === 'unsupported' ? <small className="jee-muted">This browser does not support notifications. In-app reminders still appear on Home.</small>
-            : permission === 'granted' ? <small className="jee-ok">Allowed. Reminders also appear as device notifications while Stracker is open.</small>
-            : permission === 'denied' ? <small className="jee-muted">Blocked in browser settings. In-app reminders still appear on Home.</small>
-            : <Button variant="secondary" size="sm" onClick={() => void requestPermission()} disabled={!draft.reminders_enabled}>Allow notifications</Button>}
+          <span className="field-label"><T k="settings:device-notifications">{"Device notifications"}</T></span>
+          {permission === 'unsupported' ? <small className="jee-muted"><T k="settings:this-browser-does-not-support-notificati">{"This browser does not support notifications. In-app reminders still appear on Home."}</T></small>
+            : permission === 'granted' ? <small className="jee-ok"><T k="settings:allowed-reminders-also-appear-as-device">{"Allowed. Reminders also appear as device notifications while Stracker is open."}</T></small>
+            : permission === 'denied' ? <small className="jee-muted"><T k="settings:blocked-in-browser-settings-in-app-remin">{"Blocked in browser settings. In-app reminders still appear on Home."}</T></small>
+            : <Button variant="secondary" size="sm" onClick={() => void requestPermission()} disabled={!draft.reminders_enabled}><T k="settings:allow-notifications">{"Allow notifications"}</T></Button>}
         </div>
       </div>
       <fieldset className="jee-fieldset jee-reminder-types" disabled={!draft.reminders_enabled}>
-        <legend>What to remind me about</legend>
+        <legend><T k="settings:what-to-remind-me-about">{"What to remind me about"}</T></legend>
         <div className="jee-chip-row">
           {REMINDER_KINDS.map(kind => <button key={kind} type="button" className={`jee-chip ${draft.reminder_types.includes(kind) ? 'active' : ''}`} aria-pressed={draft.reminder_types.includes(kind)} onClick={() => toggleType(kind)}>{REMINDER_LABEL[kind]}</button>)}
         </div>
         {errors.reminder_types && <p className="field-error" role="alert">{errors.reminder_types}</p>}
       </fieldset>
-      <p className="jee-small jee-muted">Works only while the app is open or running.</p>
+      <p className="jee-small jee-muted"><T k="settings:works-only-while-the-app-is-open-or-runn">{"Works only while the app is open or running."}</T></p>
     </div>
   </NotebookCard>
 }

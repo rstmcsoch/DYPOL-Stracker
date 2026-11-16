@@ -11,6 +11,7 @@ import { aggregatePractice, PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL } from '../lib/jee/
 import { practiceStudySessionId } from '../lib/jee/ids'
 import { validatePractice, type PracticeFormInput, type PracticeValue } from '../lib/jee/forms'
 import { PRACTICE_SOURCES, type AppData, type Chapter, type PracticeSession, type PracticeSource, type Subject, type StudySession } from '../types'
+import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
 type Period = '7' | '30' | '90' | 'all'
@@ -64,37 +65,37 @@ export default function PracticePage() {
     <PageHeader layoutId="practice.header"
       title="Practice log"
       subtitle="DPPs, modules and sheets — not counted as tests."
-      action={<Button onClick={() => openCreate()}><Plus size={16} /> Log practice</Button>}
+      action={<Button onClick={() => openCreate()}><Plus size={16} />{' '}<T k="practice:log-practice">{"Log practice"}</T></Button>}
     />
 
     {!sl.hidden('summary') && <section {...sl.attrs('summary')} className="jee-stat-grid" aria-label="Practice summary">
-      <NotebookCard className="jee-stat"><span>Questions attempted</span><strong>{overall.attempted.toLocaleString('en-IN')}</strong><small>{overall.sessions} block{overall.sessions === 1 ? '' : 's'} in view</small></NotebookCard>
-      <NotebookCard className="jee-stat"><span>Accuracy</span><strong><Pct value={overall.accuracy} digits={1} /></strong><small>{overall.correct} correct · {overall.incorrect} incorrect{overall.skipped ? ` · ${overall.skipped} skipped` : ''}</small></NotebookCard>
-      <NotebookCard className="jee-stat"><span>Recent accuracy</span><strong><Pct value={overall.recentAccuracy} digits={1} /></strong><small>last three blocks</small></NotebookCard>
-      <NotebookCard className="jee-stat"><span>Practice volume</span><strong>{minutesLabel(overall.timeMinutes)}</strong><small>time recorded in view</small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="practice:questions-attempted">{"Questions attempted"}</T></span><strong>{overall.attempted.toLocaleString('en-IN')}</strong><small>{overall.sessions} block{overall.sessions === 1 ? '' : 's'} in view</small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="practice:accuracy">{"Accuracy"}</T></span><strong><Pct value={overall.accuracy} digits={1} /></strong><small>{overall.correct} correct · {overall.incorrect} incorrect{overall.skipped ? ` · ${overall.skipped} skipped` : ''}</small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="practice:recent-accuracy">{"Recent accuracy"}</T></span><strong><Pct value={overall.recentAccuracy} digits={1} /></strong><small><T k="practice:last-three-blocks">{"last three blocks"}</T></small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="practice:practice-volume">{"Practice volume"}</T></span><strong>{minutesLabel(overall.timeMinutes)}</strong><small><T k="practice:time-recorded-in-view">{"time recorded in view"}</T></small></NotebookCard>
     </section>}
 
     <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
       <div className="jee-filter-grid">
         <SubjectSelect value={subject} onChange={value => { setSubject(value as Subject | 'all'); setChapterFilter('') }} />
         <ChapterSelect chapters={subjectChapters} value={chapterFilter} onChange={setChapterFilter} allowNone noneLabel="All chapters" subject={subject} label="Chapter" />
-        <label className="jee-select"><span>Source</span><select value={source} onChange={event => setSource(event.target.value as PracticeSource | 'all')}><option value="all">All sources</option>{PRACTICE_SOURCES.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label className="jee-select"><span><T k="practice:l-source">{"Source"}</T></span><select value={source} onChange={event => setSource(event.target.value as PracticeSource | 'all')}><option value="all">All sources</option>{PRACTICE_SOURCES.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
       </div>
-      <ChipFilter<Period> label="Date" value={period} onChange={setPeriod} options={[{ value: '7', label: 'Last 7 days' }, { value: '30', label: '30 days' }, { value: '90', label: '90 days' }, { value: 'all', label: 'All time' }]} />
+      <ChipFilter<Period> lk="practice" label="Date" value={period} onChange={setPeriod} options={[{ value: '7', label: 'Last 7 days' }, { value: '30', label: '30 days' }, { value: '90', label: '90 days' }, { value: 'all', label: 'All time' }]} />
     </NotebookCard>
 
-    {!hasAny ? <NotebookCard><EmptyState icon={<ClipboardList size={26} />} title="No practice logged yet." action={<Button variant="secondary" size="sm" onClick={() => openCreate()}><Plus size={15} /> Log your first block</Button>} /></NotebookCard>
+    {!hasAny ? <NotebookCard><EmptyState lk="practice:no-practice-logged-yet" icon={<ClipboardList size={26} />} title="No practice logged yet." action={<Button variant="secondary" size="sm" onClick={() => openCreate()}><Plus size={15} />{' '}<T k="practice:log-your-first-block">{"Log your first block"}</T></Button>} /></NotebookCard>
     : <div className="jee-two-col">
       <section>
         <SectionHeading title="Chapter performance" note={`${byChapter.length} chapter${byChapter.length === 1 ? '' : 's'} with practice in view`} />
-        {byChapter.length === 0 ? <NotebookCard><EmptyState icon={<Target size={22} />} title="Nothing matches these filters." /></NotebookCard> : <div className="jee-chapter-list">
+        {byChapter.length === 0 ? <NotebookCard><EmptyState lk="practice:nothing-matches-these-filters" icon={<Target size={22} />} title="Nothing matches these filters." /></NotebookCard> : <div className="jee-chapter-list">
           {byChapter.map(({ chapter, agg }) => <ChapterPracticeRow key={chapter.id} chapter={chapter} agg={agg} weakThreshold={data.settings.weak_threshold} onLog={() => openCreate(chapter.id)} />)}
         </div>}
       </section>
       <section>
         <SectionHeading title="History" note="Newest first." />
         <NotebookCard className="jee-history-card">
-          {filtered.length === 0 ? <p className="jee-muted jee-pad">No blocks in this view.</p> : <ul className="jee-history-list">
+          {filtered.length === 0 ? <p className="jee-muted jee-pad"><T k="practice:no-blocks-in-this-view">{"No blocks in this view."}</T></p> : <ul className="jee-history-list">
             {filtered.slice(0, 80).map(item => {
               const chapter = chapterById.get(item.chapter_id)
               const accuracy = item.attempted > 0 ? (item.correct / item.attempted) * 100 : null
@@ -107,11 +108,11 @@ export default function PracticePage() {
                     <StatusBadge tone="muted">{item.source}</StatusBadge>
                   </div>
                   <div className="jee-row-numbers">
-                    <span><b>{item.attempted}</b> attempted</span>
-                    <span><b>{item.correct}</b> correct</span>
-                    <span><b>{item.incorrect}</b> incorrect</span>
-                    <span><b>{item.skipped ?? 0}</b> skipped</span>
-                    <span><b><Pct value={accuracy} digits={0} /></b> accuracy</span>
+                    <span><b>{item.attempted}</b>{' '}<T k="practice:attempted">{"attempted"}</T></span>
+                    <span><b>{item.correct}</b>{' '}<T k="practice:correct">{"correct"}</T></span>
+                    <span><b>{item.incorrect}</b>{' '}<T k="practice:incorrect">{"incorrect"}</T></span>
+                    <span><b>{item.skipped ?? 0}</b>{' '}<T k="practice:skipped">{"skipped"}</T></span>
+                    <span><b><Pct value={accuracy} digits={0} /></b>{' '}<T k="practice:accuracy-2">{"accuracy"}</T></span>
                     {item.time_minutes !== null && <span><Timer size={12} aria-hidden="true" /> {minutesLabel(item.time_minutes)}</span>}
                   </div>
                   {item.notes && <p className="jee-note">{item.notes}</p>}
@@ -172,15 +173,15 @@ function ChapterPracticeRow({ chapter, agg, weakThreshold, onLog }: { chapter: C
   const trend = agg.recentAccuracy !== null && agg.accuracy !== null ? agg.recentAccuracy - agg.accuracy : null
   return <NotebookCard className={`jee-chapter-row ${weak ? 'is-weak' : ''}`}>
     <div className="jee-chapter-row-head">
-      <div><strong>{chapter.name}</strong><div className="jee-row-meta"><SubjectBadge subject={chapter.subject} />{weak && <StatusBadge tone="weak">Practice weak</StatusBadge>}</div></div>
-      <Button variant="quiet" size="sm" onClick={onLog}><Plus size={14} /> Log</Button>
+      <div><strong>{chapter.name}</strong><div className="jee-row-meta"><SubjectBadge subject={chapter.subject} />{weak && <StatusBadge tone="weak"><T k="practice:practice-weak">{"Practice weak"}</T></StatusBadge>}</div></div>
+      <Button variant="quiet" size="sm" onClick={onLog}><Plus size={14} />{' '}<T k="practice:log">{"Log"}</T></Button>
     </div>
     <div className="jee-chapter-row-stats">
-      <span><b>{agg.attempted}</b> attempted</span>
-      <span><b><Pct value={agg.accuracy} digits={0} /></b> accuracy</span>
+      <span><b>{agg.attempted}</b>{' '}<T k="practice:attempted">{"attempted"}</T></span>
+      <span><b><Pct value={agg.accuracy} digits={0} /></b>{' '}<T k="practice:accuracy-2">{"accuracy"}</T></span>
       <span>recent <b><Pct value={agg.recentAccuracy} digits={0} /></b>{trend !== null && trend !== 0 && <em className={trend > 0 ? 'jee-up' : 'jee-down'}>{trend > 0 ? '▲' : '▼'} {Math.abs(Math.round(trend))}</em>}</span>
-      <span><b>{agg.incorrect}</b> incorrect</span>
-      {agg.skipped > 0 && <span><b>{agg.skipped}</b> skipped</span>}
+      <span><b>{agg.incorrect}</b>{' '}<T k="practice:incorrect">{"incorrect"}</T></span>
+      {agg.skipped > 0 && <span><b>{agg.skipped}</b>{' '}<T k="practice:skipped">{"skipped"}</T></span>}
     </div>
     <Meter value={agg.accuracy} label={`${chapter.name} practice accuracy`} tone={weak ? 'orange' : 'green'} />
     <p className="jee-muted jee-small">{agg.sessions} block{agg.sessions === 1 ? '' : 's'}{agg.timeMinutes ? ` · ${minutesLabel(agg.timeMinutes)}` : ''}{agg.attempted < PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL ? ` · needs ${PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL} questions before it flags weakness` : ''}</p>
@@ -226,27 +227,27 @@ function PracticeDialog({ data, initialChapterId = '', existing, onClose, onSave
   const correct = Number(form.correct)
   const accuracy = attempted > 0 && Number.isFinite(correct) && form.correct !== '' && correct <= attempted ? (correct / attempted) * 100 : null
   const derivedIncorrect = form.attempted.trim() !== '' && form.correct.trim() !== '' && Number.isInteger(attempted) && Number.isInteger(correct) && correct >= 0 && correct <= attempted ? String(attempted - correct) : ''
-  return <Dialog title={existing ? 'Edit practice block' : 'Log practice'} subtitle="Incorrect is worked out for you: attempted − correct." onClose={onClose} className="jee-dialog">
+  return <Dialog lk2="practice:incorrect-is-worked-out-for-you-attempte" title={existing ? 'Edit practice block' : 'Log practice'} subtitle="Incorrect is worked out for you: attempted − correct." onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <div className="form-grid two">
         <SubjectSelect value={subject} onChange={value => { setSubject(value as Subject | 'all'); set('chapterId', '') }} allowAll label="Subject filter" />
-        <Field label="Date" error={errors.date} required><input type="date" max={today} value={form.date} onChange={event => set('date', event.target.value)} /></Field>
+        <Field lk="practice:l-date" label="Date" error={errors.date} required><input type="date" max={today} value={form.date} onChange={event => set('date', event.target.value)} /></Field>
       </div>
       <div className="jee-field-wide"><ChapterSelect chapters={data.chapters} value={form.chapterId} onChange={value => set('chapterId', value)} subject={subject} label="Chapter" formatLabel={chapterWithSubject} /></div>
       {errors.chapterId && <p className="field-error" role="alert">{errors.chapterId}</p>}
       <div className="form-grid three">
-        <Field label="Attempted" hint="Excludes skipped" error={errors.attempted} required><input inputMode="numeric" value={form.attempted} onChange={event => set('attempted', event.target.value)} placeholder="120" /></Field>
-        <Field label="Correct" error={errors.correct} required><input inputMode="numeric" value={form.correct} onChange={event => set('correct', event.target.value)} placeholder="92" /></Field>
-        <Field label="Incorrect" hint="Attempted − correct"><input inputMode="numeric" value={derivedIncorrect} readOnly aria-readonly="true" tabIndex={-1} placeholder="—" className="jee-derived-input" /></Field>
+        <Field lk="practice:attempted-2" lk2="practice:excludes-skipped" label="Attempted" hint="Excludes skipped" error={errors.attempted} required><input inputMode="numeric" value={form.attempted} onChange={event => set('attempted', event.target.value)} placeholder="120" /></Field>
+        <Field lk="practice:correct-2" label="Correct" error={errors.correct} required><input inputMode="numeric" value={form.correct} onChange={event => set('correct', event.target.value)} placeholder="92" /></Field>
+        <Field lk="practice:incorrect-2" lk2="practice:attempted-correct" label="Incorrect" hint="Attempted − correct"><input inputMode="numeric" value={derivedIncorrect} readOnly aria-readonly="true" tabIndex={-1} placeholder="—" className="jee-derived-input" /></Field>
       </div>
-      <Field label="Skipped (optional)" hint="Not attempted. Recorded separately; never counted as incorrect." error={errors.skipped}><input inputMode="numeric" value={form.skipped ?? ''} onChange={event => set('skipped', event.target.value)} placeholder="0" /></Field>
+      <Field lk="practice:skipped-optional" lk2="practice:not-attempted-recorded-separately-never" label="Skipped (optional)" hint="Not attempted. Recorded separately; never counted as incorrect." error={errors.skipped}><input inputMode="numeric" value={form.skipped ?? ''} onChange={event => set('skipped', event.target.value)} placeholder="0" /></Field>
       <div className="form-grid two">
-        <Field label="Source"><select value={form.source} onChange={event => set('source', event.target.value)}>{PRACTICE_SOURCES.map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
-        <Field label="Time spent (min, optional)" error={errors.minutes}><input inputMode="numeric" value={form.minutes} onChange={event => set('minutes', event.target.value)} placeholder="45" /></Field>
+        <Field lk="practice:l-source" label="Source"><select value={form.source} onChange={event => set('source', event.target.value)}>{PRACTICE_SOURCES.map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
+        <Field lk="practice:time-spent-min-optional" label="Time spent (min, optional)" error={errors.minutes}><input inputMode="numeric" value={form.minutes} onChange={event => set('minutes', event.target.value)} placeholder="45" /></Field>
       </div>
-      <Field label="Notes (optional)" error={errors.notes}><textarea rows={2} maxLength={5000} value={form.notes} onChange={event => set('notes', event.target.value)} placeholder="e.g. DPP 7, Q14–20 were tricky" /></Field>
+      <Field lk="practice:notes-optional" label="Notes (optional)" error={errors.notes}><textarea rows={2} maxLength={5000} value={form.notes} onChange={event => set('notes', event.target.value)} placeholder="e.g. DPP 7, Q14–20 were tricky" /></Field>
       <div className="jee-live-accuracy" aria-live="polite"><BarChart3 size={15} aria-hidden="true" /> Accuracy: <strong>{accuracy === null ? '—' : `${accuracy.toFixed(1)}%`}</strong>{accuracy !== null && <span className="jee-muted"> ({form.correct} of {form.attempted})</span>}</div>
-      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>{existing ? 'Save changes' : 'Log practice'} <Check size={16} /></Button></div>
+      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}><T k="practice:cancel">{"Cancel"}</T></Button><Button type="submit" loading={saving}>{existing ? 'Save changes' : 'Log practice'} <Check size={16} /></Button></div>
     </form>
   </Dialog>
 }

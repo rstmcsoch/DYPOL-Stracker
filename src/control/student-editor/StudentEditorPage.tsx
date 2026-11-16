@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ArrowLeft, Eye, SquareDashedMousePointer, FileStack, History, Image, Layers, Palette, Maximize2, Minimize2, Monitor, Moon, MousePointer2, RefreshCw, Save, Settings2, Smartphone, Sun, Tablet, Undo2, Redo2, Upload, X
+  ArrowLeft, Eye, MonitorUp, SquareDashedMousePointer, FileStack, History, Image, Layers, Palette, Maximize2, Minimize2, Monitor, Moon, MousePointer2, RefreshCw, Save, Settings2, Smartphone, Sun, Tablet, Undo2, Redo2, Upload, X
 } from 'lucide-react'
 import { Button } from '../ui'
 import { controlFetch } from '../api'
@@ -28,8 +28,9 @@ import './student-editor.css'
  * draft and MFA-protected publishing. Student data is never shown or editable here.
  */
 
-type Viewport = 'desktop' | 'landscape' | 'tablet' | 'mobile'
+type Viewport = 'wide' | 'desktop' | 'landscape' | 'tablet' | 'mobile'
 const VIEWPORTS: Record<Viewport, { label: string; width: number; icon: typeof Monitor }> = {
+  wide: { label: 'Wide desktop 1440', width: 1440, icon: MonitorUp },
   desktop: { label: 'Desktop 1280', width: 1280, icon: Monitor },
   landscape: { label: 'Tablet landscape 1180', width: 1180, icon: Tablet },
   tablet: { label: 'Tablet portrait 820', width: 820, icon: Tablet },
@@ -126,7 +127,6 @@ export default function StudentEditorPage() {
         if (isLocked(message.id)) flash('Unlock this part first.')
         else if (!update(doc => setText(doc, message.id, message.key, message.value), `text.${message.id}.${message.key}`) && !COMPONENT_MAP.get(message.id)?.text?.[message.key]) flash(LOCKED_TEXT)
         setSelected(message.id)
-        setEpoch(value => value + 1)
         break
       }
       case 'sl:shortcut':

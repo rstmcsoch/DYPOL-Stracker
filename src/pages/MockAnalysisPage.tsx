@@ -11,6 +11,7 @@ import { categoryTotals, checkLostMarks, mockInsights, mockSummary, subjectTimeR
 import { validateErrorLog, type ErrorLogFormInput, type ErrorLogValue } from '../lib/jee/forms'
 import { ERROR_CATEGORIES, type AppData, type ErrorCategory, type Subject, type TestErrorLog, type TestRecord, type TestTimeEntry } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
+import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
 export default function MockAnalysisPage() {
@@ -28,7 +29,7 @@ export default function MockAnalysisPage() {
 
   if (!selected) return <div className="content-page mock-analysis-page">
     <PageHeader title="Mock analysis" subtitle="Record a test first." />
-    <NotebookCard><EmptyState title="No tests to analyse yet." action={<Button variant="secondary" size="sm" onClick={() => navigate('/tests?add=1')}>Log a test</Button>} /></NotebookCard>
+    <NotebookCard><EmptyState lk="mock-analysis:no-tests-to-analyse-yet" title="No tests to analyse yet." action={<Button variant="secondary" size="sm" onClick={() => navigate('/tests?add=1')}><T k="mock-analysis:log-a-test">{"Log a test"}</T></Button>} /></NotebookCard>
   </div>
 
   const logs = data.testErrorLogs.filter(log => log.test_id === selected.id).sort((a, b) => a.created_at.localeCompare(b.created_at))
@@ -50,16 +51,16 @@ export default function MockAnalysisPage() {
     />
 
     <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
-      <label className="jee-select"><span>Test</span>
+      <label className="jee-select"><span><T k="mock-analysis:test">{"Test"}</T></span>
         <select value={selected.id} onChange={event => choose(event.target.value)}>
           {tests.map(test => <option key={test.id} value={test.id}>{prettyDate(test.test_date)} · {test.title} · {test.test_type}</option>)}
         </select>
       </label>
       <div className="jee-test-summary">
-        <div><span>Recorded score</span><strong>{summary.score === null ? '—' : <Pct value={summary.score} digits={1} />}</strong></div>
-        <div><span>Type</span><strong>{selected.test_type}</strong></div>
-        <div><span>Lost marks tagged</span><strong>{summary.taggedMarks ?? '—'}</strong></div>
-        <div><span>Questions tagged</span><strong>{summary.taggedQuestions || '—'}</strong></div>
+        <div><span><T k="mock-analysis:recorded-score">{"Recorded score"}</T></span><strong>{summary.score === null ? '—' : <Pct value={summary.score} digits={1} />}</strong></div>
+        <div><span><T k="mock-analysis:type">{"Type"}</T></span><strong>{selected.test_type}</strong></div>
+        <div><span><T k="mock-analysis:lost-marks-tagged">{"Lost marks tagged"}</T></span><strong>{summary.taggedMarks ?? '—'}</strong></div>
+        <div><span><T k="mock-analysis:questions-tagged">{"Questions tagged"}</T></span><strong>{summary.taggedQuestions || '—'}</strong></div>
       </div>
     </NotebookCard>
 
@@ -67,23 +68,23 @@ export default function MockAnalysisPage() {
       <div className="jee-analysis-col">
         <SectionHeading title="Recorded time & attempts" note="Only what you entered. Missing values stay blank." action={<Button variant="secondary" size="sm" onClick={() => setTiming(true)}><Clock3 size={15} /> {hasRecordedTime ? 'Edit' : 'Add'} time</Button>} />
         <NotebookCard>
-          {times.length === 0 ? <div className="jee-pad"><p className="jee-muted">No time or attempt data recorded for this test. Nothing is estimated — add it if you tracked it.</p></div> : <div className="jee-subject-time-list">
+          {times.length === 0 ? <div className="jee-pad"><p className="jee-muted"><T k="mock-analysis:no-time-or-attempt-data-recorded-for-thi">{"No time or attempt data recorded for this test. Nothing is estimated — add it if you tracked it."}</T></p></div> : <div className="jee-subject-time-list">
             {times.map(row => <div key={row.subject} className="jee-subject-time">
               <SubjectBadge subject={row.subject} />
               <div className="jee-row-numbers">
-                <span>Time <b>{row.minutes === null ? '—' : minutesLabel(row.minutes)}</b></span>
-                <span>Attempted <b>{row.attempted ?? '—'}</b></span>
-                <span>Unattempted <b>{row.unattempted ?? '—'}</b></span>
-                <span>Marks <b>{row.marks ?? '—'}{row.total ? `/${row.total}` : ''}</b></span>
+                <span><T k="mock-analysis:l-time">{"Time"}</T>{' '}<b>{row.minutes === null ? '—' : minutesLabel(row.minutes)}</b></span>
+                <span><T k="mock-analysis:attempted">{"Attempted"}</T>{' '}<b>{row.attempted ?? '—'}</b></span>
+                <span><T k="mock-analysis:unattempted">{"Unattempted"}</T>{' '}<b>{row.unattempted ?? '—'}</b></span>
+                <span><T k="mock-analysis:l-marks">{"Marks"}</T>{' '}<b>{row.marks ?? '—'}{row.total ? `/${row.total}` : ''}</b></span>
               </div>
               {row.marksPerMinute !== null && <p className="jee-small jee-muted">{row.marksPerMinute.toFixed(2)} marks per minute spent</p>}
             </div>)}
           </div>}
         </NotebookCard>
 
-        <SectionHeading title="Lost marks, classified" note="Tag why marks were lost." action={<Button size="sm" onClick={() => setClassifying('new')}><Plus size={15} /> Classify</Button>} />
+        <SectionHeading title="Lost marks, classified" note="Tag why marks were lost." action={<Button size="sm" onClick={() => setClassifying('new')}><Plus size={15} />{' '}<T k="mock-analysis:classify">{"Classify"}</T></Button>} />
         <NotebookCard>
-          {logs.length === 0 ? <div className="jee-pad"><p className="jee-muted">No classifications yet.</p></div> : <ul className="jee-log-list">
+          {logs.length === 0 ? <div className="jee-pad"><p className="jee-muted"><T k="mock-analysis:no-classifications-yet">{"No classifications yet."}</T></p></div> : <ul className="jee-log-list">
             {logs.map(log => <li key={log.id} className="jee-log-row">
               <div>
                 <strong>{log.category}</strong>
@@ -102,7 +103,7 @@ export default function MockAnalysisPage() {
       <div className="jee-analysis-col">
         <SectionHeading title="Where the marks went" note="Your classifications, summed." />
         <NotebookCard>
-          {totals.length === 0 ? <p className="jee-muted jee-pad">Classify some lost marks to see the breakdown.</p> : <div className="jee-category-bars">
+          {totals.length === 0 ? <p className="jee-muted jee-pad"><T k="mock-analysis:classify-some-lost-marks-to-see-the-brea">{"Classify some lost marks to see the breakdown."}</T></p> : <div className="jee-category-bars">
             {totals.map(total => {
               const max = Math.max(...totals.map(item => item.marksLost ?? item.entries))
               const value = total.marksLost ?? total.entries
@@ -116,14 +117,14 @@ export default function MockAnalysisPage() {
 
         <SectionHeading title="Fix before your next mock" note="Each line shows its basis." />
         <NotebookCard className="jee-insights">
-          {insights.length === 0 ? <div className="jee-pad"><Lightbulb size={18} aria-hidden="true" /><p className="jee-muted">Not enough data yet.</p></div> : <ul>
+          {insights.length === 0 ? <div className="jee-pad"><Lightbulb size={18} aria-hidden="true" /><p className="jee-muted"><T k="mock-analysis:not-enough-data-yet">{"Not enough data yet."}</T></p></div> : <ul>
             {insights.map((insight, index) => <li key={index}>
               <StatusBadge tone={insight.kind === 'recorded' ? 'Strong' : insight.kind === 'classified' ? 'Okay' : 'muted'}>{insight.kind === 'recorded' ? 'Recorded' : insight.kind === 'classified' ? 'You classified' : 'Derived'}</StatusBadge>
               <span>{insight.text}</span>
             </li>)}
           </ul>}
         </NotebookCard>
-        <Button variant="quiet" size="sm" onClick={() => navigate('/weak-areas')}>See weak areas →</Button>
+        <Button variant="quiet" size="sm" onClick={() => navigate('/weak-areas')}><T k="mock-analysis:see-weak-areas">{"See weak areas →"}</T></Button>
       </div>
     </section>
 
@@ -177,15 +178,15 @@ function ClassifyDialog({ data, test, existing, onClose, onSave }: {
   return <Dialog title={existing ? 'Edit classification' : 'Classify lost marks'} onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <div className="form-grid two">
-        <Field label="Subject"><select value={form.subject} onChange={event => set('subject', event.target.value as Subject | '')}><option value="">Not specified</option>{classifySubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field>
-        <Field label="Why did it happen?" error={errors.category} required><select value={form.category} onChange={event => set('category', event.target.value as ErrorCategory)}>{ERROR_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></Field>
+        <Field lk="mock-analysis:subject" label="Subject"><select value={form.subject} onChange={event => set('subject', event.target.value as Subject | '')}><option value="">Not specified</option>{classifySubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field>
+        <Field lk="mock-analysis:why-did-it-happen" label="Why did it happen?" error={errors.category} required><select value={form.category} onChange={event => set('category', event.target.value as ErrorCategory)}>{ERROR_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></Field>
       </div>
       <div className="form-grid two">
-        <Field label="Questions" error={errors.questions}><input inputMode="numeric" value={form.questions} onChange={event => set('questions', event.target.value)} placeholder="4" /></Field>
-        <Field label="Marks lost" error={errors.marksLost ?? liveLostError ?? undefined} hint={lostRemaining !== null ? `${lostRemaining} mark${lostRemaining === 1 ? '' : 's'} left to classify${form.subject ? ` in ${form.subject}` : ''}.` : undefined}><input inputMode="decimal" value={form.marksLost} onChange={event => set('marksLost', event.target.value)} placeholder="16" /></Field>
+        <Field lk="mock-analysis:questions" label="Questions" error={errors.questions}><input inputMode="numeric" value={form.questions} onChange={event => set('questions', event.target.value)} placeholder="4" /></Field>
+        <Field lk="mock-analysis:marks-lost" label="Marks lost" error={errors.marksLost ?? liveLostError ?? undefined} hint={lostRemaining !== null ? `${lostRemaining} mark${lostRemaining === 1 ? '' : 's'} left to classify${form.subject ? ` in ${form.subject}` : ''}.` : undefined}><input inputMode="decimal" value={form.marksLost} onChange={event => set('marksLost', event.target.value)} placeholder="16" /></Field>
       </div>
-      <Field label="Note (optional)" error={errors.note}><textarea rows={2} maxLength={5000} value={form.note} onChange={event => set('note', event.target.value)} placeholder="e.g. sign error in Q12 after long substitution" /></Field>
-      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>{existing ? 'Save' : 'Add classification'} <Check size={16} /></Button></div>
+      <Field lk="mock-analysis:note-optional" label="Note (optional)" error={errors.note}><textarea rows={2} maxLength={5000} value={form.note} onChange={event => set('note', event.target.value)} placeholder="e.g. sign error in Q12 after long substitution" /></Field>
+      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}><T k="mock-analysis:cancel">{"Cancel"}</T></Button><Button type="submit" loading={saving}>{existing ? 'Save' : 'Add classification'} <Check size={16} /></Button></div>
     </form>
   </Dialog>
 }
@@ -231,17 +232,17 @@ function TimeDialog({ data, test, onClose, onSave }: { data: AppData; test: Test
     catch (error) { notify(error instanceof Error ? error.message : 'Could not save time data.', 'error') }
     finally { setSaving(false) }
   }
-  return <Dialog title="Time & attempts by subject" subtitle="Leave unknown fields blank." onClose={onClose} className="jee-dialog">
+  return <Dialog lk="mock-analysis:time-attempts-by-subject" lk2="mock-analysis:leave-unknown-fields-blank" title="Time & attempts by subject" subtitle="Leave unknown fields blank." onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       {rows.map(row => <fieldset key={row.subject} className="jee-fieldset"><legend><SubjectBadge subject={row.subject} /></legend>
         <div className="form-grid three">
-          <Field label="Minutes"><input inputMode="numeric" value={row.minutes} onChange={event => update(row.subject, 'minutes', event.target.value)} /></Field>
-          <Field label="Attempted"><input inputMode="numeric" value={row.attempted} onChange={event => update(row.subject, 'attempted', event.target.value)} /></Field>
-          <Field label="Unattempted"><input inputMode="numeric" value={row.unattempted} onChange={event => update(row.subject, 'unattempted', event.target.value)} /></Field>
+          <Field lk="mock-analysis:l-minutes" label="Minutes"><input inputMode="numeric" value={row.minutes} onChange={event => update(row.subject, 'minutes', event.target.value)} /></Field>
+          <Field lk="mock-analysis:attempted" label="Attempted"><input inputMode="numeric" value={row.attempted} onChange={event => update(row.subject, 'attempted', event.target.value)} /></Field>
+          <Field lk="mock-analysis:unattempted" label="Unattempted"><input inputMode="numeric" value={row.unattempted} onChange={event => update(row.subject, 'unattempted', event.target.value)} /></Field>
         </div>
       </fieldset>)}
       {errors && <p className="field-error" role="alert">{errors}</p>}
-      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>Save time data <Check size={16} /></Button></div>
+      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}><T k="mock-analysis:cancel">{"Cancel"}</T></Button><Button type="submit" loading={saving}><T k="mock-analysis:save-time-data">{"Save time data"}</T>{' '}<Check size={16} /></Button></div>
     </form>
   </Dialog>
 }

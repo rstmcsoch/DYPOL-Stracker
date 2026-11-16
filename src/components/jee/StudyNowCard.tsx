@@ -1,3 +1,4 @@
+import { T } from '../../lib/student-layout/T'
 /* eslint-disable react-refresh/only-export-components */
 import { useEffect, useId, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -34,10 +35,10 @@ export function StudyNowCard({ compact = false, layoutAttrs }: { compact?: boole
   }, [showWhy, whyButtonId])
   return <NotebookCard className="study-now-card accent-blue" aria-labelledby="study-now-heading" {...layoutAttrs}>
     <div className="study-now-top">
-      <span className="study-now-kicker"><Compass size={15} aria-hidden="true" /> PLANNING</span>
+      <span className="study-now-kicker"><Compass size={15} aria-hidden="true" />{' '}<T k="study-now:planning">{"PLANNING"}</T></span>
       {result.examMode && <StatusBadge tone="weak"><Flame size={12} aria-hidden="true" /> Exam Mode{result.examLabel ? ` · ${result.examLabel}` : ''}</StatusBadge>}
     </div>
-    <h2 id="study-now-heading" className="study-now-title">What should I study now?</h2>
+    <h2 id="study-now-heading" className="study-now-title"><T k="study-now:what-should-i-study-now">{"What should I study now?"}</T></h2>
     {primary ? <>
       <p className="study-now-summary">{primary.summary}</p>
       <div className="study-now-actions">
@@ -52,12 +53,12 @@ export function StudyNowCard({ compact = false, layoutAttrs }: { compact?: boole
 
 function WhyList({ primary, alternatives }: { primary: Recommendation; alternatives: Recommendation[] }) {
   return <div className="study-now-why">
-    <strong>Ranked highest because:</strong>
+    <strong><T k="study-now:ranked-highest-because">{"Ranked highest because:"}</T></strong>
     <ul>{primary.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>
     {alternatives.length > 0 && <>
-      <strong>Also in the running</strong>
+      <strong><T k="study-now:also-in-the-running">{"Also in the running"}</T></strong>
       <ol>{alternatives.map(item => <li key={item.id}><span>{item.title}</span><small>{item.reasons.join('; ') || item.summary}</small></li>)}</ol>
     </>}
-    <small className="study-now-note">Ranking is deterministic: overdue revisions, due backlog, due flashcards, mistakes awaiting retry, weak practice or test chapters, pending PYQs, and mock losses, weighted by chapter importance.</small>
+    <small className="study-now-note"><T k="study-now:ranking-is-deterministic-overdue-revisio">{"Ranking is deterministic: overdue revisions, due backlog, due flashcards, mistakes awaiting retry, weak practice or test chapters, pending PYQs, and mock losses, weighted by chapter importance."}</T></small>
   </div>
 }

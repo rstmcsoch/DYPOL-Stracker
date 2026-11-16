@@ -1,3 +1,5 @@
+import { T as Label } from '../../lib/student-layout/T'
+import { labelSlug } from '../../lib/student-layout/label-key'
 /* eslint-disable react-refresh/only-export-components */
 import type { ReactNode } from 'react'
 import { Check, Circle, CircleDashed } from 'lucide-react'
@@ -7,13 +9,16 @@ import type { StageState } from '../../lib/jee/progress'
 import { useExamSubjects } from '../../lib/exams/useExamSubjects'
 
 /** Compact chip-style filter group. Each option is a 40px-high tap target on touch screens. */
-export function ChipFilter<T extends string>({ label, value, options, onChange }: {
+export function ChipFilter<T extends string>({ label, value, options, onChange, lk }: {
   label: string; value: T; options: { value: T; label: string }[]; onChange: (value: T) => void
+  /** Student page id: chip wording (fixed lists only) becomes editable in the Student Dashboard Editor. */
+  lk?: string
 }) {
+  const text = (wording: string) => (lk ? <Label k={`${lk}:chip-${labelSlug(wording)}`}>{wording}</Label> : wording)
   return <div className="jee-chip-filter" role="group" aria-label={label}>
-    <span className="jee-chip-filter-label">{label}</span>
+    <span className="jee-chip-filter-label">{text(label)}</span>
     <div className="jee-chip-row">
-      {options.map(option => <button key={option.value} type="button" className={`jee-chip ${value === option.value ? 'active' : ''}`} aria-pressed={value === option.value} onClick={() => onChange(option.value)}>{option.label}</button>)}
+      {options.map(option => <button key={option.value} type="button" className={`jee-chip ${value === option.value ? 'active' : ''}`} aria-pressed={value === option.value} onClick={() => onChange(option.value)}>{text(option.label)}</button>)}
     </div>
   </div>
 }

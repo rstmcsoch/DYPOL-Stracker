@@ -46,8 +46,16 @@ export function LayersPanel({ page, document, selected, actions }: { page: Stude
   const root = page
   return <div className="le-layers">
     <ul className="le-layers__list" role="tree" aria-label="Page parts">{render(root, 0, [root])}</ul>
+    {COMPONENT_MAP.get(`${page}.labels`) && (() => {
+      const id = `${page}.labels`
+      const total = Object.keys(COMPONENT_MAP.get(id)?.text ?? {}).length
+      const edited = Object.keys(configOf(document, id).text ?? {}).length
+      return <button type="button" className={`le-layer le-layer__name le-page-text${selected === id ? ' is-selected' : ''}`} onClick={() => actions.select(id)}>
+        Page text · {total} labels{edited ? ` · ${edited} edited` : ''}<span className="le-hint"> headings, buttons, tabs, field labels, hints and empty states, including sub-tabs and dialogs</span>
+      </button>
+    })()}
     <p className="le-hint">Only presentation can change here. Parts marked <Lock size={10} aria-hidden="true" /> data show each student’s own records, which stay live and are never editable. Required parts cannot be hidden.</p>
-    {page !== 'home' && page !== 'shell' && <p className="le-hint">Page sections keep their functional order; you can restyle them, edit the page title and info tip, and hide optional sections. Section contents are live student data.</p>}
+    {page !== 'home' && page !== 'shell' && <p className="le-hint">Page sections keep their functional order; you can restyle them, hide optional ones and edit every static label (double-click it on the canvas, or open Page text). Use View state in the toolbar to reach sub-tabs, filters and dialogs. Values from student records stay locked.</p>}
   </div>
 }
 

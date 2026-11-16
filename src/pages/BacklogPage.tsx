@@ -11,6 +11,7 @@ import { isAwake } from '../lib/jee/reminders'
 import { backlogChapterChange, backlogSubjectChange, validateBacklog, type BacklogFormInput, type BacklogValue } from '../lib/jee/forms'
 import { BACKLOG_TYPES, type BacklogItem, type BacklogType, type Priority, type Subject, type AppData } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
+import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
 type GroupBy = 'due' | 'subject' | 'type' | 'priority'
@@ -93,7 +94,7 @@ export default function BacklogPage() {
         </div>
         {item.notes && <p className="jee-note">{item.notes}</p>}
       </div>
-      {!(item.status === 'snoozed' && item.snoozed_until === tomorrow) && <button type="button" className="jee-snooze-quick" onClick={() => void snooze(item, 1)} disabled={snoozing.has(item.id)} aria-label={`Snooze ${item.title} until tomorrow`} title="Snooze until tomorrow"><AlarmClock size={14} aria-hidden="true" /><span className="jee-snooze-text">Snooze until tomorrow</span></button>}
+      {!(item.status === 'snoozed' && item.snoozed_until === tomorrow) && <button type="button" className="jee-snooze-quick" onClick={() => void snooze(item, 1)} disabled={snoozing.has(item.id)} aria-label={`Snooze ${item.title} until tomorrow`} title="Snooze until tomorrow"><AlarmClock size={14} aria-hidden="true" /><span className="jee-snooze-text"><T k="backlog:snooze-until-tomorrow">{"Snooze until tomorrow"}</T></span></button>}
       <OverflowMenu label={`Actions for ${item.title}`} items={[
         { id: 'done', label: 'Mark done', icon: <Check size={15} />, onSelect: () => void complete(item) },
         { id: 'snooze1', label: 'Come back tomorrow', icon: <AlarmClock size={15} />, onSelect: () => void snooze(item, 1) },
@@ -111,27 +112,27 @@ export default function BacklogPage() {
     <PageHeader layoutId="backlog.header"
       title="Backlog"
       subtitle="Skipped lectures, unsolved DPPs and topics to revisit."
-      action={<Button onClick={() => { setCreating(true); if (params.get('add')) setParams({}, { replace: true }) }}><Plus size={16} /> Add item</Button>}
+      action={<Button onClick={() => { setCreating(true); if (params.get('add')) setParams({}, { replace: true }) }}><Plus size={16} />{' '}<T k="backlog:add-item">{"Add item"}</T></Button>}
     />
     {!sl.hidden('summary') && <section {...sl.attrs('summary')} className="jee-stat-grid" aria-label="Backlog summary">
-      <NotebookCard className="jee-stat"><span>Due now</span><strong>{counts.due}</strong><small>{overdueCount ? `${overdueCount} overdue` : 'nothing overdue'}</small></NotebookCard>
-      <NotebookCard className="jee-stat"><span>Open</span><strong>{active.length}</strong><small>active items</small></NotebookCard>
-      <NotebookCard className="jee-stat"><span>Snoozed</span><strong>{counts.snoozed}</strong><small>waiting to come back</small></NotebookCard>
-      <NotebookCard className="jee-stat"><span>Cleared</span><strong>{data.backlogItems.filter(item => item.status === 'done').length}</strong><small>completed</small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="backlog:due-now">{"Due now"}</T></span><strong>{counts.due}</strong><small>{overdueCount ? `${overdueCount} overdue` : 'nothing overdue'}</small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="backlog:open">{"Open"}</T></span><strong>{active.length}</strong><small><T k="backlog:active-items">{"active items"}</T></small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="backlog:snoozed">{"Snoozed"}</T></span><strong>{counts.snoozed}</strong><small><T k="backlog:waiting-to-come-back">{"waiting to come back"}</T></small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="backlog:cleared">{"Cleared"}</T></span><strong>{data.backlogItems.filter(item => item.status === 'done').length}</strong><small><T k="backlog:completed">{"completed"}</T></small></NotebookCard>
     </section>}
 
     <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
-      <ChipFilter<TypeFilter> label="Type" value={typeFilter} onChange={setTypeFilter} options={[{ value: 'all', label: 'All' }, ...BACKLOG_TYPES.map(type => ({ value: type, label: type === 'DPP' ? 'Unsolved DPPs' : type === 'Lecture' ? 'Skipped lectures' : 'Come back to' }))]} />
+      <ChipFilter<TypeFilter> lk="backlog" label="Type" value={typeFilter} onChange={setTypeFilter} options={[{ value: 'all', label: 'All' }, ...BACKLOG_TYPES.map(type => ({ value: type, label: type === 'DPP' ? 'Unsolved DPPs' : type === 'Lecture' ? 'Skipped lectures' : 'Come back to' }))]} />
       <div className="jee-filter-grid">
         <SubjectSelect value={subject} onChange={value => setSubject(value as Subject | 'all')} />
-        <label className="jee-select"><span>Priority</span><select value={priority} onChange={event => setPriority(event.target.value as 'all' | Priority)}><option value="all">Any priority</option><option>High</option><option>Medium</option><option>Low</option></select></label>
-        <label className="jee-select"><span>Group by</span><select value={groupBy} onChange={event => setGroupBy(event.target.value as GroupBy)}><option value="due">Due date</option><option value="subject">Subject</option><option value="type">Type</option><option value="priority">Priority</option></select></label>
+        <label className="jee-select"><span><T k="backlog:priority">{"Priority"}</T></span><select value={priority} onChange={event => setPriority(event.target.value as 'all' | Priority)}><option value="all">Any priority</option><option>High</option><option>Medium</option><option>Low</option></select></label>
+        <label className="jee-select"><span><T k="backlog:group-by">{"Group by"}</T></span><select value={groupBy} onChange={event => setGroupBy(event.target.value as GroupBy)}><option value="due">Due date</option><option value="subject">Subject</option><option value="type">Type</option><option value="priority">Priority</option></select></label>
       </div>
     </NotebookCard>
 
-    {data.backlogItems.length === 0 ? <NotebookCard><EmptyState icon={<Check size={24} />} title="Backlog is empty." action={<Button variant="secondary" size="sm" onClick={() => setCreating(true)}><Plus size={15} /> Add the first item</Button>} /></NotebookCard>
+    {data.backlogItems.length === 0 ? <NotebookCard><EmptyState lk="backlog:backlog-is-empty" icon={<Check size={24} />} title="Backlog is empty." action={<Button variant="secondary" size="sm" onClick={() => setCreating(true)}><Plus size={15} />{' '}<T k="backlog:add-the-first-item">{"Add the first item"}</T></Button>} /></NotebookCard>
     : <>
-      {groups.length === 0 ? <NotebookCard><EmptyState icon={<Check size={22} />} title="Nothing open in this view." /></NotebookCard>
+      {groups.length === 0 ? <NotebookCard><EmptyState lk="backlog:nothing-open-in-this-view" icon={<Check size={22} />} title="Nothing open in this view." /></NotebookCard>
         : groups.map(group => <section key={group.key} className="jee-backlog-group">
           <SectionHeading title={group.title} note={`${group.items.length} item${group.items.length === 1 ? '' : 's'}`} />
           <NotebookCard><ul className="jee-backlog-list">{group.items.map(renderRow)}</ul></NotebookCard>
@@ -143,7 +144,7 @@ export default function BacklogPage() {
       </section>}
 
       <NotebookCard className="jee-completed-toggle">
-        <div><strong>Completed</strong><small>{completed.length} cleared item{completed.length === 1 ? '' : 's'}</small></div>
+        <div><strong><T k="backlog:completed-2">{"Completed"}</T></strong><small>{completed.length} cleared item{completed.length === 1 ? '' : 's'}</small></div>
         <button type="button" aria-expanded={showDone} onClick={() => setShowDone(value => !value)}>{showDone ? <><ChevronUp size={15} /> Hide</> : <><ChevronDown size={15} /> Show</>}</button>
       </NotebookCard>
       {showDone && <NotebookCard><ul className="jee-backlog-list done">{completed.slice(0, 60).map(item => <li key={item.id} className="jee-backlog-row is-done">
@@ -233,18 +234,18 @@ function BacklogDialog({ data, existing, onClose, onSave }: {
   }
   return <Dialog title={existing ? 'Edit backlog item' : 'Add to backlog'} onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
-      <Field label="What is it?" required error={errors.title}><input autoFocus maxLength={200} value={form.title} onChange={event => set('title', event.target.value)} placeholder="e.g. Lecture 8 — EMI" /></Field>
+      <Field lk="backlog:what-is-it" label="What is it?" required error={errors.title}><input autoFocus maxLength={200} value={form.title} onChange={event => set('title', event.target.value)} placeholder="e.g. Lecture 8 — EMI" /></Field>
       <div className="form-grid two">
-        <Field label="Type" error={errors.type}><select value={form.type} onChange={event => set('type', event.target.value as BacklogType)}>{BACKLOG_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></Field>
-        <Field label="Priority"><select value={form.priority} onChange={event => set('priority', event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field>
+        <Field lk="backlog:type" label="Type" error={errors.type}><select value={form.type} onChange={event => set('type', event.target.value as BacklogType)}>{BACKLOG_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></Field>
+        <Field lk="backlog:priority" label="Priority"><select value={form.priority} onChange={event => set('priority', event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field>
       </div>
       <div className="form-grid two">
-        <Field label="Subject"><select value={form.subject} onChange={event => changeSubject(event.target.value as Subject | '')}><option value="">Choose subject (optional)</option>{backlogSubjects.map(item => <option key={item}>{item}</option>)}</select></Field>
-        <Field label="Due date (optional)" error={errors.dueOn}><input type="date" value={form.dueOn} onChange={event => set('dueOn', event.target.value)} /></Field>
+        <Field lk="backlog:subject" label="Subject"><select value={form.subject} onChange={event => changeSubject(event.target.value as Subject | '')}><option value="">Choose subject (optional)</option>{backlogSubjects.map(item => <option key={item}>{item}</option>)}</select></Field>
+        <Field lk="backlog:due-date-optional" label="Due date (optional)" error={errors.dueOn}><input type="date" value={form.dueOn} onChange={event => set('dueOn', event.target.value)} /></Field>
       </div>
       <ChapterSelect chapters={data.chapters} value={form.chapterId} onChange={changeChapter} subject={form.subject || 'all'} label="Linked chapter (optional)" allowNone noneLabel="No chapter" />
-      <Field label="Notes (optional)" error={errors.notes}><textarea rows={2} maxLength={5000} value={form.notes} onChange={event => set('notes', event.target.value)} /></Field>
-      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>{existing ? 'Save changes' : 'Add to backlog'} <Check size={16} /></Button></div>
+      <Field lk="backlog:notes-optional" label="Notes (optional)" error={errors.notes}><textarea rows={2} maxLength={5000} value={form.notes} onChange={event => set('notes', event.target.value)} /></Field>
+      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}><T k="backlog:cancel">{"Cancel"}</T></Button><Button type="submit" loading={saving}>{existing ? 'Save changes' : 'Add to backlog'} <Check size={16} /></Button></div>
     </form>
   </Dialog>
 }

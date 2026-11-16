@@ -1,3 +1,4 @@
+import { T } from '../../lib/student-layout/T'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Check, GraduationCap } from 'lucide-react'
@@ -77,17 +78,17 @@ export function ExamSelectionSection() {
   }
 
   return <NotebookCard className="settings-section exam-selection-section">
-    <div className="jee-settings-head"><GraduationCap size={18} aria-hidden="true" /><div><strong>Your exam</strong></div></div>
+    <div className="jee-settings-head"><GraduationCap size={18} aria-hidden="true" /><div><strong><T k="settings:your-exam">{"Your exam"}</T></strong></div></div>
     <div className="settings-section-content">
       <div className="form-grid two">
-        <Field label="Exam">
+        <Field lk="settings:l-exam" label="Exam">
           <select value={exam?.id ?? ''} onChange={event => changeExam(event.target.value)}>
             {groupByCategory(options).map(([category, exams]) => <optgroup key={category} label={category}>
               {exams.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
             </optgroup>)}
           </select>
         </Field>
-        <Field label="Target year">
+        <Field lk="settings:target-year" label="Target year">
           <select value={year} onChange={event => setYear(event.target.value)}>
             <option value="">Not set</option>
             {yearChoices.map(item => <option key={item} value={item}>{item}</option>)}
@@ -100,8 +101,7 @@ export function ExamSelectionSection() {
           </select>
         </Field>}
         {exam?.boards_addon && <label className="exam-addon-toggle">
-          <input type="checkbox" checked={addon} onChange={event => setAddon(event.target.checked)} /> Also track my Class 12 boards
-        </label>}
+          <input type="checkbox" checked={addon} onChange={event => setAddon(event.target.checked)} />{' '}<T k="settings:also-track-my-class-12-boards">{"Also track my Class 12 boards"}</T></label>}
         {needsBoard && <Field label={exam?.boards.length ? 'Board' : 'Class 12 board'}>
           <select value={board} onChange={event => setBoard(event.target.value)}>
             <option value="">Not set</option>
@@ -110,8 +110,8 @@ export function ExamSelectionSection() {
         </Field>}
       </div>
       {exam && <p className="jee-small jee-muted exam-subject-preview">Subjects: {examSubjects({ exam_id: exam.id, exam_session: session || null, boards_addon: addon }, options).join(', ')}</p>}
-      {exam && !isJeeExam(exam.id) && <p className="jee-small jee-muted">Your existing syllabus, tests and notes are kept as they are. A new notebook for this exam starts with an empty syllabus you can fill in on the Syllabus page.</p>}
-      <div className="jee-section-save"><Button variant="secondary" size="sm" onClick={() => void save()} loading={saving}><Check size={14} /> Save exam</Button></div>
+      {exam && !isJeeExam(exam.id) && <p className="jee-small jee-muted"><T k="settings:your-existing-syllabus-tests-and-notes-a">{"Your existing syllabus, tests and notes are kept as they are. A new notebook for this exam starts with an empty syllabus you can fill in on the Syllabus page."}</T></p>}
+      <div className="jee-section-save"><Button variant="secondary" size="sm" onClick={() => void save()} loading={saving}><Check size={14} />{' '}<T k="settings:save-exam">{"Save exam"}</T></Button></div>
     </div>
   </NotebookCard>
 }

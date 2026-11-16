@@ -102,7 +102,7 @@ describe('real Home page over the synthetic student', () => {
     for (const element of container.querySelectorAll('[data-sl-text]')) {
       const [id, key] = element.getAttribute('data-sl-text')!.split(':')
       expect(key).not.toMatch(/^(name|date|marks?|scores?|streak|count|percent|minutes|days)$/)
-      expect(id).toMatch(/^home\./)
+      expect(id).toMatch(/^home\.|^[a-z-]+\.labels$/)
     }
     // A sample task completes in memory (real task component, preview data provider).
     const before = container.querySelectorAll('.task-row.task-done').length

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useStudentLayout } from '../../contexts/StudentLayoutContext'
 import type { ComponentConfig } from './validate'
+import { labelTarget } from './label-key'
 
 /**
  * Per-component presentation from the published student layout. Without a layout every
@@ -24,7 +25,7 @@ export function useLayoutSlot(id: string) {
     /** Static label as a text node; wrapped in a marker span only inside the editor canvas. */
     text: (key: string, fallback: string): ReactNode => {
       const value = config?.text?.[key] ?? fallback
-      return editing ? <span data-sl-text={`${id}:${key}`}>{value}</span> : value
+      return editing ? <span key={value} data-sl-text={`${id}:${key}`}>{value}</span> : value
     },
     /** Live student value; wrapped in a locked marker span only inside the editor canvas. */
     data: (key: string, value: ReactNode): ReactNode => (editing ? <span data-sl-data={`${id}:${key}`}>{value}</span> : value),
@@ -86,4 +87,15 @@ export function layoutPageFor(pathname: string): string | null {
   if (pathname === '/') return 'home'
   const id = pathname.replace(/^\/+|\/+$/g, '')
   return /^[a-z-]+$/.test(id) ? id : null
+}
+
+
+/** Static wording as a plain string (tooltips, aria text); see `T` for rendered labels. */
+export function useLabelText(k: string | undefined, fallback: string): string
+export function useLabelText(k: string | undefined, fallback: string | undefined): string | undefined
+export function useLabelText(k: string | undefined, fallback: string | undefined): string | undefined {
+  const { document } = useStudentLayout()
+  if (!k || !document || fallback === undefined) return fallback
+  const [id, key] = labelTarget(k)
+  return document.components?.[id]?.text?.[key] ?? fallback
 }
