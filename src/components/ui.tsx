@@ -4,6 +4,7 @@ import { useExit } from '../lib/ui/use-exit'
 import { ArrowUpRight, Check, Info, LoaderCircle, MoreHorizontal, Sparkles, X } from 'lucide-react'
 import type { Subject } from '../types'
 import { subjectSlug } from '../lib/exams/subjects'
+import { T } from '../lib/student-layout/T'
 import { useLayoutSlot } from '../lib/student-layout/use-layout'
 
 export function Button({
@@ -84,14 +85,14 @@ export function ProgressBar({ value, color = 'var(--accent)', label }: { value: 
   </div>
 }
 
-export function EmptyState({ icon, title, description, action }: { icon?: ReactNode; title: string; description?: string; action?: ReactNode }) {
+export function EmptyState({ icon, title, description, action, lk, lk2 }: { icon?: ReactNode; title: string; description?: string; action?: ReactNode; lk?: string; lk2?: string }) {
   return <div className="empty-state">
     <div className="empty-illustration">{icon ?? <span className="empty-star">✳</span>}</div>
-    <h3 className="type-empty">{title}</h3>{description && <p className="type-body">{description}</p>}{action && <div className="empty-action">{action}</div>}
+    <h3 className="type-empty">{lk ? <T k={lk}>{title}</T> : title}</h3>{description && <p className="type-body">{lk2 ? <T k={lk2}>{description}</T> : description}</p>}{action && <div className="empty-action">{action}</div>}
   </div>
 }
 
-export function Field({ label, hint, error, required, children, className = '' }: { label: string; hint?: string; error?: string; required?: boolean; children: ReactNode; className?: string }) {
+export function Field({ label, hint, error, required, children, className = '', lk, lk2 }: { label: string; hint?: string; error?: string; required?: boolean; children: ReactNode; className?: string; lk?: string; lk2?: string }) {
   const fieldId = useId().replaceAll(':', '')
   const hintId = `${fieldId}-hint`
   const errorId = `${fieldId}-error`
@@ -107,14 +108,14 @@ export function Field({ label, hint, error, required, children, className = '' }
     })
   })
   return <label className={`field ${error ? 'field-invalid' : ''} ${className}`}>
-    <span className="field-label type-body">{label}{required && <span className="required-mark" aria-hidden="true"> *</span>}</span>
+    <span className="field-label type-body">{lk ? <T k={lk}>{label}</T> : label}{required && <span className="required-mark" aria-hidden="true"> *</span>}</span>
     {controls}
-    {hint && <span className="field-hint type-caption" id={hintId}>{hint}</span>}
+    {hint && <span className="field-hint type-caption" id={hintId}>{lk2 ? <T k={lk2}>{hint}</T> : hint}</span>}
     {error && <span className="field-error type-alert" id={errorId} role="alert">{error}</span>}
   </label>
 }
 
-export function Dialog({ title, subtitle, onClose, children, className = '', labelledBy }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; className?: string; labelledBy?: string }) {
+export function Dialog({ title, subtitle, onClose, children, className = '', labelledBy, lk, lk2 }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; className?: string; labelledBy?: string; lk?: string; lk2?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const { state, exit, onAnimationEnd } = useExit(170)
   const closeRef = useRef(onClose)
@@ -146,7 +147,7 @@ export function Dialog({ title, subtitle, onClose, children, className = '', lab
   const stop = (event: FormEvent) => event.preventDefault()
   return <div className="dialog-backdrop" data-state={state} onAnimationEnd={onAnimationEnd} onMouseDown={event => { if (event.target === event.currentTarget) close() }}>
     <div className={`dialog-panel ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref} onSubmit={stop}>
-      <div className="dialog-head"><div><h2 className="type-h2" id={titleId}>{title}</h2>{subtitle && <p className="type-body">{subtitle}</p>}</div><IconButton label="Close dialog" onClick={close}><X size={19} /></IconButton></div>
+      <div className="dialog-head"><div><h2 className="type-h2" id={titleId}>{lk ? <T k={lk}>{title}</T> : title}</h2>{subtitle && <p className="type-body">{lk2 ? <T k={lk2}>{subtitle}</T> : subtitle}</p>}</div><IconButton label="Close dialog" onClick={close}><X size={19} /></IconButton></div>
       <div className="dialog-content">{children}</div>
     </div>
   </div>

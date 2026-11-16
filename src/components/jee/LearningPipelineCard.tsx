@@ -1,3 +1,4 @@
+import { T } from '../../lib/student-layout/T'
 import { useMemo } from 'react'
 import { NotebookCard, SectionHeading } from '../ui'
 import { Meter, Pct } from './shared'
@@ -26,8 +27,8 @@ export function LearningPipelineCard() {
         </div>)}
       </div>
       <div className="jee-progress-compare">
-        <div><span>Raw completion</span><strong><Pct value={progress.raw} /></strong></div>
-        <div><span>Weighted completion</span><strong><Pct value={progress.weighted} /></strong></div>
+        <div><span><T k="analytics:raw-completion">{"Raw completion"}</T></span><strong><Pct value={progress.raw} /></strong></div>
+        <div><span><T k="analytics:weighted-completion">{"Weighted completion"}</T></span><strong><Pct value={progress.weighted} /></strong></div>
       </div>
     </NotebookCard>
   </section>

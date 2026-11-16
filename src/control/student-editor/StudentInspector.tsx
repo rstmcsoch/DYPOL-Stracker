@@ -93,6 +93,7 @@ export function StudentInspector({ id, document, device, setDevice, errors, acti
   id: string | null; document: StudentLayoutDocument; device: Device; setDevice: (device: Device) => void; errors: Record<string, string>; actions: InspectorActions; extraContent?: ReactNode
 }) {
   const [tab, setTab] = useState<Tab>('content')
+  const [textFilter, setTextFilter] = useState('')
   const def = id ? COMPONENT_MAP.get(id) : undefined
   if (!id || !def) return <div className="le-inspector"><p className="le-empty">Select a part of the page (tap it on the canvas or in Layers) to change how it looks.</p>
     <p className="le-hint">The page shows a synthetic student. Values such as dates, marks, scores, names, streaks, counts, timers and progress always come from each student’s own records and are never editable here.</p></div>
@@ -117,7 +118,9 @@ export function StudentInspector({ id, document, device, setDevice, errors, acti
     </div>
     <div className="le-inspector__body" role="tabpanel">
       {tab === 'content' && <>
-        {Object.entries(def.text ?? {}).map(([key, field]) => {
+        {Object.keys(def.text ?? {}).length > 10 && <label className="le-field"><span className="le-field__label">Find a label</span>
+          <input className="cc-input" type="search" value={textFilter} placeholder="Type part of the wording" onChange={event => setTextFilter(event.target.value)} /></label>}
+        {Object.entries(def.text ?? {}).filter(([key, field]) => !textFilter || `${field.default} ${config.text?.[key] ?? ''}`.toLowerCase().includes(textFilter.toLowerCase())).map(([key, field]) => {
           const value = config.text?.[key] ?? ''
           const error = ownErrors[`components.${id}.text.${key}`]
           return <label key={key} className="le-field"><span className="le-field__label">{field.label} <span className="le-hint">({field.max} max)</span></span>

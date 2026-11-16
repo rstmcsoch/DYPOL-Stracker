@@ -9,6 +9,8 @@ import type { StudyActivity, Subject } from '../types'
 import { STUDY_ACTIVITIES } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
 import { formatClock, formatStudiedDuration, isFocusMode, loggableMinutes } from '../lib/focus-timer'
+import { T } from '../lib/student-layout/T'
+import { labelSlug } from '../lib/student-layout/label-key'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
 const MODES: { name: FocusMode; minutes: number; label: string; icon: React.ReactNode }[] = [
@@ -77,45 +79,45 @@ export default function FocusPage() {
 
   return <div className="focus-page" data-mode={timer.mode.toLowerCase().replace(' ', '-') }>
     <div className="focus-vignette" aria-hidden="true" />
-    <header {...sl.attrs('topbar')} className="focus-topbar"><button className="focus-exit" onClick={requestExit}><ArrowLeft size={17} /> Exit focus</button><div className="focus-wordmark"><span className="focus-mark">S</span><span>Stracker <i>focus mode</i></span></div><div className="focus-top-note"><span className={timer.running ? 'focus-live-dot live' : 'focus-live-dot'} />{timer.running ? 'BLOCK IN PROGRESS' : 'DISTRACTION-FREE SPACE'}</div></header>
+    <header {...sl.attrs('topbar')} className="focus-topbar"><button className="focus-exit" onClick={requestExit}><ArrowLeft size={17} />{' '}<T k="focus:exit-focus">{"Exit focus"}</T></button><div className="focus-wordmark"><span className="focus-mark">S</span><span><T k="focus:stracker">{"Stracker"}</T>{' '}<i><T k="focus:focus-mode">{"focus mode"}</T></i></span></div><div className="focus-top-note"><span className={timer.running ? 'focus-live-dot live' : 'focus-live-dot'} />{timer.running ? 'BLOCK IN PROGRESS' : 'DISTRACTION-FREE SPACE'}</div></header>
     <main className="focus-main">
       {!sl.hidden('prelude') && <div {...sl.attrs('prelude')} className="focus-prelude"><span className="focus-star">✳</span><span className="eyebrow">{sl.text('prelude', 'label', 'MAKE THIS MOMENT COUNT')}</span><span className="focus-star">✦</span></div>}
       <h1>{timer.mode === 'Pomodoro' || timer.mode === 'Custom' ? 'One thing at a time.' : 'Take the pause.'}</h1>
       <p className="focus-subtitle">{subtitle}</p>
-      <div className="focus-mode-selector" role="group" aria-label="Timer mode">{MODES.map(mode => <button key={mode.name} className={timer.mode === mode.name ? 'selected' : ''} onClick={() => requestMode(mode.name)} disabled={timer.running} aria-pressed={timer.mode === mode.name}>{mode.icon}<span>{mode.label}</span>{mode.name !== 'Custom' && <small>{timer.durations[mode.name]}m</small>}</button>)}</div>
-      {timer.mode === 'Custom' && <label className="custom-time-control">Custom focus minutes <input type="number" min="1" max="180" step="1" value={timer.durations.Custom} disabled={timer.running} onChange={event => { const minutes = event.currentTarget.valueAsNumber; if (Number.isFinite(minutes) && Number.isInteger(minutes)) timer.setCustomMinutes(minutes) }} /></label>}
+      <div className="focus-mode-selector" role="group" aria-label="Timer mode">{MODES.map(mode => <button key={mode.name} className={timer.mode === mode.name ? 'selected' : ''} onClick={() => requestMode(mode.name)} disabled={timer.running} aria-pressed={timer.mode === mode.name}>{mode.icon}<span><T k={`focus:mode-${labelSlug(mode.name)}`}>{mode.label}</T></span>{mode.name !== 'Custom' && <small>{timer.durations[mode.name]}m</small>}</button>)}</div>
+      {timer.mode === 'Custom' && <label className="custom-time-control"><T k="focus:custom-focus-minutes">{"Custom focus minutes"}</T>{' '}<input type="number" min="1" max="180" step="1" value={timer.durations.Custom} disabled={timer.running} onChange={event => { const minutes = event.currentTarget.valueAsNumber; if (Number.isFinite(minutes) && Number.isInteger(minutes)) timer.setCustomMinutes(minutes) }} /></label>}
       <div {...sl.attrs('clock')} className={`focus-clock-wrap ${timer.running ? 'is-running' : ''} ${timer.finished ? 'is-finished' : ''}`}>
         <span className="focus-clock-orbit orbit-one" aria-hidden="true" /><span className="focus-clock-orbit orbit-two" aria-hidden="true" />
         <ProgressRing value={timer.progress} size={332} color="var(--focus-accent)" label={<span className="focus-clock" aria-live="off">{clock}</span>} />
         <div className="focus-clock-caption">{timer.finished ? <><Check size={15} /> BLOCK COMPLETE</> : timer.running ? 'STAY WITH THIS PAGE' : unsaved ? 'PAUSED' : 'READY WHEN YOU ARE'}</div>
       </div>
-      {focusBlock && (unsaved || timer.running) && <p className="focus-elapsed-line" aria-live="off"><span>Elapsed <strong>{formatClock(timer.liveElapsed)}</strong></span><span aria-hidden="true"> · </span><span>Remaining <strong>{clock}</strong></span></p>}
-      <div className="focus-primary-actions">{timer.running ? <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.pause}><Pause size={18} /> Pause <kbd>Space</kbd></Button> : <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.start}><Play size={17} fill="currentColor" /> {timer.finished ? 'Start another block' : timer.remainingSeconds < timer.focusMinutes * 60 ? 'Resume focus' : 'Begin focus'} <kbd>Space</kbd></Button>}
-        {unsaved && <button className="focus-reset-button focus-end-button" onClick={() => setConfirmEnd({ then: 'stay' })} aria-label="End focus block"><Square size={14} /> End</button>}
-        {!unsaved && (timer.running || timer.finished || timer.remainingSeconds < timer.focusMinutes * 60) && <button className="focus-reset-button" onClick={timer.reset} aria-label="Reset timer"><RotateCcw size={16} /> Reset</button>}</div>
-      <div {...sl.attrs('context')} className="focus-context-card"><div className="focus-context-head"><BookOpen size={15} /><span>KEEP THIS BLOCK GROUNDED</span><span className="context-free-note">Optional</span></div><div className="focus-context-fields">
-        <label><span>Activity</span><select value={timer.activity} disabled={timer.running} onChange={event => timer.setActivity(event.target.value as StudyActivity)} aria-describedby="focus-activity-note">{STUDY_ACTIVITIES.map(item => <option key={item} value={item}>{item}</option>)}</select><small id="focus-activity-note" className="jee-small jee-muted">Lecture, practice, revision — tracked separately.</small></label>
-        <label><span>Subject</span><select value={timer.subject ?? ''} disabled={timer.running} onChange={event => chooseSubject(event.target.value)}><option value="">Choose a subject</option>{focusSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></label>
-        <div className="focus-picker-field"><span id="focus-chapter-label">Chapter</span>
+      {focusBlock && (unsaved || timer.running) && <p className="focus-elapsed-line" aria-live="off"><span><T k="focus:elapsed">{"Elapsed"}</T>{' '}<strong>{formatClock(timer.liveElapsed)}</strong></span><span aria-hidden="true"> · </span><span><T k="focus:remaining">{"Remaining"}</T>{' '}<strong>{clock}</strong></span></p>}
+      <div className="focus-primary-actions">{timer.running ? <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.pause}><Pause size={18} />{' '}<T k="focus:pause">{"Pause"}</T>{' '}<kbd>Space</kbd></Button> : <Button className="focus-start-button" size="lg" variant="marker" onClick={timer.start}><Play size={17} fill="currentColor" /> {timer.finished ? 'Start another block' : timer.remainingSeconds < timer.focusMinutes * 60 ? 'Resume focus' : 'Begin focus'} <kbd>Space</kbd></Button>}
+        {unsaved && <button className="focus-reset-button focus-end-button" onClick={() => setConfirmEnd({ then: 'stay' })} aria-label="End focus block"><Square size={14} />{' '}<T k="focus:end">{"End"}</T></button>}
+        {!unsaved && (timer.running || timer.finished || timer.remainingSeconds < timer.focusMinutes * 60) && <button className="focus-reset-button" onClick={timer.reset} aria-label="Reset timer"><RotateCcw size={16} />{' '}<T k="focus:reset">{"Reset"}</T></button>}</div>
+      <div {...sl.attrs('context')} className="focus-context-card"><div className="focus-context-head"><BookOpen size={15} /><span><T k="focus:keep-this-block-grounded">{"KEEP THIS BLOCK GROUNDED"}</T></span><span className="context-free-note"><T k="focus:optional">{"Optional"}</T></span></div><div className="focus-context-fields">
+        <label><span><T k="focus:activity">{"Activity"}</T></span><select value={timer.activity} disabled={timer.running} onChange={event => timer.setActivity(event.target.value as StudyActivity)} aria-describedby="focus-activity-note">{STUDY_ACTIVITIES.map(item => <option key={item} value={item}>{item}</option>)}</select><small id="focus-activity-note" className="jee-small jee-muted"><T k="focus:lecture-practice-revision-tracked-separa">{"Lecture, practice, revision — tracked separately."}</T></small></label>
+        <label><span><T k="focus:subject">{"Subject"}</T></span><select value={timer.subject ?? ''} disabled={timer.running} onChange={event => chooseSubject(event.target.value)}><option value="">Choose a subject</option>{focusSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></label>
+        <div className="focus-picker-field"><span id="focus-chapter-label"><T k="focus:chapter">{"Chapter"}</T></span>
           <button type="button" className="focus-picker-trigger" disabled={timer.running} aria-haspopup="dialog" aria-labelledby="focus-chapter-label" onClick={() => setChapterPickerOpen(true)}>
-            {selectedChapter ? <><span className="focus-picker-value">{selectedChapter.name}</span><SubjectBadge subject={selectedChapter.subject} /></> : <span className="focus-picker-placeholder">Search chapters…</span>}
+            {selectedChapter ? <><span className="focus-picker-value">{selectedChapter.name}</span><SubjectBadge subject={selectedChapter.subject} /></> : <span className="focus-picker-placeholder"><T k="focus:search-chapters">{"Search chapters…"}</T></span>}
             <Search size={14} aria-hidden="true" />
           </button>
         </div>
-        <div className="focus-picker-field"><span id="focus-task-label">Today's task</span>
+        <div className="focus-picker-field"><span id="focus-task-label"><T k="focus:todays-task">{"Today's task"}</T></span>
           {selectedTask
             ? <div className="focus-task-link-actions"><button type="button" className="focus-picker-trigger is-linked" disabled={timer.running} onClick={() => setTaskPickerOpen(true)}><Check size={14} aria-hidden="true" /><span className="focus-picker-value">{selectedTask.title}</span><ChevronRight size={14} aria-hidden="true" /></button><button type="button" className="focus-unlink-button" disabled={timer.running} onClick={() => timer.setTask(null)} aria-label="Unlink task"><Unlink size={15} /></button></div>
-            : <button type="button" className="focus-picker-trigger link-task" disabled={timer.running} aria-haspopup="dialog" aria-labelledby="focus-task-label" onClick={() => setTaskPickerOpen(true)}><Link2 size={14} aria-hidden="true" /><span>Link a task</span></button>}
+            : <button type="button" className="focus-picker-trigger link-task" disabled={timer.running} aria-haspopup="dialog" aria-labelledby="focus-task-label" onClick={() => setTaskPickerOpen(true)}><Link2 size={14} aria-hidden="true" /><span><T k="focus:link-a-task">{"Link a task"}</T></span></button>}
         </div>
       </div>
-      {selectedTask && <div className="focus-current-task"><span className="focus-task-bullet">↳</span><div><span>CURRENT TASK</span><strong>{selectedTask.title}</strong>{selectedChapter && <small><SubjectBadge subject={selectedChapter.subject} /> {selectedChapter.name}</small>}</div></div>}
+      {selectedTask && <div className="focus-current-task"><span className="focus-task-bullet">↳</span><div><span><T k="focus:current-task">{"CURRENT TASK"}</T></span><strong>{selectedTask.title}</strong>{selectedChapter && <small><SubjectBadge subject={selectedChapter.subject} /> {selectedChapter.name}</small>}</div></div>}
       {chapterPickerOpen && <ChapterSearchPicker chapters={availableChapters} selectedId={timer.chapterId} onClose={() => setChapterPickerOpen(false)} onChoose={chapterId => { timer.setChapter(chapterId); setChapterPickerOpen(false) }} />}
       {taskPickerOpen && <TaskLinkPicker tasks={data.tasks.filter(task => task.task_date === indiaToday())} linkedId={timer.taskId} onClose={() => setTaskPickerOpen(false)} onChoose={taskId => { timer.setTask(taskId); setTaskPickerOpen(false) }} />}
       </div>
-      {!sl.hidden('footnote') && <div {...sl.attrs('footnote')} className="focus-footer-note"><Sparkles size={14} /> Your timer keeps going if you step away — Home shows it until you end the block. Ending early lets you save the time you studied.</div>}
+      {!sl.hidden('footnote') && <div {...sl.attrs('footnote')} className="focus-footer-note"><Sparkles size={14} />{' '}<T k="focus:your-timer-keeps-going-if-you-step-away">{"Your timer keeps going if you step away — Home shows it until you end the block. Ending early lets you save the time you studied."}</T></div>}
     </main>
     {confirmEnd && <EndBlockDialog seconds={timer.liveElapsed} onSave={() => resolveEnd(true)} onDiscard={() => resolveEnd(false)} onKeep={() => setConfirmEnd(null)} exiting={confirmEnd.then === 'exit'} />}
-    <footer className="focus-bottom"><span>Stracker <strong>by DYPOL LABS</strong></span><span>Press <kbd>Esc</kbd> to exit · <kbd>Space</kbd> to pause or resume</span></footer>
+    <footer className="focus-bottom"><span><T k="focus:stracker">{"Stracker"}</T>{' '}<strong><T k="focus:by-dypol-labs">{"by DYPOL LABS"}</T></strong></span><span><T k="focus:press">{"Press"}</T>{' '}<kbd>Esc</kbd>{' '}<T k="focus:to-exit">{"to exit ·"}</T>{' '}<kbd>Space</kbd>{' '}<T k="focus:to-pause-or-resume">{"to pause or resume"}</T></span></footer>
   </div>
 }
 
@@ -151,12 +153,12 @@ function ChapterSearchPicker({ chapters, selectedId, onClose, onChoose }: {
     if (event.key === 'Enter' && results[selected]) { event.preventDefault(); onChoose(results[selected].id) }
   }
 
-  return <Dialog title="Choose a chapter" onClose={onClose} className="dialog-narrow chapter-picker-dialog">
+  return <Dialog lk="focus:choose-a-chapter" title="Choose a chapter" onClose={onClose} className="dialog-narrow chapter-picker-dialog">
     <div className="chapter-picker-body">
       <div className="global-search-input chapter-picker-input"><Search size={17} aria-hidden="true" /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} onKeyDown={onKeyDown} placeholder="e.g. Current Electricity, Thermodynamics…" aria-label="Search chapters" /></div>
-      {selectedId && <button type="button" className="chapter-picker-clear" onClick={() => onChoose(null)}><X size={14} aria-hidden="true" /> Clear chapter choice</button>}
+      {selectedId && <button type="button" className="chapter-picker-clear" onClick={() => onChoose(null)}><X size={14} aria-hidden="true" />{' '}<T k="focus:clear-chapter-choice">{"Clear chapter choice"}</T></button>}
       <div className="chapter-picker-results" ref={listRef} role="listbox" aria-label="Matching chapters">
-        {results.length === 0 ? <div className="chapter-picker-empty"><Search size={17} aria-hidden="true" /> No chapter matches “{query.trim()}”. Try a shorter word, or a subject name like <em>Chemistry</em>.</div> : results.map((chapter, index) => (
+        {results.length === 0 ? <div className="chapter-picker-empty"><Search size={17} aria-hidden="true" /> No chapter matches “{query.trim()}”. Try a shorter word, or a subject name like <em><T k="focus:chemistry">{"Chemistry"}</T></em>.</div> : results.map((chapter, index) => (
           <button key={chapter.id} type="button" role="option" aria-selected={chapter.id === selectedId} data-selected={index === selected} className={`chapter-picker-result ${chapter.id === selectedId ? 'chosen' : ''} ${index === selected ? 'selected' : ''}`} onClick={() => onChoose(chapter.id)}>
             <SubjectBadge subject={chapter.subject} /><span>{chapter.name}</span>{chapter.id === selectedId && <Check size={15} aria-hidden="true" />}
           </button>
@@ -175,16 +177,16 @@ function TaskLinkPicker({ tasks, linkedId, onClose, onChoose }: {
   onChoose: (taskId: string | null) => void
 }) {
   const open = tasks.filter(task => !task.is_completed)
-  return <Dialog title="Link a task" onClose={onClose} className="dialog-narrow chapter-picker-dialog">
+  return <Dialog lk="focus:link-a-task" title="Link a task" onClose={onClose} className="dialog-narrow chapter-picker-dialog">
     <div className="chapter-picker-body">
-      {open.length === 0 ? <div className="chapter-picker-empty"><CalendarCheck size={17} aria-hidden="true" /> No open tasks for today. Plan one in the Planner, then link it here.</div> : <div className="chapter-picker-results" role="listbox" aria-label="Today's tasks">
+      {open.length === 0 ? <div className="chapter-picker-empty"><CalendarCheck size={17} aria-hidden="true" />{' '}<T k="focus:no-open-tasks-for-today-plan-one-in-the">{"No open tasks for today. Plan one in the Planner, then link it here."}</T></div> : <div className="chapter-picker-results" role="listbox" aria-label="Today's tasks">
         {open.map(task => (
           <button key={task.id} type="button" role="option" aria-selected={task.id === linkedId} className={`chapter-picker-result ${task.id === linkedId ? 'chosen' : ''}`} onClick={() => onChoose(task.id)}>
             <SubjectBadge subject={task.subject} /><span>{task.title}</span>{task.id === linkedId && <Check size={15} aria-hidden="true" />}
           </button>
         ))}
       </div>}
-      {linkedId && <button type="button" className="chapter-picker-clear" onClick={() => onChoose(null)}><X size={14} aria-hidden="true" /> Unlink the current task</button>}
+      {linkedId && <button type="button" className="chapter-picker-clear" onClick={() => onChoose(null)}><X size={14} aria-hidden="true" />{' '}<T k="focus:unlink-the-current-task">{"Unlink the current task"}</T></button>}
     </div>
   </Dialog>
 }
@@ -203,7 +205,7 @@ function EndBlockDialog({ seconds, onSave, onDiscard, onKeep, exiting }: { secon
       <div className="focus-end-actions">
         <Button variant="marker" onClick={onSave} disabled={minutes < 1}><Check size={15} /> {exiting ? 'Save & exit' : 'Save & end'}</Button>
         <Button variant="secondary" onClick={onDiscard}><X size={15} /> {exiting ? 'Discard & exit' : 'Discard & end'}</Button>
-        <Button variant="quiet" onClick={onKeep}><Play size={15} /> Keep studying</Button>
+        <Button variant="quiet" onClick={onKeep}><Play size={15} />{' '}<T k="focus:keep-studying">{"Keep studying"}</T></Button>
       </div>
     </div>
   </Dialog>

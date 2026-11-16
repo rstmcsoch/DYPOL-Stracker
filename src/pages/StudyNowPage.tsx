@@ -7,6 +7,7 @@ import { useData } from '../contexts/DataContext'
 import { indiaToday } from '../lib/date'
 import { allTrackReadiness, countdownLabel, currentExamMode, trackLabels } from '../lib/jee/exam'
 import { computeReminders, REMINDER_LABEL } from '../lib/jee/reminders'
+import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
 export default function StudyNowPage() {
@@ -22,14 +23,14 @@ export default function StudyNowPage() {
     <PageHeader layoutId="study-now.header" title="Study now" subtitle="Your most urgent item, and why." />
     <StudyNowCard />
 
-    <SectionHeading title="Exam Mode" note={mode.reason} action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} /> Exam settings</Button>} />
+    <SectionHeading title="Exam Mode" note={mode.reason} action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} />{' '}<T k="study-now:exam-settings">{"Exam settings"}</T></Button>} />
     <NotebookCard {...sl.attrs('exam-mode')} className="jee-exam-mode">
       <div className="jee-exam-mode-head">
         <StatusBadge tone={mode.active ? 'weak' : 'muted'}>{mode.active ? 'On' : 'Off'}</StatusBadge>
         <strong>{mode.label ?? 'No active track'}</strong>
         <span className="jee-muted">{countdownLabel(mode.daysLeft)}</span>
       </div>
-      {mode.active && <p className="jee-small">While Exam Mode is on, revision, PYQs, mocks, flashcards and weak-area fixes are weighted up. New theory is not suggested, and backlog only surfaces when it is due or high priority.</p>}
+      {mode.active && <p className="jee-small"><T k="study-now:while-exam-mode-is-on-revision-pyqs-mock">{"While Exam Mode is on, revision, PYQs, mocks, flashcards and weak-area fixes are weighted up. New theory is not suggested, and backlog only surfaces when it is due or high priority."}</T></p>}
     </NotebookCard>
 
     <SectionHeading title="Track readiness" note="Each track is measured against its own PYQs." />

@@ -10,6 +10,7 @@ import { indiaToday, prettyDate } from '../lib/date'
 import { reviewCard, dueCards, ratingPreview, RATING_LABELS } from '../lib/jee/cards'
 import { CARD_RATINGS, type CardKind, type CardRating, type Chapter, type StudyCard } from '../types'
 import { useReportSubjects } from '../lib/exams/useExamSubjects'
+import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
 type KindFilter = 'all' | CardKind
@@ -73,46 +74,46 @@ export default function DecksPage() {
     <PageHeader layoutId="decks.header"
       title="Formula & flashcards"
       subtitle="Rate each card Again, Hard, Good or Easy; Good and Easy move it up your revision ladder."
-      action={<Button onClick={() => setEditing('new')} disabled={data.chapters.length === 0}><Plus size={16} /> New card</Button>}
+      action={<Button onClick={() => setEditing('new')} disabled={data.chapters.length === 0}><Plus size={16} />{' '}<T k="decks:new-card">{"New card"}</T></Button>}
     />
 
     {!sl.hidden('summary') && <section {...sl.attrs('summary')} className="jee-stat-grid" aria-label="Due cards">
-      <NotebookCard className="jee-stat"><span>Due overall</span><strong>{dueOverall.length}</strong><small>{subject === 'all' ? 'across all chapters' : `across ${subject}`}</small></NotebookCard>
-      <NotebookCard className="jee-stat"><span>Due in this chapter</span><strong>{chapterDue.length}</strong><small>{chapter?.name ?? 'Pick a chapter'}</small></NotebookCard>
-      <NotebookCard className="jee-stat"><span>Cards</span><strong>{data.studyCards.length}</strong><small>formulas and flashcards</small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="decks:due-overall">{"Due overall"}</T></span><strong>{dueOverall.length}</strong><small>{subject === 'all' ? 'across all chapters' : `across ${subject}`}</small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="decks:due-in-this-chapter">{"Due in this chapter"}</T></span><strong>{chapterDue.length}</strong><small>{chapter?.name ?? 'Pick a chapter'}</small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="decks:cards">{"Cards"}</T></span><strong>{data.studyCards.length}</strong><small><T k="decks:formulas-and-flashcards">{"formulas and flashcards"}</T></small></NotebookCard>
     </section>}
 
     <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
       <div className="jee-filter-grid">
-        <label className="jee-select"><span>Subject</span><select value={subject} onChange={event => setSubject(event.target.value)}><option value="all">All subjects</option>{deckSubjects.map(item => <option key={item}>{item}</option>)}</select></label>
+        <label className="jee-select"><span><T k="decks:subject">{"Subject"}</T></span><select value={subject} onChange={event => setSubject(event.target.value)}><option value="all">All subjects</option>{deckSubjects.map(item => <option key={item}>{item}</option>)}</select></label>
         <ChapterSelect chapters={data.chapters} value={chapterId} onChange={setChapterId} subject={subject} label="Chapter" />
       </div>
-      <ChipFilter<KindFilter> label="Deck" value={kind} onChange={setKind} options={[{ value: 'all', label: 'Both' }, { value: 'formula', label: 'Formulas' }, { value: 'flashcard', label: 'Flashcards' }]} />
+      <ChipFilter<KindFilter> lk="decks" label="Deck" value={kind} onChange={setKind} options={[{ value: 'all', label: 'Both' }, { value: 'formula', label: 'Formulas' }, { value: 'flashcard', label: 'Flashcards' }]} />
     </NotebookCard>
 
     {!chapter ? <NotebookCard><EmptyState title={subject !== 'all' && !data.chapters.some(item => item.subject === subject) ? `No ${subject} chapters yet. Add one in Syllabus.` : 'Pick a chapter to open its decks.'} /></NotebookCard> : <>
       <div className="jee-deck-actions">
         <Button onClick={() => setReviewing(true)} disabled={chapterDue.length === 0}><Eye size={16} /> Review {chapterDue.length} due</Button>
-        {chapter.formula_notes.trim() && <Button variant="secondary" onClick={() => void importFormulaNotes()}><WandSparkles size={15} /> Make formula cards from chapter notes</Button>}
+        {chapter.formula_notes.trim() && <Button variant="secondary" onClick={() => void importFormulaNotes()}><WandSparkles size={15} />{' '}<T k="decks:make-formula-cards-from-chapter-notes">{"Make formula cards from chapter notes"}</T></Button>}
       </div>
 
       <SectionHeading title={`${chapter.name}`} note={`${cards.length} card${cards.length === 1 ? '' : 's'} in view · ${gaps.map(gap => `R${gap}`).join(' → ')} ladder`} action={<SubjectBadge subject={chapter.subject} />} />
-      {cards.length === 0 ? <NotebookCard><EmptyState icon={<Sigma size={24} />} title="No cards in this deck yet." action={<Button variant="secondary" size="sm" onClick={() => setEditing('new')}><Plus size={15} /> Add a card</Button>} /></NotebookCard>
+      {cards.length === 0 ? <NotebookCard><EmptyState lk="decks:no-cards-in-this-deck-yet" icon={<Sigma size={24} />} title="No cards in this deck yet." action={<Button variant="secondary" size="sm" onClick={() => setEditing('new')}><Plus size={15} />{' '}<T k="decks:add-a-card">{"Add a card"}</T></Button>} /></NotebookCard>
       : <div className="jee-card-grid">
         {cards.map(card => {
           const isDue = dueCards([card], today).length > 0
           return <NotebookCard key={card.id} className="jee-deck-card">
             <div className="jee-deck-card-head">
               <StatusBadge tone={card.kind === 'formula' ? 'Okay' : 'Strong'}>{card.kind === 'formula' ? 'Formula' : 'Flashcard'}</StatusBadge>
-              {isDue ? <StatusBadge tone="weak">Due</StatusBadge> : card.next_review_at && <span className="jee-muted jee-small"><AlarmClock size={12} aria-hidden="true" /> {prettyDate(card.next_review_at.slice(0, 10))}</span>}
-              {card.last_rating ? <StatusBadge tone={card.last_rating === 'again' || card.last_rating === 'hard' ? 'dropping' : 'muted'}>{RATING_LABELS[card.last_rating]}</StatusBadge> : card.difficulty === 'difficult' && <StatusBadge tone="dropping">Difficult</StatusBadge>}
+              {isDue ? <StatusBadge tone="weak"><T k="decks:due">{"Due"}</T></StatusBadge> : card.next_review_at && <span className="jee-muted jee-small"><AlarmClock size={12} aria-hidden="true" /> {prettyDate(card.next_review_at.slice(0, 10))}</span>}
+              {card.last_rating ? <StatusBadge tone={card.last_rating === 'again' || card.last_rating === 'hard' ? 'dropping' : 'muted'}>{RATING_LABELS[card.last_rating]}</StatusBadge> : card.difficulty === 'difficult' && <StatusBadge tone="dropping"><T k="decks:difficult">{"Difficult"}</T></StatusBadge>}
               <OverflowMenu label={`Actions for card ${card.front}`} items={[
                 { id: 'edit', label: 'Edit', icon: <Edit3 size={15} />, onSelect: () => setEditing(card) },
                 { id: 'delete', label: 'Delete', icon: <Trash2 size={15} />, danger: true, onSelect: () => void remover(card) }
               ]} />
             </div>
             <strong className="jee-deck-front">{card.front}</strong>
-            <details className="jee-deck-back"><summary>Show answer</summary><p>{card.back}</p>{card.hint && <small>Hint: {card.hint}</small>}</details>
+            <details className="jee-deck-back"><summary><T k="decks:show-answer">{"Show answer"}</T></summary><p>{card.back}</p>{card.hint && <small>Hint: {card.hint}</small>}</details>
             <small className="jee-muted">Reviewed {card.reviews} time{card.reviews === 1 ? '' : 's'}</small>
           </NotebookCard>
         })}
@@ -164,16 +165,16 @@ function ReviewDialog({ cards, chapterName, gaps, onClose, onRate }: {
   return <Dialog title={`Review · ${chapterName}`} subtitle={`${gaps.map(gap => `R${gap}`).join(' → ')} schedule · ${Math.min(index + 1, queue.length)} of ${queue.length}`} onClose={onClose} className="jee-dialog">
     {finished || !card ? <div className="jee-review-done">
       <Check size={26} aria-hidden="true" />
-      <h3>Session complete</h3>
+      <h3><T k="decks:session-complete">{"Session complete"}</T></h3>
       <p>{CARD_RATINGS.map(rating => `${stats[rating]} ${RATING_LABELS[rating].toLowerCase()}`).join(' · ')}. Again cards stay due today, Hard ones return tomorrow, Good and Easy move up the ladder.</p>
-      <Button onClick={onClose}>Done</Button>
+      <Button onClick={onClose}><T k="decks:done">{"Done"}</T></Button>
     </div> : <div className="jee-review">
       <ProgressBar value={(index / queue.length) * 100} label="Review progress" />
       <div className="jee-review-card" aria-live="polite">
         <span className="jee-muted jee-small">{card.kind === 'formula' ? 'Formula' : 'Flashcard'}</span>
         <p className="jee-review-front">{card.front}</p>
         {revealed ? <div className="jee-review-back"><p>{card.back}</p>{card.hint && <small>Hint: {card.hint}</small>}</div>
-          : <Button variant="secondary" onClick={() => setRevealed(true)}><Eye size={15} /> Reveal answer</Button>}
+          : <Button variant="secondary" onClick={() => setRevealed(true)}><Eye size={15} />{' '}<T k="decks:reveal-answer">{"Reveal answer"}</T></Button>}
       </div>
       {revealed && <div className="jee-review-actions jee-review-ratings" role="group" aria-label="Rate this card">
         {CARD_RATINGS.map(rating => <Button key={rating} variant={rating === 'again' ? 'danger' : rating === 'good' ? 'primary' : 'secondary'} onClick={() => void rate(rating)} loading={busy} aria-label={`${RATING_LABELS[rating]} — next review ${ratingPreview(card, rating, gaps)}`}>
@@ -221,15 +222,15 @@ function CardDialog({ card, chapters, subjects, initialChapterId, positionFor, o
   return <Dialog title={card ? 'Edit card' : 'New card'} onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <div className="form-grid two">
-        <Field label="Subject" required><select value={subject} onChange={event => changeSubject(event.target.value)}><option value="" disabled>Choose a subject</option>{subjectOptions.map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
-        <Field label="Chapter" required><select value={chapterId} onChange={event => setChapterId(event.target.value)} disabled={!subject}><option value="" disabled>{subject ? 'Choose a chapter' : 'Pick a subject first'}</option>{chapterOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+        <Field lk="decks:subject" label="Subject" required><select value={subject} onChange={event => changeSubject(event.target.value)}><option value="" disabled>Choose a subject</option>{subjectOptions.map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
+        <Field lk="decks:chapter" label="Chapter" required><select value={chapterId} onChange={event => setChapterId(event.target.value)} disabled={!subject}><option value="" disabled>{subject ? 'Choose a chapter' : 'Pick a subject first'}</option>{chapterOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       </div>
-      <Field label="Deck"><select value={kind} onChange={event => setKind(event.target.value as CardKind)}><option value="formula">Formula</option><option value="flashcard">Flashcard</option></select></Field>
+      <Field lk="decks:deck" label="Deck"><select value={kind} onChange={event => setKind(event.target.value as CardKind)}><option value="formula">Formula</option><option value="flashcard">Flashcard</option></select></Field>
       <Field label={kind === 'formula' ? 'Formula name or prompt' : 'Question'} required><textarea rows={2} maxLength={5000} value={front} onChange={event => setFront(event.target.value)} placeholder={kind === 'formula' ? 'e.g. Capacitance of parallel plates' : 'e.g. Why does a conductor have zero field inside?'} /></Field>
       <Field label={kind === 'formula' ? 'Formula' : 'Answer'} required><textarea rows={3} maxLength={10000} value={back} onChange={event => setBack(event.target.value)} placeholder={kind === 'formula' ? 'C = ε₀A / d' : 'Charges redistribute so the field cancels inside.'} /></Field>
-      <Field label="Hint (optional)"><input maxLength={2000} value={hint} onChange={event => setHint(event.target.value)} /></Field>
+      <Field lk="decks:hint-optional" label="Hint (optional)"><input maxLength={2000} value={hint} onChange={event => setHint(event.target.value)} /></Field>
       {error && <p className="field-error" role="alert">{error}</p>}
-      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving}>{card ? 'Save card' : 'Add card'} <Check size={16} /></Button></div>
+      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}><T k="decks:cancel">{"Cancel"}</T></Button><Button type="submit" loading={saving}>{card ? 'Save card' : 'Add card'} <Check size={16} /></Button></div>
     </form>
   </Dialog>
 }

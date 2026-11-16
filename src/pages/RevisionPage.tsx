@@ -7,6 +7,7 @@ import { indiaDate, indiaToday, plusDays, prettyDate } from '../lib/date'
 import { completeRevision as completeRevisionAction } from '../lib/revision-actions'
 import { revisionIntervalDays, revisionIntervalLabel } from '../lib/revision-labels'
 import type { Revision } from '../types'
+import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
 export default function RevisionPage() {
@@ -42,12 +43,12 @@ export default function RevisionPage() {
   }
 
   return <div className="content-page revision-page">
-    <PageHeader layoutId="revision.header" title="Revision desk" doodle={<span className="revision-title-doodle">↻</span>} action={<div className="revision-total-pill"><AlarmClock size={16} /><strong>{overdue.length + dueToday.length}</strong><span>need attention</span></div>} />
+    <PageHeader layoutId="revision.header" title="Revision desk" doodle={<span className="revision-title-doodle">↻</span>} action={<div className="revision-total-pill"><AlarmClock size={16} /><strong>{overdue.length + dueToday.length}</strong><span><T k="revision:need-attention">{"need attention"}</T></span></div>} />
     {overdue.length > 0 && <RevisionSection title="Overdue" note="Oldest first." tone="overdue" icon={<Clock3 size={17} />} revisions={overdue} data={data} onComplete={complete} onSnooze={snooze} />}
     <div {...sl.attrs('columns')} className="revision-two-column"><RevisionSection title="Due today" note={dueToday.length ? `${dueToday.length} ready for a quick recall pass.` : 'Nothing due today. Keep progressing.'} tone="today" icon={<CalendarClock size={17} />} revisions={dueToday} data={data} onComplete={complete} onSnooze={snooze} /><RevisionSection title="Tomorrow" note="A little peek at what’s coming." tone="tomorrow" icon={<Sparkles size={17} />} revisions={dueTomorrow} data={data} onComplete={complete} onSnooze={snooze} /></div>
     <RevisionSection title="Coming up" note="Scheduled next." tone="upcoming" icon={<ArrowRight size={17} />} revisions={upcoming} data={data} onComplete={complete} onSnooze={snooze} limit={10} />
-    {!sl.hidden('completed') && <NotebookCard {...sl.attrs('completed')} className="revision-completed-toggle"><div><span className="completed-stamp"><CheckCheck size={16} /></span><span><strong>Recently completed</strong><small>{completed.length} revision{completed.length === 1 ? '' : 's'} in your record</small></span></div><button onClick={() => setShowCompleted(value => !value)} aria-expanded={showCompleted}>{showCompleted ? 'Hide' : 'Show'} <span aria-hidden="true">{showCompleted ? '↑' : '↓'}</span></button></NotebookCard>}
-    {showCompleted && <NotebookCard className="completed-revisions-board">{completed.length ? completed.map(revision => <RevisionRow key={revision.id} revision={revision} data={data} completed />) : <EmptyState icon={<CheckCheck size={23} />} title="No finished revisions yet." />}</NotebookCard>}
+    {!sl.hidden('completed') && <NotebookCard {...sl.attrs('completed')} className="revision-completed-toggle"><div><span className="completed-stamp"><CheckCheck size={16} /></span><span><strong><T k="revision:recently-completed">{"Recently completed"}</T></strong><small>{completed.length} revision{completed.length === 1 ? '' : 's'} in your record</small></span></div><button onClick={() => setShowCompleted(value => !value)} aria-expanded={showCompleted}>{showCompleted ? 'Hide' : 'Show'} <span aria-hidden="true">{showCompleted ? '↑' : '↓'}</span></button></NotebookCard>}
+    {showCompleted && <NotebookCard className="completed-revisions-board">{completed.length ? completed.map(revision => <RevisionRow key={revision.id} revision={revision} data={data} completed />) : <EmptyState lk="revision:no-finished-revisions-yet" icon={<CheckCheck size={23} />} title="No finished revisions yet." />}</NotebookCard>}
   </div>
 }
 
@@ -58,7 +59,7 @@ function RevisionSection({ title, note, tone, icon, revisions, data, onComplete,
   const visible = limit ? revisions.slice(0, limit) : revisions
   return <section className={`revision-section revision-section-${tone}`}><div className="revision-section-head"><div className="revision-section-icon">{icon}</div><div><h2>{title}<span>{revisions.length}</span></h2>{note && <p>{note}</p>}</div></div>
     <NotebookCard className="revision-section-card">
-      {!visible.length ? <div className="revision-section-empty"><span aria-hidden="true">✳</span><p>{title === 'Due today' ? 'Nothing due today.' : title === 'Tomorrow' ? 'No revision due tomorrow.' : title === 'Overdue' ? 'You’re all caught up.' : 'No upcoming revisions scheduled.'}</p></div> : <div className="revision-list">{visible.map(revision => <div key={revision.id} className="revision-list-row"><RevisionRow revision={revision} data={data} overdue={tone === 'overdue'} /><div className="revision-row-buttons"><button className="revision-snooze" onClick={() => onSnooze(revision)} aria-label={`Snooze R${revision.revision_number} by one day, to tomorrow`} title="Snooze: move this revision to tomorrow">Snooze +1d</button><Button size="sm" onClick={() => onComplete(revision)}><Check size={14} /> Revised</Button></div></div>)}</div>}
+      {!visible.length ? <div className="revision-section-empty"><span aria-hidden="true">✳</span><p>{title === 'Due today' ? 'Nothing due today.' : title === 'Tomorrow' ? 'No revision due tomorrow.' : title === 'Overdue' ? 'You’re all caught up.' : 'No upcoming revisions scheduled.'}</p></div> : <div className="revision-list">{visible.map(revision => <div key={revision.id} className="revision-list-row"><RevisionRow revision={revision} data={data} overdue={tone === 'overdue'} /><div className="revision-row-buttons"><button className="revision-snooze" onClick={() => onSnooze(revision)} aria-label={`Snooze R${revision.revision_number} by one day, to tomorrow`} title="Snooze: move this revision to tomorrow"><T k="revision:snooze-1d">{"Snooze +1d"}</T></button><Button size="sm" onClick={() => onComplete(revision)}><Check size={14} />{' '}<T k="revision:revised">{"Revised"}</T></Button></div></div>)}</div>}
       {limit && revisions.length > limit && <p className="revision-more-note">And {revisions.length - limit} more scheduled.</p>}
     </NotebookCard>
   </section>
@@ -69,6 +70,6 @@ function RevisionRow({ revision, data, overdue = false, completed = false }: { r
   if (!chapter) return null
   const interval = revisionIntervalDays(revision.revision_number, data.settings.revision_gaps)
   return <div className={`revision-row-main ${overdue ? 'is-overdue' : ''} ${completed ? 'is-completed' : ''}`}>
-    <div className="revision-number-mark">{completed ? <Check size={16} /> : `R${revision.revision_number}`}</div><div className="revision-chapter-copy"><strong>{chapter.name}</strong><div><SubjectBadge subject={chapter.subject} />{interval !== null && <span className="revision-interval" title={`Revision ${revision.revision_number}: the ${interval}-day step in your revision schedule`}>{revisionIntervalLabel(revision.revision_number, data.settings.revision_gaps)}</span>}<span>{completed ? `Completed ${prettyDate(revision.completed_at ? indiaDate(revision.completed_at) : '')}` : `Due ${prettyDate(revision.due_on)}`}</span>{overdue && <StatusBadge tone="weak">Overdue</StatusBadge>}</div></div>
+    <div className="revision-number-mark">{completed ? <Check size={16} /> : `R${revision.revision_number}`}</div><div className="revision-chapter-copy"><strong>{chapter.name}</strong><div><SubjectBadge subject={chapter.subject} />{interval !== null && <span className="revision-interval" title={`Revision ${revision.revision_number}: the ${interval}-day step in your revision schedule`}>{revisionIntervalLabel(revision.revision_number, data.settings.revision_gaps)}</span>}<span>{completed ? `Completed ${prettyDate(revision.completed_at ? indiaDate(revision.completed_at) : '')}` : `Due ${prettyDate(revision.due_on)}`}</span>{overdue && <StatusBadge tone="weak"><T k="revision:overdue">{"Overdue"}</T></StatusBadge>}</div></div>
   </div>
 }

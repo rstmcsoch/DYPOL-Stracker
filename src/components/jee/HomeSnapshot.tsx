@@ -1,3 +1,4 @@
+import { T } from '../../lib/student-layout/T'
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowUpRight, Bell, Clock3, ListChecks } from 'lucide-react'
@@ -36,45 +37,45 @@ export function HomeSnapshot({ layoutAttrs }: { layoutAttrs?: Record<string, str
 
   return <section className="jee-snapshot" aria-label="Study snapshot" {...layoutAttrs}>
     <NotebookCard className="jee-snap-card jee-snap-study">
-      <div className="jee-snap-head"><span className="eyebrow">TODAY</span><button type="button" className="jee-link" onClick={() => navigate('/focus')}>Focus <ArrowUpRight size={13} aria-hidden="true" /></button></div>
+      <div className="jee-snap-head"><span className="eyebrow"><T k="home:today">{"TODAY"}</T></span><button type="button" className="jee-link" onClick={() => navigate('/focus')}><T k="home:focus">{"Focus"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
       <SplitRow minutes={todayMinutes} empty="Nothing recorded yet today" />
-      <div className="jee-snap-head sub"><span className="eyebrow">THIS WEEK</span><small className="jee-muted">{minutesLabel(week.total)} total</small></div>
+      <div className="jee-snap-head sub"><span className="eyebrow"><T k="home:this-week">{"THIS WEEK"}</T></span><small className="jee-muted">{minutesLabel(week.total)} total</small></div>
       <SplitRow minutes={week} compact />
     </NotebookCard>
 
     {/* Streak and the exam countdown live in the hero cards above; repeating the
         same numbers here was removed so every statistic renders exactly once. */}
     <NotebookCard className="jee-snap-card jee-snap-progress">
-      <div className="jee-snap-head"><span className="eyebrow">SYLLABUS</span><button type="button" className="jee-link" onClick={() => navigate('/syllabus')}>Open <ArrowUpRight size={13} aria-hidden="true" /></button></div>
+      <div className="jee-snap-head"><span className="eyebrow"><T k="home:syllabus">{"SYLLABUS"}</T></span><button type="button" className="jee-link" onClick={() => navigate('/syllabus')}><T k="home:open">{"Open"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
       <ProgressLine label="Raw completion" value={progress.raw} detail={`${progress.completedChapters}/${progress.totalChapters} chapters`} />
       <ProgressLine label="Weighted completion" value={progress.weighted} detail="by chapter importance" />
       
     </NotebookCard>
 
     <NotebookCard className="jee-snap-card jee-snap-practice">
-      <div className="jee-snap-head"><span className="eyebrow">PRACTICE & PYQs</span><button type="button" className="jee-link" onClick={() => navigate('/practice')}>Log <ArrowUpRight size={13} aria-hidden="true" /></button></div>
+      <div className="jee-snap-head"><span className="eyebrow"><T k="home:practice-pyqs">{"PRACTICE & PYQs"}</T></span><button type="button" className="jee-link" onClick={() => navigate('/practice')}><T k="home:log">{"Log"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
       <div className="jee-mini-stats">
-        <div><strong>{practice.attempted.toLocaleString('en-IN')}</strong><span>questions</span></div>
-        <div><strong><Pct value={practice.accuracy} /></strong><span>accuracy</span></div>
-        {jee && <div><strong><Pct value={pyqMain.percent} /></strong><span>JEE Main PYQs</span></div>}
-        {jee && <div><strong><Pct value={pyqAdv.percent} /></strong><span>Advanced PYQs</span></div>}
-        {!jee && <div><strong><Pct value={pyqMain.percent} /></strong><span>PYQ years covered</span></div>}
-        <div><strong>{pyqCounts.doneYears.toLocaleString('en-IN')}</strong><span>PYQ chapter-years done</span></div>
+        <div><strong>{practice.attempted.toLocaleString('en-IN')}</strong><span><T k="home:questions">{"questions"}</T></span></div>
+        <div><strong><Pct value={practice.accuracy} /></strong><span><T k="home:accuracy">{"accuracy"}</T></span></div>
+        {jee && <div><strong><Pct value={pyqMain.percent} /></strong><span><T k="home:jee-main-pyqs">{"JEE Main PYQs"}</T></span></div>}
+        {jee && <div><strong><Pct value={pyqAdv.percent} /></strong><span><T k="home:advanced-pyqs">{"Advanced PYQs"}</T></span></div>}
+        {!jee && <div><strong><Pct value={pyqMain.percent} /></strong><span><T k="home:pyq-years-covered">{"PYQ years covered"}</T></span></div>}
+        <div><strong>{pyqCounts.doneYears.toLocaleString('en-IN')}</strong><span><T k="home:pyq-chapter-years-done">{"PYQ chapter-years done"}</T></span></div>
       </div>
       <div className="jee-backlog-due-links">
-        <button type="button" className="jee-link" onClick={() => navigate('/backlog')}>Backlog due now: <strong>{backlog.dueNow}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
-        <button type="button" className="jee-link" onClick={() => navigate('/backlog')}>Due tomorrow: <strong>{backlog.dueTomorrow}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
+        <button type="button" className="jee-link" onClick={() => navigate('/backlog')}><T k="home:backlog-due-now">{"Backlog due now:"}</T>{' '}<strong>{backlog.dueNow}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
+        <button type="button" className="jee-link" onClick={() => navigate('/backlog')}><T k="home:due-tomorrow">{"Due tomorrow:"}</T>{' '}<strong>{backlog.dueTomorrow}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
       </div>
     </NotebookCard>
 
     <NotebookCard className="jee-snap-card jee-snap-exam">
-      <div className="jee-snap-head"><span className="eyebrow">{trackLabels(data.settings)[activeTrack].toUpperCase()}</span><button type="button" className="jee-link" onClick={() => navigate('/settings')}>Exam dates <ArrowUpRight size={13} aria-hidden="true" /></button></div>
+      <div className="jee-snap-head"><span className="eyebrow">{trackLabels(data.settings)[activeTrack].toUpperCase()}</span><button type="button" className="jee-link" onClick={() => navigate('/settings')}><T k="home:exam-dates">{"Exam dates"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
       <p className="jee-small">{mode.active ? mode.reason : 'Exam Mode turns on automatically in the final 30 days. The big countdown lives at the top of Home.'}</p>
       <ProgressLine label="Track readiness" value={track.percent} detail="weighted syllabus, PYQs and recent tests" />
     </NotebookCard>
 
     {reminders.length > 0 && <NotebookCard className="jee-snap-card jee-snap-reminders">
-      <div className="jee-snap-head"><span className="eyebrow"><Bell size={13} aria-hidden="true" /> REMINDERS</span></div>
+      <div className="jee-snap-head"><span className="eyebrow"><Bell size={13} aria-hidden="true" />{' '}<T k="home:reminders">{"REMINDERS"}</T></span></div>
       <ul className="jee-reminder-list">{reminders.map(item => <li key={item.kind}><ListChecks size={14} aria-hidden="true" /><span><strong>{item.title}.</strong> {item.body}</span></li>)}</ul>
     </NotebookCard>}
   </section>
@@ -86,7 +87,7 @@ function SplitRow({ minutes, compact = false, empty }: { minutes: ActivityMinute
     {PRIMARY_ACTIVITIES.map(activity => <div key={activity} className={`jee-split-item split-${activity.toLowerCase()}`}>
       <Clock3 size={12} aria-hidden="true" /><span>{activity}</span><strong>{minutesLabel(minutes[activity])}</strong>
     </div>)}
-    {!compact && (minutes['Mock/Test'] > 0 || minutes['PYQ practice'] > 0) && <div className="jee-split-item other"><span>Mock/Test &amp; PYQ</span><strong>{minutesLabel(minutes['Mock/Test'] + minutes['PYQ practice'])}</strong></div>}
+    {!compact && (minutes['Mock/Test'] > 0 || minutes['PYQ practice'] > 0) && <div className="jee-split-item other"><span><T k="home:mock-test-pyq">{"Mock/Test & PYQ"}</T></span><strong>{minutesLabel(minutes['Mock/Test'] + minutes['PYQ practice'])}</strong></div>}
   </div>
 }
 

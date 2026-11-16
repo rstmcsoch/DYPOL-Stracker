@@ -72,6 +72,7 @@ export function attachStudentOverlay(send: (message: StudentCanvasMessage) => vo
 
   let hoverTarget: Element | null = null
   let editing: HTMLElement | null = null
+  let original = ''
   let tipTimer = 0
   const editMode = () => current()?.mode === 'edit'
 
@@ -117,6 +118,9 @@ export function attachStudentOverlay(send: (message: StudentCanvasMessage) => vo
     element.classList.remove('sl-editing')
     const [id, key] = (element.getAttribute('data-sl-text') ?? '').split(':')
     const value = (element.textContent ?? '').replace(/\s+/g, ' ').trim()
+    // Put the rendered text back; the page re-renders the saved wording itself (no rebuild,
+    // so the current sub-tab, filter or dialog stays open).
+    element.textContent = original
     if (save && id && key) send({ type: 'sl:text', id, key, value })
     else if (!save) send({ type: 'sl:select', id: id ?? null })
   }
@@ -171,6 +175,7 @@ export function attachStudentOverlay(send: (message: StudentCanvasMessage) => vo
     const owner = id ? COMPONENT_MAP.get(id) : null
     if (!owner?.text) return
     editing = text
+    original = text.textContent ?? ''
     text.contentEditable = 'plaintext-only'
     if (text.contentEditable !== 'plaintext-only') text.contentEditable = 'true'
     text.classList.add('sl-editing')
