@@ -1,6 +1,10 @@
 import { SITE_CONTENT_FIELDS, type FieldDefinition } from '../../lib/site-content/registry'
 import { BLOCK_SPECS, BUILTIN_PROP_SPECS, DEFAULT_EXAMS_LABEL, DEFAULT_EXAM_NAMES, DEFAULT_LOOP_STEPS, DEFAULT_STATS, type PropSpec } from '../../lib/site-editor/blocks-spec'
-import { isBuiltinType, type SiteBlock } from '../../lib/site-editor/model'
+import { isBuiltinType, type SiteBlock, type SitePageId } from '../../lib/site-editor/model'
+import type { SiteValues } from '../../lib/site-content/content'
+import { ITEM_SECTIONS, hasDocumentItems, isItemSection, itemsFromSlots, resetSlots } from '../../lib/site-editor/section-items'
+import { findBlock, pageBlocks, updateBlock } from './doc-ops'
+import type { Working } from './useEditorState'
 
 /** Registry fields behind each Stracker section (and the header/footer regions). */
 const REGISTRY_PREFIXES: Record<string, string[]> = {
@@ -10,9 +14,12 @@ const REGISTRY_PREFIXES: Record<string, string[]> = {
   'privacy-doc': ['public.footer.privacy.'], 'terms-doc': ['public.footer.terms.'], 'about-doc': ['public.footer.about.'], 'contact-form': ['public.footer.contact.']
 }
 
+const SLOT_PATTERNS = Object.values(ITEM_SECTIONS).map(section => section.keyPattern)
+
+/** Registry fields shown for a section; card-list slots are edited as items instead. */
 export function registryFieldsFor(id: string): FieldDefinition[] {
   const prefixes = REGISTRY_PREFIXES[id] ?? []
-  return SITE_CONTENT_FIELDS.filter(field => field.area === 'public' && prefixes.some(prefix => field.key.startsWith(prefix)))
+  return SITE_CONTENT_FIELDS.filter(field => field.area === 'public' && prefixes.some(prefix => field.key.startsWith(prefix)) && !SLOT_PATTERNS.some(pattern => pattern.test(field.key)))
 }
 
 /** Starting values for structured lists of Stracker sections when nothing is stored yet. */
@@ -23,8 +30,23 @@ export const BUILTIN_DEFAULTS: Record<string, Record<string, unknown>> = {
 }
 
 /** The block's props with built-in defaults filled in. */
-export function effectiveProps(block: SiteBlock): Record<string, unknown> {
-  return { ...(isBuiltinType(block.type) ? BUILTIN_DEFAULTS[block.type] ?? {} : {}), ...(block.props ?? {}) }
+export function effectiveProps(block: SiteBlock, values?: SiteValues): Record<string, unknown> {
+  const derived = values && isItemSection(block.type) && !hasDocumentItems(block) ? { items: itemsFromSlots(block.type, values) } : {}
+  return { ...(isBuiltinType(block.type) ? BUILTIN_DEFAULTS[block.type] ?? {} : {}), ...(block.props ?? {}), ...derived }
+}
+
+/**
+ * Before the first edit of a Stracker card list, moves its registry slots into the document
+ * (same undo step as the edit), so the list has exactly one source from then on.
+ */
+export function adoptItems(working: Working, page: SitePageId, id: string): Working {
+  const block = findBlock(pageBlocks(working.document, page), id)?.block
+  if (!block || !isItemSection(block.type) || hasDocumentItems(block)) return working
+  const items = itemsFromSlots(block.type, working.values)
+  return {
+    values: resetSlots(block.type, working.values),
+    document: updateBlock(working.document, page, id, current => ({ ...current, props: { ...(current.props ?? {}), items } }))
+  }
 }
 
 /** Spec of a (possibly nested, e.g. `items.2.title`) prop path, to know if it keeps formatting. */

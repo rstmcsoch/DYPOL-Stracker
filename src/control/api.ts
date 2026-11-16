@@ -33,7 +33,7 @@ async function accessToken(): Promise<string> {
  */
 const CONTROL_REQUEST_TIMEOUT_MS = 25_000
 
-export async function controlFetch<T>(path: string, init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown } = {}): Promise<T> {
+export async function controlFetch<T>(path: string, init: { method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: unknown } = {}): Promise<T> {
   const token = await accessToken()
   let response: Response
   const controller = new AbortController()

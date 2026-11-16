@@ -5,6 +5,8 @@ import { Disclosure, Panel } from '../ui'
 import { useContentEditor, fieldsForArea } from './ContentEditor'
 import { FieldRow, LinkSuggestions, SaveBar } from './FieldRow'
 import type { FieldDefinition } from '../../lib/site-content/registry'
+import { managedSlotKeys } from '../../lib/site-editor/section-items'
+import type { SiteDocument } from '../../lib/site-editor/model'
 import { useTimeZone } from '../time'
 
 type Notice = { tone: 'ok' | 'crit'; text: string } | null
@@ -97,11 +99,16 @@ export function OverviewTab() {
 /* ------------------------------------------------------------- public website */
 
 export function PublicTab() {
-  const { loading, loadError, reload, values } = useContentEditor()
+  const { loading, loadError, reload, values, state } = useContentEditor()
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState<Notice>(null)
   const text = query.trim().toLowerCase()
-  const fields = fieldsForArea('public')
+  // Card lists moved into the Live Site Editor's page document are edited there; their old
+  // numbered slots no longer reach the site, so they are not offered here.
+  const managed = useMemo(() => managedSlotKeys((state?.draft.exists ? state.draft.document : state?.published.document) as SiteDocument | null | undefined), [state])
+  const allFields = fieldsForArea('public')
+  const fields = useMemo(() => allFields.filter(definition => !managed(definition.key)), [allFields, managed])
+  const movedCount = allFields.length - fields.length
   const visible = useMemo(() => fields.filter(definition => matchesQuery(definition, text, values[definition.key] ?? '')), [fields, text, values])
   const pages = groupBy(visible, definition => definition.page)
 
@@ -114,6 +121,7 @@ export function PublicTab() {
       <label htmlFor="cc-copy-search" className="cc-sr-only">Search public website copy</label>
       <input id="cc-copy-search" type="search" placeholder="Search by label, section or current text" value={query} onChange={event => setQuery(event.target.value)} />
     </div>
+    {movedCount > 0 && <p className="cc-muted cc-editor-count">Some card lists (feature cards, principles, steps or privacy points) are edited as items in the <Link to={`${CONSOLE_BASE}/appearance/live-editor`}>Live Site Editor</Link>, so their {movedCount} old fields are hidden here.</p>}
     <p className="cc-muted cc-editor-count">{visible.length} of {fields.length} items shown. Changes are saved as a draft first; publish them from Preview &amp; publishing.</p>
 
     {pages.length === 0 && <Panel title="No matches"><p className="cc-muted">Nothing matches “{query}”. Try a shorter search, or clear it.</p></Panel>}

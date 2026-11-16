@@ -1,5 +1,5 @@
-import { useId, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Bold, Italic, Plus, Trash2, Underline } from 'lucide-react'
+import { useId, useState, type ReactNode } from 'react'
+import { ArrowDown, ArrowUp, Bold, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Italic, Plus, Trash2, Underline } from 'lucide-react'
 import { Button } from '../ui'
 import { HOMEPAGE_ANCHOR_TARGETS, INTERNAL_ROUTE_TARGETS } from '../../lib/site-content/registry'
 import type { PropSpec } from '../../lib/site-editor/blocks-spec'
@@ -13,7 +13,7 @@ const LABELS: Record<string, string> = {
   columns: 'Columns (desktop)', tablet: 'Columns (tablet)', mobile: 'Columns (phone)', poster: 'Poster image', icon: 'Icon', points: 'Bullet points', image: 'Image',
   value: 'Value', layout: 'Layout', quote: 'Quote', name: 'Name', role: 'Role', leftTitle: 'Left heading', left: 'Left points', rightTitle: 'Right heading', right: 'Right points',
   single: 'Open one at a time', background: 'Background', width: 'Width', anchor: 'Anchor id (for #links)', surface: 'Surface', direction: 'Direction', justify: 'Justify',
-  wrap: 'Wrap', gap: 'Gap', style: 'Line style', orientation: 'Orientation', speed: 'Speed', steps: 'Steps', step: 'Step', link: 'Chip text'
+  summary: 'Summary', wrap: 'Wrap', gap: 'Gap', style: 'Line style', orientation: 'Orientation', speed: 'Speed', steps: 'Steps', step: 'Step', link: 'Chip text'
 }
 const propLabel = (key: string) => LABELS[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase())
 
@@ -40,8 +40,10 @@ export function FieldShell({ label, htmlFor, error, hint, children }: { label: s
   </div>
 }
 
-export function PropField({ name, spec, value, onChange, error, coalesceKey }: {
+export function PropField({ name, spec, value, onChange, error, coalesceKey, onAlt }: {
   name: string; spec: PropSpec; value: unknown; onChange: (value: unknown, coalesce?: string) => void; error?: string; coalesceKey: string
+  /** Media fields: called with the library's alt text when an asset is picked. */
+  onAlt?: (alt: string) => void
 }) {
   const id = useId()
   const label = propLabel(name)
@@ -66,7 +68,7 @@ export function PropField({ name, spec, value, onChange, error, coalesceKey }: {
         <input id={id} className="cc-input" list="le-links" value={text} autoComplete="off" spellCheck={false} onChange={event => onChange(event.target.value, coalesceKey)} />
       </FieldShell>
     case 'media':
-      return <FieldShell label={label} error={error}><MediaUpload kind={spec.media} value={text} onChange={next => onChange(next)} label={label} /></FieldShell>
+      return <FieldShell label={label} error={error}><MediaUpload kind={spec.media} value={text} onChange={next => onChange(next)} label={label} onAlt={onAlt} /></FieldShell>
     case 'select':
       return <FieldShell label={label} htmlFor={id} error={error}>
         <select id={id} className="cc-input" value={String(value ?? spec.options[0])} onChange={event => onChange(event.target.value)}>
@@ -117,18 +119,47 @@ function StringsField({ label, items, max, onChange, coalesceKey, error }: { lab
 }
 
 function emptyItem(spec: Extract<PropSpec, { k: 'list' }>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(spec.item).map(([key, item]) => [key, item.k === 'bool' ? false : item.k === 'number' ? item.min : item.k === 'select' ? item.options[0] : item.k === 'text' && !item.optional ? 'New item' : '']))
+  return Object.fromEntries(Object.entries(spec.item).map(([key, item]) => [key, item.k === 'strings' ? [] : item.k === 'bool' ? false : item.k === 'number' ? item.min : item.k === 'select' ? item.options[0] : item.k === 'text' && !item.optional ? 'New item' : '']))
 }
 
+function itemTitle(item: Record<string, unknown>, index: number): string {
+  const text = [item.title, item.step, item.value, item.label].find(value => typeof value === 'string' && value.trim()) as string | undefined
+  return text ? text.slice(0, 60) : `Item ${index + 1}`
+}
+
+/**
+ * Editable list of structured items: add, edit, reorder, duplicate, hide (when the item has a
+ * `hidden` flag) and delete. Each card folds to its title so long lists stay scannable.
+ */
 function ListField({ label, spec, items, onChange, coalesceKey, error }: { label: string; spec: Extract<PropSpec, { k: 'list' }>; items: Array<Record<string, unknown>>; onChange: (items: Array<Record<string, unknown>>, coalesce?: string) => void; coalesceKey: string; error?: string }) {
-  return <FieldShell label={`${label} (${items.length}/${spec.max})`} error={error}>
+  const [open, setOpen] = useState<number | null>(items.length <= 3 ? -1 : null)
+  const hideable = 'hidden' in spec.item
+  const fields = Object.entries(spec.item).filter(([key]) => key !== 'hidden')
+  const visibleCount = hideable ? items.filter(item => item.hidden !== true).length : items.length
+  return <FieldShell label={`${label} (${items.length}/${spec.max}${hideable ? ` · ${visibleCount} shown` : ''})`} error={error}>
     <ol className="le-cards">
-      {items.map((item, index) => <li key={index} className="le-card">
-        <div className="le-card__head"><strong>{index + 1}</strong><RowActions index={index} count={items.length} label={`item ${index + 1}`} onMove={to => onChange(move(items, index, to))} onRemove={() => onChange(items.filter((_, i) => i !== index))} /></div>
-        {Object.entries(spec.item).map(([key, itemSpec]) => <PropField key={key} name={key} spec={itemSpec} value={item[key]} coalesceKey={`${coalesceKey}.${index}.${key}`}
-          onChange={(value, coalesce) => onChange(items.map((current, i) => (i === index ? { ...current, [key]: value } : current)), coalesce)} />)}
-      </li>)}
+      {items.map((item, index) => {
+        const expanded = open === -1 || open === index
+        const name = itemTitle(item, index)
+        return <li key={index} className={`le-card${item.hidden === true ? ' is-hidden' : ''}`}>
+          <div className="le-card__head">
+            <button type="button" className="le-card__toggle" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : index)}>
+              {expanded ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />} <strong>{index + 1}. {name}</strong>{item.hidden === true && <span className="le-layer__tag">Hidden</span>}
+            </button>
+            <span className="le-row-actions">
+              <button type="button" className="le-icon-btn" disabled={index === 0} onClick={() => onChange(move(items, index, index - 1))} aria-label={`Move ${name} up`} title="Move up"><ArrowUp size={14} /></button>
+              <button type="button" className="le-icon-btn" disabled={index === items.length - 1} onClick={() => onChange(move(items, index, index + 1))} aria-label={`Move ${name} down`} title="Move down"><ArrowDown size={14} /></button>
+              <button type="button" className="le-icon-btn" disabled={items.length >= spec.max} onClick={() => onChange([...items.slice(0, index + 1), structuredClone(item), ...items.slice(index + 1)])} aria-label={`Duplicate ${name}`} title="Duplicate"><Copy size={14} /></button>
+              {hideable && <button type="button" className="le-icon-btn" disabled={item.hidden !== true && visibleCount <= 1} onClick={() => onChange(items.map((current, i) => (i === index ? { ...current, hidden: current.hidden !== true } : current)))} aria-label={item.hidden === true ? `Show ${name}` : `Hide ${name}`} title={item.hidden === true ? 'Show' : 'Hide'}>{item.hidden === true ? <EyeOff size={14} /> : <Eye size={14} />}</button>}
+              <button type="button" className="le-icon-btn is-danger" disabled={items.length <= 1} onClick={() => onChange(items.filter((_, i) => i !== index))} aria-label={`Delete ${name}`} title="Delete"><Trash2 size={14} /></button>
+            </span>
+          </div>
+          {expanded && fields.map(([key, itemSpec]) => <PropField key={key} name={key} spec={itemSpec} value={item[key]} coalesceKey={`${coalesceKey}.${index}.${key}`}
+            onChange={(value, coalesce) => onChange(items.map((current, i) => (i === index ? { ...current, [key]: value } : current)), coalesce)}
+            onAlt={itemSpec.k === 'media' && 'alt' in spec.item ? alt => { if (!item.alt) onChange(items.map((current, i) => (i === index ? { ...current, alt } : current))) } : undefined} />)}
+        </li>
+      })}
     </ol>
-    <Button size="sm" disabled={items.length >= spec.max} onClick={() => onChange([...items, emptyItem(spec)])}><Plus size={14} aria-hidden="true" /> Add item</Button>
+    <Button size="sm" disabled={items.length >= spec.max} onClick={() => { onChange([...items, emptyItem(spec)]); setOpen(items.length) }}><Plus size={14} aria-hidden="true" /> Add item</Button>
   </FieldShell>
 }

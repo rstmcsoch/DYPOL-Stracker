@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react'
 import { Eye, EyeOff, Lock, Unlock } from 'lucide-react'
 import { FieldRow } from '../appearance/FieldRow'
 import { BLOCK_SPECS, BUILTIN_PROP_SPECS, type PropSpec } from '../../lib/site-editor/blocks-spec'
-import { BUILTIN_DEFAULTS, registryFieldsFor } from './registry-map'
+import { effectiveProps, registryFieldsFor } from './registry-map'
 import { isBuiltinType, type SiteBlock, type SitePageId } from '../../lib/site-editor/model'
 import { DEVICE_LABELS, blockLabel, type Device } from './doc-ops'
-import { ChartEditor, TableEditor, type ChartValue, type TableValue } from './DataEditors'
+import { ChartEditor, FocalPicker, TableEditor, type ChartValue, type TableValue } from './DataEditors'
 import { PropField } from './PropFields'
 import { StylePanel } from './StylePanel'
 import type { Selection } from './protocol'
@@ -24,9 +24,10 @@ export interface InspectorProps {
   setStyle: (device: Device, key: string, value: string, coalesce?: string) => void
   clearStyles: (device: Device) => void
   setMeta: (patch: Partial<Pick<SiteBlock, 'name' | 'hidden' | 'locked'>>) => void
+  values?: Record<string, string>
 }
 
-export function Inspector({ page, selection, block, device, errors, setDevice, setProp, setStyle, clearStyles, setMeta }: InspectorProps) {
+export function Inspector({ page, selection, block, device, errors, setDevice, setProp, setStyle, clearStyles, setMeta, values }: InspectorProps) {
   const [tab, setTab] = useState<Tab>('content')
   const builtin = block ? isBuiltinType(block.type) : true
   const specs: Record<string, PropSpec> = useMemo(() => (block ? (builtin ? BUILTIN_PROP_SPECS[block.type] ?? {} : BLOCK_SPECS[block.type]?.props ?? {}) : {}), [block, builtin])
@@ -42,15 +43,20 @@ export function Inspector({ page, selection, block, device, errors, setDevice, s
   const contentKeys = Object.entries(specs).filter(([, spec]) => spec.k !== 'link').map(([key]) => key)
   const registryLinks = registry.filter(field => field.type === 'link')
   const registryContent = registry.filter(field => field.type !== 'link')
-  const props = { ...(block && builtin ? BUILTIN_DEFAULTS[block.type] ?? {} : {}), ...(block?.props ?? {}) }
+  const props = block ? effectiveProps(block, values) : {}
   const tabs: Tab[] = selection.kind === 'region' ? ['content', 'link'] : ['content', 'style', 'layout', 'link', 'responsive', 'advanced']
 
   const renderProp = (key: string) => {
     const spec = specs[key]!
     const error = Object.entries(errors).find(([path]) => path.endsWith(`.props.${key}`))?.[1]
+    if (block?.type === 'image' && key === 'focusY') return null
+    if (block?.type === 'image' && key === 'zoom') return null
+    if (block?.type === 'image' && key === 'focusX') return <FocalPicker key={key} src={String(props.src ?? '')} x={typeof props.focusX === 'number' ? props.focusX : 50} y={typeof props.focusY === 'number' ? props.focusY : 50} zoom={typeof props.zoom === 'number' ? props.zoom : 100}
+      onPoint={(x, y) => { setProp('focus', 'custom'); setProp('focusX', x); setProp('focusY', y) }} onZoom={(zoom, coalesce) => setProp('zoom', zoom, coalesce && `${block.id}.zoom`)} />
     if (spec.k === 'table') return <TableEditor key={key} value={props[key] as TableValue} onChange={(next, coalesce) => setProp(key, next, coalesce && `table.${coalesce}`)} />
     if (spec.k === 'chart') return <ChartEditor key={key} value={props[key] as ChartValue} onChange={(next, coalesce) => setProp(key, next, coalesce && `chart.${coalesce}`)} />
-    return <PropField key={key} name={key} spec={spec} value={props[key]} error={error} coalesceKey={`${block?.id}.${key}`} onChange={(value, coalesce) => setProp(key, value, coalesce)} />
+    return <PropField key={key} name={key} spec={spec} value={props[key]} error={error} coalesceKey={`${block?.id}.${key}`} onChange={(value, coalesce) => setProp(key, value, coalesce)}
+      onAlt={spec.k === 'media' && 'alt' in specs ? alt => { if (!props.alt) setProp('alt', alt) } : undefined} />
   }
 
   return <div className="le-inspector">

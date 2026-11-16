@@ -40,8 +40,14 @@ function Children({ blocks }: { blocks?: SiteBlock[] }) {
   return <>{blocks.map(child => <SiteBlockView key={child.id} block={child} />)}</>
 }
 
-const RATIOS: Record<string, string> = { '16:9': '16 / 9', '4:3': '4 / 3', '1:1': '1 / 1', '3:4': '3 / 4', '9:16': '9 / 16' }
+const RATIOS: Record<string, string> = { '21:9': '21 / 9', '16:9': '16 / 9', '3:2': '3 / 2', '4:3': '4 / 3', '1:1': '1 / 1', '3:4': '3 / 4', '2:3': '2 / 3', '9:16': '9 / 16' }
 const FOCUS: Record<string, string> = { center: 'center', top: 'center top', bottom: 'center bottom', left: 'left center', right: 'right center' }
+
+/** Image with crop (aspect ratio + zoom), focal point and fit. Zoom crops around the focal point. */
+function ImageCrop({ src, alt, ratio, fit, position, zoom }: { src: string; alt: string; ratio?: string; fit: string; position: string; zoom: number }) {
+  const image = <img src={src} alt={alt} loading="lazy" decoding="async" style={{ aspectRatio: ratio, objectFit: fit as 'cover', objectPosition: position, ...(zoom > 100 ? { transform: `scale(${zoom / 100})`, transformOrigin: position } : {}) }} />
+  return zoom > 100 ? <span className="sb-image-crop">{image}</span> : image
+}
 
 function Accordion({ items, single }: { items: P[]; single: boolean }) {
   const [open, setOpen] = useState<number[]>([])
@@ -134,7 +140,7 @@ export function SiteBlockView({ block }: { block: SiteBlock }): ReactNode {
       const ratio = str(props, 'ratio', 'auto')
       return <figure {...sb} className={`sb-image frame-${str(props, 'frame', 'card')}`}>
         {src
-          ? <img src={src} alt={str(props, 'alt')} loading="lazy" decoding="async" style={{ aspectRatio: RATIOS[ratio], objectFit: str(props, 'fit', 'cover') as 'cover', objectPosition: FOCUS[str(props, 'focus', 'center')] }} />
+          ? <ImageCrop src={src} alt={str(props, 'alt')} ratio={RATIOS[ratio]} fit={str(props, 'fit', 'cover')} position={str(props, 'focus') === 'custom' ? `${num(props, 'focusX', 50)}% ${num(props, 'focusY', 50)}%` : FOCUS[str(props, 'focus', 'center')] ?? 'center'} zoom={num(props, 'zoom', 100)} />
           : <Placeholder label="Upload an image" />}
         {str(props, 'caption') && <figcaption data-se-prop="caption">{str(props, 'caption')}</figcaption>}
       </figure>
