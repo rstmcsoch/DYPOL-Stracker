@@ -29,6 +29,9 @@ const SettingsPage = lazy(() => import('./settings/SettingsPage'))
 const PublicPreviewPage = lazy(() => import('./appearance/PublicPreviewPage'))
 const LiveEditorCanvas = lazy(() => import('./live-editor/CanvasPage'))
 const LiveEditorPage = lazy(() => import('./live-editor/LiveEditorPage'))
+// Student Dashboard Editor (separate from the public Live Site Editor): its own lazy chunks.
+const StudentCanvasPage = lazy(() => import('./student-editor/StudentCanvasPage'))
+const StudentEditorPage = lazy(() => import('./student-editor/StudentEditorPage'))
 
 /**
  * Entry point for /control-panel/*. It is lazy-loaded by the application router, so the
@@ -139,6 +142,29 @@ function ControlRouter() {
       <ReauthProvider passkey={phase.session.role === 'owner' && phase.session.passkey === true}>
         <Suspense fallback={<div className="cc-page-skeleton"><Skeleton rows={6} height={18} /></div>}>
           <LiveEditorPage />
+        </Suspense>
+      </ReauthProvider>
+    )
+  }
+
+  // Student Dashboard Editor canvas: the real student AppFrame and pages over a synthetic
+  // student (never a real notebook), driven only by the same-origin editor window.
+  if (location.pathname === `${CONSOLE_BASE}/preview/student-canvas`) {
+    if (!permissions.includes('appearance.edit')) return <Navigate to={firstAllowedPath(permissions)} replace />
+    return (
+      <Suspense fallback={<p className="cc-preview-message">Loading the synthetic student preview…</p>}>
+        <StudentCanvasPage />
+      </Suspense>
+    )
+  }
+
+  // Student Dashboard Editor workspace: full screen, without the console sidebar.
+  if (location.pathname === `${CONSOLE_BASE}/appearance/student-dashboard-editor`) {
+    if (!permissions.includes('appearance.edit')) return <NotInRole fallback={firstAllowedPath(permissions)} />
+    return (
+      <ReauthProvider passkey={phase.session.role === 'owner' && phase.session.passkey === true}>
+        <Suspense fallback={<div className="cc-page-skeleton"><Skeleton rows={6} height={18} /></div>}>
+          <StudentEditorPage />
         </Suspense>
       </ReauthProvider>
     )

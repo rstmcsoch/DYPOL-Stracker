@@ -23,7 +23,6 @@ export interface StudentLayoutValue {
 const StudentLayoutContext = createContext<StudentLayoutValue>({ document: null, editing: false })
 
 const CACHE_KEY = 'stracker-student-layout-v1'
-const STYLE_ID = 'student-layout-css'
 
 interface Cached { version: number; document: unknown }
 
@@ -54,14 +53,17 @@ export async function fetchPublishedStudentLayout(): Promise<Cached | null | und
   } catch { return undefined }
 }
 
-function useStyleElement(css: string) {
+/**
+ * Installs the compiled layout CSS as a constructed stylesheet: the site's Content Security
+ * Policy (`style-src 'self'`) refuses inline <style> elements, but allows constructed sheets.
+ */
+function useLayoutStyles(css: string) {
   useEffect(() => {
-    if (!css) return
-    const element = document.createElement('style')
-    element.id = STYLE_ID
-    element.textContent = css
-    document.head.appendChild(element)
-    return () => { element.remove() }
+    if (!css || typeof CSSStyleSheet === 'undefined' || !('adoptedStyleSheets' in document)) return undefined
+    const sheet = new CSSStyleSheet()
+    try { sheet.replaceSync(css) } catch { return undefined }
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
+    return () => { document.adoptedStyleSheets = document.adoptedStyleSheets.filter(item => item !== sheet) }
   }, [css])
 }
 
@@ -100,7 +102,7 @@ export function StudentLayoutProvider({ children, document: preview, css: previe
   }, [isPreview])
 
   const css = isPreview ? (previewCss ?? '') : state.css
-  useStyleElement(css)
+  useLayoutStyles(css)
   const value = useMemo<StudentLayoutValue>(() => ({ document: isPreview ? preview ?? null : state.document, editing }), [isPreview, preview, state.document, editing])
   return <StudentLayoutContext.Provider value={value}>{children}</StudentLayoutContext.Provider>
 }

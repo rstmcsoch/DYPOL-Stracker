@@ -3,6 +3,7 @@ import type { ApiRequest, ApiResponse } from '../http.js'
 import { ApiError, readJson, sendJson } from '../http.js'
 import { controlHandler, recordAuditEvent, requireRecentMfa, type ControlContext } from '../control.js'
 import { STUDENT_LAYOUT_SCHEMA_VERSION } from '../../../src/lib/student-layout/registry.js'
+import { changedAreas } from '../../../src/lib/student-layout/diff.js'
 import { checkStudentLayout, layoutProblemsToErrors, MAX_LAYOUT_BYTES, type StudentLayoutDocument } from '../../../src/lib/student-layout/validate.js'
 
 /**
@@ -42,19 +43,7 @@ export function checkLayoutForWrite(raw: unknown): { ok: true; document: Student
   return { ok: true, document }
 }
 
-/** Top-level areas that differ between two layouts, for publish summaries. */
-export function changedAreas(before: StudentLayoutDocument | null, after: StudentLayoutDocument | null): string[] {
-  const areas = new Set<string>()
-  const a = before ?? { schemaVersion: STUDENT_LAYOUT_SCHEMA_VERSION }
-  const b = after ?? { schemaVersion: STUDENT_LAYOUT_SCHEMA_VERSION }
-  const ids = new Set([...Object.keys(a.components ?? {}), ...Object.keys(b.components ?? {})])
-  for (const id of ids) if (JSON.stringify(a.components?.[id] ?? null) !== JSON.stringify(b.components?.[id] ?? null)) areas.add(id.split('.')[0] ?? id)
-  const orders = new Set([...Object.keys(a.order ?? {}), ...Object.keys(b.order ?? {})])
-  for (const id of orders) if (JSON.stringify(a.order?.[id] ?? null) !== JSON.stringify(b.order?.[id] ?? null)) areas.add(id.split('.')[0] ?? id)
-  if (JSON.stringify(a.nav ?? null) !== JSON.stringify(b.nav ?? null)) areas.add('navigation')
-  if (JSON.stringify(a.tokens ?? null) !== JSON.stringify(b.tokens ?? null)) areas.add('tokens')
-  return [...areas].sort()
-}
+export { changedAreas }
 
 async function readDraft(context: ControlContext): Promise<Row | null> {
   const { data, error } = await context.admin.from('student_layout_draft').select('document, schema_version, updated_at, updated_by').eq('id', 1).maybeSingle()

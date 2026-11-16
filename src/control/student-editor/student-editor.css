@@ -1,0 +1,11 @@
+.se-student .le-locked { margin-top: 14px; padding: 10px 12px; border: 1px dashed var(--cc-line, #d0d4dc); border-radius: 10px; }
+.se-student .le-locked ul, .se-student .le-caps, .se-student .le-order { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.se-student .le-locked__row { display: flex; gap: 8px; align-items: flex-start; }
+.se-student .le-locked__row > span { display: grid; gap: 2px; }
+.se-student .le-order li { padding: 6px 10px; border-radius: 8px; background: var(--cc-surface-2, rgba(0, 0, 0, .04)); }
+.se-student .le-order li.is-current { outline: 2px solid #2f5cff; }
+.se-student .le-link { padding: 0; border: 0; background: none; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
+.se-student .le-version { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--cc-line, #e3e6ec); }
+.se-student .le-synthetic { padding: 3px 10px; border-radius: 999px; background: #12151c; color: #fff; font: 700 11px/16px system-ui, sans-serif; letter-spacing: .06em; white-space: nowrap; }
+.se-student .le-layer__tag { display: inline-flex; gap: 2px; align-items: center; }
+.se-student .le-scenario { max-width: 220px; }

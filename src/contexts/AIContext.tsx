@@ -65,7 +65,7 @@ export interface AIBackendHealth {
   invalid?:string[]
 }
 interface LastRequest { message:string; messageId:string; assistantId:string; pageContext:string|null }
-interface AIContextValue {
+export interface AIContextValue {
   providers:AIProviderConfig[]
   providersLoading:boolean
   providersError:string|null
@@ -547,6 +547,11 @@ export function AIProvider({ children }: { children:ReactNode }) {
     recentConversations,recentTasks,loadConversations,loadTasks,openConversation,clearConversation,newConversation,conversationId,conversationTitle,messages,activeTask,isBusy,lastRequest,
     sendMessage,retryLast,stopTask,confirmAction,panelOpen,minimized,largeOpen,openPanel,minimizePanel,closePanel,restorePanel,expandPanel,collapseLarge
   }),[providers,providersLoading,providersError,backendStatus,backendHealth,checkBackendHealth,refreshProviders,discoverModels,saveProvider,testProvider,patchProvider,removeProvider,manager,stracker,preference,preferStracker,recentConversations,recentTasks,loadConversations,loadTasks,openConversation,clearConversation,newConversation,conversationId,conversationTitle,messages,activeTask,isBusy,lastRequest,sendMessage,retryLast,stopTask,confirmAction,panelOpen,minimized,largeOpen,openPanel,minimizePanel,closePanel,restorePanel,expandPanel,collapseLarge])
+  return <AIContext.Provider value={value}>{children}</AIContext.Provider>
+}
+
+/** Preview-only injection boundary (editor canvas): AI requests disabled. */
+export function AIPreviewProvider({ value, children }:{ value:AIContextValue; children:ReactNode }) {
   return <AIContext.Provider value={value}>{children}</AIContext.Provider>
 }
 
