@@ -9,7 +9,7 @@ import { focusClockLabel } from '../../lib/focus-clock'
  * time. Reads the single FocusProvider timer (no second ticking timer) and disappears
  * as soon as the block is completed, saved or discarded.
  */
-export function FocusIndicator() {
+export function FocusIndicator({ layoutAttrs }: { layoutAttrs?: Record<string, string> } = {}) {
   const focus = useFocusOptional()
   const navigate = useNavigate()
   if (!focus?.unsaved) return null
@@ -19,7 +19,7 @@ export function FocusIndicator() {
   // accessible label only changes once a minute so screen readers are not flooded.
   const label = focusClockLabel(seconds)
   const spoken = minutes >= 1 ? `${minutes} min` : 'under a minute'
-  return <div className="home-focus-indicator" role="status" aria-label={`${focus.running ? 'Focus in progress' : 'Focus paused'} · ${spoken}`}>
+  return <div className="home-focus-indicator" {...layoutAttrs} role="status" aria-label={`${focus.running ? 'Focus in progress' : 'Focus paused'} · ${spoken}`}>
     <span className={focus.running ? 'focus-live-dot live' : 'focus-live-dot'} aria-hidden="true" />
     <Timer size={16} aria-hidden="true" />
     <span><strong>{focus.running ? 'Focus in progress' : 'Focus paused'}</strong> · <span className="home-focus-clock">{label}</span></span>

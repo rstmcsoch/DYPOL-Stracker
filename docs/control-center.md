@@ -58,6 +58,7 @@ was allowed but could not be completed). The catalogue is defined once in
 | `audit.export` | A CSV export was requested. The summary holds the filters used (never row contents). A refused export (stale MFA) is `denied`; a database failure is `failed`. | success, denied, failed |
 | `content.publish` | An owner published the saved Appearance draft to the live site (one row per publish). Summary: version before and after, and the number of changed fields. A refused publish (stale MFA) is `denied`; invalid draft, no changes, or a database failure is `failed`. | success, denied, failed |
 | `content.restore` | An owner published an earlier version as a new live version. Summary: restored version, version before and after. | success, denied, failed |
+| `student_layout.publish` / `student_layout.restore` | An owner published (or restored) the Student Dashboard Editor layout for all student workspaces. Summary: version before and after and the changed areas (component ids, `navigation`, `tokens`); never student data. Stale MFA is `denied`; an invalid draft, no changes or a database failure is `failed`. | success, denied, failed |
 
 Not in the audit log, by design:
 
@@ -351,3 +352,15 @@ navigation until they work.
 
 Appearance tabs not yet built: Global branding, Pages & sections, Cards & components, Images & media,
 and Theme & design tokens. Logos, images, and brand colours are not editable yet.
+
+
+## Student Dashboard Editor configuration
+
+Storage: `supabase/migrations/20261116190000_student_layout.sql` (`student_layout_draft`,
+`student_layout_published`, `student_layout_versions`, `student_layout_commit`), separate from the
+public website's `site_content_*`. Draft and history are service-role only; signed-in users can read
+the single published row (presentation only). API: `/api/control/student-layout-{state,draft,discard,publish,restore}`
+(`appearance.edit` / `appearance.publish`, aal2; publish and restore also need fresh MFA).
+The schema, registry and validator live in `src/lib/student-layout/`. Values bound to a student's own
+records (dates, marks, scores, names, streaks, counts, timers, progress) are never stored: the validator
+rejects them with `data_locked`. With nothing published, the workspace renders exactly the shipped layout.

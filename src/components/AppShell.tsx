@@ -30,6 +30,8 @@ import { GroupedChapterOptions } from './GroupedChapterOptions'
 import { showsBrandFooter } from '../lib/brand-footer'
 import { preloadAppRoutesWhenIdle, preloadRoute } from '../lib/route-preload'
 import { isPlainClick, navMatches, setPendingNav, usePendingNav } from '../lib/nav-pending'
+import { layoutPageFor, useLayoutNav, useLayoutSlot } from '../lib/student-layout/use-layout'
+import { APP_SECTION_PATHS } from '../lib/app-routes'
 
 interface NavigationItem { to: string; label: string; icon: LucideIcon; exact?: boolean }
 interface NavigationGroup { caption: string; items: NavigationItem[] }
@@ -95,6 +97,13 @@ export function AppFrame() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [quickTaskOpen, setQuickTaskOpen] = useState(false)
   const [quickActionsOpen, setQuickActionsOpen] = useState(false)
+  const groups = useLayoutNav(navGroups)
+  const sidebarSlot = useLayoutSlot('shell.sidebar')
+  const toplineSlot = useLayoutSlot('shell.topline')
+  const mobileNavSlot = useLayoutSlot('shell.mobile-nav')
+  const quickSlot = useLayoutSlot('shell.quick-actions')
+  const pageId = location.pathname === '/' || (APP_SECTION_PATHS as readonly string[]).includes(location.pathname) ? layoutPageFor(location.pathname) : null
+  const pageSlot = useLayoutSlot(pageId && pageId !== 'home' ? pageId : 'none')
 
   useEffect(() => { setDrawerOpen(false) }, [location.pathname])
   // The route has committed, so the real NavLink state takes over from the tap highlight.
@@ -163,13 +172,13 @@ export function AppFrame() {
 
   return <>
   <div className="app-shell" inert={onboarding || undefined} aria-hidden={onboarding || undefined}>
-    <aside className="sidebar" aria-label="Main navigation">
+    <aside className="sidebar" aria-label="Main navigation" {...sidebarSlot.attrs}>
       <div className="sidebar-head">
         <div className="sidebar-brand-row"><Brand /><span className="sidebar-sync">{syncPill}</span></div>
         <div className="sidebar-date"><span className="date-dot" />{new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date())}</div>
       </div>
       <div className="sidebar-scroll">
-        {navGroups.map(group => <div key={group.caption} className="nav-group">
+        {groups.map(group => <div key={group.caption} className="nav-group">
           <div className="nav-caption">{navCaptionFor(group.caption, siteValues)}</div>
           <nav className="nav-list" aria-label={`${group.caption.toLowerCase()} sections`}>
             {group.items.map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} />)}
@@ -198,7 +207,7 @@ export function AppFrame() {
     </header>
 
     <main className="main-area">
-      <div className="topline">
+      <div className="topline" {...toplineSlot.attrs}>
         <div className="breadcrumb"><span>{loading || (!data.settings.exam_id && !data.settings.onboarding_completed) ? 'Stracker' : isJeeSettings(data.settings) ? `JEE ${data.settings.exam_year ?? 2027}` : chosenExamTitle(data.settings)}</span><ChevronRight size={13} /><strong>{currentNavLabel(location.pathname, siteValues) ?? (location.pathname === '/focus' ? 'Focus mode' : 'Study home')}</strong></div>
         <div className="topline-right">
           {user?.isLocal && <span className="preview-pill"><span />Local preview — not synced</span>}
@@ -209,18 +218,18 @@ export function AppFrame() {
       {syncError && syncState !== 'local' && <div className={`sync-message sync-message-${syncState}`} role="status">
         <span>{syncError}</span><button onClick={() => void refresh()}>{syncState === 'offline' ? 'Retry when online' : 'Retry sync'}</button>
       </div>}
-      <div className="page-wrap"><Suspense fallback={<PageLoading />}><Outlet /></Suspense></div>
+      <div className="page-wrap" {...(pageId && pageId !== 'home' ? pageSlot.attrs : {})}><Suspense fallback={<PageLoading />}><Outlet /></Suspense></div>
       {showsBrandFooter(location.pathname) && <footer className="app-footer"><span className="footer-spark" aria-hidden="true">✳</span><span className="footer-credit">Stracker <i>by</i> DYPOL LABS</span><span className="footer-tagline">A little more prepared, every day.</span><span className="footer-links"><InfoLinks /><ContactLink className="footer-contact" addressOnly /></span></footer>}
     </main>
 
-    <nav className="mobile-nav" aria-label="Mobile navigation">
+    <nav className="mobile-nav" aria-label="Mobile navigation" {...mobileNavSlot.attrs}>
       {mobileBar.map(item => <MobileNavItem key={item.to} item={{ ...item, label: navLabelFor(item.to, item.label, siteValues) }} />)}
     </nav>
     {drawerOpen && <div className="mobile-drawer-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setDrawerOpen(false) }}>
       <aside className="mobile-drawer" id="mobile-drawer" role="dialog" aria-modal="true" aria-label="Navigation">
         <div className="mobile-drawer-head"><Brand compact /><span className="drawer-sync">{syncPill}</span></div>
         <nav className="mobile-drawer-nav" aria-label="All sections">
-          {navGroups.map(group => <div key={group.caption} className="mobile-drawer-group">
+          {groups.map(group => <div key={group.caption} className="mobile-drawer-group">
             <div className="sheet-nav-caption">{(() => { const caption = navCaptionFor(group.caption, siteValues); return caption.charAt(0) + caption.slice(1).toLowerCase() })()}</div>
             {group.items.filter(item => item.to !== '/settings' && !mobileBar.some(bar => bar.to === item.to)).map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} onClick={() => setDrawerOpen(false)} />)}
           </div>)}
@@ -229,7 +238,7 @@ export function AppFrame() {
       </aside>
     </div>}
 
-    <div className="quick-action-area">
+    <div className="quick-action-area" {...quickSlot.attrs}>
       {quickActionsOpen && <div className="quick-action-menu" aria-label="Quick actions">
         <button onClick={() => { setQuickActionsOpen(false); setQuickTaskOpen(true) }}><ListChecks size={17} /><span>Plan a task</span><kbd>N</kbd></button>
         <button onClick={() => { setQuickActionsOpen(false); navigate('/tests?add=1') }}><NotebookPen size={17} /><span>Add a test</span><kbd>T</kbd></button>

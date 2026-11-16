@@ -26,9 +26,9 @@ export function NotebookCard({ children, className = '', accent, style, ...props
 }
 
 export function PageHeader({
-  eyebrow, title, subtitle, action, doodle
-}: { eyebrow?: string; title: string; subtitle?: string; action?: ReactNode; doodle?: ReactNode }) {
-  return <div className="page-header">
+  eyebrow, title, subtitle, action, doodle, layoutAttrs
+}: { eyebrow?: string; title: string; subtitle?: string; action?: ReactNode; doodle?: ReactNode; layoutAttrs?: Record<string, string> }) {
+  return <div className="page-header" {...layoutAttrs}>
     <div className="page-header-copy">
       {eyebrow && <div className="eyebrow">{eyebrow}</div>}
       <h1 className="type-h1">{title}{doodle && <span className="title-doodle" aria-hidden="true">{doodle}</span>}{subtitle && <InfoTip text={subtitle} />}</h1>
