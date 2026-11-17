@@ -12,6 +12,7 @@ export type PublicTheme = 'light' | 'dark'
  */
 export const PUBLIC_SECTIONS = [
   { href: '#features', key: 'public.header.features.label' },
+  { href: '#why-stracker', key: 'public.header.loop.label' },
   { href: '#how-it-works', key: 'public.header.how.label' },
   { href: '#ai', key: 'public.header.ai.label' },
   { href: '#privacy', key: 'public.header.privacy.label' }
@@ -49,7 +50,7 @@ export function PublicThemeToggle({ theme, onToggle }: { theme: PublicTheme; onT
     </span>
     <span className="theme-toggle-copy">
       <strong>{isDark ? 'Night' : 'Light'}</strong>
-      <small>Theme</small>
+      <small>theme</small>
     </span>
   </button>
 }
@@ -98,7 +99,7 @@ export function PublicHeader({ theme, onThemeToggle, sectionPrefix = '', signedI
     <div className="pub-header-inner">
       <PublicBrand />
       <nav className="pub-nav" aria-label="Stracker sections">
-        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-nav-link" href={`${sectionPrefix}${section.href}`}>{t(section.key)}</a>)}
+        {PUBLIC_SECTIONS.map(section => <a key={section.href} className={section.href === '#why-stracker' ? 'pub-nav-link pub-nav-link-loop' : 'pub-nav-link'} href={`${sectionPrefix}${section.href}`}>{t(section.key)}</a>)}
       </nav>
       <PublicThemeToggle theme={theme} onToggle={onThemeToggle} />
       <div className="pub-header-actions">

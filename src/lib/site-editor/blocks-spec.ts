@@ -186,14 +186,14 @@ export const BUILTIN_PROP_SPECS: Record<string, Record<string, PropSpec>> = {
 
 /** The shipped values of those lists (also the editor's starting point). */
 export const DEFAULT_EXAM_NAMES = ['JEE', 'NEET UG', 'MHT CET', 'BITSAT', 'CUET UG', 'CLAT', 'NDA', 'Class 9–12 boards', 'CA', 'CS', 'CMA', 'GATE', 'CAT', 'UPSC CSE', 'SSC CGL', 'IBPS PO', 'SBI PO']
-export const DEFAULT_EXAMS_LABEL = 'Built for aspirants preparing for'
+export const DEFAULT_EXAMS_LABEL = 'For students preparing for'
 /** `{modules}` is replaced by the live count of feature cards on the page. */
 export const MODULES_TOKEN = '{modules}'
 export const DEFAULT_STATS = [
-  { value: MODULES_TOKEN, label: 'core modules in one notebook — each one a page you will use weekly' },
-  { value: '4', label: 'test types in the journal: chapter, subject, full mock and PYQ practice' },
-  { value: '1 · 7 · 30', label: 'day revision gaps ready to use — change them any time' },
-  { value: '0', label: 'ads or third-party trackers on your notebook' }
+  { value: MODULES_TOKEN, label: 'core study tools in one notebook' },
+  { value: '4', label: 'test types in one journal' },
+  { value: '1 · 7 · 30', label: 'day revision gaps you can change' },
+  { value: '0', label: 'ads or third-party trackers' }
 ]
 export const DEFAULT_LOOP_STEPS = [
   { step: 'Learn', link: 'Syllabus notebook', body: '' },

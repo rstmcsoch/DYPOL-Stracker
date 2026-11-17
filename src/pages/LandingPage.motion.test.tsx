@@ -52,8 +52,8 @@ describe('AI example exchange', () => {
     mockReducedMotion(true)
     const { container } = render(<MemoryRouter><AiSection /></MemoryRouter>)
     expect(container.querySelector('.hp-chat')?.className).toContain('is-static')
-    expect(screen.getByText(/Illustrative exchange/)).toBeTruthy()
-    expect(container.textContent).toContain('Which topics are pulling my recent mock scores down?')
+    expect(screen.getByText(/Example chat/)).toBeTruthy()
+    expect(container.textContent).toContain('Which chapters are pulling my mock scores down?')
   })
 
   it('plays question, typing and answer once the panel enters the viewport', () => {

@@ -1,5 +1,5 @@
-import { useRef } from 'react'
-import { ArrowDown, ArrowRight, Check, LockKeyhole } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { ArrowDown, ArrowRight, LockKeyhole } from 'lucide-react'
 import { PublicHeader } from '../components/public/PublicHeader'
 import { PublicFooter } from '../components/public/PublicFooter'
 import { NotebookPreview } from '../components/public/NotebookPreview'
@@ -17,11 +17,6 @@ import { PageLayout } from '../components/public/PageLayout'
 import { stringList, stringRecords, useBlockAttrs, useBlockProps } from '../components/public/page-block'
 import { DEFAULT_EXAM_NAMES, DEFAULT_EXAMS_LABEL, DEFAULT_STATS, MODULES_TOKEN } from '../lib/site-editor/blocks-spec'
 import '../styles/home.css'
-
-/** One highlight per line; blank lines are ignored. */
-function lines(value: string): string[] {
-  return value.split('\n').map(line => line.trim()).filter(Boolean)
-}
 
 /**
  * Exams students can pick in Stracker's exam catalogue (src/lib/exams/catalog.ts). The
@@ -61,7 +56,7 @@ function ExamBand() {
   const label = typeof props.label === 'string' && props.label ? props.label : DEFAULT_EXAMS_LABEL
   const speed = EXAM_SPEEDS[typeof props.speed === 'string' ? props.speed : 'normal']
   const items = names.map((name, index) => <li key={`${index}-${name}`}>{name}<span aria-hidden="true">✳</span></li>)
-  return <section className="hp-exams" aria-label="Built for every major exam" {...useBlockAttrs()} style={speed ? { ['--hp-exams-duration' as string]: speed } : undefined}>
+  return <section className="hp-exams" aria-label="Exams students prepare for with Stracker" {...useBlockAttrs()} style={speed ? { ['--hp-exams-duration' as string]: speed } : undefined}>
     <p className="hp-exams-label" data-se-prop="label">{label}</p>
     <div className="hp-exams-window">
       <ul className="hp-exams-track">{items}</ul>
@@ -83,15 +78,12 @@ function HeroSection() {
         <p className="hp-eyebrow hp-eyebrow-pill"><span aria-hidden="true">✎</span> {t('public.hero.eyebrow')}</p>
         <h1 id="hero-title" className="hp-h1"><span data-se-key="public.hero.title">{t('public.hero.title')}</span> <em className="hp-highlight" data-se-key="public.hero.title_emphasis">{t('public.hero.title_emphasis')}</em></h1>
         <p className="hp-hero-lede" data-se-key="public.hero.lede">{t('public.hero.lede')}</p>
-        <ul className="hp-pillars" aria-label="What Stracker brings together">
-          {lines(t('public.hero.pillars')).map(pillar => <li key={pillar}><Check size={13} strokeWidth={3} aria-hidden="true" /> <span>{pillar}</span></li>)}
-        </ul>
         <div className="hp-cta-row">
           <SiteLink className="hp-btn hp-btn-primary hp-btn-lg" href={t('public.hero.cta_primary.href')}>{t('public.hero.cta_primary.label')} <ArrowRight size={17} aria-hidden="true" /></SiteLink>
           <SiteLink className="hp-btn hp-btn-secondary hp-btn-lg" href={t('public.hero.cta_secondary.href')}>{t('public.hero.cta_secondary.label')}</SiteLink>
         </div>
-        <p className="hp-hero-scroll"><a href="#why-stracker">{t('public.hero.scroll.label')} <ArrowDown size={14} aria-hidden="true" /><span className="visually-hidden">(jump to the study system section)</span></a></p>
         <p className="hp-hero-meta"><LockKeyhole size={13} aria-hidden="true" /> {t('public.hero.meta')}</p>
+        <p className="hp-hero-scroll"><a href="#why-stracker">{t('public.hero.scroll.label')} <ArrowDown size={14} aria-hidden="true" /><span className="visually-hidden">(jump to the study loop)</span></a></p>
       </div>
       <div className="hp-hero-visual">
         {t('public.hero.image')
@@ -100,6 +92,24 @@ function HeroSection() {
       </div>
     </div>
   </section>
+}
+
+/**
+ * #how-it-works is a real section again and links land on it natively. Only if the owner hides
+ * that section in the Live Site Editor does the anchor fall back to the study loop.
+ */
+const RETIRED_ANCHORS: Record<string, string> = { '#how-it-works': 'why-stracker' }
+function useRetiredAnchors() {
+  useEffect(() => {
+    const go = () => {
+      const target = RETIRED_ANCHORS[window.location.hash]
+      if (!target || document.getElementById(window.location.hash.slice(1))) return
+      document.getElementById(target)?.scrollIntoView()
+    }
+    go()
+    window.addEventListener('hashchange', go)
+    return () => window.removeEventListener('hashchange', go)
+  }, [])
 }
 
 /** Registered homepage sections, rendered in the order of the published page document. */
@@ -134,6 +144,7 @@ export default function LandingPage() {
 
   usePageMeta(t('public.meta.title'), t('public.meta.description'))
   useHomeMotion(rootRef)
+  useRetiredAnchors()
 
   return <div ref={rootRef} className="pub-page pub-home pub-hp" id="top" data-public-theme={publicTheme} data-owner-accent={ownerAccent ? '' : undefined} data-owner-font={ownerFont !== 'identity' ? ownerFont : undefined} style={ownerAccent}>
     <a className="pub-skip-link" href="#main">Skip to content</a>

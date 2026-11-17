@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import * as registryModule from './site-content/registry'
+import { DEFAULT_STATS } from './site-editor/blocks-spec'
 
 /**
  * Public-site contract.
@@ -88,9 +90,13 @@ describe('public navigation integrity', () => {
   })
 
   it('keeps the advertised navigation sections in the header and the footer', () => {
-    for (const section of ['#features', '#how-it-works', '#ai', '#privacy']) {
+    // How It Works is back (owner request) alongside the Study Loop link.
+    for (const section of ['#features', '#why-stracker', '#how-it-works', '#ai', '#privacy']) {
       expect(publicSources).toContain(`href: '${section}'`)
     }
+    const footer = readFileSync(`${publicDir}PublicFooter.tsx`, 'utf8')
+    expect(footer).toContain("at('#how-it-works')")
+    expect(footer).toContain("at('#why-stracker')")
     expect(readFileSync(`${publicDir}PublicFooter.tsx`, 'utf8')).toContain('new Date().getFullYear()')
   })
 })
@@ -107,19 +113,49 @@ describe('homepage honesty', () => {
     expect(preview).toContain('<figcaption')
   })
 
-  it('claims no AI inference that DYPOL does not provide', () => {
+  it('describes Stracker AI as it ships: built-in models with a daily limit, or your own provider', () => {
     // Copy lives in the editable content registry; the component only renders it.
     const sections = readFileSync(`${srcDir}lib/site-content/registry.ts`, 'utf8')
-    expect(sections).toContain('DYPOL does not supply or proxy a model key')
-    expect(sections).toContain('with AI switched off')
-    expect(sections).not.toMatch(/unlimited ai|free ai|free inference/i)
+    expect(sections).toContain('built-in AI with a daily limit')
+    expect(sections).toContain('works without AI.')
+    expect(sections).not.toMatch(/unlimited ai|free ai|free inference|DYPOL does not supply/i)
   })
 
-  it('keeps the privacy section to claims the architecture supports', () => {
-    const sections = readFileSync(`${srcDir}lib/site-content/registry.ts`, 'utf8')
-    expect(sections).not.toMatch(/military-grade|bank-level|unhackable/i)
-    expect(sections).toContain('row-level security')
-    expect(sections).toContain('AES-256-GCM')
+  it('keeps homepage privacy copy jargon-free and the technical detail on the Privacy Policy', () => {
+    const { SITE_CONTENT_DEFAULTS } = registryModule
+    const homepage = Object.entries(SITE_CONTENT_DEFAULTS).filter(([key]) => /^public\.(privacy|ai)\./.test(key)).map(([, value]) => value).join('\n')
+    expect(homepage).not.toMatch(/military-grade|bank-level|unhackable/i)
+    expect(homepage).not.toMatch(/row-level|postgres|anonymous role|supabase|public key|AES-256|ciphertext/i)
+    const policy = readFileSync(`${srcDir}lib/site-content/info-page-defaults.ts`, 'utf8')
+    expect(policy).toContain('row-level security')
+    expect(policy).toContain('AES-256-GCM')
+    expect(policy).toContain('anonymous role')
+  })
+
+  it('keeps homepage copy short: the word limits from the copy-simplification brief', () => {
+    const d = registryModule.SITE_CONTENT_DEFAULTS
+    const words = (text: string) => text.trim().split(/\s+/).filter(Boolean).length
+    const over: string[] = []
+    const check = (key: string, max: number) => { const n = words(d[key] ?? ''); if (n > max) over.push(`${key}: ${n} > ${max}`) }
+    for (const s of ['hero', 'loop', 'features', 'how', 'ai', 'privacy', 'final']) check(`public.${s}.title`, 10)
+    check('public.hero.lede', 16)
+    for (const s of ['loop', 'features', 'how', 'ai', 'privacy']) check(`public.${s}.lede`, 16)
+    for (let n = 1; n <= 8; n++) {
+      check(`public.features.item_${n}.summary`, 12)
+      for (const point of (d[`public.features.item_${n}.points`] ?? '').split('\n')) if (words(point) > 8) over.push(`feature ${n} point: ${point}`)
+    }
+    for (let n = 1; n <= 5; n++) check(`public.loop.step_${n}.body`, 12)
+    for (let n = 1; n <= 4; n++) check(`public.ai.fact_${n}.body`, 12)
+    for (let n = 1; n <= 6; n++) check(`public.privacy.item_${n}.body`, 12)
+    for (const key of ['public.dypol.body', 'public.final.body', 'public.final.note', 'public.promo.body', 'public.privacy.foot', 'public.loop.footnote', 'public.ai.cta.note', 'public.hero.meta', 'public.features.footnote', 'public.footer.tagline']) check(key, 12)
+    for (const stat of DEFAULT_STATS) if (words(stat.label) > 8) over.push(`stat: ${stat.label}`)
+    expect(over).toEqual([])
+  })
+
+  it('never claims students can create their own subjects, or a ready syllabus for every exam', () => {
+    const copy = Object.entries(registryModule.SITE_CONTENT_DEFAULTS).filter(([key]) => key.startsWith('public.') && !key.startsWith('public.footer.') && !/principles|how\./.test(key)).map(([, value]) => value).join('\n')
+    expect(copy).not.toMatch(/(add|create|build) (or choose )?your (own )?subjects/i)
+    expect(copy).not.toMatch(/every exam has|syllabus for every exam/i)
   })
 
   it('never renders a provider secret or service key on the public surface', () => {

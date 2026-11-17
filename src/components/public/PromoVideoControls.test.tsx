@@ -17,13 +17,14 @@ function renderWith(overrides: Record<string, string>) {
 }
 
 describe('owner promo video controls', () => {
-  it('renders the original layout by default', () => {
+  it('renders the default layout with its short visible heading', () => {
     const { container } = renderWith({})
     const section = container.querySelector('section.pub-section-promo')
     expect(section?.className).toContain('promo-size-medium')
     expect(section?.className).toContain('promo-aspect-portrait')
     expect(section?.className).toContain('promo-pos-center')
-    expect(container.querySelector('#promo-title')?.className).toBe('visually-hidden')
+    expect(container.querySelector('#promo-title')?.textContent).toBe('See Stracker in action.')
+    expect(container.querySelector('#promo-title')?.className).not.toBe('visually-hidden')
   })
 
   it('hides the whole section and its video when switched off', () => {

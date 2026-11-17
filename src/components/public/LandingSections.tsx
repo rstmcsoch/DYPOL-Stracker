@@ -4,9 +4,11 @@ import {
   ListChecks, LockKeyhole, NotebookPen, Repeat2, Shield, ShieldCheck, Sparkles, Target,
   TrendingUp, Timer
 } from 'lucide-react'
-import { useSiteText } from '../../contexts/SiteContentContext'
+import { useSiteText, useSiteValues } from '../../contexts/SiteContentContext'
+import { infoPageBody } from '../../lib/site-content/info-pages'
 import { parseOrder } from '../../lib/site-content/content'
 import { fieldDefinition } from '../../lib/site-content/registry'
+import { Link } from 'react-router-dom'
 import { SiteLink } from './SiteLink'
 import { prefersReducedMotion } from './home-motion'
 import { useFeatureOrder } from './feature-order'
@@ -238,13 +240,13 @@ export function AiSection() {
       </div>
       <aside className={`hp-chat is-${stage}`} aria-labelledby="ai-example-title" ref={exampleRef}>
         <span className="hp-tape hp-tape-blue" aria-hidden="true" />
-        <p className="hp-chat-label" id="ai-example-title"><Sparkles size={13} aria-hidden="true" /> Illustrative exchange · not real student data</p>
+        <p className="hp-chat-label" id="ai-example-title"><Sparkles size={13} aria-hidden="true" /> Example chat · not real data</p>
         <div className="hp-chat-thread">
-          <p className="hp-bubble hp-bubble-ask"><span className="visually-hidden">Example question: </span>“Which topics are pulling my recent mock scores down?”</p>
+          <p className="hp-bubble hp-bubble-ask"><span className="visually-hidden">Example question: </span>“Which chapters are pulling my mock scores down?”</p>
           <span className="hp-typing" aria-hidden="true"><i /><i /><i /></span>
-          <p className="hp-bubble hp-bubble-answer"><span className="visually-hidden">Example answer: </span>“Two tested chapters sit below your weak threshold: <strong>Probability (48%)</strong> and <strong>Reading comprehension (52%)</strong>. Both have mistakes logged as concept errors, and one revision is due today.”</p>
+          <p className="hp-bubble hp-bubble-answer"><span className="visually-hidden">Example answer: </span>“<strong>Probability (48%)</strong> and <strong>Reading comprehension (52%)</strong> are below your target. Both have concept mistakes, and one revision is due today.”</p>
         </div>
-        <p className="hp-chat-note"><Shield size={13} aria-hidden="true" /> An example of the kind of answer supported tools produce from your own figures — not a transcript of anyone&rsquo;s data.</p>
+        <p className="hp-chat-note"><Shield size={13} aria-hidden="true" /> Example only. Real answers use your own records.</p>
       </aside>
     </div>
   </section>
@@ -256,6 +258,8 @@ const PRIVACY_INDEXES = [1, 2, 3, 4, 5, 6]
 
 export function PrivacySection() {
   const t = useSiteText
+  // The written policy holds the technical detail; with no policy written, /privacy shows this section.
+  const hasPolicy = infoPageBody(useSiteValues(), 'privacy') !== ''
   const docItems = documentItems(useBlockProps().items)
   const points = docItems
     ? docItems.map(item => ({ key: `d${item.index}`, title: item.text('title'), body: item.text('body'), edit: (field: string) => ({ 'data-se-prop': `items.${item.index}.${field}` }) }))
@@ -270,7 +274,7 @@ export function PrivacySection() {
             <dd {...point.edit('body')}>{point.body}</dd>
           </div>)}
         </dl>
-        <p className="hp-privacy-foot"><LockKeyhole size={15} aria-hidden="true" /> {t('public.privacy.foot')}</p>
+        <p className="hp-privacy-foot"><LockKeyhole size={15} aria-hidden="true" /> <span>{t('public.privacy.foot')}{hasPolicy && <> <Link className="hp-privacy-policy-link" to="/privacy">Read the Privacy Policy</Link></>}</span></p>
       </div>
     </div>
   </section>

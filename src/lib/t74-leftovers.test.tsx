@@ -29,7 +29,7 @@ describe('item 1: footer information links', () => {
   it('ships page text written for Stracker by DYPOL LABS that stays editable and optional', () => {
     for (const kind of ['about', 'terms', 'privacy']) {
       const body = SITE_CONTENT_DEFAULTS[`public.footer.${kind}.body`]!
-      expect(body).toContain('Last updated: 14 November 2026')
+      expect(body).toContain('Last updated: 16 November 2026')
       expect(body).toContain('DYPOL LABS')
       expect(body).toContain('Contact page')
       const field = SITE_CONTENT_FIELDS.find(item => item.key === `public.footer.${kind}.body`)!

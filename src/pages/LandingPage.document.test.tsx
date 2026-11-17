@@ -20,10 +20,29 @@ function renderWith(document: unknown) {
 const order = (container: HTMLElement) => [...container.querySelectorAll('main [data-sb]')].filter(node => !node.parentElement?.closest('[data-sb]')).map(node => node.getAttribute('data-sb'))
 
 describe('homepage page document', () => {
-  it('renders every Stracker section in the shipped order with no document', () => {
+  it('renders every shipped Stracker section in order with no document, skipping the ones that ship hidden', () => {
     const container = renderWith(null)
-    expect(order(container)).toEqual(BUILTIN_SECTIONS.home.filter(section => section.id !== 'home-video' || container.querySelector('[data-sb="home-video"]')).map(section => section.id))
+    const shipped = BUILTIN_SECTIONS.home.filter(section => !section.hiddenByDefault)
+    expect(order(container)).toEqual(shipped.filter(section => section.id !== 'home-video' || container.querySelector('[data-sb="home-video"]')).map(section => section.id))
+    expect(order(container)).not.toContain('home-principles')
+    // How It Works is back by default, in its original place after the features.
+    expect(order(container)).toContain('home-how')
+    expect(order(container).indexOf('home-how')).toBe(order(container).indexOf('home-features') + 1)
+    expect(container.querySelector('#how-it-works')).not.toBeNull()
+    expect(screen.getByText('Four steps, repeated all year.')).toBeTruthy()
     expect(screen.getByText('JEE', { selector: '.hp-exams-track:first-child li' })).toBeTruthy()
+  })
+
+  it('keeps retired sections hidden when a stored page lacks them, and shows them once the owner unhides them', () => {
+    const without = BUILTIN_SECTIONS.home.filter(section => !section.hiddenByDefault).map(section => ({ id: section.id, type: section.type }))
+    const container = renderWith({ schemaVersion: 1, pages: { home: { blocks: without } } })
+    expect(order(container)).not.toContain('home-principles')
+    expect(order(container)).toContain('home-how')
+    cleanup()
+    const restored = BUILTIN_SECTIONS.home.map(section => ({ id: section.id, type: section.type }))
+    const shown = renderWith({ schemaVersion: 1, pages: { home: { blocks: restored } } })
+    expect(order(shown)).toContain('home-principles')
+    expect(order(shown)).toContain('home-how')
   })
 
   it('applies stored order, hidden sections and structured lists', () => {
