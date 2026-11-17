@@ -195,7 +195,7 @@ export function AppFrame() {
     </aside>
 
     <header className="mobile-topbar">
-      <Brand compact />
+      <Brand compact markOnly />
       <span className="mobile-exam-title">{loading || (!data.settings.exam_id && !data.settings.onboarding_completed) ? 'Study home' : isJeeSettings(data.settings) ? `JEE ${data.settings.exam_year ?? 2027}` : chosenExamTitle(data.settings)}</span>
       <div className="mobile-top-actions">
         <ThemeToggle className="theme-toggle-compact" />
@@ -297,10 +297,11 @@ function MobileNavItem({ item }: { item: NavigationItem }) {
   </NavLink>
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
+/** `markOnly` (phone top bar): just the S mark, so the student's exam sits right after it. */
+function Brand({ compact = false, markOnly = false }: { compact?: boolean; markOnly?: boolean }) {
   const warm = () => preloadRoute('/')
-  return <NavLink className={`brand ${compact ? 'brand-compact' : ''}`} to="/" aria-label="Stracker home" onPointerEnter={warm} onPointerDown={warm} onFocus={warm} onClick={event => { if (isPlainClick(event)) setPendingNav('/') }}>
-    <span className="brand-mark"><span>S</span><i>✳</i></span><span className="brand-type type-brand">Stracker<small className="type-overline">STUDY HOME</small></span>
+  return <NavLink className={`brand ${compact ? 'brand-compact' : ''} ${markOnly ? 'brand-mark-only' : ''}`} to="/" aria-label="Stracker home" onPointerEnter={warm} onPointerDown={warm} onFocus={warm} onClick={event => { if (isPlainClick(event)) setPendingNav('/') }}>
+    <span className="brand-mark" aria-hidden={markOnly || undefined}><span>S</span><i>✳</i></span>{!markOnly && <span className="brand-type type-brand">Stracker<small className="type-overline">STUDY HOME</small></span>}
   </NavLink>
 }
 
