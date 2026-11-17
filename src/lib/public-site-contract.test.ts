@@ -145,7 +145,7 @@ describe('homepage honesty', () => {
     for (let n = 1; n <= 5; n++) check(`public.loop.step_${n}.body`, 12)
     for (let n = 1; n <= 4; n++) check(`public.ai.fact_${n}.body`, 12)
     for (let n = 1; n <= 6; n++) check(`public.privacy.item_${n}.body`, 12)
-    for (const key of ['public.dypol.body', 'public.final.body', 'public.final.note', 'public.promo.body', 'public.privacy.foot', 'public.loop.footnote']) check(key, 12)
+    for (const key of ['public.dypol.body', 'public.final.body', 'public.final.note', 'public.promo.body', 'public.privacy.foot', 'public.loop.footnote', 'public.ai.cta.note', 'public.hero.meta', 'public.features.footnote', 'public.footer.tagline']) check(key, 12)
     for (const stat of DEFAULT_STATS) if (words(stat.label) > 8) over.push(`stat: ${stat.label}`)
     expect(over).toEqual([])
   })
