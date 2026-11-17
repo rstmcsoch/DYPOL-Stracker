@@ -51,7 +51,33 @@ export async function authenticateRequest(req: ApiRequest): Promise<Authenticate
   const adminClient = createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
   })
+  await assertNotBanned(adminClient, data.user.id)
   return { userId: data.user.id, user: data.user, userClient, adminClient }
+}
+
+/** True when a public.account_bans row is still in force (null `banned_until` = permanent). */
+export function banIsActive(row: { banned_until?: unknown } | null | undefined, now = Date.now()): boolean {
+  if (!row) return false
+  if (row.banned_until === null || row.banned_until === undefined) return true
+  const until = Date.parse(String(row.banned_until))
+  return Number.isNaN(until) || until > now
+}
+
+/**
+ * Defence in depth for the AI endpoints, which use the service-role client for some reads and
+ * writes (bypassing the "account not banned" RLS policy). A ban already blocks the account in
+ * Supabase Auth and revokes its sessions; this also refuses a still-unexpired access token, the
+ * same way the Control Center does. Fails closed, like the rest of the authorisation path.
+ */
+async function assertNotBanned(admin: SupabaseClient, userId: string): Promise<void> {
+  const { data, error } = await admin.from('account_bans').select('banned_until').eq('user_id', userId).maybeSingle()
+  if (error) {
+    logAIEvent('error', 'ai_ban_lookup_failed', { code: error.code ?? '' })
+    throw new ApiError(503, 'auth_unavailable', 'Stracker could not verify your account right now. Try again in a moment.')
+  }
+  if (banIsActive(data as { banned_until?: unknown } | null)) {
+    throw new ApiError(403, 'account_restricted', 'This account cannot use Stracker AI right now.')
+  }
 }
 
 export function verifyOwnerRow<T extends { user_id?: string }>(row: T | null, userId: string): T {
