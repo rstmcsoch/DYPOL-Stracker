@@ -279,6 +279,6 @@
   justify-content: center;
 }
 
-/* Cloudflare Turnstile: always visible, full width, its 65px height reserved so nothing jumps. */
-.turnstile-slot { width: 100%; min-width: 0; min-height: 65px; display: block; }
+/* Cloudflare Turnstile: always visible, full width; its rendered 71px height (65px box + wrapper) is reserved so nothing jumps. */
+.turnstile-slot { width: 100%; min-width: 0; min-height: 71px; display: block; }
 .turnstile-slot iframe { max-width: 100%; }
