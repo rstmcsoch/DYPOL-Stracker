@@ -50,7 +50,6 @@ export function PublicThemeToggle({ theme, onToggle }: { theme: PublicTheme; onT
     </span>
     <span className="theme-toggle-copy">
       <strong>{isDark ? 'Night' : 'Light'}</strong>
-      <small>theme</small>
     </span>
   </button>
 }

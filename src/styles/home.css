@@ -425,13 +425,12 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
   box-shadow: 3px 3px 0 var(--hp-hard);
 }
 .pub-hp .pub-theme-toggle:hover { transform: translateY(-1px); }
-/* Wide screens: one readable line ("Light theme") instead of a cramped two-line stack.
+/* Wide screens: one short word ("Light" / "Night") beside the switch.
    Narrower headers keep hiding the caption (rules below and in public.css). */
 @media (min-width: 1121px) {
-  .pub-hp .pub-theme-toggle { gap: 10px; padding: 4px 14px 4px 6px; }
-  .pub-hp .pub-theme-toggle .theme-toggle-copy { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+  .pub-hp .pub-theme-toggle { gap: 8px; padding: 4px 12px 4px 6px; }
+  .pub-hp .pub-theme-toggle .theme-toggle-copy { display: inline-flex; align-items: baseline; white-space: nowrap; }
   .pub-hp .pub-theme-toggle .theme-toggle-copy strong { font:600 .875rem/1 var(--font-body); letter-spacing: 0; }
-  .pub-hp .pub-theme-toggle .theme-toggle-copy small { font:500 .875rem/1 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--hp-ink-soft); }
 }
 .pub-hp .pub-theme-toggle:focus-visible { outline: 3px solid var(--hp-accent-solid); outline-offset: 3px; }
 .pub-hp .pub-header-actions { gap: 10px; }

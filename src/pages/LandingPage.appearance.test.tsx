@@ -45,6 +45,17 @@ describe('owner public appearance defaults', () => {
     expect(window.localStorage.getItem('stracker-public-home-theme')).toBe('light')
   })
 
+  it('shows only "Light" / "Night" on the theme switch, keeping the full accessible name', () => {
+    renderLanding({ 'public.appearance.default_mode': 'light' })
+    const toggle = screen.getByRole('switch', { name: 'Light mode on. Switch to night mode.' })
+    expect(toggle.textContent?.trim()).toBe('Light')
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(toggle)
+    expect(toggle.textContent?.trim()).toBe('Night')
+    expect(toggle.textContent).not.toMatch(/theme/i)
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+  })
+
   it('applies an accent preset with tuned light and dark values', () => {
     const page = renderLanding({ 'public.appearance.accent': 'forest-emerald' })
     expect(page.hasAttribute('data-owner-accent')).toBe(true)
