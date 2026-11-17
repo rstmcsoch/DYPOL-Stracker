@@ -1012,10 +1012,11 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
 
 /* ------------------------------------------------------ promo video */
 
-.pub-hp .pub-section-promo { position: relative; z-index: 1; padding-block: var(--hp-pad); }
-/* Without its visible heading the player sits between two padded sections: trim its own
-   padding so no tall empty band opens above the final call to action. */
-.pub-hp .pub-section-promo:not(:has(.promo-head)) { padding-block: clamp(20px, 3vw, 40px) clamp(4px, 1vw, 12px); }
+/* The player sits between two padded sections: keep its own padding small so no tall
+   empty band opens above the final call to action. */
+.pub-hp .pub-section-promo { position: relative; z-index: 1; padding-block: clamp(36px, 5vw, 64px) clamp(4px, 1vw, 12px); }
+.pub-hp .pub-section-promo:not(:has(.promo-head)) { padding-top: clamp(20px, 3vw, 40px); }
+.pub-hp .pub-section-promo .promo-head { margin-bottom: clamp(20px, 2.6vw, 32px); }
 .pub-hp .pub-section-promo .pub-shell { width: min(100%, var(--hp-shell)); padding-inline: var(--hp-gutter); }
 .pub-hp .pub-section-promo .promo-head { text-align: center; margin-inline: auto; max-width: 46rem; }
 .pub-hp .pub-section-promo .promo-head h2 { --font-public: var(--hp-hand); font-size: clamp(2.2rem, 4.8vw, 3.5rem); line-height: 1.02; margin-top: 12px; }
@@ -1354,3 +1355,6 @@ body:has(.pub-hp)::before { display: none; }
   .pub-hp .pub-doc-siblings a:hover,
   .pub-hp :is(.contact-card, .not-found-card) .button:hover { transform: none; }
 }
+
+/* The final call to action follows the player closely instead of after a full section gap. */
+.pub-hp .pub-section-promo + .hp-section { padding-top: clamp(40px, 5vw, 72px); }

@@ -112,12 +112,12 @@ export function NotebookPreview() {
             <span className="hp-revision-number" aria-hidden="true">R{SAMPLE.revision.number}</span>
             <div><p className="hp-revision-chapter">{SAMPLE.revision.chapter}</p><p className="hp-revision-when"><AlarmClock size={12} aria-hidden="true" /> Scheduled for today</p></div>
           </div>
-          <p className="hp-revision-note">Completing it opens the next interval in the revision chain.</p>
+          <p className="hp-revision-note">Finish it and the next revision is set.</p>
         </div>
       </div>
     </div>
     <figcaption className="hp-figure-caption">
-      <Pencil size={14} aria-hidden="true" /> <span>An illustrative JEE PCM example. Your own exam&rsquo;s subjects and chapters take their place.</span>
+      <Pencil size={14} aria-hidden="true" /> <span>Sample only. Your subjects follow the exam you choose.</span>
     </figcaption>
     <span className="hp-sticker" aria-hidden="true">your page, every day →</span>
   </figure>
