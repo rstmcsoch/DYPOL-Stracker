@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react'
 import { loadTurnstile, turnstileSiteKey, type TurnstileApi } from '../lib/turnstile'
 
 export interface TurnstileHandle {
@@ -12,20 +12,29 @@ export interface TurnstileHandle {
 
 const TOKEN_WAIT_MS = 20_000
 
-function pageTheme(): 'light' | 'dark' {
+/**
+ * The theme of the page around the widget: public pages (sign-in, sign-up, reset, contact) carry
+ * their Light / Night choice on a `data-public-theme` wrapper; signed-in pages use `data-theme`
+ * on the document root.
+ */
+function pageTheme(element: HTMLElement | null): 'light' | 'dark' {
   if (typeof document === 'undefined') return 'light'
+  const scoped = element?.closest<HTMLElement>('[data-public-theme]')?.dataset.publicTheme
+  if (scoped) return scoped === 'dark' ? 'dark' : 'light'
   return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
 }
 
 /** Follows the page's Light / Night setting so the widget is re-rendered with the matching theme. */
-function usePageTheme(): 'light' | 'dark' {
-  const [theme, setTheme] = useState(pageTheme)
+function usePageTheme(container: RefObject<HTMLDivElement | null>): 'light' | 'dark' | null {
+  const [theme, setTheme] = useState<'light' | 'dark' | null>(null)
   useEffect(() => {
+    const update = () => setTheme(pageTheme(container.current))
+    update()
     if (typeof MutationObserver === 'undefined') return
-    const observer = new MutationObserver(() => setTheme(pageTheme()))
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    const observer = new MutationObserver(update)
+    observer.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['data-theme', 'data-public-theme'] })
     return () => observer.disconnect()
-  }, [])
+  }, [container])
   return theme
 }
 
@@ -40,10 +49,10 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
     api: null, id: null, token: null, failed: false, waiters: []
   })
   const disabled = import.meta.env.MODE === 'test'
-  const theme = usePageTheme()
+  const theme = usePageTheme(container)
 
   useEffect(() => {
-    if (disabled) return
+    if (disabled || !theme) return
     const current = state.current
     let active = true
     const settle = (token: string | undefined) => {
