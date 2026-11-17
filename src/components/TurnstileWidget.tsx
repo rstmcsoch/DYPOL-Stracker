@@ -1,10 +1,9 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react'
 import { loadTurnstile, turnstileSiteKey, type TurnstileApi } from '../lib/turnstile'
 
 export interface TurnstileHandle {
   /**
-   * A fresh single-use token, waiting briefly while Cloudflare finishes its (usually invisible)
-   * check. Resolves `undefined` when the widget is unavailable; Supabase Auth then decides.
+   * A fresh single-use token, waiting briefly while Cloudflare finishes its visible check. Resolves `undefined` when the widget is unavailable; Supabase Auth then decides.
    */
   getToken: () => Promise<string | undefined>
   /** Throw away the used token and start a new check. Call after every attempt. */
@@ -13,15 +12,36 @@ export interface TurnstileHandle {
 
 const TOKEN_WAIT_MS = 20_000
 
-function pageTheme(): 'light' | 'dark' {
+/**
+ * The theme of the page around the widget: public pages (sign-in, sign-up, reset, contact) carry
+ * their Light / Night choice on a `data-public-theme` wrapper; signed-in pages use `data-theme`
+ * on the document root.
+ */
+function pageTheme(element: HTMLElement | null): 'light' | 'dark' {
   if (typeof document === 'undefined') return 'light'
+  const scoped = element?.closest<HTMLElement>('[data-public-theme]')?.dataset.publicTheme
+  if (scoped) return scoped === 'dark' ? 'dark' : 'light'
   return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
 }
 
+/** Follows the page's Light / Night setting so the widget is re-rendered with the matching theme. */
+function usePageTheme(container: RefObject<HTMLDivElement | null>): 'light' | 'dark' | null {
+  const [theme, setTheme] = useState<'light' | 'dark' | null>(null)
+  useEffect(() => {
+    const update = () => setTheme(pageTheme(container.current))
+    update()
+    if (typeof MutationObserver === 'undefined') return
+    const observer = new MutationObserver(update)
+    observer.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['data-theme', 'data-public-theme'] })
+    return () => observer.disconnect()
+  }, [container])
+  return theme
+}
+
 /**
- * Cloudflare Turnstile, in "interaction-only" mode: invisible for almost everyone, and a small
- * full-width checkbox only when Cloudflare needs a click. Loaded lazily on the auth pages only.
- * Disabled under Vitest (no network in jsdom).
+ * Cloudflare Turnstile, always visible (appearance "always"): a full-width verification box
+ * placed just above the submit button. Space is reserved before it loads so the form does not
+ * jump. Loaded lazily on the pages that use it. Disabled under Vitest (no network in jsdom).
  */
 export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(function TurnstileWidget({ action }, ref) {
   const container = useRef<HTMLDivElement>(null)
@@ -29,9 +49,10 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
     api: null, id: null, token: null, failed: false, waiters: []
   })
   const disabled = import.meta.env.MODE === 'test'
+  const theme = usePageTheme(container)
 
   useEffect(() => {
-    if (disabled) return
+    if (disabled || !theme) return
     const current = state.current
     let active = true
     const settle = (token: string | undefined) => {
@@ -43,9 +64,9 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
       current.api = api
       current.id = api.render(container.current, {
         sitekey: turnstileSiteKey(window.location.hostname, import.meta.env.VITE_TURNSTILE_SITE_KEY),
-        theme: pageTheme(),
+        theme,
         size: 'flexible',
-        appearance: 'interaction-only',
+        appearance: 'always',
         action,
         'refresh-expired': 'auto',
         'response-field': false,
@@ -65,7 +86,7 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
       current.id = null
       current.token = null
     }
-  }, [action, disabled])
+  }, [action, disabled, theme])
 
   useImperativeHandle(ref, () => ({
     getToken: () => {
@@ -98,5 +119,5 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
   }), [disabled])
 
   if (disabled) return null
-  return <div ref={container} className="turnstile-slot" data-testid="turnstile-slot" />
+  return <div ref={container} className="turnstile-slot" data-testid="turnstile-slot" aria-label="Security check" />
 })

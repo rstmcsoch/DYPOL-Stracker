@@ -136,11 +136,11 @@ export default function ResetPasswordPage() {
               </span>
             </Field>
           </>}
-          {mode === 'request' && supabaseConfigured && <TurnstileWidget ref={captcha} action="reset" />}
           {error && <div className="form-error" role="alert">{error}</div>}
           {message && <div className="form-notice" role="status">{message}</div>}
           {mode === 'update' && !user && <div className="form-notice" role="status">Open the secure reset link from your email to continue here.</div>}
           {!supabaseConfigured && <div className="form-error" role="status">Supabase is not configured, so password reset is unavailable in this deployment.</div>}
+          {mode === 'request' && supabaseConfigured && <TurnstileWidget ref={captcha} action="reset" />}
           <Button type="submit" className="auth-submit" size="lg" loading={loading || authLoading} disabled={!supabaseConfigured || (mode === 'update' && !user)}>
             {mode === 'update' ? 'Save new password' : 'Send reset link'} <ArrowRight size={17} aria-hidden="true" />
           </Button>

@@ -175,11 +175,11 @@ export default function SignupPage() {
         <div className="success-circle" aria-hidden="true"><Mail size={22} /></div>
         <h3>Confirm your email</h3>
         <p>Your account is created. We sent a confirmation link to <strong>{sentTo}</strong> — open it to activate the notebook, then log in.</p>
+        <TurnstileWidget ref={resendCaptcha} action="resend" />
         <div className="auth-success-actions">
           <Button variant="secondary" onClick={() => void resend()} loading={resending}>Resend the email</Button>
           <Link className="button button-primary" to="/login">Go to log in <ArrowRight size={16} aria-hidden="true" /></Link>
         </div>
-        <TurnstileWidget ref={resendCaptcha} action="resend" />
         {error && <div className="form-error" role="alert">{error}</div>}
         <p className="auth-success-note">Wrong address? <button type="button" className="text-button" onClick={() => { setSentTo(null); setStep(1); clearError() }}>Use a different email</button></p>
       </div> : <>
@@ -244,9 +244,9 @@ export default function SignupPage() {
           <ul className="auth-perks">
             {PERKS.map(perk => <li key={perk}><Check size={13} strokeWidth={3} aria-hidden="true" /> <span>{perk}</span></li>)}
           </ul>
-          {step === 2 && supabaseConfigured && <TurnstileWidget ref={captcha} action="signup" />}
           {error && <div className="form-error" role="alert">{error}</div>}
           {!supabaseConfigured && !localPreviewEnabled && <div className="form-error" role="status">Supabase is not configured, so accounts cannot be created yet. Add the public project URL and anon key to the deployment environment, then redeploy.</div>}
+          {supabaseConfigured && <TurnstileWidget ref={captcha} action="signup" />}
           {step === 1 ? (
             <Button type="submit" className="auth-submit" size="lg" loading={checkingEmail}>
               Next <ArrowRight size={17} aria-hidden="true" />
