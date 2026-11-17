@@ -3,7 +3,7 @@ import { T } from '../../lib/student-layout/T'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, ChevronDown, ChevronUp, Compass, Flame } from 'lucide-react'
-import { Button, NotebookCard, StatusBadge } from '../ui'
+import { Button, InfoTip, NotebookCard, StatusBadge } from '../ui'
 import { useData } from '../../contexts/DataContext'
 import { indiaToday } from '../../lib/date'
 import { recommendStudyNow, type Recommendation, type StudyNowResult } from '../../lib/jee/recommend'
@@ -59,6 +59,6 @@ function WhyList({ primary, alternatives }: { primary: Recommendation; alternati
       <strong><T k="study-now:also-in-the-running">{"Also in the running"}</T></strong>
       <ol>{alternatives.map(item => <li key={item.id}><span>{item.title}</span><small>{item.reasons.join('; ') || item.summary}</small></li>)}</ol>
     </>}
-    <small className="study-now-note"><T k="study-now:ranking-is-deterministic-overdue-revisio">{"Ranking is deterministic: overdue revisions, due backlog, due flashcards, mistakes awaiting retry, weak practice or test chapters, pending PYQs, and mock losses, weighted by chapter importance."}</T></small>
+    <small className="study-now-note"><T k="study-now:ranking-is-deterministic-overdue-revisio">{"Based on overdue work, weak areas and pending tasks."}</T> <InfoTip text="Ranks overdue revisions, due backlog and flashcards, retries, weak chapters, pending PYQs and mock losses, weighted by chapter importance." /></small>
   </div>
 }

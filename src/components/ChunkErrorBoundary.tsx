@@ -21,7 +21,7 @@ export class ChunkErrorBoundary extends Component<{ children: ReactNode }, { err
     // Not a loading problem: let it reach the app's normal error handling exactly as before.
     if (!isChunkLoadError(this.state.error)) throw this.state.error
     return <div className="route-loading" role="alert">
-      <span>This page didn’t load. Check your connection and try again.</span>
+      <span>This page didn’t load. Check your connection and retry.</span>
       <button type="button" className="button type-button button-secondary button-md" onClick={() => window.location.reload()}>Reload</button>
     </div>
   }

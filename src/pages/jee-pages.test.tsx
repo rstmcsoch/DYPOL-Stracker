@@ -181,7 +181,7 @@ describe('Mock analysis page', () => {
     harness.data = baseData({ tests: [test] })
     const { default: MockAnalysisPage } = await import('./MockAnalysisPage')
     renderPage(<MockAnalysisPage />, '/mock-analysis?test=mock2')
-    expect(screen.getByText(/No time or attempt data recorded/)).toBeTruthy()
+    expect(screen.getByText(/No timing data recorded for this test/)).toBeTruthy()
   })
 })
 
@@ -216,6 +216,6 @@ describe('Weekly report', () => {
     harness.data = baseData()
     const { WeeklyReportCard } = await import('../components/jee/WeeklyReportCard')
     renderPage(<WeeklyReportCard />)
-    expect(screen.getByText(/Not enough history to compare/)).toBeTruthy()
+    expect(screen.getByText(/Not enough history yet/)).toBeTruthy()
   })
 })

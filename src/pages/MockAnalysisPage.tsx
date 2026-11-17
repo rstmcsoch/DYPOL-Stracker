@@ -40,14 +40,14 @@ export default function MockAnalysisPage() {
   const hasRecordedTime = data.testTimeEntries.some(entry => entry.test_id === selected.id)
 
   const removeLog = async (log: TestErrorLog) => {
-    try { await remove('test_error_logs', log); notify('Classification removed. Undo is available briefly.') }
+    try { await remove('test_error_logs', log); notify('Classification removed.') }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not remove this classification.', 'error') }
   }
 
   return <div className="content-page mock-analysis-page">
     <PageHeader layoutId="mock-analysis.header"
       title="Mock analysis"
-      subtitle="Recorded, classified and derived data, kept separate."
+      subtitle="Where you lost marks, and why."
     />
 
     <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
@@ -66,9 +66,9 @@ export default function MockAnalysisPage() {
 
     <section {...sl.attrs('analysis')} className="jee-analysis-grid">
       <div className="jee-analysis-col">
-        <SectionHeading title="Recorded time & attempts" note="Only what you entered. Missing values stay blank." action={<Button variant="secondary" size="sm" onClick={() => setTiming(true)}><Clock3 size={15} /> {hasRecordedTime ? 'Edit' : 'Add'} time</Button>} />
+        <SectionHeading title="Recorded time & attempts" note="Only what you entered." action={<Button variant="secondary" size="sm" onClick={() => setTiming(true)}><Clock3 size={15} /> {hasRecordedTime ? 'Edit' : 'Add'} time</Button>} />
         <NotebookCard>
-          {times.length === 0 ? <div className="jee-pad"><p className="jee-muted"><T k="mock-analysis:no-time-or-attempt-data-recorded-for-thi">{"No time or attempt data recorded for this test. Nothing is estimated — add it if you tracked it."}</T></p></div> : <div className="jee-subject-time-list">
+          {times.length === 0 ? <div className="jee-pad"><p className="jee-muted"><T k="mock-analysis:no-time-or-attempt-data-recorded-for-thi">{"No timing data recorded for this test."}</T></p></div> : <div className="jee-subject-time-list">
             {times.map(row => <div key={row.subject} className="jee-subject-time">
               <SubjectBadge subject={row.subject} />
               <div className="jee-row-numbers">
@@ -103,7 +103,7 @@ export default function MockAnalysisPage() {
       <div className="jee-analysis-col">
         <SectionHeading title="Where the marks went" note="Your classifications, summed." />
         <NotebookCard>
-          {totals.length === 0 ? <p className="jee-muted jee-pad"><T k="mock-analysis:classify-some-lost-marks-to-see-the-brea">{"Classify some lost marks to see the breakdown."}</T></p> : <div className="jee-category-bars">
+          {totals.length === 0 ? <p className="jee-muted jee-pad"><T k="mock-analysis:classify-some-lost-marks-to-see-the-brea">{"Classify lost marks to see the breakdown."}</T></p> : <div className="jee-category-bars">
             {totals.map(total => {
               const max = Math.max(...totals.map(item => item.marksLost ?? item.entries))
               const value = total.marksLost ?? total.entries

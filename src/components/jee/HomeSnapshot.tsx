@@ -70,7 +70,7 @@ export function HomeSnapshot({ layoutAttrs }: { layoutAttrs?: Record<string, str
 
     <NotebookCard className="jee-snap-card jee-snap-exam">
       <div className="jee-snap-head"><span className="eyebrow">{trackLabels(data.settings)[activeTrack].toUpperCase()}</span><button type="button" className="jee-link" onClick={() => navigate('/settings')}><T k="home:exam-dates">{"Exam dates"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
-      <p className="jee-small">{mode.active ? mode.reason : 'Exam Mode turns on automatically in the final 30 days. The big countdown lives at the top of Home.'}</p>
+      <p className="jee-small">{mode.active ? mode.reason : 'Exam Mode turns on in the last 30 days.'}</p>
       <ProgressLine label="Track readiness" value={track.percent} detail="weighted syllabus, PYQs and recent tests" />
     </NotebookCard>
 

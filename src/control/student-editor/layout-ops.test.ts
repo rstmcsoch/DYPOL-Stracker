@@ -6,7 +6,7 @@ describe('student layout edits', () => {
   it('edits declared labels and drops values equal to the shipped default', () => {
     const doc = setText(EMPTY_LAYOUT, 'home.streak', 'kicker', 'MY RHYTHM')!
     expect(doc.components?.['home.streak']?.text).toEqual({ kicker: 'MY RHYTHM' })
-    expect(setText(doc, 'home.streak', 'kicker', 'YOUR RHYTHM')!.components).toBeUndefined()
+    expect(setText(doc, 'home.streak', 'kicker', 'STUDY STREAK')!.components).toBeUndefined()
   })
 
   it('never writes data-bound values', () => {

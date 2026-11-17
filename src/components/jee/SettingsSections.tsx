@@ -99,12 +99,12 @@ export function ReminderSettingsSection({ draft, patch, errors }: {
     <div className="settings-section-content">
       <label className="jee-toggle-row"><input type="checkbox" checked={draft.reminders_enabled} onChange={event => patch('reminders_enabled', event.target.checked)} /><span><T k="settings:remind-me-once-a-day">{"Remind me once a day"}</T></span></label>
       <div className="form-grid two">
-        <Field lk="settings:l-time" lk2="settings:type-or-paste-a-time-e-g-8-30-pm-arrow-k" label="Time" hint="Type or paste a time, e.g. 8:30 pm. Arrow keys step 5 minutes."><TimeInput label="Reminder time" value={draft.reminder_time} disabled={!draft.reminders_enabled} error={errors.reminder_time} onChange={value => patch('reminder_time', value)} /></Field>
+        <Field lk="settings:l-time" lk2="settings:type-or-paste-a-time-e-g-8-30-pm-arrow-k" label="Time" hint="e.g. 8:30 pm. Arrow keys move 5 minutes."><TimeInput label="Reminder time" value={draft.reminder_time} disabled={!draft.reminders_enabled} error={errors.reminder_time} onChange={value => patch('reminder_time', value)} /></Field>
         <div className="jee-notif-permission">
           <span className="field-label"><T k="settings:device-notifications">{"Device notifications"}</T></span>
-          {permission === 'unsupported' ? <small className="jee-muted"><T k="settings:this-browser-does-not-support-notificati">{"This browser does not support notifications. In-app reminders still appear on Home."}</T></small>
-            : permission === 'granted' ? <small className="jee-ok"><T k="settings:allowed-reminders-also-appear-as-device">{"Allowed. Reminders also appear as device notifications while Stracker is open."}</T></small>
-            : permission === 'denied' ? <small className="jee-muted"><T k="settings:blocked-in-browser-settings-in-app-remin">{"Blocked in browser settings. In-app reminders still appear on Home."}</T></small>
+          {permission === 'unsupported' ? <small className="jee-muted"><T k="settings:this-browser-does-not-support-notificati">{"Notifications not supported here. Reminders still show on Home."}</T></small>
+            : permission === 'granted' ? <small className="jee-ok"><T k="settings:allowed-reminders-also-appear-as-device">{"Allowed while Stracker is open."}</T></small>
+            : permission === 'denied' ? <small className="jee-muted"><T k="settings:blocked-in-browser-settings-in-app-remin">{"Blocked in your browser. Reminders still show on Home."}</T></small>
             : <Button variant="secondary" size="sm" onClick={() => void requestPermission()} disabled={!draft.reminders_enabled}><T k="settings:allow-notifications">{"Allow notifications"}</T></Button>}
         </div>
       </div>
@@ -115,7 +115,7 @@ export function ReminderSettingsSection({ draft, patch, errors }: {
         </div>
         {errors.reminder_types && <p className="field-error" role="alert">{errors.reminder_types}</p>}
       </fieldset>
-      <p className="jee-small jee-muted"><T k="settings:works-only-while-the-app-is-open-or-runn">{"Works only while the app is open or running."}</T></p>
+      <p className="jee-small jee-muted"><T k="settings:works-only-while-the-app-is-open-or-runn">{"Works while the app is open."}</T></p>
     </div>
   </NotebookCard>
 }

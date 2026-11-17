@@ -110,7 +110,7 @@ export function ExamSelectionSection() {
         </Field>}
       </div>
       {exam && <p className="jee-small jee-muted exam-subject-preview">Subjects: {examSubjects({ exam_id: exam.id, exam_session: session || null, boards_addon: addon }, options).join(', ')}</p>}
-      {exam && !isJeeExam(exam.id) && <p className="jee-small jee-muted"><T k="settings:your-existing-syllabus-tests-and-notes-a">{"Your existing syllabus, tests and notes are kept as they are. A new notebook for this exam starts with an empty syllabus you can fill in on the Syllabus page."}</T></p>}
+      {exam && !isJeeExam(exam.id) && <p className="jee-small jee-muted"><T k="settings:your-existing-syllabus-tests-and-notes-a">{"Your current data is kept. The new exam starts with an empty syllabus."}</T></p>}
       <div className="jee-section-save"><Button variant="secondary" size="sm" onClick={() => void save()} loading={saving}><Check size={14} />{' '}<T k="settings:save-exam">{"Save exam"}</T></Button></div>
     </div>
   </NotebookCard>

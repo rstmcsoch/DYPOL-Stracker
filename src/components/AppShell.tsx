@@ -391,10 +391,10 @@ export function GlobalSearch({ data, onClose }: { data: AppData; onClose: () => 
   return <Dialog title="Search your notebook" subtitle="Find chapters, tests, mistakes and tasks." onClose={onClose} className="search-dialog">
     <div className="global-search-input"><Search size={19} /><input autoFocus value={query} onChange={event => { setQuery(event.target.value); setSelected(0) }} onKeyDown={onKeyDown} placeholder="Try ‘Current Electricity’…" aria-label="Search notebook" /><kbd>ESC</kbd></div>
     <div className="search-results">
-      {!trimmed ? <div className="search-hint"><Sparkles size={17} /> Your notes stay private to your account.</div> : results.length ? results.map((result, index) => <button id={`search-result-${index}`} aria-current={selected === index ? 'true' : undefined} className={`search-result ${selected === index ? 'selected' : ''}`} key={`${result.type}-${result.label}-${index}`} onClick={() => { navigate(result.to); onClose() }}>
+      {!trimmed ? <div className="search-hint"><Sparkles size={17} /> Private to your account.</div> : results.length ? results.map((result, index) => <button id={`search-result-${index}`} aria-current={selected === index ? 'true' : undefined} className={`search-result ${selected === index ? 'selected' : ''}`} key={`${result.type}-${result.label}-${index}`} onClick={() => { navigate(result.to); onClose() }}>
         <span className="search-result-icon">{result.type === 'Chapter' ? <BookOpen size={16} /> : result.type === 'Test' ? <ListChecks size={16} /> : result.type === 'Mistake' ? <NotebookPen size={16} /> : <Check size={16} />}</span>
         <span className="search-result-text"><strong title={result.label}>{result.label}</strong><small>{result.context}</small></span><span className="search-result-type">{result.type}</span>
-      </button>) : <div className="search-empty">No matches yet. Try another word.</div>}
+      </button>) : <div className="search-empty">No matches. Try another word.</div>}
     </div>
   </Dialog>
 }

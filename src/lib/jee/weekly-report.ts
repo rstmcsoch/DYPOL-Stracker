@@ -95,10 +95,10 @@ export function buildWeeklyReport(data: AppData, today: string): WeeklyReport {
     ? 'Comparisons use subjects with data in both weeks.'
     : priorHasHistory
       ? 'Not enough overlapping subject data between the two weeks to compare subjects yet.'
-      : 'Not enough history to compare with the previous week yet. Comparisons start once you have data in both weeks.'
+      : 'Not enough history yet. Needs data in both weeks.'
 
   const actionable = comparisons[0]
-    ?? (weakestChapter ? `Start the next block with ${weakestChapter.name}: ${weakestChapter.basis} is ${Math.round(weakestChapter.value)}%.` : 'Log a practice block or test this week to get a specific action.')
+    ?? (weakestChapter ? `Start the next block with ${weakestChapter.name}: ${weakestChapter.basis} is ${Math.round(weakestChapter.value)}%.` : 'Log practice or a test this week for a tip.')
 
   return {
     range, studiedMinutes: activity.total, activity,

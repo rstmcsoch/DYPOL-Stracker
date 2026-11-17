@@ -57,14 +57,14 @@ export default function PracticePage() {
     if (params.get('add')) setParams({}, { replace: true })
   }
   const remover = async (session: PracticeSession) => {
-    try { await remove('practice_sessions', session); notify('Practice block removed. Undo is available briefly.') }
+    try { await remove('practice_sessions', session); notify('Practice removed.') }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not remove this block.', 'error') }
   }
 
   return <div className="content-page practice-page">
     <PageHeader layoutId="practice.header"
       title="Practice log"
-      subtitle="DPPs, modules and sheets — not counted as tests."
+      subtitle="DPPs, modules and sheets. Not counted as tests."
       action={<Button onClick={() => openCreate()}><Plus size={16} />{' '}<T k="practice:log-practice">{"Log practice"}</T></Button>}
     />
 
@@ -132,7 +132,7 @@ export default function PracticePage() {
     {creating && <PracticeDialog key={`new-${presetChapter}`} data={data} initialChapterId={presetChapter} onClose={() => setCreating(false)} onSave={async value => {
       const id = createId()
       await savePractice(id, value, data, upsert, remove)
-      notify('Practice logged. Chapter accuracy is updated.')
+      notify('Practice logged.')
     }} />}
     {editing && <PracticeDialog key={editing.id} data={data} existing={editing} onClose={() => setEditing(null)} onSave={async value => {
       await savePractice(editing.id, value, data, upsert, remove, editing.created_at)
@@ -227,7 +227,7 @@ function PracticeDialog({ data, initialChapterId = '', existing, onClose, onSave
   const correct = Number(form.correct)
   const accuracy = attempted > 0 && Number.isFinite(correct) && form.correct !== '' && correct <= attempted ? (correct / attempted) * 100 : null
   const derivedIncorrect = form.attempted.trim() !== '' && form.correct.trim() !== '' && Number.isInteger(attempted) && Number.isInteger(correct) && correct >= 0 && correct <= attempted ? String(attempted - correct) : ''
-  return <Dialog lk2="practice:incorrect-is-worked-out-for-you-attempte" title={existing ? 'Edit practice block' : 'Log practice'} subtitle="Incorrect is worked out for you: attempted − correct." onClose={onClose} className="jee-dialog">
+  return <Dialog lk2="practice:incorrect-is-worked-out-for-you-attempte" title={existing ? 'Edit practice block' : 'Log practice'} subtitle="Incorrect = attempted − correct." onClose={onClose} className="jee-dialog">
     <form className="form-stack" noValidate onSubmit={submit}>
       <div className="form-grid two">
         <SubjectSelect value={subject} onChange={value => { setSubject(value as Subject | 'all'); set('chapterId', '') }} allowAll label="Subject filter" />
@@ -240,7 +240,7 @@ function PracticeDialog({ data, initialChapterId = '', existing, onClose, onSave
         <Field lk="practice:correct-2" label="Correct" error={errors.correct} required><input inputMode="numeric" value={form.correct} onChange={event => set('correct', event.target.value)} placeholder="92" /></Field>
         <Field lk="practice:incorrect-2" lk2="practice:attempted-correct" label="Incorrect" hint="Attempted − correct"><input inputMode="numeric" value={derivedIncorrect} readOnly aria-readonly="true" tabIndex={-1} placeholder="—" className="jee-derived-input" /></Field>
       </div>
-      <Field lk="practice:skipped-optional" lk2="practice:not-attempted-recorded-separately-never" label="Skipped (optional)" hint="Not attempted. Recorded separately; never counted as incorrect." error={errors.skipped}><input inputMode="numeric" value={form.skipped ?? ''} onChange={event => set('skipped', event.target.value)} placeholder="0" /></Field>
+      <Field lk="practice:skipped-optional" lk2="practice:not-attempted-recorded-separately-never" label="Skipped (optional)" hint="Not attempted. Never counted as incorrect." error={errors.skipped}><input inputMode="numeric" value={form.skipped ?? ''} onChange={event => set('skipped', event.target.value)} placeholder="0" /></Field>
       <div className="form-grid two">
         <Field lk="practice:l-source" label="Source"><select value={form.source} onChange={event => set('source', event.target.value)}>{PRACTICE_SOURCES.map(item => <option key={item} value={item}>{item}</option>)}</select></Field>
         <Field lk="practice:time-spent-min-optional" label="Time spent (min, optional)" error={errors.minutes}><input inputMode="numeric" value={form.minutes} onChange={event => set('minutes', event.target.value)} placeholder="45" /></Field>
