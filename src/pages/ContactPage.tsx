@@ -5,6 +5,7 @@ import { PublicPageShell } from '../components/public/PublicPageShell'
 import { BlockRoot, PageLayout } from '../components/public/PageLayout'
 import { ReasonSelect } from '../components/contact/ReasonSelect'
 import { Button } from '../components/ui'
+import { TurnstileWidget, type TurnstileHandle } from '../components/TurnstileWidget'
 import { useOptionalUser } from '../contexts/AuthContext'
 import {
   ATTACHMENT_ACCEPT,
@@ -119,6 +120,7 @@ export default function ContactPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>({ kind: 'editing' })
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const captcha = useRef<TurnstileHandle>(null)
   const successRef = useRef<HTMLHeadingElement>(null)
   const reasonLabelId = useId().replaceAll(':', '')
 
@@ -191,7 +193,8 @@ export default function ContactPage() {
     setPhase({ kind: 'sending' })
     setProgress(files.map(() => 0))
     try {
-      await submitContactMessage({ name, email, reason, subject, message, details: draft.details, links, files, website }, (index, fraction) => {
+      const captchaToken = await captcha.current?.getToken()
+      await submitContactMessage({ name, email, reason, subject, message, details: draft.details, links, files, website, captchaToken }, (index, fraction) => {
         setProgress(current => current.map((value, position) => (position === index ? fraction : value)))
       })
       setPhase({ kind: 'sent' })
@@ -201,6 +204,8 @@ export default function ContactPage() {
       setFormError(failure.message)
       setPhase({ kind: 'editing' })
     }
+    // Turnstile tokens are single-use: start a fresh check for the next attempt.
+    captcha.current?.reset()
   }
 
   const reset = () => {
@@ -313,6 +318,7 @@ export default function ContactPage() {
           </div>
 
           {formError && <div className="form-error" role="alert">{formError}</div>}
+          <TurnstileWidget ref={captcha} action="contact" />
           <div className="contact-actions">
             <Button type="submit" size="lg" className="contact-send" loading={sending}>{sending ? (files.length ? 'Sending and uploading…' : 'Sending…') : <><Send size={17} aria-hidden="true" /> Send {section.noun}</>}</Button>
             <p className="contact-privacy-note">By sending, you agree that DYPOL LABS stores this message to answer it, as described in the <Link to="/privacy">Privacy Policy</Link>.</p>

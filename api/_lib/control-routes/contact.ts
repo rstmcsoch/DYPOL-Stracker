@@ -6,6 +6,7 @@ import type { ApiRequest, ApiResponse } from '../http.js'
 import { ApiError, publicError, readJson, sendJson } from '../http.js'
 import { clientKeyHash, serviceClient } from '../control.js'
 import { logAIEvent } from '../diagnostics.js'
+import { verifyTurnstile } from '../turnstile-verify.js'
 import {
   ATTACHMENT_RULES,
   CONTACT_LIMITS,
@@ -33,7 +34,8 @@ import {
  *       bytes, 15 MB total). Success makes the message visible; failure deletes it and its files.
  *   { action: 'cancel', id, token }     the sender gave up during upload: delete message and files.
  *
- * `website` is a honeypot: humans never see it, so a value means a bot and the request is
+ * `captchaToken` is a single-use Cloudflare Turnstile token, verified server-side before anything
+ * is stored. `website` is a honeypot: humans never see it, so a value means a bot and the request is
  * answered as if it succeeded while nothing is stored. Message text, names and emails are never
  * logged. The raw network address is never stored; only the same one-way hash the console uses
  * for rate limits.
@@ -55,7 +57,8 @@ const startSchema = z.object({
   details: z.record(z.string().max(40), z.union([z.string().max(10_000), z.boolean()])).optional().default({}),
   links: z.array(z.string().max(2_000)).max(20).optional().default([]),
   files: z.array(fileSchema).max(20).optional().default([]),
-  website: z.string().max(500).optional()
+  website: z.string().max(500).optional(),
+  captchaToken: z.string().max(2048).optional()
 }).strict()
 const tokenSchema = z.object({ action: z.enum(['finalize', 'cancel']), id: z.string().regex(UUID), token: z.string().regex(/^[0-9a-f]{64}$/) }).strict()
 
@@ -67,6 +70,7 @@ export interface PlannedAttachment { path: string; name: string; size: number; t
 
 export interface ValidStart {
   honeypot: boolean
+  captchaToken: string | undefined
   row: { name: string; email: string; reason: ContactReason; subject: string | null; message: string; details: Record<string, string | boolean>; links: string[] }
   files: Array<{ name: string; size: number; type: AttachmentMime }>
 }
@@ -90,6 +94,7 @@ export function parseStart(raw: unknown): ValidStart {
   if (!isContactReason(draft.reason)) throw new ApiError(400, 'invalid_message', 'Choose why you are contacting us.')
   return {
     honeypot,
+    captchaToken: input.captchaToken,
     row: {
       name: draft.name,
       email: draft.email,
@@ -215,6 +220,8 @@ export function uploadProblem(planned: readonly PlannedAttachment[], objects: re
 async function start(req: ApiRequest, res: ApiResponse, body: unknown): Promise<void> {
   const input = parseStart(body)
   if (input.honeypot) { sendJson(res, 200, { ok: true, id: null, uploads: [] }); return }
+  // Cloudflare Turnstile, verified here with the secret (the browser only holds the public site key).
+  await verifyTurnstile(input.captchaToken, 'contact')
   const { url, anonKey, admin } = serviceClient()
   await assertSiteUp(admin)
   const clientHash = clientKeyHash(req)

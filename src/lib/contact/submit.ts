@@ -12,6 +12,8 @@ export interface ContactSubmission {
   files: File[]
   /** Honeypot value; real visitors never fill it. */
   website: string
+  /** Single-use Cloudflare Turnstile token, verified by the server. */
+  captchaToken?: string
 }
 
 export class ContactSubmitError extends Error {
@@ -82,7 +84,8 @@ export async function submitContactMessage(input: ContactSubmission, onFileProgr
     details: input.details,
     links: input.links.filter(link => link.trim()),
     files: input.files.map(file => ({ name: file.name, size: file.size, type: file.type })),
-    website: input.website
+    website: input.website,
+    ...(input.captchaToken ? { captchaToken: input.captchaToken } : {})
   }, await bearer())
   if (!start.id || start.finalised || !start.uploads.length) return
   const id = start.id

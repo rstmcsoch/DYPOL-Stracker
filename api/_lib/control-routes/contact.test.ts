@@ -12,7 +12,9 @@ const state = vi.hoisted(() => ({
   row: null as Record<string, unknown> | null,
   objects: [] as Array<{ name: string; metadata: { size: number; mimetype: string } }>,
   removed: [] as string[][],
-  heads: new Map<string, Uint8Array>()
+  heads: new Map<string, Uint8Array>(),
+  captchaOk: true as boolean,
+  verifyCalls: [] as string[]
 }))
 
 function chain(table: string) {
@@ -48,7 +50,7 @@ vi.mock('../control.js', () => ({
 import { CONTACT_BURST_RATE, contactHandler, hashToken, parseStart, uploadProblem } from './contact.js'
 
 const MB = 1024 * 1024
-const valid = (overrides: Record<string, unknown> = {}) => ({ action: 'start', name: 'Asha', email: 'asha@example.com', reason: 'general_query', subject: '', message: 'How do I export my tests?', ...overrides })
+const valid = (overrides: Record<string, unknown> = {}) => ({ action: 'start', name: 'Asha', email: 'asha@example.com', reason: 'general_query', subject: '', message: 'How do I export my tests?', captchaToken: 'test-token', ...overrides })
 
 function call(body: Record<string, unknown>, method = 'POST') {
   const res: { statusCode?: number; body?: Record<string, unknown>; headers: Record<string, string>; headersSent: boolean; setHeader: (k: string, v: string) => void; end: (text: string) => void } = {
@@ -60,14 +62,18 @@ function call(body: Record<string, unknown>, method = 'POST') {
 }
 
 beforeEach(() => {
-  Object.assign(state, { rateAllowed: true, rateError: null, rpcCalls: [], inserts: [], updates: [], deletes: 0, row: null, objects: [], removed: [], heads: new Map() })
-  vi.stubGlobal('fetch', async (url: string) => {
+  Object.assign(state, { rateAllowed: true, rateError: null, rpcCalls: [], inserts: [], updates: [], deletes: 0, row: null, objects: [], removed: [], heads: new Map(), captchaOk: true, verifyCalls: [] })
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    if (url === 'https://challenges.cloudflare.com/turnstile/v0/siteverify') {
+      state.verifyCalls.push(String(init?.body ?? ''))
+      return new Response(JSON.stringify(state.captchaOk ? { success: true, action: 'contact' } : { success: false, 'error-codes': ['invalid-input-response'] }), { status: 200 })
+    }
     const path = url.replace('https://signed/', '')
     const head = state.heads.get(path) ?? new Uint8Array()
     return new Response(head as unknown as BodyInit, { status: 206 })
   })
 })
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 
 describe('POST /api/contact validation', () => {
   it('rejects bad lengths, emails, reasons and unknown fields with per-field messages', async () => {
@@ -207,5 +213,48 @@ describe('contact data boundary', () => {
     for (const file of ['src/pages/ContactPage.tsx', 'src/lib/contact/submit.ts', 'src/lib/contact/reasons.ts', 'src/control/messages/MessagesPage.tsx', 'src/components/contact/ReasonSelect.tsx']) {
       expect(readFileSync(join(root, file), 'utf8')).not.toMatch(/SERVICE_ROLE|service_role|serviceRole/)
     }
+  })
+})
+
+describe('POST /api/contact Turnstile (server-side)', () => {
+  it('rejects a message without a Turnstile token before anything is stored', async () => {
+    const res = await call(valid({ captchaToken: undefined }))
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toMatchObject({ error: 'captcha_failed' })
+    expect(state.inserts).toEqual([])
+    expect(state.rpcCalls).toEqual([])
+  })
+
+  it('rejects a token Cloudflare does not confirm', async () => {
+    state.captchaOk = false
+    const res = await call(valid())
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toMatchObject({ error: 'captcha_failed' })
+    expect(state.inserts).toEqual([])
+  })
+
+  it('verifies the token with Cloudflare and then stores the message', async () => {
+    const res = await call(valid())
+    expect(res.statusCode).toBe(200)
+    expect(state.verifyCalls).toHaveLength(1)
+    expect(state.verifyCalls[0]).toContain('response=test-token')
+    expect(state.inserts).toHaveLength(1)
+  })
+
+  it('fails closed in production when the secret env var is missing', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production')
+    vi.stubEnv('TURNSTILE_SECRET_KEY', '')
+    const res = await call(valid())
+    expect(res.statusCode).toBe(503)
+    expect(res.body).toMatchObject({ error: 'captcha_unavailable' })
+    expect(state.verifyCalls).toEqual([])
+    expect(state.inserts).toEqual([])
+  })
+
+  it('keeps the honeypot: a filled honeypot is answered as success without verifying or storing', async () => {
+    const res = await call(valid({ website: 'spam.example', captchaToken: undefined }))
+    expect(res.statusCode).toBe(200)
+    expect(state.verifyCalls).toEqual([])
+    expect(state.inserts).toEqual([])
   })
 })
