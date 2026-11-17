@@ -1,0 +1,7 @@
+/* Light/night circular reveal (src/lib/theme-reveal.ts). The browser's default root crossfade is
+   replaced by a clip-path circle animated from script; the old snapshot simply stays underneath. */
+::view-transition-old(root),
+::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-new(root) { z-index: 1; }
+/* Colour transitions would fade inside the circle; the reveal is the transition. */
+.theme-revealing, .theme-revealing * { transition: none !important; }

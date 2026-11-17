@@ -69,15 +69,22 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   const [fontPreview, setFontPreview] = useState<ReadingFont | null>(null)
   const [appearancePreview, setAppearancePreview] = useState<AppearancePreview | null>(null)
   const [saving, setSaving] = useState(false)
+  // The header switch shows its choice at once (and inside the theme reveal) while the save is in flight.
+  const [pendingTheme, setPendingTheme] = useState<ThemeMode | null>(null)
 
   const settings = data.settings
   // An unsaved Settings draft (if any) wins while Settings is open; otherwise the saved values.
-  const theme = appearancePreview?.theme ?? settings.theme
+  const theme = appearancePreview?.theme ?? pendingTheme ?? settings.theme
   const colorTheme = normalizeColorTheme(appearancePreview?.color_theme ?? settings.color_theme)
   const resolvedTheme: ResolvedTheme = theme === 'auto' ? (systemPrefersDark ? 'dark' : 'light') : theme
   const readingFont = fontPreview ?? normalizeReadingFont(settings.interface_font)
 
   useEffect(() => {
+    if (pendingTheme !== null && settings.theme === pendingTheme) setPendingTheme(null)
+  }, [pendingTheme, settings.theme])
+
+  // Layout phase so a flushSync'd switch is on <html> before the reveal snapshots the new page.
+  useLayoutEffect(() => {
     const root = document.documentElement
     root.dataset.theme = resolvedTheme
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? DARK_THEME_COLOR : LIGHT_THEME_COLOR)
@@ -114,7 +121,8 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   }, [notify, updateSettings])
 
   const setTheme = useCallback((next: ThemeMode) => {
-    void persistAppearance({ theme: next })
+    setPendingTheme(next)
+    void persistAppearance({ theme: next }).then(saved => { if (!saved) setPendingTheme(null) })
   }, [persistAppearance])
 
   const setColorTheme = useCallback((next: ColorTheme) => {
