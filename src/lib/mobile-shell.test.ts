@@ -21,6 +21,16 @@ describe('mobile shell (Phase 1)', () => {
     expect(shell).not.toContain('More to explore')
   })
 
+  it('top bar: S mark only (no wordmark), exam fills the middle, actions sit in fixed slots', () => {
+    const bar = shell.slice(shell.indexOf('<header className="mobile-topbar">'), shell.indexOf('</header>'))
+    expect(bar).toContain('<Brand compact markOnly />')
+    expect(shell).toContain('aria-label="Stracker home"')
+    expect(shell).toContain('{!markOnly && <span className="brand-type')
+    expect(responsive).toContain('grid-template-columns: auto minmax(0, 1fr) auto')
+    expect(responsive).toContain('min-width: max-content')
+    expect(responsive).not.toContain('.mobile-top-actions { min-width: 0; }')
+  })
+
   it('bars are floating, theme-safe and scoped to the mobile breakpoint', () => {
     const block = responsive.slice(responsive.indexOf('mobile shell (Phase 1)'))
     expect(block).toContain('@media (max-width: 960px)')

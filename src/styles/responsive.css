@@ -514,8 +514,42 @@ body.modal-open .quick-action-area { display: none; }
   .page-header-action .button { white-space: normal; }
   .dialog-actions { flex-wrap: wrap; }
   .quick-action-menu { width: min(204px, calc(100vw - 24px)); }
-  .mobile-top-actions { min-width: 0; }
   .brand-compact .brand-type small { display: none; }
+
+  /* Phone top bar: three fixed slots, so no element can push another out of the bar.
+     [S mark: fixed] [exam: takes the rest, truncates] [theme · search · menu: fixed, never shrink] */
+  .mobile-topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 6px;
+    min-width: 0;
+    padding: 6px 8px 6px 10px;
+    overflow: hidden;
+  }
+  .mobile-topbar > .brand-mark-only { flex: none; min-width: 0; min-height: 44px; gap: 0; padding: 0; }
+  .mobile-topbar > .mobile-exam-title { grid-column: 2; padding-inline: 4px 2px; }
+  .mobile-top-actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    align-items: center;
+    gap: 2px;
+    justify-self: end;
+    min-width: max-content;
+  }
+  .mobile-top-actions > * { flex: none; margin: 0; }
+  .mobile-top-actions > .theme-toggle { min-height: 40px; }
+  .mobile-top-actions > .icon-button,
+  .mobile-top-actions > .mobile-menu-btn { width: 42px; min-width: 42px; height: 42px; }
+}
+
+/* The narrowest phones: slightly smaller touch slots (still >= 40px) so the exam keeps room. */
+@media (max-width: 359px) {
+  .mobile-topbar { column-gap: 4px; padding-inline: 8px 6px; }
+  .mobile-top-actions { gap: 0; }
+  .mobile-top-actions > .icon-button,
+  .mobile-top-actions > .mobile-menu-btn { width: 40px; min-width: 40px; height: 40px; }
 }
 
 /* ------------------------------------------------- mobile profile (Phase 3) */
