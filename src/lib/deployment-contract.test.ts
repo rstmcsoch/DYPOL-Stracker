@@ -23,6 +23,8 @@ describe('production deployment freshness contract', () => {
     expect(appHeaders.get('x-content-type-options')).toBe('nosniff')
     expect(appHeaders.get('referrer-policy')).toBe('strict-origin-when-cross-origin')
     expect(appHeaders.get('x-frame-options')).toBe('DENY')
+    expect(appHeaders.get('cross-origin-opener-policy')).toBe('same-origin')
+    expect(appHeaders.get('x-permitted-cross-domain-policies')).toBe('none')
     const csp = appHeaders.get('content-security-policy') ?? ''
     expect(csp).toContain("default-src 'self'")
     expect(csp).toContain("script-src 'self'")
