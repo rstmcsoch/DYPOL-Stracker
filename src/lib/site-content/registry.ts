@@ -105,7 +105,8 @@ field('public', PUBLIC_SEO, 'Document', 'public.meta.description', 'Meta descrip
   { maxLength: 300, help: 'Used by search engines and link previews.' })
 
 field('public', 'Header', 'Navigation', 'public.header.features.label', 'Section link: Features', 'text', 'Features', { maxLength: 40 })
-field('public', 'Header', 'Navigation', 'public.header.how.label', 'Section link: Study Loop', 'text', 'Study Loop', { maxLength: 40 })
+field('public', 'Header', 'Navigation', 'public.header.how.label', 'Section link: How It Works', 'text', 'How It Works', { maxLength: 40 })
+field('public', 'Header', 'Navigation', 'public.header.loop.label', 'Section link: Study Loop', 'text', 'Study Loop', { maxLength: 40 })
 field('public', 'Header', 'Navigation', 'public.header.ai.label', 'Section link: AI Assistant', 'text', 'AI Assistant', { maxLength: 40 })
 field('public', 'Header', 'Navigation', 'public.header.privacy.label', 'Section link: Privacy', 'text', 'Privacy', { maxLength: 40 })
 field('public', 'Header', 'Account buttons', 'public.header.login.label', 'Log in button', 'text', 'Log In', { maxLength: 30 })
@@ -258,9 +259,9 @@ PRINCIPLE_SLOTS.forEach(([title, body], index) => {
 
 field('public', HOME, 'How it works', 'public.how.eyebrow', 'Eyebrow line', 'text', 'HOW IT WORKS', { maxLength: 90 })
 field('public', HOME, 'How it works', 'public.how.title', 'Heading', 'text', 'Four steps, repeated all year.', { maxLength: 120 })
-field('public', HOME, 'How it works', 'public.how.lede', 'Introduction', 'multiline', 'This is the whole method, whichever exam you are preparing for. There is nothing to configure beyond your own syllabus and your own dates.')
+field('public', HOME, 'How it works', 'public.how.lede', 'Introduction', 'multiline', 'This is the whole method, whichever exam you are preparing for.')
 const STEPS: Array<[string, string]> = [
-  ['Set up your preparation', 'Pick the exam you are preparing for, set your dates and daily goal, then organise your subjects, topics and chapters and mark what you have already covered.'],
+  ['Set up your preparation', 'Pick the exam you are preparing for, set your dates and daily goal, then organise your chapters within your exam’s subjects and mark what you have already covered.'],
   ['Study and record', 'Run focus sessions, tick off the day’s tasks, log every test with its marks and counts, and file the mistakes that cost you.'],
   ['Analyse', 'Open the analytics page and the due desk: subject signals, chapter trends, error types and the chapters sitting below your threshold.'],
   ['Improve', 'Revise what is due, retry the mistakes, and let that decide tomorrow’s tasks and this week’s goals. Then run the loop again.']
@@ -393,7 +394,8 @@ field('public', HOME, PROMO, 'public.promo.position', 'Position on wide screens'
 })
 field('public', 'Footer', 'Links', 'public.footer.features.label', 'Link label: Features', 'text', 'Features', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.ai.label', 'Link label: AI Assistant', 'text', 'AI Assistant', { maxLength: 40 })
-field('public', 'Footer', 'Links', 'public.footer.how.label', 'Link label: Study Loop', 'text', 'Study Loop', { maxLength: 40 })
+field('public', 'Footer', 'Links', 'public.footer.how.label', 'Link label: How It Works', 'text', 'How It Works', { maxLength: 40 })
+field('public', 'Footer', 'Links', 'public.footer.loop.label', 'Link label: Study Loop', 'text', 'Study Loop', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.login.label', 'Link label: Log In', 'text', 'Log In', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.signup.label', 'Link label: Sign Up', 'text', 'Sign Up', { maxLength: 40 })
 field('public', 'Footer', 'Links', 'public.footer.reset.label', 'Link label: Reset password', 'text', 'Reset password', { maxLength: 40 })

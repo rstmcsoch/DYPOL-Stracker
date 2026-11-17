@@ -90,11 +90,13 @@ describe('public navigation integrity', () => {
   })
 
   it('keeps the advertised navigation sections in the header and the footer', () => {
-    // "Study Loop" (#why-stracker) replaced "How It Works", whose section now ships hidden.
-    for (const section of ['#features', '#why-stracker', '#ai', '#privacy']) {
+    // How It Works is back (owner request) alongside the Study Loop link.
+    for (const section of ['#features', '#why-stracker', '#how-it-works', '#ai', '#privacy']) {
       expect(publicSources).toContain(`href: '${section}'`)
     }
-    expect(publicSources).not.toContain(`href: '#how-it-works'`)
+    const footer = readFileSync(`${publicDir}PublicFooter.tsx`, 'utf8')
+    expect(footer).toContain("at('#how-it-works')")
+    expect(footer).toContain("at('#why-stracker')")
     expect(readFileSync(`${publicDir}PublicFooter.tsx`, 'utf8')).toContain('new Date().getFullYear()')
   })
 })
@@ -135,9 +137,9 @@ describe('homepage honesty', () => {
     const words = (text: string) => text.trim().split(/\s+/).filter(Boolean).length
     const over: string[] = []
     const check = (key: string, max: number) => { const n = words(d[key] ?? ''); if (n > max) over.push(`${key}: ${n} > ${max}`) }
-    for (const s of ['hero', 'loop', 'features', 'ai', 'privacy', 'final']) check(`public.${s}.title`, 10)
+    for (const s of ['hero', 'loop', 'features', 'how', 'ai', 'privacy', 'final']) check(`public.${s}.title`, 10)
     check('public.hero.lede', 16)
-    for (const s of ['loop', 'features', 'ai', 'privacy']) check(`public.${s}.lede`, 16)
+    for (const s of ['loop', 'features', 'how', 'ai', 'privacy']) check(`public.${s}.lede`, 16)
     for (let n = 1; n <= 8; n++) {
       check(`public.features.item_${n}.summary`, 12)
       for (const point of (d[`public.features.item_${n}.points`] ?? '').split('\n')) if (words(point) > 8) over.push(`feature ${n} point: ${point}`)

@@ -26,7 +26,8 @@ export function PublicFooter({ sectionPrefix = '' }: { sectionPrefix?: '' | '/' 
           <h2>{t('public.footer.group_product.title')}</h2>
           <ul>
             <li><a href={at('#features')}>{t('public.footer.features.label')}</a></li>
-            <li><a href={at('#why-stracker')}>{t('public.footer.how.label')}</a></li>
+            <li><a href={at('#why-stracker')}>{t('public.footer.loop.label')}</a></li>
+            <li><a href={at('#how-it-works')}>{t('public.footer.how.label')}</a></li>
             <li><a href={at('#ai')}>{t('public.footer.ai.label')}</a></li>
           </ul>
         </div>

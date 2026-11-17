@@ -78,7 +78,7 @@ export const BUILTIN_SECTIONS: Record<SitePageId, readonly BuiltinSection[]> = {
     // Retired from the shipped homepage (Nov 2026): their unique points now live in the feature
     // cards. Kept registered and restorable, hidden unless the owner shows them again.
     { type: 'stracker.principles', id: 'home-principles', label: 'Principles', hiddenByDefault: true },
-    { type: 'stracker.how', id: 'home-how', label: 'How it works', anchor: 'how-it-works', hiddenByDefault: true },
+    { type: 'stracker.how', id: 'home-how', label: 'How it works', anchor: 'how-it-works' },
     { type: 'stracker.ai', id: 'home-ai', label: 'Stracker AI', anchor: 'ai' },
     { type: 'stracker.privacy', id: 'home-privacy', label: 'Privacy section', anchor: 'privacy' },
     { type: 'stracker.dypol', id: 'home-dypol', label: 'DYPOL LABS', anchor: 'dypol-labs' },

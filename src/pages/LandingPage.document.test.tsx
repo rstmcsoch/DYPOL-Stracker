@@ -25,15 +25,19 @@ describe('homepage page document', () => {
     const shipped = BUILTIN_SECTIONS.home.filter(section => !section.hiddenByDefault)
     expect(order(container)).toEqual(shipped.filter(section => section.id !== 'home-video' || container.querySelector('[data-sb="home-video"]')).map(section => section.id))
     expect(order(container)).not.toContain('home-principles')
-    expect(order(container)).not.toContain('home-how')
-    expect(container.querySelector('#how-it-works')).toBeNull()
+    // How It Works is back by default, in its original place after the features.
+    expect(order(container)).toContain('home-how')
+    expect(order(container).indexOf('home-how')).toBe(order(container).indexOf('home-features') + 1)
+    expect(container.querySelector('#how-it-works')).not.toBeNull()
+    expect(screen.getByText('Four steps, repeated all year.')).toBeTruthy()
     expect(screen.getByText('JEE', { selector: '.hp-exams-track:first-child li' })).toBeTruthy()
   })
 
   it('keeps retired sections hidden when a stored page lacks them, and shows them once the owner unhides them', () => {
     const without = BUILTIN_SECTIONS.home.filter(section => !section.hiddenByDefault).map(section => ({ id: section.id, type: section.type }))
     const container = renderWith({ schemaVersion: 1, pages: { home: { blocks: without } } })
-    expect(order(container)).not.toContain('home-how')
+    expect(order(container)).not.toContain('home-principles')
+    expect(order(container)).toContain('home-how')
     cleanup()
     const restored = BUILTIN_SECTIONS.home.map(section => ({ id: section.id, type: section.type }))
     const shown = renderWith({ schemaVersion: 1, pages: { home: { blocks: restored } } })

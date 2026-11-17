@@ -12,8 +12,8 @@ export type PublicTheme = 'light' | 'dark'
  */
 export const PUBLIC_SECTIONS = [
   { href: '#features', key: 'public.header.features.label' },
-  // The registry key keeps its historical name; the link now opens the five-step study loop.
-  { href: '#why-stracker', key: 'public.header.how.label' },
+  { href: '#why-stracker', key: 'public.header.loop.label' },
+  { href: '#how-it-works', key: 'public.header.how.label' },
   { href: '#ai', key: 'public.header.ai.label' },
   { href: '#privacy', key: 'public.header.privacy.label' }
 ] as const
@@ -99,7 +99,7 @@ export function PublicHeader({ theme, onThemeToggle, sectionPrefix = '', signedI
     <div className="pub-header-inner">
       <PublicBrand />
       <nav className="pub-nav" aria-label="Stracker sections">
-        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-nav-link" href={`${sectionPrefix}${section.href}`}>{t(section.key)}</a>)}
+        {PUBLIC_SECTIONS.map(section => <a key={section.href} className={section.href === '#why-stracker' ? 'pub-nav-link pub-nav-link-loop' : 'pub-nav-link'} href={`${sectionPrefix}${section.href}`}>{t(section.key)}</a>)}
       </nav>
       <PublicThemeToggle theme={theme} onToggle={onThemeToggle} />
       <div className="pub-header-actions">

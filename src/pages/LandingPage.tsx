@@ -95,8 +95,8 @@ function HeroSection() {
 }
 
 /**
- * Old shared links may still end in #how-it-works, a section that now ships hidden. When that
- * anchor is not on the page, land on the study loop instead of the top of the page.
+ * #how-it-works is a real section again and links land on it natively. Only if the owner hides
+ * that section in the Live Site Editor does the anchor fall back to the study loop.
  */
 const RETIRED_ANCHORS: Record<string, string> = { '#how-it-works': 'why-stracker' }
 function useRetiredAnchors() {

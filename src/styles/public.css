@@ -1469,6 +1469,8 @@ html[data-app-font='active'] .pub-page .pub-footer-wordmark {
   }
   .pub-nav { gap: clamp(0px, .35vw, 4px); }
   .pub-nav-link { padding-inline: clamp(5px, .7vw, 8px); }
+  /* Five links do not fit cleanly here; Study Loop stays in the mobile menu and the footer. */
+  .pub-nav-link-loop { display: none; }
 }
 
 /* Phone header: the theme action precedes the original hamburger and menu. */
