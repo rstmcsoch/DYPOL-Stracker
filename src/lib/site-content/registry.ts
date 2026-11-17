@@ -286,7 +286,7 @@ AI_FACTS.forEach(([term, body], index) => {
   field('public', HOME, section, `public.ai.fact_${index + 1}.body`, 'Description', 'multiline', body, { maxLength: 400 })
 })
 field('public', HOME, 'Stracker AI', 'public.ai.cta.label', 'Button label', 'text', 'Explore Stracker AI', { maxLength: 60 })
-field('public', HOME, 'Stracker AI', 'public.ai.cta.note', 'Note beside the button', 'text', 'Works with Gemini, OpenAI, Anthropic and more. Your own key is billed by your provider.', { maxLength: 200 })
+field('public', HOME, 'Stracker AI', 'public.ai.cta.note', 'Note beside the button', 'text', 'Works with Gemini, OpenAI, Anthropic and more. Your provider bills your key.', { maxLength: 200 })
 
 field('public', HOME, 'Privacy', 'public.privacy.eyebrow', 'Eyebrow line', 'text', 'PRIVACY & SECURITY', { maxLength: 90 })
 field('public', HOME, 'Privacy', 'public.privacy.title', 'Heading', 'text', 'Your study stays private.', { maxLength: 120 })
