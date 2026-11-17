@@ -1,5 +1,6 @@
 import { Moon, Sun } from 'lucide-react'
 import { useAppearance } from '../contexts/AppearanceContext'
+import { revealThemeChange } from '../lib/theme-reveal'
 
 /**
  * Direct light/night switch for the top-right corner of the shell.
@@ -21,7 +22,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
     aria-label={`${label}. ${action}.`}
     title={`${label} — ${action}${theme === 'auto' ? ' (auto theme follows this device)' : ''}`}
     className={`theme-toggle ${isDark ? 'theme-toggle-dark' : 'theme-toggle-light'} ${className}`}
-    onClick={() => setTheme(isDark ? 'light' : 'dark')}
+    onClick={event => { const next = isDark ? 'light' : 'dark'; revealThemeChange(event.currentTarget, () => setTheme(next)) }}
   >
     <span className="theme-toggle-track" aria-hidden="true">
       <Sun size={13} className="theme-toggle-icon theme-toggle-sun" />

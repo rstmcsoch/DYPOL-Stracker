@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu, Moon, Sun, X } from 'lucide-react'
 import { useSiteText } from '../../contexts/SiteContentContext'
+import { revealThemeChange } from '../../lib/theme-reveal'
 
 export type PublicTheme = 'light' | 'dark'
 
@@ -41,7 +42,7 @@ export function PublicThemeToggle({ theme, onToggle }: { theme: PublicTheme; onT
     aria-label={`${label}. ${action}.`}
     title={`${label} — ${action}`}
     className={`theme-toggle pub-theme-toggle ${isDark ? 'theme-toggle-dark' : 'theme-toggle-light'}`}
-    onClick={onToggle}
+    onClick={event => revealThemeChange(event.currentTarget, onToggle)}
   >
     <span className="theme-toggle-track" aria-hidden="true">
       <Sun size={13} className="theme-toggle-icon theme-toggle-sun" />
