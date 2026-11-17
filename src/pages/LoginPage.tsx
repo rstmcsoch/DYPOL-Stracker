@@ -128,8 +128,8 @@ export default function LoginPage() {
         </Field>
         {banned && <BannedSignInBlock notice={banned.notice} />}
         {error && !banned && <div className="form-error" role="alert">{error}</div>}
-        {supabaseConfigured && <TurnstileWidget ref={captcha} action="login" />}
         {!supabaseConfigured && !localPreviewEnabled && <div className="form-error" role="status">Supabase is not configured. Add the public project URL and anon key to the deployment environment, then redeploy.</div>}
+        {supabaseConfigured && <TurnstileWidget ref={captcha} action="login" />}
         <Button type="submit" className="auth-submit" size="lg" loading={loading || authLoading} disabled={!supabaseConfigured && !localPreviewEnabled}>
           Open my notebook <ArrowRight size={17} aria-hidden="true" />
         </Button>
