@@ -93,7 +93,7 @@ export default function PyqPage() {
       await writeYears(targets.flatMap(chapter => years.map(year => ({ chapter, exam: examValue, year, done }))))
       notify(`${targets.length} chapter${targets.length === 1 ? '' : 's'} updated for ${pyqLabel(examValue)}.`)
       setSelected(new Set())
-    } catch (error) { notify(error instanceof Error ? error.message : 'Bulk update failed. Nothing was half-applied; retry.', 'error') }
+    } catch (error) { notify(error instanceof Error ? error.message : 'Bulk update failed. Nothing changed; retry.', 'error') }
     finally { setBulkBusy(false) }
   }
 
@@ -108,7 +108,7 @@ export default function PyqPage() {
   return <div className="content-page pyq-page">
     <PageHeader layoutId="pyqs.header"
       title="PYQ tracker"
-      subtitle="Mark past papers done per chapter."
+      subtitle="Track past papers by chapter."
       action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} />{' '}<T k="pyqs:year-range">{"Year range"}</T></Button>}
     />
 

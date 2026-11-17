@@ -47,7 +47,7 @@ export default function DecksPage() {
   const gaps = data.settings.revision_gaps
 
   const remover = async (card: StudyCard) => {
-    try { await remove('study_cards', card); notify('Card removed. Undo is available briefly.') }
+    try { await remove('study_cards', card); notify('Card removed.') }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not remove this card.', 'error') }
   }
 
@@ -56,7 +56,7 @@ export default function DecksPage() {
     const lines = chapter.formula_notes.split('\n').map(line => line.trim()).filter(Boolean)
     const existing = new Set(data.studyCards.filter(card => card.chapter_id === chapter.id && card.kind === 'formula').map(card => card.back))
     const fresh = lines.filter(line => !existing.has(line)).slice(0, 200)
-    if (!fresh.length) { notify('Every formula line in this chapter is already a card.'); return }
+    if (!fresh.length) { notify('All formulas in this chapter are already cards.'); return }
     const now = new Date().toISOString()
     const base = data.studyCards.filter(card => card.chapter_id === chapter.id && card.kind === 'formula').length
     try {
@@ -73,7 +73,7 @@ export default function DecksPage() {
   return <div className="content-page decks-page">
     <PageHeader layoutId="decks.header"
       title="Formula & flashcards"
-      subtitle="Rate each card Again, Hard, Good or Easy; Good and Easy move it up your revision ladder."
+      subtitle="Rate each card. Good and Easy push it further out."
       action={<Button onClick={() => setEditing('new')} disabled={data.chapters.length === 0}><Plus size={16} />{' '}<T k="decks:new-card">{"New card"}</T></Button>}
     />
 

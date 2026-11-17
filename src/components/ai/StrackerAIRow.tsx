@@ -3,8 +3,8 @@ import { Button, StatusBadge } from '../ui'
 import type { StrackerAIStatus } from './useProviderManager'
 
 export const STRACKER_AI_NAME = 'Stracker AI (Default)'
-export const STRACKER_UNAVAILABLE_COPY = 'Stracker AI is temporarily unavailable. You can add your own AI model to keep going.'
-export const STRACKER_UNAVAILABLE_OWN_COPY = 'Stracker AI is temporarily unavailable and your own AI model is not ready. Check or test it in Settings → AI Assistant.'
+export const STRACKER_UNAVAILABLE_COPY = 'Stracker AI is down. Add your own model to keep going.'
+export const STRACKER_UNAVAILABLE_OWN_COPY = 'Stracker AI is down and your model isn’t ready. Check Settings → AI Assistant.'
 
 /** Professional notice with a direct "Add your own model" action, used in Settings and the AI window. */
 export function StrackerUnavailableNotice({ onAddOwn, onCheckOwn, ownModel = false, compact = false }: { onAddOwn?:()=>void; onCheckOwn?:()=>void; ownModel?:boolean; compact?:boolean }) {

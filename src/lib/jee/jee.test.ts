@@ -227,7 +227,7 @@ describe('What should I study now?', () => {
   it('returns an honest empty reason when there is nothing urgent', () => {
     const result = recommendStudyNow(emptyData({ chapters: [chapter('a')] }), TODAY)
     expect(result.primary).toBeNull()
-    expect(result.emptyReason).toMatch(/Nothing is urgent/)
+    expect(result.emptyReason).toMatch(/Nothing urgent right now/)
   })
 
   it('surfaces lost marks from recorded mock analysis', () => {

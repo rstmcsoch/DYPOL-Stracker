@@ -68,7 +68,7 @@ export default function HomePage() {
   const toggleTask = async (task: DailyTask) => {
     try {
       await upsert('daily_tasks', { ...task, is_completed: !task.is_completed, updated_at: new Date().toISOString() })
-      if (!task.is_completed) notify('Nice work — one less thing on the list.')
+      if (!task.is_completed) notify('Task done.')
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not update task. Retry.', 'error') }
   }
 
@@ -116,17 +116,17 @@ export default function HomePage() {
 
   const heroParts: Record<string, ReactNode> = {
     'home.countdown': countdown.hidden ? null : <NotebookCard key="countdown" className="countdown-card" {...countdown.attrs}>
-      <div className="countdown-top"><span className="countdown-label"><span className="pencil-underline" {...countdown.textAttrs('kicker')}>{countdown.t('kicker', 'THE BIG DAY')}</span></span><span className="countdown-badge" {...countdown.dataAttrs('exam')}><Rocket size={15} /> {jee ? `JEE ${data.settings.exam_year ?? 2027}` : examTitle}</span></div>
-      {primaryExam === null ? <div className="countdown-unset"><div><span>{jee ? 'JEE Main & Advanced' : examTitle}</span><h2><T k="home:set-your-date">{"Set your date"}</T><br /><em><T k="home:when-youre-ready">{"when you’re ready."}</T></em></h2><p><T k="home:well-keep-the-countdown-honest">{"We’ll keep the countdown honest."}</T></p></div><Button variant="marker" size="sm" onClick={() => navigate('/settings')}>{countdown.text('addDate', 'Add exam date')} <ArrowRight size={15} /></Button></div> : <div className="countdown-main"><div className="countdown-number" {...countdown.dataAttrs('daysLeft')}>{Math.max(0, primaryExam.days)}<span {...countdown.textAttrs('daysUnit')}>{countdown.t('daysUnit', 'days')}</span></div><div className="countdown-copy"><span {...countdown.textAttrs('until')}>{countdown.t('until', 'until')}</span><strong {...countdown.dataAttrs('exam')}>{primaryExam.label}</strong><small {...countdown.dataAttrs('examDates')}>{prettyDate(primaryExam.date)}</small></div><span className="countdown-scribble" aria-hidden="true">↗</span></div>}
+      <div className="countdown-top"><span className="countdown-label"><span className="pencil-underline" {...countdown.textAttrs('kicker')}>{countdown.t('kicker', 'EXAM COUNTDOWN')}</span></span><span className="countdown-badge" {...countdown.dataAttrs('exam')}><Rocket size={15} /> {jee ? `JEE ${data.settings.exam_year ?? 2027}` : examTitle}</span></div>
+      {primaryExam === null ? <div className="countdown-unset"><div><span>{jee ? 'JEE Main & Advanced' : examTitle}</span><h2><T k="home:set-your-date">{"Set your date"}</T><br /><em><T k="home:when-youre-ready">{"when you’re ready."}</T></em></h2><p><T k="home:well-keep-the-countdown-honest">{"Add it to start the countdown."}</T></p></div><Button variant="marker" size="sm" onClick={() => navigate('/settings')}>{countdown.text('addDate', 'Add exam date')} <ArrowRight size={15} /></Button></div> : <div className="countdown-main"><div className="countdown-number" {...countdown.dataAttrs('daysLeft')}>{Math.max(0, primaryExam.days)}<span {...countdown.textAttrs('daysUnit')}>{countdown.t('daysUnit', 'days')}</span></div><div className="countdown-copy"><span {...countdown.textAttrs('until')}>{countdown.t('until', 'until')}</span><strong {...countdown.dataAttrs('exam')}>{primaryExam.label}</strong><small {...countdown.dataAttrs('examDates')}>{prettyDate(primaryExam.date)}</small></div><span className="countdown-scribble" aria-hidden="true">↗</span></div>}
       <div className="countdown-footer">{secondaryExam && <div className="mini-exam"><span className={`mini-exam-dot ${secondaryExam.dot}`} /><span>{secondaryExam.label}</span>{secondaryExam.days === null ? <button onClick={() => navigate('/settings')}><T k="home:add-date">{"Add date"}</T></button> : <strong {...countdown.dataAttrs('daysLeft')}>{Math.max(0, secondaryExam.days)} days</strong>}</div>}<div className="mini-exam"><span className="mini-exam-dot orange" /><span {...countdown.textAttrs('chapters')}>{countdown.t('chapters', 'Chapters covered')}</span><strong {...countdown.dataAttrs('chaptersCovered')}>{completedChapters}/{totalChapters}</strong></div></div>
       <div className="countdown-star" aria-hidden="true">✳</div>
     </NotebookCard>,
     'home.streak': streakSlot.hidden ? null : <NotebookCard key="streak" className="streak-card accent-orange" {...streakSlot.attrs}>
-      <div className="card-kicker"><span className="icon-tile orange"><Flame size={17} /></span> {streakSlot.text('kicker', 'YOUR RHYTHM')} <span className="tiny-star">✦</span></div>
+      <div className="card-kicker"><span className="icon-tile orange"><Flame size={17} /></span> {streakSlot.text('kicker', 'STUDY STREAK')} <span className="tiny-star">✦</span></div>
       <div className="streak-number" {...streakSlot.dataAttrs('current')}>{streak.current}<span>day{streak.current === 1 ? '' : 's'}</span></div>
       <p className="streak-subtitle" {...streakSlot.textAttrs('subtitle')}>{streakSlot.t('subtitle', 'current study streak')}</p>
       <div className="streak-bottom"><span><strong {...streakSlot.dataAttrs('longest')}>{streak.longest}</strong> {streakSlot.text('longestLabel', 'longest')}</span><span className="streak-separator" /><span><strong {...streakSlot.dataAttrs('activeDays')}>{streak.weeklyConsistency}/7</strong> {streakSlot.text('weekLabel', 'active this week')}</span></div>
-      <p className="jee-small jee-muted streak-rule" {...streakSlot.dataAttrs('rule')}>{streak.qualifyingToday ? 'Today counts.' : 'A day counts after 15+ min of study, a practice log, a completed revision, or a test.'}</p>
+      <p className="jee-small jee-muted streak-rule" {...streakSlot.dataAttrs('rule')}>{streak.qualifyingToday ? 'Today counts.' : '15+ min of study, practice, a revision or a test counts.'}</p>
       <div className="streak-sun" aria-hidden="true">☼</div>
     </NotebookCard>
   }
@@ -134,14 +134,14 @@ export default function HomePage() {
   const asideParts: Record<string, ReactNode> = {
     'home.study-time': studyTime.hidden ? null : <NotebookCard key="study-time" className="study-progress-card accent-blue" {...studyTime.attrs}>
       <div className="card-kicker"><span className="icon-tile blue"><Timer size={16} /></span> {studyTime.text('kicker', 'DAILY STUDY TIME')}</div>
-      <div className="progress-content"><ProgressRing value={progress} size={88} label={<span className="ring-value" {...studyTime.dataAttrs('percent')}>{Math.round(progress)}<small>%</small></span>} color="var(--subject-physics)" /><div className="study-progress-copy"><div className="study-time-value" {...studyTime.dataAttrs('minutes')}>{fmtDuration(todayMinutes)}<span> / {fmtDuration(data.settings.daily_study_goal_minutes)}</span></div><p {...studyTime.textAttrs('goalCaption')}>{studyTime.t('goalCaption', 'towards your daily goal')}</p><button onClick={() => navigate('/focus')}><Timer size={14} /> {studyTime.text('start', 'Start a focus session')}</button></div></div>
+      <div className="progress-content"><ProgressRing value={progress} size={88} label={<span className="ring-value" {...studyTime.dataAttrs('percent')}>{Math.round(progress)}<small>%</small></span>} color="var(--subject-physics)" /><div className="study-progress-copy"><div className="study-time-value" {...studyTime.dataAttrs('minutes')}>{fmtDuration(todayMinutes)}<span> / {fmtDuration(data.settings.daily_study_goal_minutes)}</span></div><p {...studyTime.textAttrs('goalCaption')}>{studyTime.t('goalCaption', 'of your daily goal')}</p><button onClick={() => navigate('/focus')}><Timer size={14} /> {studyTime.text('start', 'Start a focus session')}</button></div></div>
       <ProgressBar value={progress} color="var(--subject-physics)" />
       <span className="study-doodle" aria-hidden="true">⌁</span>
     </NotebookCard>,
     'home.revisions': revisionsSlot.hidden ? null : <NotebookCard key="revisions" className="revisions-card accent-green" {...revisionsSlot.attrs}>
       <div className="section-card-head"><div className="card-kicker"><span className="icon-tile green"><AlarmClock size={16} /></span> {revisionsSlot.text('kicker', 'REVISION DESK')}</div><button className="text-link" onClick={() => navigate('/revision')}>{revisionsSlot.text('open', 'Open')} <ArrowUpRight size={14} /></button></div>
       <div className="revision-summary"><strong {...revisionsSlot.dataAttrs('count')}>{dayRevisions.length}</strong><span {...revisionsSlot.textAttrs('due')}>{revisionsSlot.t('due', 'due now')}</span>{dayRevisions.length > 0 && <span className="revision-dot-mark">•</span>}</div>
-      {dayRevisions.length === 0 ? <p className="revision-empty" {...revisionsSlot.textAttrs('empty')}>{revisionsSlot.t('empty', 'Nothing due today. Keep that momentum going.')}</p> : <div className="revision-peek-list" {...revisionsSlot.dataAttrs('revisions')}>{dayRevisions.slice(0, 3).map(revision => <RevisionPeek key={revision.id} revision={revision} data={data} onDone={async () => {
+      {dayRevisions.length === 0 ? <p className="revision-empty" {...revisionsSlot.textAttrs('empty')}>{revisionsSlot.t('empty', 'Nothing due today.')}</p> : <div className="revision-peek-list" {...revisionsSlot.dataAttrs('revisions')}>{dayRevisions.slice(0, 3).map(revision => <RevisionPeek key={revision.id} revision={revision} data={data} onDone={async () => {
         const chapter = data.chapters.find(item => item.id === revision.chapter_id)
         try {
           const completed = await completeRevisionAction(
@@ -150,13 +150,13 @@ export default function HomePage() {
             record => upsert('chapters', record),
             { revisions: data.revisions, gaps: data.settings.revision_gaps, today }
           )
-          if (completed) notify('Revision marked complete. Well remembered.')
+          if (completed) notify('Revision done.')
         } catch (error) { notify(error instanceof Error ? error.message : 'Could not mark revision complete.', 'error') }
       }} />)}</div>}
     </NotebookCard>,
     'home.tip': tipSlot.hidden ? null : <NotebookCard key="tip" className="smart-tip-card" {...tipSlot.attrs}>
-      <div className="tip-top"><span className="tip-spark"><Sparkles size={16} /></span><span {...tipSlot.textAttrs('kicker')}>{tipSlot.t('kicker', 'ONE THING TO NOTICE')}</span></div>
-      <p {...tipSlot.dataAttrs('tip')}>{tip}</p><button className="tip-link" onClick={() => navigate('/analytics')}>{tipSlot.text('cta', 'See what the data says')} <ArrowRight size={14} /></button>
+      <div className="tip-top"><span className="tip-spark"><Sparkles size={16} /></span><span {...tipSlot.textAttrs('kicker')}>{tipSlot.t('kicker', 'STUDY TIP')}</span></div>
+      <p {...tipSlot.dataAttrs('tip')}>{tip}</p><button className="tip-link" onClick={() => navigate('/analytics')}>{tipSlot.text('cta', 'See analytics')} <ArrowRight size={14} /></button>
       <span className="tip-pencil" aria-hidden="true">✎</span>
     </NotebookCard>
   }
@@ -165,7 +165,7 @@ export default function HomePage() {
     'home.today-plan': plan.hidden ? null : <section key="plan" className="today-plan-block" {...plan.attrs}>
       <SectionHeading title={plan.t('title', "Today's plan")} note={`${doneTasks} of ${todayTasks.length} done`} action={<Button variant="secondary" size="sm" onClick={() => navigate('/planner?add=1')}><Plus size={16} /> {plan.t('addTask', 'Add task')}</Button>} />
       <NotebookCard className="today-plan-card">
-        <div className="plan-card-top"><span className="handwriting-label" {...plan.textAttrs('listLabel')}>{plan.t('listLabel', 'A little list for today')}</span><span className="plan-date" {...plan.dataAttrs('date')}><CalendarDays size={14} /> {prettyDate(today, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
+        <div className="plan-card-top"><span className="handwriting-label" {...plan.textAttrs('listLabel')}>{plan.t('listLabel', 'Today’s tasks')}</span><span className="plan-date" {...plan.dataAttrs('date')}><CalendarDays size={14} /> {prettyDate(today, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
         {todayTasks.length === 0 ? <EmptyState icon={<BookOpen size={26} />} title={plan.t('empty', 'No tasks today.')} action={<Button variant="secondary" size="sm" onClick={() => navigate('/planner?add=1')}><Plus size={15} /> {plan.t('planTask', 'Plan a task')}</Button>} /> : <div className="task-list" {...plan.dataAttrs('tasks')}>
           {todayTasks.slice(0, 6).map((task, index) => {
             const chapter = data.chapters.find(item => item.id === task.chapter_id)
@@ -188,8 +188,8 @@ export default function HomePage() {
   const bottomParts: Record<string, ReactNode> = {
     'home.checkpoint': checkpoint.hidden ? null : <CheckpointCard key="checkpoint" data={data} today={today} slot={checkpoint} onView={id => navigate(`/tests?view=${encodeURIComponent(id)}`)} onAdd={() => navigate('/tests?add=1')} />,
     'home.syllabus': syllabus.hidden ? null : <NotebookCard key="syllabus" className="syllabus-mini-card" {...syllabus.attrs}>
-      <div className="syllabus-mini-head"><div><span className="eyebrow" {...syllabus.textAttrs('eyebrow')}>{syllabus.t('eyebrow', 'THE LONG GAME')}</span><h3 {...syllabus.textAttrs('title')}>{syllabus.t('title', 'Syllabus progress')}</h3></div><ProgressRing value={totalChapters ? completedChapters / totalChapters * 100 : 0} size={62} label={<span className="ring-value small" {...syllabus.dataAttrs('percent')}>{Math.round(totalChapters ? completedChapters / totalChapters * 100 : 0)}<small>%</small></span>} /></div>
-      {trackedSubjects.length === 0 ? <p className="subject-mini-hint"><T k="home:add-chapters-in-syllabus-to-track-a-subj">{"Add chapters in Syllabus to track a subject."}</T></p> : <div className="subject-mini-bars" {...syllabus.dataAttrs('subjects')}>{trackedSubjects.slice(0, subjectLimit).map(subject => {
+      <div className="syllabus-mini-head"><div><span className="eyebrow" {...syllabus.textAttrs('eyebrow')}>{syllabus.t('eyebrow', 'OVERALL')}</span><h3 {...syllabus.textAttrs('title')}>{syllabus.t('title', 'Syllabus progress')}</h3></div><ProgressRing value={totalChapters ? completedChapters / totalChapters * 100 : 0} size={62} label={<span className="ring-value small" {...syllabus.dataAttrs('percent')}>{Math.round(totalChapters ? completedChapters / totalChapters * 100 : 0)}<small>%</small></span>} /></div>
+      {trackedSubjects.length === 0 ? <p className="subject-mini-hint"><T k="home:add-chapters-in-syllabus-to-track-a-subj">{"Add chapters in Syllabus to track progress."}</T></p> : <div className="subject-mini-bars" {...syllabus.dataAttrs('subjects')}>{trackedSubjects.slice(0, subjectLimit).map(subject => {
         const total = data.chapters.filter(item => item.subject === subject).length
         const done = data.chapters.filter(item => item.subject === subject && (item.status === 'Done' || item.status === 'Revised')).length
         return <div className="subject-mini-row" key={subject}><SubjectBadge subject={subject} /><ProgressBar value={total ? done / total * 100 : 0} color={subjectColor(subject)} /><span>{done}/{total}</span></div>
@@ -202,7 +202,7 @@ export default function HomePage() {
     'home.header': <PageHeader key="header" layoutAttrs={header.attrs} eyebrow={new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' }).format(new Date()).toUpperCase()} title={`Good ${getGreeting()}, ${data.settings.owner_name || data.profile?.display_name || 'future engineer'}.`} doodle={<span className="header-atom">✦</span>} />,
     'home.focus': <FocusIndicator key="focus" layoutAttrs={focusSlot.attrs} />,
     'home.hero': <section key="hero" className="hero-row" aria-label="Exam countdown and syllabus progress" {...hero.attrs}>{heroOrder.map(id => heroParts[id])}</section>,
-    'home.exam-mode': examMode.active ? <div key="exam-mode" className="exam-mode-banner" role="status" {...examSlot.attrs}><span className="exam-mode-days" {...examSlot.dataAttrs('daysLeft')}>{examMode.daysLeft}</span><div><strong {...examSlot.dataAttrs('label')}>Exam Mode · {examMode.label}</strong><p>{examSlot.data('reason', examMode.reason)} {examSlot.text('focus', 'Revision, PYQs, mocks and weak-area fixes come first.')}</p></div></div> : null,
+    'home.exam-mode': examMode.active ? <div key="exam-mode" className="exam-mode-banner" role="status" {...examSlot.attrs}><span className="exam-mode-days" {...examSlot.dataAttrs('daysLeft')}>{examMode.daysLeft}</span><div><strong {...examSlot.dataAttrs('label')}>Exam Mode · {examMode.label}</strong><p>{examSlot.data('reason', examMode.reason)} {examSlot.text('focus', 'Revision, PYQs, mocks and weak areas come first.')}</p></div></div> : null,
     'home.study-now': studyNow.hidden ? null : <StudyNowCard key="study-now" layoutAttrs={studyNow.attrs} />,
     'home.grid': <div key="grid" className="dashboard-grid" {...grid.attrs}>{gridOrder.map(id => gridParts[id])}</div>,
     'home.snapshot': snapshot.hidden ? null : <HomeSnapshot key="snapshot" layoutAttrs={snapshot.attrs} />,
@@ -220,7 +220,7 @@ function CheckpointCard({ data, today, onView, onAdd, slot }: { data: AppData; t
   if (!latest) {
     return <NotebookCard className="quick-test-card" {...slot.attrs}>
       <div className="quick-test-illustration" aria-hidden="true"><NotebookPen size={25} /><span>✦</span></div>
-      <div><span className="eyebrow" {...slot.textAttrs('emptyEyebrow')}>{slot.t('emptyEyebrow', 'A FRESH CHECKPOINT')}</span><h2 {...slot.textAttrs('emptyTitle')}>{slot.t('emptyTitle', 'How did the practice go?')}</h2><p {...slot.textAttrs('emptyBody')}>{slot.t('emptyBody', 'Log a chapter test, a PYQ session, or your latest mock.')}</p></div>
+      <div><span className="eyebrow" {...slot.textAttrs('emptyEyebrow')}>{slot.t('emptyEyebrow', 'LATEST TEST')}</span><h2 {...slot.textAttrs('emptyTitle')}>{slot.t('emptyTitle', 'No tests yet.')}</h2><p {...slot.textAttrs('emptyBody')}>{slot.t('emptyBody', 'Log a test, PYQ session or mock.')}</p></div>
       <Button onClick={onAdd}><Plus size={17} /> {slot.t('add', 'Add test')}</Button>
     </NotebookCard>
   }

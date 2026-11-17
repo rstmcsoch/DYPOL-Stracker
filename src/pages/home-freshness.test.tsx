@@ -56,7 +56,7 @@ describe('Home reflects a newly saved test', () => {
     harness.data = baseData()
     const { rerenderHome, container } = await renderHome()
     expect(screen.getByText(/You have 6 untested chapters/)).toBeTruthy()
-    expect(screen.getByText('How did the practice go?')).toBeTruthy()
+    expect(screen.getByText('No tests yet.')).toBeTruthy()
 
     harness.data = baseData({ tests: [test('t1', { title: 'Kinematics quiz', chapter_id: 'c1', marks_obtained: 36, total_marks: 50 })] })
     rerenderHome()
@@ -83,7 +83,7 @@ describe('Home reflects a newly saved test', () => {
     const data = baseData({ chapters: [], tests: [test('t1')] })
     data.chapters = [chapter('c1')]
     expect(recommendStudyNow(data, indiaToday()).emptyReason).toMatch(/Today’s test is logged/)
-    expect(recommendStudyNow({ ...data, tests: [] }, indiaToday()).emptyReason).toMatch(/Log a practice block or a test/)
+    expect(recommendStudyNow({ ...data, tests: [] }, indiaToday()).emptyReason).toMatch(/Log practice or a test/)
   })
 })
 

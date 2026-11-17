@@ -109,7 +109,7 @@ describe('Retry list “Reveal my note”', () => {
     const { default: RetryPage } = await import('./RetryPage')
     renderAt(<RetryPage />, '/retry')
     fireEvent.click(screen.getByText('Reveal my note'))
-    expect(screen.getByText(/No note saved for this one yet/)).toBeTruthy()
+    expect(screen.getByText(/No note yet\. Edit it in/)).toBeTruthy()
   })
 
   it('shows the saved note when there is one', async () => {

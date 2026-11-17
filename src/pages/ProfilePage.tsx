@@ -39,6 +39,6 @@ export default function ProfilePage() {
       </div>
     </NotebookCard>
     <ExamSelectionSection />
-    <p className="profile-settings-note"><T k="profile:theme-reading-font-appearance-and-ai-set">{"Theme, reading font, appearance and AI settings live under the gear at the top of this page."}</T></p>
+    <p className="profile-settings-note"><T k="profile:theme-reading-font-appearance-and-ai-set">{"Theme, font and AI settings are under the gear icon."}</T></p>
   </div>
 }

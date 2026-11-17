@@ -111,7 +111,7 @@ export default function BacklogPage() {
   return <div className="content-page backlog-page">
     <PageHeader layoutId="backlog.header"
       title="Backlog"
-      subtitle="Skipped lectures, unsolved DPPs and topics to revisit."
+      subtitle="Lectures, DPPs and topics to catch up on."
       action={<Button onClick={() => { setCreating(true); if (params.get('add')) setParams({}, { replace: true }) }}><Plus size={16} />{' '}<T k="backlog:add-item">{"Add item"}</T></Button>}
     />
     {!sl.hidden('summary') && <section {...sl.attrs('summary')} className="jee-stat-grid" aria-label="Backlog summary">

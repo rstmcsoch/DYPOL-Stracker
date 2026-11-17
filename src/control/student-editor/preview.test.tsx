@@ -121,6 +121,6 @@ describe('inspector data lock', () => {
       actions={{ setText: noop, setProp: noop, setStyle: noop, clearStyles: noop, move: noop, toggleHidden: noop, toggleLocked: noop, reset: noop, select: noop }} />)
     expect(getAllByText('Live student data, not editable')).toHaveLength(4)
     const placeholders = [...container.querySelectorAll('input')].map(input => input.getAttribute('placeholder'))
-    expect(placeholders).toEqual(['YOUR RHYTHM', 'current study streak', 'longest', 'active this week'])
+    expect(placeholders).toEqual(['STUDY STREAK', 'current study streak', 'longest', 'active this week'])
   })
 })
