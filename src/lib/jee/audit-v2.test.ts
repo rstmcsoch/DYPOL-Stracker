@@ -9,6 +9,7 @@ import { chapterRepeatOffenders, estimatePercentile, percentileBand, subjectDelt
 import { speedAccuracyBand } from './progress.js'
 import { personalRecords, recentBadges } from './records.js'
 import { computeStreaks, hasSubjectTargets, honouredFreezes, subjectTargetRows, takeFreezeDay } from './study-time.js'
+import { digestVisibleOn } from './weekly-report.js'
 
 const USER = '00000000-0000-4000-8000-000000000001'
 const TODAY = '2026-10-08'
@@ -235,3 +236,12 @@ function sessionOn(day: string): StudySession {
     completion_state: 'completed', created_at: NOW, updated_at: NOW
   }
 }
+
+describe('week digest visibility', () => {
+  it('appears on Sunday and Monday only — 2026-11-18 is a Wednesday', () => {
+    expect(digestVisibleOn('2026-11-15')).toBe(true)  // Sunday
+    expect(digestVisibleOn('2026-11-16')).toBe(true)  // Monday
+    expect(digestVisibleOn('2026-11-18')).toBe(false) // Wednesday
+    expect(digestVisibleOn('2026-11-21')).toBe(false) // Saturday
+  })
+})

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { AppData, Chapter, Mistake, PracticeSession, PyqRecord, StudyCard, TestRecord, TestErrorLog } from '../types'
+import type { AppData, BacklogItem, Chapter, Mistake, PracticeSession, PyqRecord, StudyCard, TestRecord, TestErrorLog } from '../types'
 import { defaultExamTracks, defaultSettings } from '../lib/defaults'
 import { plusDays } from '../lib/date'
 
@@ -243,6 +243,87 @@ describe('every audited page renders without throwing', () => {
     expect(screen.getByText('Last 12 weeks')).toBeTruthy()
     expect(screen.getByText('PERSONAL RECORDS')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Sign out/ })).toBeTruthy()
+  })
+
+  it('Mock analysis shows the percentile band, labelled as estimated when no number was entered', async () => {
+    harness.data = baseData({
+      // A Subject Test carries its own marks/total; a Full Mock needs all three subject rows
+      // before it aggregates to a score, so it is the wrong fixture for an estimate.
+      tests: [test('a', { test_type: 'Subject Test', subject: 'Physics', marks_obtained: 150, total_marks: 300, percentile: null })]
+    })
+    const { default: MockAnalysisPage } = await import('./MockAnalysisPage')
+    renderAt(<MockAnalysisPage />, '/mock-analysis?test=a')
+    expect(screen.getByText('Where this score sits')).toBeTruthy()
+    expect(screen.getByText(/Estimated from marks/)).toBeTruthy()
+    // Never a flat hundred, never a rank: the band stops at 99.9.
+    expect(screen.queryByText('100.0 %ile')).toBeNull()
+  })
+
+  it('Backlog turns chapters stuck in Studying for 21+ days into backlog items', async () => {
+    const old = new Date(Date.now() - 30 * 86_400_000).toISOString()
+    harness.data = baseData({
+      // The fixture's NOW is in the past too, so pin the fresh chapter explicitly.
+      chapters: [
+        chapter('elec', 'Electrostatics', { status: 'Studying', updated_at: old }),
+        chapter('curr', 'Current Electricity', { updated_at: new Date().toISOString() })
+      ],
+      backlogItems: []
+    })
+    const { default: BacklogPage } = await import('./BacklogPage')
+    renderAt(<BacklogPage />, '/backlog')
+    expect(screen.getByText('Stalled chapters')).toBeTruthy()
+    expect(screen.getByText('30 days')).toBeTruthy()
+    const button = screen.getByRole('button', { name: /Add 1 to backlog/ })
+    button.click()
+    await vi.waitFor(() => expect(harness.upsertMany).toHaveBeenCalledTimes(1))
+    const [, rows] = harness.upsertMany.mock.calls[0] as unknown as [string, BacklogItem[]]
+    const row = rows[0]
+    expect(row).toBeDefined()
+    expect(row).toMatchObject({ title: 'Finish Electrostatics', subject: 'Physics', chapter_id: 'elec', status: 'active', priority: 'Medium', type: 'Lecture' })
+    expect(row!.due_on).toBe(plusDays(TODAY, 7))
+  })
+
+  it('Backlog never duplicates a stalled chapter that is already a backlog row', async () => {
+    const old = new Date(Date.now() - 40 * 86_400_000).toISOString()
+    harness.data = baseData({
+      chapters: [chapter('elec', 'Electrostatics', { status: 'Studying', updated_at: old })],
+      backlogItems: [{
+        id: 'b1', user_id: USER, title: 'Redo Electrostatics DPPs', type: 'DPP', subject: 'Physics',
+        chapter_id: 'elec', priority: 'High', due_on: TODAY, status: 'active', snoozed_until: null,
+        completed_at: null, notes: '', created_at: NOW, updated_at: NOW
+      }]
+    })
+    const { default: BacklogPage } = await import('./BacklogPage')
+    renderAt(<BacklogPage />, '/backlog')
+    expect(screen.queryByText('Stalled chapters')).toBeNull()
+  })
+
+  it('Decks says when the next card is due instead of leaving a dead button', async () => {
+    harness.data = baseData({
+      studyCards: [{ ...card('c1'), next_review_at: `${plusDays(TODAY, 3)}T00:00:00.000Z` }]
+    })
+    const { default: DecksPage } = await import('./DecksPage')
+    renderAt(<DecksPage />, '/decks?chapter=elec')
+    expect(screen.getByText(/Nothing due in this deck/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Formula sheet PDF/ })).toBeTruthy()
+  })
+
+  it('Home draws one bar per subject target that was actually set', async () => {
+    harness.data = baseData({
+      settings: { ...defaultSettings(USER), pyq_from_year: 2025, pyq_to_year: 2026, main_exam_date: '2026-12-20', subject_daily_targets: { Physics: 120 } },
+      sessions: [{
+        id: 's1', user_id: USER, subject: 'Physics', chapter_id: 'elec', activity: 'Lecture', mode: 'Pomodoro',
+        duration_minutes: 60, started_at: `${TODAY}T05:00:00.000Z`, ended_at: `${TODAY}T06:00:00.000Z`,
+        completion_state: 'completed', created_at: NOW, updated_at: NOW
+      }]
+    })
+    const { default: HomePage } = await import('./HomePage')
+    renderAt(<HomePage />)
+    const list = screen.getByLabelText('Today by subject')
+    expect(list.textContent).toContain('Physics')
+    expect(list.textContent).toContain('/ 120m')
+    // Chemistry was never given a target, so it must not appear with an invented one.
+    expect(list.textContent).not.toContain('Chemistry')
   })
 
   it('Settings owns focus lengths and rest days on the rhythm tab', async () => {

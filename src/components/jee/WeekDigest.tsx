@@ -4,7 +4,7 @@ import { ArrowRight, MailCheck } from 'lucide-react'
 import { NotebookCard } from '../ui'
 import { useData } from '../../contexts/DataContext'
 import { indiaToday, prettyDate } from '../../lib/date'
-import { buildWeeklyReport } from '../../lib/jee/weekly-report'
+import { buildWeeklyReport, digestVisibleOn } from '../../lib/jee/weekly-report'
 import { fmtDuration } from '../../lib/format'
 import { T } from '../../lib/student-layout/T'
 
@@ -22,10 +22,7 @@ export function WeekDigest() {
   const navigate = useNavigate()
   const today = indiaToday()
   const report = useMemo(() => buildWeeklyReport(data, today), [data, today])
-  // IST week runs Monday→Sunday; show this only on Sunday and Monday.
-  const day = new Date(`${today}T12:00:00+05:30`).getUTCDay()
-  const isDigestDay = day === 0 || day === 1
-  if (!isDigestDay) return null
+  if (!digestVisibleOn(today)) return null
   const empty = report.studiedMinutes === 0 && report.testsLogged === 0 && report.questionsAttempted === 0
   return <NotebookCard className="jee-snap-card week-digest">
     <div className="jee-snap-head"><span className="eyebrow"><MailCheck size={13} aria-hidden="true" />{' '}<T k="home:week-digest">{"WEEK DIGEST"}</T></span><span className="week-digest-range">{prettyDate(report.range.start)} – {prettyDate(report.range.end)}</span></div>

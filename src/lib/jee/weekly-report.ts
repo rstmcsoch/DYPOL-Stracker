@@ -55,6 +55,16 @@ export interface WeeklyReport {
   actionable: string
 }
 
+/**
+ * Whether the week digest is worth showing today: Sunday (the review moment) and Monday
+ * (the catch-up for anyone who closed the app on Sunday). Every other day the card is
+ * absent, so it never turns into a permanent block competing for attention.
+ */
+export function digestVisibleOn(today: string): boolean {
+  const day = new Date(`${today}T12:00:00+05:30`).getUTCDay()
+  return day === 0 || day === 1
+}
+
 export function buildWeeklyReport(data: AppData, today: string): WeeklyReport {
   const range = weekRange(today)
   const previous = previousWeekRange(today)
