@@ -909,11 +909,39 @@ html[data-app-font='active'] .pub-page.pub-hp :where(*) {
   .hp-ai { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); }
   .hp-chat { position: sticky; top: 110px; }
 }
-.hp-ai-facts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 28px; }
+.hp-ai-facts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 13px; margin-top: 26px; }
 @media (min-width: 640px) { .hp-ai-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.hp-ai-facts > div { min-width: 0; padding: 18px; border: 1px solid var(--hp-line); border-top: 3px solid var(--hp-tone-ink); border-radius: 14px; background: var(--hp-card); }
-.hp-ai-facts dt { font-size: .9375rem; line-height: 1.35; }
-.hp-ai-facts dd { margin-top: 6px; color: var(--hp-ink-soft); font-size: .84rem; line-height: 1.55; }
+.hp-ai-fact {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 158px;
+  padding: 16px 17px 17px;
+  border: 1px solid var(--hp-line);
+  border-left: 3px solid var(--hp-tone-ink);
+  border-radius: 15px;
+  background: var(--hp-card);
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--hp-hard) 7%, transparent);
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.hp-ai-fact-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hp-ai-fact-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid color-mix(in srgb, var(--hp-tone-ink) 24%, var(--hp-line));
+  border-radius: 11px;
+  color: var(--hp-tone-ink);
+  background: var(--hp-tone);
+}
+.hp-ai-fact-index { color: var(--hp-ink-faint); font-size: .68rem; font-weight: 700; letter-spacing: .13em; font-variant-numeric: tabular-nums; }
+.hp-ai-fact dt { margin-top: 13px; color: var(--hp-ink); font-size: .94rem; font-weight: 700; line-height: 1.35; letter-spacing: -.01em; }
+.hp-ai-fact dd { margin: 6px 0 0; color: var(--hp-ink-soft); font-size: .84rem; line-height: 1.55; }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .hp-ai-fact:hover { transform: translateY(-3px); border-color: var(--hp-line-strong); box-shadow: 0 8px 18px -14px var(--hp-hard); }
+}
 
 .hp-chat {
   position: relative;
