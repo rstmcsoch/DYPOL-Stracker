@@ -28,6 +28,28 @@ export function backlogDueCounts(items: readonly BacklogItem[], today: string): 
 
 export interface ReminderItem { kind: ReminderKind; title: string; body: string }
 
+/**
+ * The sitting planner: a full mock (or test) already on the calendar for a future date.
+ * Stracker has no separate "schedule" table — a planned paper is a test row with a future
+ * `test_date`, which keeps one source of truth and lets the student edit it like any test.
+ */
+export function upcomingSittings(data: AppData, today: string): { id: string; title: string; date: string; type: string }[] {
+  return data.tests
+    .filter(test => test.test_date > today && (test.marks_obtained === null || test.marks_obtained === undefined))
+    .sort((a, b) => a.test_date.localeCompare(b.test_date))
+    .map(test => ({ id: test.id, title: test.title, date: test.test_date, type: test.test_type }))
+}
+
+/** Days between two IST calendar dates (`yyyy-mm-dd`), absolute. */
+export function daysBetween(from: string, to: string): number {
+  const start = Date.parse(`${from}T12:00:00`)
+  const end = Date.parse(`${to}T12:00:00`)
+  return Math.round(Math.abs(end - start) / 86_400_000)
+}
+
+/** A gap longer than this between full mocks is worth a nudge. */
+export const MOCK_GAP_WARN_DAYS = 14
+
 export const REMINDER_LABEL: Record<ReminderKind, string> = {
   revision: 'Due revision', backlog: 'Backlog', practice: 'Practice', pyq: 'PYQs', mock: 'Mock', plan: 'Study plan'
 }
@@ -51,6 +73,20 @@ export function computeReminders(data: AppData, today: string): ReminderItem[] {
   }
   if (enabled.has('practice') && !data.practiceSessions.some(item => item.practice_date === today)) {
     items.push({ kind: 'practice', title: 'No practice logged today', body: 'A short DPP block keeps your accuracy honest.' })
+  }
+  if (enabled.has('mock')) {
+    // Sitting planner: the reminder mock rule already exists, but a gap between mocks is the
+    // thing that actually costs marks. Warn when the last paper is 14+ days old, or when the
+    // next scheduled one is close and nothing is booked.
+    const lastMock = [...data.tests].filter(test => test.test_type === 'Full Mock').sort((a, b) => b.test_date.localeCompare(a.test_date))[0]
+    const mockGap = lastMock ? daysBetween(lastMock.test_date, today) : null
+    if (mockGap !== null && mockGap >= MOCK_GAP_WARN_DAYS) {
+      items.push({ kind: 'mock', title: 'No full mock recently', body: `Your last full mock was ${mockGap} days ago. A paper every 1–2 weeks keeps timing real.` })
+    }
+  }
+  for (const sitting of upcomingSittings(data, today)) {
+    const days = daysBetween(today, sitting.date)
+    if (days <= 3 && days >= 0) items.push({ kind: 'mock', title: 'Mock booked soon', body: `${sitting.title} is in ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'}`}.` })
   }
   if (enabled.has('pyq')) {
     const started = data.chapters.filter(chapter => chapter.status !== 'Not Started')

@@ -10,11 +10,14 @@ import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { Button, EmptyState, NotebookCard, PageHeader, ProgressBar, ProgressRing, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
-import { latestTestOn, getOverallTestPercentage, getOverallTestScore, getSmartTip, getTodayStudyMinutes } from '../lib/analytics'
-import { computeStreaks } from '../lib/jee/study-time'
+import { latestTestOn, getOverallTestPercentage, getOverallTestScore, getSmartTipAction, getTodayStudyMinutes } from '../lib/analytics'
+import { computeStreaks, hasSubjectTargets, subjectTargetRows, takeFreezeDay, takeRestDay } from '../lib/jee/study-time'
+import { currentWeekGoal } from '../lib/jee/goals'
 import { StudyNowCard } from '../components/jee/StudyNowCard'
 import { HomeSnapshot } from '../components/jee/HomeSnapshot'
+import { WeekDigest } from '../components/jee/WeekDigest'
 import { FocusIndicator } from '../components/jee/FocusIndicator'
+import { ManualStudyTimeDialog } from '../components/jee/ManualStudyTimeDialog'
 import { currentExamMode } from '../lib/jee/exam'
 import { fmtDuration, fmtNumber } from '../lib/format'
 import { indiaToday, prettyDate } from '../lib/date'
@@ -28,21 +31,24 @@ const HOME_SUBJECT_LIMIT = 5
 
 export default function HomePage() {
   const homeSubjects = useReportSubjects()
-  const { data, upsert, upsertMany } = useData()
+  const { data, upsert, upsertMany, updateSettings } = useData()
   // Only subjects the student actually has chapters in; a long catalogue (CUET, school) would otherwise list every option.
   const trackedSubjects = homeSubjects.filter(subject => data.chapters.some(item => item.subject === subject))
   const { notify } = useToast()
   const navigate = useNavigate()
   const [reordering, setReordering] = useState(false)
+  const [addingTime, setAddingTime] = useState(false)
   const today = indiaToday()
   const todayTasks = useMemo(() => data.tasks.filter(task => task.task_date === today).sort((a, b) => a.position - b.position), [data.tasks, today])
   const doneTasks = todayTasks.filter(task => task.is_completed).length
   const dayRevisions = data.revisions.filter(revision => !revision.completed_at && revision.due_on <= today).sort((a, b) => a.due_on.localeCompare(b.due_on))
   const todayMinutes = getTodayStudyMinutes(data)
   const streak = computeStreaks(data, today)
+  const weekGoal = currentWeekGoal(data.goals, data, today)
   const examMode = currentExamMode(data, today)
+  const subjectTargets = hasSubjectTargets(data) ? subjectTargetRows(data, today).filter(row => row.target !== null) : []
   const progress = data.settings.daily_study_goal_minutes > 0 ? Math.min(100, todayMinutes / data.settings.daily_study_goal_minutes * 100) : 0
-  const tip = getSmartTip(data)
+  const tip = getSmartTipAction(data)
   const completedChapters = data.chapters.filter(chapter => chapter.status === 'Done' || chapter.status === 'Revised').length
   const totalChapters = data.chapters.length
   const examDays = daysUntil(data.settings.advanced_exam_date)
@@ -64,6 +70,19 @@ export default function HomePage() {
     ? { label: 'JEE Advanced', days: examDays, date: data.settings.advanced_exam_date, dot: 'orange' as const }
     : { label: 'JEE Main', days: mainDays, date: data.settings.main_exam_date, dot: 'blue' as const }
   const secondaryExam = jee ? jeeSecondary : otherSecondary
+
+  const takeFreeze = async () => {
+    try {
+      await updateSettings(current => ({ ...current, streak_freezes_used: takeFreezeDay(current, today) }))
+      notify('Freeze spent. Your streak is safe for today.')
+    } catch (error) { notify(error instanceof Error ? error.message : 'Could not save the freeze.', 'error') }
+  }
+  const takeRest = async () => {
+    try {
+      await updateSettings(current => ({ ...current, streak_rest_days_used: takeRestDay(current, today) }))
+      notify('Rest day saved. The streak holds.')
+    } catch (error) { notify(error instanceof Error ? error.message : 'Could not save the rest day.', 'error') }
+  }
 
   const toggleTask = async (task: DailyTask) => {
     try {
@@ -126,7 +145,22 @@ export default function HomePage() {
       <div className="streak-number" {...streakSlot.dataAttrs('current')}>{streak.current}<span>day{streak.current === 1 ? '' : 's'}</span></div>
       <p className="streak-subtitle" {...streakSlot.textAttrs('subtitle')}>{streakSlot.t('subtitle', 'current study streak')}</p>
       <div className="streak-bottom"><span><strong {...streakSlot.dataAttrs('longest')}>{streak.longest}</strong> {streakSlot.text('longestLabel', 'longest')}</span><span className="streak-separator" /><span><strong {...streakSlot.dataAttrs('activeDays')}>{streak.weeklyConsistency}/7</strong> {streakSlot.text('weekLabel', 'active this week')}</span></div>
-      <p className="jee-small jee-muted streak-rule" {...streakSlot.dataAttrs('rule')}>{streak.qualifyingToday ? 'Today counts.' : '15+ min of study, practice, a revision or a test counts.'}</p>
+      <p className="jee-small jee-muted streak-rule" {...streakSlot.dataAttrs('rule')}>{streak.qualifyingToday ? 'Today counts.' : streak.restingToday ? 'Rest day — your streak is safe.' : '15+ min of study, practice, a revision or a test counts.'}</p>
+      {!streak.qualifyingToday && (streak.restAvailableToday
+        ? <button type="button" className="streak-rest-button" onClick={() => void takeRest()}>{streakSlot.t('rest', 'Take a rest day')} <span aria-hidden="true">☾</span></button>
+        : streak.restingToday ? <span className="streak-rest-note resting">Rest day — your streak is safe.</span>
+        : streak.freezeAvailableToday ? <button type="button" className="streak-rest-button freeze" onClick={() => void takeFreeze()}>{streakSlot.t('freeze', 'Spend a monthly freeze')} <span aria-hidden="true">❄</span></button>
+        : streak.freezingToday ? <span className="streak-rest-note resting">Freeze spent — your streak is safe.</span>
+        : <span className="streak-rest-note">Rest days are used up this week.</span>)}
+      {weekGoal ? <div className={`streak-goal${weekGoal.percent >= 100 ? ' streak-goal-hit' : ''}`}>
+        <div className="streak-goal-top"><span>{weekGoal.goal.title}</span><strong>{Math.round(weekGoal.current * 10) / 10} / {weekGoal.goal.target} {weekGoal.goal.unit}</strong></div>
+        <ProgressBar value={Math.min(100, weekGoal.percent)} color="var(--accent)" />
+        <div className="streak-goal-foot"><span className="streak-goal-note">{weekGoal.percent >= 100 ? 'Target met.' : `${Math.round(weekGoal.percent)}% of this week’s target.`}</span><button type="button" className="text-link" onClick={() => navigate('/planner')}>{weekGoal.percent >= 100 ? 'See plan' : 'Open plan'}</button></div>
+      </div> : <div className="streak-goal streak-goal-empty">
+        <div className="streak-goal-top"><span>{streakSlot.text('noGoal', 'Weekly goal')}</span></div>
+        <p className="streak-goal-note">No target set for this week. A number to aim at makes the rest of the week decide itself.</p>
+        <button type="button" className="text-link" onClick={() => navigate('/planner')}>Set a weekly goal</button>
+      </div>}
       <div className="streak-sun" aria-hidden="true">☼</div>
     </NotebookCard>
   }
@@ -134,8 +168,16 @@ export default function HomePage() {
   const asideParts: Record<string, ReactNode> = {
     'home.study-time': studyTime.hidden ? null : <NotebookCard key="study-time" className="study-progress-card accent-blue" {...studyTime.attrs}>
       <div className="card-kicker"><span className="icon-tile blue"><Timer size={16} /></span> {studyTime.text('kicker', 'DAILY STUDY TIME')}</div>
-      <div className="progress-content"><ProgressRing value={progress} size={88} label={<span className="ring-value" {...studyTime.dataAttrs('percent')}>{Math.round(progress)}<small>%</small></span>} color="var(--subject-physics)" /><div className="study-progress-copy"><div className="study-time-value" {...studyTime.dataAttrs('minutes')}>{fmtDuration(todayMinutes)}<span> / {fmtDuration(data.settings.daily_study_goal_minutes)}</span></div><p {...studyTime.textAttrs('goalCaption')}>{studyTime.t('goalCaption', 'of your daily goal')}</p><button onClick={() => navigate('/focus')}><Timer size={14} /> {studyTime.text('start', 'Start a focus session')}</button></div></div>
+      <div className="progress-content"><ProgressRing value={progress} size={88} label={<span className="ring-value" {...studyTime.dataAttrs('percent')}>{Math.round(progress)}<small>%</small></span>} color="var(--subject-physics)" /><div className="study-progress-copy"><div className="study-time-value" {...studyTime.dataAttrs('minutes')}>{fmtDuration(todayMinutes)}<span> / {fmtDuration(data.settings.daily_study_goal_minutes)}</span></div><p {...studyTime.textAttrs('goalCaption')}>{studyTime.t('goalCaption', 'of your daily goal')}</p><div className="study-time-actions"><button onClick={() => navigate('/focus')}><Timer size={14} /> {studyTime.text('start', 'Start a focus session')}</button><button type="button" className="study-time-add" onClick={() => setAddingTime(true)}><Plus size={13} /> {studyTime.text('addTime', 'Add time')}</button></div></div></div>
       <ProgressBar value={progress} color="var(--subject-physics)" />
+      {subjectTargets.length > 0 && <ul className="study-subject-targets" aria-label="Today by subject">
+        {subjectTargets.map(row => <li key={row.subject} className={row.target !== null && row.percent !== null && row.percent >= 100 ? 'is-met' : ''}>
+          <span className={`subject-dot subject-${row.subject.toLowerCase()}`} aria-hidden="true" />
+          <span>{row.subject}</span>
+          <b>{fmtDuration(row.minutes)}{row.target === null ? '' : ` / ${row.target}m`}</b>
+          {row.percent !== null && <i style={{ width: `${row.percent}%` }} aria-hidden="true" />}
+        </li>)}
+      </ul>}
       <span className="study-doodle" aria-hidden="true">⌁</span>
     </NotebookCard>,
     'home.revisions': revisionsSlot.hidden ? null : <NotebookCard key="revisions" className="revisions-card accent-green" {...revisionsSlot.attrs}>
@@ -156,7 +198,7 @@ export default function HomePage() {
     </NotebookCard>,
     'home.tip': tipSlot.hidden ? null : <NotebookCard key="tip" className="smart-tip-card" {...tipSlot.attrs}>
       <div className="tip-top"><span className="tip-spark"><Sparkles size={16} /></span><span {...tipSlot.textAttrs('kicker')}>{tipSlot.t('kicker', 'STUDY TIP')}</span></div>
-      <p {...tipSlot.dataAttrs('tip')}>{tip}</p><button className="tip-link" onClick={() => navigate('/analytics')}>{tipSlot.text('cta', 'See analytics')} <ArrowRight size={14} /></button>
+      <p {...tipSlot.dataAttrs('tip')}>{tip.text}</p><button className="tip-link" onClick={() => navigate(tip.to)}>{tip.cta} <ArrowRight size={14} /></button>
       <span className="tip-pencil" aria-hidden="true">✎</span>
     </NotebookCard>
   }
@@ -205,11 +247,13 @@ export default function HomePage() {
     'home.exam-mode': examMode.active ? <div key="exam-mode" className="exam-mode-banner" role="status" {...examSlot.attrs}><span className="exam-mode-days" {...examSlot.dataAttrs('daysLeft')}>{examMode.daysLeft}</span><div><strong {...examSlot.dataAttrs('label')}>Exam Mode · {examMode.label}</strong><p>{examSlot.data('reason', examMode.reason)} {examSlot.text('focus', 'Revision, PYQs, mocks and weak areas come first.')}</p></div></div> : null,
     'home.study-now': studyNow.hidden ? null : <StudyNowCard key="study-now" layoutAttrs={studyNow.attrs} />,
     'home.grid': <div key="grid" className="dashboard-grid" {...grid.attrs}>{gridOrder.map(id => gridParts[id])}</div>,
-    'home.snapshot': snapshot.hidden ? null : <HomeSnapshot key="snapshot" layoutAttrs={snapshot.attrs} />,
+    'home.snapshot': snapshot.hidden ? null : <HomeSnapshot key="snapshot" layoutAttrs={snapshot.attrs}>
+      <WeekDigest />
+    </HomeSnapshot>,
     'home.bottom': <section key="bottom" className="dashboard-bottom-row" {...bottom.attrs}>{bottomOrder.map(id => bottomParts[id])}</section>
   }
 
-  return <div className="dashboard-page">{pageOrder.map(id => sections[id])}</div>
+  return <div className="dashboard-page">{pageOrder.map(id => sections[id])}{addingTime && <ManualStudyTimeDialog onClose={() => setAddingTime(false)} />}</div>
 }
 
 const HOME_SECTIONS = ['home.header', 'home.focus', 'home.hero', 'home.exam-mode', 'home.study-now', 'home.grid', 'home.snapshot', 'home.bottom'] as const

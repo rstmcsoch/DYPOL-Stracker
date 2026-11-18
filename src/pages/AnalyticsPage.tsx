@@ -9,6 +9,8 @@ import {
   Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis
 } from 'recharts'
 import { Button, NotebookCard, PageHeader, ProgressBar, ProgressRing, StatusBadge, SubjectBadge } from '../components/ui'
+import { Meter } from '../components/jee/shared'
+import type { Subject } from '../types'
 import { WeeklyReportCard } from '../components/jee/WeeklyReportCard'
 import { LearningPipelineCard } from '../components/jee/LearningPipelineCard'
 import { useAuth } from '../contexts/AuthContext'
@@ -107,6 +109,7 @@ export default function AnalyticsPage() {
   }
 
   const trends = useMemo(() => getMarksTrend(data, 5000), [data])
+
   const subjects = useMemo(() => getSubjectPerformance(data), [data])
   const chapterRows = useMemo(() => getChapterPerformance(data), [data])
   const accuracy = getAccuracy(data)
@@ -177,6 +180,12 @@ export default function AnalyticsPage() {
     </div>
 
     {renderCard('heatmap')}
+
+    {hasSessions && <section className="section-heading analytics-section-title"><div><h2><T k="analytics:where-the-hours-go">{"Where the hours go"}</T></h2><p>Study time and marks, side by side, from your own records.</p></div></section>}
+    {hasSessions && <div className="analytics-grid two-col analytics-alloc-grid">
+      <SubjectTimeCard data={data} />
+      <TimeVersusMarksCard data={data} subjects={subjects} />
+    </div>}
 
     <div className="analytics-grid two-col analytics-final-grid">
       {renderCard('syllabus')}
@@ -262,7 +271,7 @@ function SamplePreviewCard({ onAddTest }: { onAddTest: () => void }) {
 
 /* ------------------------------------------------------------ chart cards */
 
-function PerformanceCard({ data, subjects, hasTestScore, hasSubjectScores, pinned, onPin }: ChartCardProps) {
+function PerformanceCard({ data, trends, subjects, hasTestScore, hasSubjectScores, pinned, onPin }: ChartCardProps) {
   const { user } = useAuth()
   const rangeOwner = user?.id ?? 'session'
   // The chosen range is remembered on this device (like pinned charts), so a reload keeps it.
@@ -286,6 +295,19 @@ function PerformanceCard({ data, subjects, hasTestScore, hasSubjectScores, pinne
   // The X-axis is a real time scale: each row carries its epoch so a 13-day gap
   // occupies 13 days of space and a 2-day gap occupies two.
   const timeTrends = useMemo(() => rangedTrends.map(row => ({ ...row, t: new Date(`${row.date}T12:00:00`).getTime() })), [rangedTrends])
+  // Screen-reader equivalent of the trend chart (plain concatenation, no JSX template trick).
+  const trendRows = useMemo(() => {
+    const head: (string | number | null)[] = ['Date', 'Overall %']
+    for (const item of subjects) head.push(item.subject + ' %')
+    return [head, ...trends.slice(-12).map(row => {
+      const out: (string | number | null)[] = [prettyDate(row.date), row.overall === null ? null : Math.round(row.overall)]
+      for (const item of subjects) {
+        const value = row[item.subject]
+        out.push(value === null || value === undefined ? null : Math.round(Number(value)))
+      }
+      return out
+    })]
+  }, [trends, subjects])
   const nothingAtAll = !hasTestScore && !hasSubjectScores
   return <NotebookCard className={`chart-card performance-card ${nothingAtAll ? 'chart-card-flat' : ''}`}>
     <div className="chart-card-head">
@@ -297,12 +319,16 @@ function PerformanceCard({ data, subjects, hasTestScore, hasSubjectScores, pinne
     </div>
     {nothingAtAll ? <NoDataLine label="Marks & subjects" hint="Log a test to start the trend." /> : <>
       {hasTestScore ? <>
-        <div className="chart-frame trend-chart"><ResponsiveContainer width="100%" height={280}><LineChart data={timeTrends} margin={{ top: 10, right: 16, left: 0, bottom: 4 }}><CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" /><XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={value => chartDate(Number(value))} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} minTickGap={34} tickMargin={8} padding={{ left: 14, right: 8 }} /><YAxis domain={[0, 100]} width={44} tickMargin={6} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} tickFormatter={value => `${value}%`} /><Tooltip content={<NotebookTooltip />} labelFormatter={value => chartDateLong(Number(value))} /><Line type="monotone" dataKey="overall" name="Overall" hide={hiddenSeries.includes('overall')} stroke={chartColors.overall} strokeWidth={2.5} strokeDasharray="7 5" dot={{ r: 3.5, fill: chartColors.overall, strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />{subjects.map(({ subject }) => <Line key={subject} type="monotone" dataKey={subject} name={subject} hide={hiddenSeries.includes(subject)} stroke={subjectColor(subject)} strokeWidth={2} dot={{ r: 3, fill: subjectColor(subject), strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />)}</LineChart></ResponsiveContainer></div>
-        <div className="chart-legend-note chart-legend-toggles" role="group" aria-label="Show or hide trend series"><button type="button" className={`legend-toggle ${hiddenSeries.includes('overall') ? 'is-off' : ''}`} aria-pressed={!hiddenSeries.includes('overall')} onClick={() => toggleSeries('overall')} title={hiddenSeries.includes('overall') ? 'Show Overall' : 'Hide Overall'}><i className="swatch-dashed" style={{ background: `repeating-linear-gradient(90deg, ${chartColors.overall} 0 6px, transparent 6px 9px)` }} />{' '}<T k="analytics:overall">{"Overall"}</T></button>{subjects.map(({ subject }) => <button type="button" key={subject} className={`legend-toggle ${hiddenSeries.includes(subject) ? 'is-off' : ''}`} aria-pressed={!hiddenSeries.includes(subject)} onClick={() => toggleSeries(subject)} title={hiddenSeries.includes(subject) ? `Show ${subject}` : `Hide ${subject}`}><i style={{ background: subjectColor(subject) }} />{subject}</button>)}</div>
+        <div className="chart-frame trend-chart"><ResponsiveContainer width="100%" height={280}><LineChart data={timeTrends} margin={{ top: 10, right: 16, left: 0, bottom: 4 }}><CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" /><XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={value => chartDate(Number(value))} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} minTickGap={34} tickMargin={8} padding={{ left: 14, right: 8 }} /><YAxis domain={[0, 100]} width={44} tickMargin={6} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} tickFormatter={value => `${value}%`} /><Tooltip content={<NotebookTooltip />} labelFormatter={value => chartDateLong(Number(value))} /><Line type="monotone" dataKey="overall" name="Overall" hide={hiddenSeries.includes('overall')} stroke={chartColors.overall} strokeWidth={2.5} strokeDasharray="7 5" dot={{ r: 3.5, fill: chartColors.overall, strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />{subjects.map(({ subject }) => <Line key={subject} type="monotone" dataKey={subject} name={subject} hide={hiddenSeries.includes(subject)} stroke={subjectColor(subject)} strokeWidth={2} dot={{ r: 3, fill: subjectColor(subject), strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />)}</LineChart></ResponsiveContainer>
+        <ChartTable caption="Marks trend by test date" rows={trendRows} />
+      </div>
+      <div className="chart-legend-note chart-legend-toggles" role="group" aria-label="Show or hide trend series"><button type="button" className={`legend-toggle ${hiddenSeries.includes('overall') ? 'is-off' : ''}`} aria-pressed={!hiddenSeries.includes('overall')} onClick={() => toggleSeries('overall')} title={hiddenSeries.includes('overall') ? 'Show Overall' : 'Hide Overall'}><i className="swatch-dashed" style={{ background: `repeating-linear-gradient(90deg, ${chartColors.overall} 0 6px, transparent 6px 9px)` }} />{' '}<T k="analytics:overall">{"Overall"}</T></button>{subjects.map(({ subject }) => <button type="button" key={subject} className={`legend-toggle ${hiddenSeries.includes(subject) ? 'is-off' : ''}`} aria-pressed={!hiddenSeries.includes(subject)} onClick={() => toggleSeries(subject)} title={hiddenSeries.includes(subject) ? `Show ${subject}` : `Hide ${subject}`}><i style={{ background: subjectColor(subject) }} />{subject}</button>)}</div>
       </> : <NoDataLine label="Marks trend" hint="No comparable test result in this range yet." />}
       <div className="performance-subjects">
         {hasSubjectScores ? <>
-          <div className="chart-frame radar-chart performance-radar"><ResponsiveContainer width="100%" height={230}><RadarChart data={subjects.map(item => ({ subject: item.subject, score: item.average ?? 0 }))} outerRadius="76%"><PolarGrid stroke="var(--chart-grid)" strokeWidth={1.2} /><PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--ink-soft)', fontSize: 13, fontFamily: 'var(--font-body)' }} /><Radar dataKey="score" name="Average %" stroke={chartColors.accent} strokeWidth={2.5} fill={chartColors.accent} fillOpacity={0.32} /><Tooltip content={<NotebookTooltip />} /></RadarChart></ResponsiveContainer></div>
+          <div className="chart-frame radar-chart performance-radar"><ResponsiveContainer width="100%" height={230}><RadarChart data={subjects.map(item => ({ subject: item.subject, score: item.average ?? 0 }))} outerRadius="76%"><PolarGrid stroke="var(--chart-grid)" strokeWidth={1.2} /><PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--ink-soft)', fontSize: 13, fontFamily: 'var(--font-body)' }} /><Radar dataKey="score" name="Average %" stroke={chartColors.accent} strokeWidth={2.5} fill={chartColors.accent} fillOpacity={0.32} /><Tooltip content={<NotebookTooltip />} /></RadarChart></ResponsiveContainer>
+        <ChartTable caption="Average marks by subject" rows={[['Subject', 'Average %'], ...subjects.map(item => [item.subject, item.average === null ? null : Math.round(item.average)])]} />
+      </div>
           <div className="subject-performance-list performance-subject-list">{subjects.map(item => <div key={item.subject}><SubjectBadge subject={item.subject} /><strong>{item.average === null ? '—' : `${Math.round(item.average)}%`}</strong><small>{item.count} result{item.count === 1 ? '' : 's'}</small></div>)}</div>
         </> : <NoDataLine label="Subject balance" hint="Add subject scores to compare subjects." />}
       </div>
@@ -315,7 +341,9 @@ function MistakeBreakdownCard({ mistakeCounts, hasMistakes, pinned, onPin }: Cha
   return <NotebookCard className={`chart-card mistake-chart-card ${hasMistakes ? '' : 'chart-card-flat'}`}>
     <div className="chart-card-head"><div><span className="eyebrow"><T k="analytics:notice-the-repeats">{"MISTAKES"}</T></span><h2>{CHART_TITLES.mistakes}</h2><p><T k="analytics:only-entries-saved-in-your-notebook-appe">{"From your mistake notebook."}</T></p></div><div className="chart-head-actions"><button className="chart-link" onClick={() => navigate('/mistakes')}><T k="analytics:open-notebook">{"Open notebook ↗"}</T></button><PinButton id="mistakes" pinned={pinned.includes('mistakes')} onPin={onPin} /></div></div>
     {hasMistakes ? <>
-      <div className="chart-frame bar-chart"><ResponsiveContainer width="100%" height={245}><BarChart data={mistakeCounts} margin={{ top: 8, right: 6, left: -17, bottom: 0 }}><CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" /><XAxis dataKey="type" tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} /><YAxis allowDecimals={false} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} /><Tooltip content={<NotebookTooltip />} /><Bar dataKey="count" name="Mistakes" radius={[7, 7, 0, 0]}>{mistakeCounts.map((entry, index) => <Cell key={entry.type} fill={[chartColors.accent, chartColors.orange, chartColors.green, chartColors.red, chartColors.muted][index]} />)}</Bar></BarChart></ResponsiveContainer></div>
+      <div className="chart-frame bar-chart"><ResponsiveContainer width="100%" height={245}><BarChart data={mistakeCounts} margin={{ top: 8, right: 6, left: -17, bottom: 0 }}><CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" /><XAxis dataKey="type" tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} /><YAxis allowDecimals={false} tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} /><Tooltip content={<NotebookTooltip />} /><Bar dataKey="count" name="Mistakes" radius={[7, 7, 0, 0]}>{mistakeCounts.map((entry, index) => <Cell key={entry.type} fill={[chartColors.accent, chartColors.orange, chartColors.green, chartColors.red, chartColors.muted][index]} />)}</Bar></BarChart></ResponsiveContainer>
+      <ChartTable caption="Mistakes by type" rows={[['Type', 'Count'], ...mistakeCounts.map(item => [item.type, item.count])]} />
+    </div>
       <div className="mistake-count-list">{mistakeCounts.map(item => <span key={item.type}>{item.type}<strong>{item.count}</strong></span>)}</div>
     </> : <NoDataLine label="Mistake breakdown" hint="Add mistakes to see the pattern." />}
   </NotebookCard>
@@ -326,7 +354,9 @@ function StudyHoursCard({ data, hasSessions, pinned, onPin }: ChartCardProps) {
   const studyBars = useMemo(() => makeStudyBars(data.sessions, hoursView), [data.sessions, hoursView])
   return <NotebookCard className={`chart-card study-chart-card ${hasSessions ? '' : 'chart-card-flat'}`}>
     <div className="chart-card-head"><div><span className="eyebrow"><T k="analytics:showing-up-counts">{"STUDY TIME"}</T></span><h2>{CHART_TITLES['study-hours']}</h2><p><T k="analytics:logged-focus-sessions-only">{"Logged focus sessions only."}</T></p></div><div className="chart-head-actions"><div className="segmented-control" role="group" aria-label="Study hours grouping">{(['day','week','month'] as const).map(item => <button className={hoursView === item ? 'active' : ''} key={item} onClick={() => setHoursView(item)}>{item}</button>)}</div><PinButton id="study-hours" pinned={pinned.includes('study-hours')} onPin={onPin} /></div></div>
-    {hasSessions ? <div className="chart-frame bar-chart"><ResponsiveContainer width="100%" height={245}><BarChart data={studyBars} margin={{ top: 8, right: 7, left: -19, bottom: 0 }}><CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" /><XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} minTickGap={14} /><YAxis tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} /><Tooltip content={<NotebookTooltip />} /><Bar dataKey="hours" name="Hours" fill={chartColors.green} radius={[7, 7, 0, 0]} /></BarChart></ResponsiveContainer></div> : <NoDataLine label="Study hours" hint="Run a focus session to log study time." />}
+    {hasSessions ? <div className="chart-frame bar-chart"><ResponsiveContainer width="100%" height={245}><BarChart data={studyBars} margin={{ top: 8, right: 7, left: -19, bottom: 0 }}><CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" /><XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} minTickGap={14} /><YAxis tick={{ fill: 'var(--muted)', fontSize: 13, fontFamily: 'var(--font-body)' }} tickLine={false} axisLine={false} /><Tooltip content={<NotebookTooltip />} /><Bar dataKey="hours" name="Hours" fill={chartColors.green} radius={[7, 7, 0, 0]} /></BarChart></ResponsiveContainer>
+      <ChartTable caption={`Study hours by ${hoursView}`} rows={[['Period', 'Hours'], ...studyBars.slice(-12).map(row => [row.label, row.hours])]} />
+    </div> : <NoDataLine label="Study hours" hint="Run a focus session to log study time." />}
   </NotebookCard>
 }
 
@@ -365,6 +395,79 @@ function getTargetComparison(data: ReturnType<typeof useData>['data']): { score:
     return { score: aggregate.marks, gap, state: gap <= 0 ? 'above' : gap <= tolerance ? 'near' : 'below' }
   }
   return null
+}
+
+/**
+ * Study minutes per subject, joined through the chapter a session was filed under.
+ *
+ * Sessions with no chapter cannot be attributed, so they are reported as "Unfiled" rather
+ * than being silently dropped or spread across subjects.
+ */
+function SubjectTimeAllocation({ data }: { data: ReturnType<typeof useData>['data'] }) {
+  return useMemo(() => {
+    const byId = new Map(data.chapters.map(chapter => [chapter.id, chapter.subject]))
+    const totals = new Map<string, number>()
+    for (const session of data.sessions) {
+      const minutes = session.duration_minutes ?? 0
+      if (!minutes) continue
+      const key = session.chapter_id ? byId.get(session.chapter_id) ?? 'Unfiled' : 'Unfiled'
+      totals.set(key, (totals.get(key) ?? 0) + minutes)
+    }
+    const rows = [...totals.entries()].map(([subject, minutes]) => ({ subject, minutes })).sort((a, b) => b.minutes - a.minutes)
+    const total = rows.reduce((sum, row) => sum + row.minutes, 0)
+    return { rows, total }
+  }, [data.sessions, data.chapters])
+}
+
+function SubjectTimeCard({ data }: { data: ReturnType<typeof useData>['data'] }) {
+  const { rows, total } = SubjectTimeAllocation({ data })
+  return <NotebookCard className="chart-card subject-time-card">
+    <div className="chart-card-head"><div><span className="eyebrow"><T k="analytics:time-by-subject">{"TIME BY SUBJECT"}</T></span><h2>Where your hours went</h2><p>{rows.length ? `${fmtDuration(total)} across ${rows.length} subject${rows.length === 1 ? '' : 's'}` : 'No time logged yet.'}</p></div></div>
+    {rows.length === 0 ? <NoDataLine label="Time by subject" hint="File focus sessions under a chapter to see this." /> : <>
+      <div className="subject-time-bars">{rows.map(row => <div key={row.subject} className="subject-time-row">
+        <span className="subject-time-name">{row.subject === 'Unfiled' ? 'Unfiled' : <SubjectBadge subject={row.subject as Subject} />}</span>
+        <div className="subject-time-meter"><Meter value={total ? (row.minutes / total) * 100 : 0} label={`${row.subject} share of study time`} tone={row.subject === 'Unfiled' ? 'orange' : 'blue'} /></div>
+        <b>{fmtDuration(row.minutes)}</b>
+        <small>{total ? `${Math.round((row.minutes / total) * 100)}%` : '—'}</small>
+      </div>)}</div>
+      {rows.some(row => row.subject === 'Unfiled') && <p className="subject-time-note">Sessions without a chapter are counted as Unfiled. Pick a chapter in Focus to sort them.</p>}
+    </>}
+  </NotebookCard>
+}
+
+/**
+ * Study time against marks, per subject: does more time actually move the score?
+ * Points are the mean mark per subject; the x-axis is the hours recorded for it.
+ */
+function TimeVersusMarksCard({ data, subjects }: { data: ReturnType<typeof useData>['data']; subjects: ReturnType<typeof getSubjectPerformance> }) {
+  const { rows } = SubjectTimeAllocation({ data })
+  const points = rows.filter(row => row.subject !== 'Unfiled').map(row => ({
+    subject: row.subject,
+    hours: Math.round((row.minutes / 60) * 10) / 10,
+    average: subjects.find(item => item.subject === row.subject)?.average ?? null
+  })).filter(point => point.average !== null)
+  return <NotebookCard className="chart-card time-marks-card">
+    <div className="chart-card-head"><div><span className="eyebrow"><T k="analytics:hours-versus-marks">{"HOURS VS MARKS"}</T></span><h2>Does the time show up?</h2><p>Mean marks per subject against the hours recorded for it.</p></div></div>
+    {points.length < 2 ? <NoDataLine label="Hours vs marks" hint="Needs at least two subjects with both time and test results." /> : <div className="time-marks-list">{points.sort((a, b) => (b.average ?? 0) - (a.average ?? 0)).map(point => <div key={point.subject} className="time-marks-row">
+      <SubjectBadge subject={point.subject as Subject} />
+      <span className="time-marks-avg">{Math.round(point.average ?? 0)}%</span>
+      <span className="time-marks-hours">{point.hours}h logged</span>
+    </div>)}</div>}
+  </NotebookCard>
+}
+
+/**
+ * Charts are canvas-like SVG with no accessible text, so each one gets a small table that
+ * assistive tech reads instead. The table is visible only to screen readers.
+ */
+function ChartTable({ caption, rows }: { caption: string; rows: (string | number | null)[][] }) {
+  if (rows.length < 2) return null
+  const [head = [], ...body] = rows
+  return <table className="visually-hidden chart-data-table">
+    <caption>{caption}</caption>
+    <thead><tr>{head.map((cell, index) => <th key={index} scope="col">{cell}</th>)}</tr></thead>
+    <tbody>{body.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => cellIndex === 0 ? <th key={cellIndex} scope="row">{cell}</th> : <td key={cellIndex}>{cell ?? '—'}</td>)}</tr>)}</tbody>
+  </table>
 }
 
 function NotebookTooltip({ active, payload, label }: { active?: boolean; payload?: { name?: string; value?: number; color?: string; dataKey?: string }[]; label?: string }) {

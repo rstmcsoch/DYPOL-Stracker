@@ -131,8 +131,8 @@ describe('Home due tomorrow', () => {
     ] })
     const { HomeSnapshot } = await import('../components/jee/HomeSnapshot')
     renderPage(<HomeSnapshot />)
-    expect(screen.getByRole('button', { name: /Backlog due now: 2/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Due tomorrow: 1/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Backlog: 2 due now/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /1 tomorrow/ })).toBeTruthy()
   })
 })
 

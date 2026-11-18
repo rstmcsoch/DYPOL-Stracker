@@ -19,7 +19,7 @@ export const STUDENT_LAYOUT_SCHEMA_VERSION = 1
 
 export type StudentPageId =
   | 'shell' | 'home' | 'focus' | 'backlog' | 'practice' | 'syllabus' | 'weak-areas' | 'pyqs' | 'tests'
-  | 'mock-analysis' | 'mistakes' | 'retry' | 'analytics' | 'revision' | 'decks' | 'study-now' | 'planner'
+  | 'mock-analysis' | 'mistakes' | 'analytics' | 'revision' | 'decks' | 'study-now' | 'planner'
   | 'settings' | 'profile' | 'backup'
 
 export interface StudentPage { id: StudentPageId; label: string; path: string | null }
@@ -36,9 +36,8 @@ export const STUDENT_PAGES: readonly StudentPage[] = [
   { id: 'tests', label: 'Tests', path: '/tests' },
   { id: 'mock-analysis', label: 'Mock analysis', path: '/mock-analysis' },
   { id: 'mistakes', label: 'Mistake notebook', path: '/mistakes' },
-  { id: 'retry', label: 'Retry', path: '/retry' },
   { id: 'analytics', label: 'Analytics', path: '/analytics' },
-  { id: 'revision', label: 'Revisions', path: '/revision' },
+  { id: 'revision', label: 'Revision desk', path: '/revision' },
   { id: 'decks', label: 'Formulas & flashcards', path: '/decks' },
   { id: 'study-now', label: 'Study now', path: '/study-now' },
   { id: 'planner', label: 'Study plan', path: '/planner' },
@@ -175,14 +174,13 @@ const PAGE_SPECS: Record<Exclude<StudentPageId, 'home' | 'shell'>, PageSpec> = {
     ['rule', 'Threshold banner', true, true], ['overview', 'Overview cards', true, false], ['tested', 'Tested chapters', true, false], ['untested', 'Untested chapters', true, false], ['legend', 'Classification footer', true, true]
   ] },
   pyqs: { header: { title: 'PYQ tracker', subtitle: 'Track past papers by chapter.' }, sections: [['summary', 'Completion cards', true, true], ['filters', 'Filters', true, false]] },
-  tests: { header: { title: 'Test history' }, sections: [['summary', 'Summary cards', true, true], ['board', 'Test history list', true, false]] },
+  tests: { header: { title: 'Tests' }, sections: [['summary', 'Summary cards', true, true], ['board', 'Test history list', true, false]] },
   'mock-analysis': { header: { title: 'Mock analysis', subtitle: 'Where you lost marks, and why.' }, sections: [['filters', 'Test picker', true, false], ['analysis', 'Analysis grid', true, false]] },
-  mistakes: { header: { title: 'Mistake notebook' }, sections: [['overview', 'Overview cards', true, true], ['board', 'Mistake list', true, false]] },
-  retry: { header: { title: 'Retry list' }, sections: [['intro', 'Intro cards', true, true], ['board', 'Retry list', true, false]] },
+  'study-now': { header: { title: 'What to study now', subtitle: 'The full ranked shortlist behind your Home card.' }, sections: [['exam-mode', 'Exam Mode card', true, false], ['tracks', 'Track readiness', true, false]] },
+  mistakes: { header: { title: 'Mistake notebook' }, sections: [['overview', 'Overview cards', true, true], ['board', 'Mistake list', true, false], ['retry', 'Retry list tab', true, true]] },
   analytics: { header: { title: 'Analytics', subtitle: 'Based on your records.' }, sections: [['kpis', 'Key numbers', true, false], ['insights', 'Insight cards', true, true]] },
   revision: { header: { title: 'Revision desk' }, sections: [['columns', 'Due and overdue columns', true, false], ['completed', 'Recently completed', true, true]] },
   decks: { header: { title: 'Formula & flashcards', subtitle: 'Rate each card. Good and Easy push it further out.' }, sections: [['summary', 'Due cards', true, true], ['filters', 'Deck picker', true, false]] },
-  'study-now': { header: { title: 'Study now', subtitle: 'Your most useful next task.' }, sections: [['exam-mode', 'Exam Mode card', true, false], ['tracks', 'Track readiness', true, false]] },
   planner: { header: { title: 'Planner' }, sections: [['grid', 'Planner board', true, false]] },
   settings: { header: { title: 'Settings' }, sections: [['tabs', 'Settings tabs', false, false], ['panels', 'Settings panels', true, false], ['panel-account', 'Account tab', true, false], ['panel-exam', 'Exam tab', true, false], ['panel-appearance', 'Appearance tab', true, false], ['panel-rhythm', 'Study rhythm tab', true, false], ['panel-data', 'Data tab', true, false]] },
   profile: { header: { title: 'Profile', eyebrow: 'PROFILE' }, sections: [['card', 'Profile card', true, false]] },
@@ -233,9 +231,9 @@ export const COMPONENT_MAP: ReadonlyMap<string, ComponentDef> = new Map(COMPONEN
 export const NAV_GROUPS: ReadonlyArray<{ id: string; caption: string; routes: readonly string[] }> = [
   { id: 'study', caption: 'STUDY', routes: ['/', '/focus', '/backlog', '/practice'] },
   { id: 'syllabus', caption: 'SYLLABUS', routes: ['/syllabus', '/weak-areas', '/pyqs'] },
-  { id: 'tests', caption: 'TESTS', routes: ['/tests', '/mock-analysis', '/mistakes', '/retry', '/analytics'] },
+  { id: 'tests', caption: 'TESTS', routes: ['/tests', '/mock-analysis', '/mistakes', '/analytics'] },
   { id: 'revision', caption: 'REVISION', routes: ['/revision', '/decks'] },
-  { id: 'planning', caption: 'PLANNING', routes: ['/study-now', '/planner', '/settings'] }
+  { id: 'planning', caption: 'PLANNING', routes: ['/planner', '/settings'] }
 ]
 /** The only sidebar way to reach these, so they can never be hidden. */
 export const NAV_ALWAYS_VISIBLE: readonly string[] = ['/', '/settings']

@@ -1,4 +1,3 @@
-import { T } from '../../lib/student-layout/T'
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowUpRight, Bell, Clock3, ListChecks } from 'lucide-react'
@@ -6,95 +5,58 @@ import { NotebookCard } from '../ui'
 import { Meter, Pct, minutesLabel } from './shared'
 import { useData } from '../../contexts/DataContext'
 import { indiaToday } from '../../lib/date'
-import { aggregatePractice, pyqCompletion, pyqProgressCounts, syllabusProgress } from '../../lib/jee/progress'
-import { currentExamMode, effectiveTrack, isJeeSettings, trackLabels, trackReadiness } from '../../lib/jee/exam'
-import { PRIMARY_ACTIVITIES, studyMinutesByActivity, weekRange } from '../../lib/jee/study-time'
+import { aggregatePractice, pyqCompletion, pyqProgressCounts } from '../../lib/jee/progress'
 import { backlogDueCounts, computeReminders } from '../../lib/jee/reminders'
-import type { ActivityMinutes } from '../../lib/jee/study-time'
+import { weekRange } from '../../lib/jee/study-time'
+import { isJeeSettings } from '../../lib/jee/exam'
+import type { ReactNode } from 'react'
+import { T } from '../../lib/student-layout/T'
 
 /**
- * Dashboard strip that exposes the new study system without a wall of cards: today's
- * split, streak with its rule, raw vs weighted progress, PYQ and practice numbers, the
- * exam countdown for the active track, and any reminders that apply right now.
+ * One compact strip under the daily cards: the week's numbers and any reminders that apply
+ * right now.
+ *
+ * This replaced a five-card grid that repeated the countdown, chapters covered, streak,
+ * study minutes and track readiness that the hero, the study-time card and Study-now already
+ * show. One statistic now appears once. What survives is what nothing else on the page says:
+ * the weekly total, how many PYQ chapter-years are done, what is due in the backlog, and the
+ * reminders. Everything links to the page that owns the detail.
  */
-export function HomeSnapshot({ layoutAttrs }: { layoutAttrs?: Record<string, string> } = {}) {
+export function HomeSnapshot({ layoutAttrs, children }: { layoutAttrs?: Record<string, string>; children?: ReactNode } = {}) {
   const { data } = useData()
   const navigate = useNavigate()
   const today = indiaToday()
-  const todayMinutes = useMemo(() => studyMinutesByActivity(data, today, today), [data, today])
-  const week = useMemo(() => studyMinutesByActivity(data, weekRange(today).start, today), [data, today])
-  const progress = useMemo(() => syllabusProgress(data.chapters, data.settings), [data.chapters, data.settings])
-  const practice = useMemo(() => aggregatePractice(data.practiceSessions), [data.practiceSessions])
-  const pyqMain = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Main', data.settings), [data.pyqRecords, data.settings])
-  const pyqAdv = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Advanced', data.settings), [data.pyqRecords, data.settings])
-  const pyqCounts = useMemo(() => pyqProgressCounts(data), [data])
-  const backlog = useMemo(() => backlogDueCounts(data.backlogItems, today), [data.backlogItems, today])
-  const mode = currentExamMode(data, today)
-  const activeTrack = effectiveTrack(data.settings)
-  const track = trackReadiness(data, activeTrack, today)
   const jee = isJeeSettings(data.settings)
+  const week = useMemo(() => weekRange(today), [today])
+  const weekMinutes = useMemo(() => data.sessions
+    .filter(session => {
+      const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(session.started_at))
+      return day >= week.start && day <= today
+    })
+    .reduce((sum, session) => sum + session.duration_minutes, 0), [data.sessions, week.start, today])
+  const practice = useMemo(() => aggregatePractice(data.practiceSessions), [data.practiceSessions])
+  const pyqCounts = useMemo(() => pyqProgressCounts(data), [data])
+  const pyqMain = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Main', data.settings), [data.pyqRecords, data.settings])
+  const backlog = useMemo(() => backlogDueCounts(data.backlogItems, today), [data.backlogItems, today])
   const reminders = computeReminders(data, today)
 
-  return <section className="jee-snapshot" aria-label="Study snapshot" {...layoutAttrs}>
-    <NotebookCard className="jee-snap-card jee-snap-study">
-      <div className="jee-snap-head"><span className="eyebrow"><T k="home:today">{"TODAY"}</T></span><button type="button" className="jee-link" onClick={() => navigate('/focus')}><T k="home:focus">{"Focus"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
-      <SplitRow minutes={todayMinutes} empty="Nothing recorded yet today" />
-      <div className="jee-snap-head sub"><span className="eyebrow"><T k="home:this-week">{"THIS WEEK"}</T></span><small className="jee-muted">{minutesLabel(week.total)} total</small></div>
-      <SplitRow minutes={week} compact />
-    </NotebookCard>
-
-    {/* Streak and the exam countdown live in the hero cards above; repeating the
-        same numbers here was removed so every statistic renders exactly once. */}
-    <NotebookCard className="jee-snap-card jee-snap-progress">
-      <div className="jee-snap-head"><span className="eyebrow"><T k="home:syllabus">{"SYLLABUS"}</T></span><button type="button" className="jee-link" onClick={() => navigate('/syllabus')}><T k="home:open">{"Open"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
-      <ProgressLine label="Raw completion" value={progress.raw} detail={`${progress.completedChapters}/${progress.totalChapters} chapters`} />
-      <ProgressLine label="Weighted completion" value={progress.weighted} detail="by chapter importance" />
-      
-    </NotebookCard>
-
-    <NotebookCard className="jee-snap-card jee-snap-practice">
-      <div className="jee-snap-head"><span className="eyebrow"><T k="home:practice-pyqs">{"PRACTICE & PYQs"}</T></span><button type="button" className="jee-link" onClick={() => navigate('/practice')}><T k="home:log">{"Log"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
-      <div className="jee-mini-stats">
-        <div><strong>{practice.attempted.toLocaleString('en-IN')}</strong><span><T k="home:questions">{"questions"}</T></span></div>
-        <div><strong><Pct value={practice.accuracy} /></strong><span><T k="home:accuracy">{"accuracy"}</T></span></div>
-        {jee && <div><strong><Pct value={pyqMain.percent} /></strong><span><T k="home:jee-main-pyqs">{"JEE Main PYQs"}</T></span></div>}
-        {jee && <div><strong><Pct value={pyqAdv.percent} /></strong><span><T k="home:advanced-pyqs">{"Advanced PYQs"}</T></span></div>}
-        {!jee && <div><strong><Pct value={pyqMain.percent} /></strong><span><T k="home:pyq-years-covered">{"PYQ years covered"}</T></span></div>}
-        <div><strong>{pyqCounts.doneYears.toLocaleString('en-IN')}</strong><span><T k="home:pyq-chapter-years-done">{"PYQ chapter-years done"}</T></span></div>
+  return <section className="jee-snapshot jee-snapshot-line" aria-label="This week at a glance" {...layoutAttrs}>
+    <NotebookCard className="jee-snap-card jee-snap-week">
+      <div className="jee-snap-head"><span className="eyebrow"><T k="home:this-week">{"THIS WEEK"}</T></span><button type="button" className="jee-link" onClick={() => navigate('/analytics')}><T k="home:open">{"Open"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
+      <div className="jee-week-facts">
+        <div><Clock3 size={13} aria-hidden="true" /><strong>{minutesLabel(weekMinutes)}</strong><span>studied</span></div>
+        <div><strong>{practice.attempted.toLocaleString('en-IN')}</strong><span>questions</span><small><Pct value={practice.accuracy} /> accuracy</small></div>
+        {jee && <div><strong><Pct value={pyqMain.percent} /></strong><span>Main PYQs</span></div>}
+        <div><strong>{pyqCounts.doneYears.toLocaleString('en-IN')}</strong><span>PYQ chapter-years</span></div>
+        <button type="button" className="jee-week-backlog" onClick={() => navigate('/backlog')}><ListChecks size={13} aria-hidden="true" /> Backlog: <strong>{backlog.dueNow}</strong> due now · <strong>{backlog.dueTomorrow}</strong> tomorrow</button>
       </div>
-      <div className="jee-backlog-due-links">
-        <button type="button" className="jee-link" onClick={() => navigate('/backlog')}><T k="home:backlog-due-now">{"Backlog due now:"}</T>{' '}<strong>{backlog.dueNow}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
-        <button type="button" className="jee-link" onClick={() => navigate('/backlog')}><T k="home:due-tomorrow">{"Due tomorrow:"}</T>{' '}<strong>{backlog.dueTomorrow}</strong> <ArrowUpRight size={13} aria-hidden="true" /></button>
-      </div>
+      <Meter value={practice.accuracy} label="Practice accuracy" tone="blue" />
     </NotebookCard>
 
-    <NotebookCard className="jee-snap-card jee-snap-exam">
-      <div className="jee-snap-head"><span className="eyebrow">{trackLabels(data.settings)[activeTrack].toUpperCase()}</span><button type="button" className="jee-link" onClick={() => navigate('/settings')}><T k="home:exam-dates">{"Exam dates"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
-      <p className="jee-small">{mode.active ? mode.reason : 'Exam Mode turns on in the last 30 days.'}</p>
-      <ProgressLine label="Track readiness" value={track.percent} detail="weighted syllabus, PYQs and recent tests" />
-    </NotebookCard>
-
+    {children}
     {reminders.length > 0 && <NotebookCard className="jee-snap-card jee-snap-reminders">
       <div className="jee-snap-head"><span className="eyebrow"><Bell size={13} aria-hidden="true" />{' '}<T k="home:reminders">{"REMINDERS"}</T></span></div>
       <ul className="jee-reminder-list">{reminders.map(item => <li key={item.kind}><ListChecks size={14} aria-hidden="true" /><span><strong>{item.title}.</strong> {item.body}</span></li>)}</ul>
     </NotebookCard>}
   </section>
-}
-
-function SplitRow({ minutes, compact = false, empty }: { minutes: ActivityMinutes; compact?: boolean; empty?: string }) {
-  if (minutes.total === 0 && empty) return <p className="jee-small jee-muted">{empty}</p>
-  return <div className={`jee-split ${compact ? 'compact' : ''}`}>
-    {PRIMARY_ACTIVITIES.map(activity => <div key={activity} className={`jee-split-item split-${activity.toLowerCase()}`}>
-      <Clock3 size={12} aria-hidden="true" /><span>{activity}</span><strong>{minutesLabel(minutes[activity])}</strong>
-    </div>)}
-    {!compact && (minutes['Mock/Test'] > 0 || minutes['PYQ practice'] > 0) && <div className="jee-split-item other"><span><T k="home:mock-test-pyq">{"Mock/Test & PYQ"}</T></span><strong>{minutesLabel(minutes['Mock/Test'] + minutes['PYQ practice'])}</strong></div>}
-  </div>
-}
-
-function ProgressLine({ label, value, detail }: { label: string; value: number | null; detail?: string }) {
-  return <div className="jee-progress-line">
-    <div><span>{label}</span><strong><Pct value={value} /></strong></div>
-    <Meter value={value} label={label} tone="blue" />
-    {detail && <small className="jee-muted">{detail}</small>}
-  </div>
 }

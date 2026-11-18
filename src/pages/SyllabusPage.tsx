@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowDown, ArrowUp, Check, ChevronDown, CircleDot, Edit3, Filter, GripVertical, Plus, Search, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, CircleDot, ClipboardPaste, Edit3, Filter, GripVertical, Plus, Search, Trash2, X } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, EmptyState, Field, NotebookCard, OverflowMenu, PageHeader, ProgressBar, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
@@ -39,6 +39,7 @@ export default function SyllabusPage() {
   const [testedFilter, setTestedFilter] = useState<'all' | 'tested' | 'untested'>('all')
   const [editing, setEditing] = useState<Chapter | null>(null)
   const [createSubject, setCreateSubject] = useState<Subject | null>(null)
+  const [pasting, setPasting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Chapter | null>(null)
   const [deletingChapter, setDeletingChapter] = useState(false)
   const deletingChapterRef = useRef(false)
@@ -236,6 +237,31 @@ export default function SyllabusPage() {
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not save chapter. Retry.', 'error') }
   }
 
+  /**
+   * Paste a whole chapter list at once. Typing 64 JEE chapters (or a CA syllabus) one dialog
+   * at a time was the single biggest setup cost in the app, especially for non-JEE exams that
+   * start with an empty syllabus. Duplicates are skipped by name within the subject.
+   */
+  const importChapters = async (subject: Subject, names: string[]) => {
+    const existing = new Set(data.chapters.filter(chapter => chapter.subject === subject).map(chapter => chapter.name.trim().toLowerCase()))
+    const fresh: string[] = []
+    for (const raw of names) {
+      const name = raw.trim().slice(0, 140)
+      if (!name || existing.has(name.toLowerCase())) continue
+      existing.add(name.toLowerCase())
+      fresh.push(name)
+    }
+    if (!fresh.length) return 0
+    const now = new Date().toISOString()
+    const base = data.chapters.filter(chapter => chapter.subject === subject).length
+    await upsertMany('chapters', fresh.map((name, index) => ({
+      id: createId(), user_id: data.profile?.user_id, subject, name, position: base + index,
+      status: 'Not Started' as const, priority: 'Medium' as const, importance: 'medium' as const,
+      weightage: null, notes: '', formula_notes: '', completed_on: null, created_at: now, updated_at: now
+    })))
+    return fresh.length
+  }
+
   const deleteChapter = async () => {
     if (!deleteTarget || deletingChapterRef.current) return
     deletingChapterRef.current = true
@@ -254,7 +280,7 @@ export default function SyllabusPage() {
   const stripCounts = subjectCounts.filter(item => item.total > 0)
 
   return <div className="content-page syllabus-page">
-    <PageHeader layoutId="syllabus.header" title="Syllabus" doodle={<span>✎</span>} action={<Button onClick={() => setCreateSubject(examSubjectList[0] ?? 'Physics')}><Plus size={17} />{' '}<T k="syllabus:add-chapter">{"Add chapter"}</T></Button>} />
+    <PageHeader layoutId="syllabus.header" title="Syllabus" doodle={<span>✎</span>} action={<div className="syllabus-header-actions"><Button variant="secondary" onClick={() => setPasting(true)}><ClipboardPaste size={16} />{' '}<T k="syllabus:paste-list">{"Paste list"}</T></Button><Button onClick={() => setCreateSubject(examSubjectList[0] ?? 'Physics')}><Plus size={17} />{' '}<T k="syllabus:add-chapter">{"Add chapter"}</T></Button></div>} />
     {stripCounts.length > 0 && <div className="syllabus-progress-strip">{stripCounts.map(item => <NotebookCard key={item.subject} className={`subject-progress-card subject-progress-${subjectSlug(item.subject)}`}><div className="subject-progress-top"><SubjectBadge subject={item.subject} withMark /><span><strong>{item.complete}</strong> / {item.total} done</span></div><ProgressBar value={item.total ? item.complete / item.total * 100 : 0} color={item.color} /><span className="subject-progress-foot">{item.total ? Math.round(item.complete / item.total * 100) : 0}% mapped</span></NotebookCard>)}</div>}
     <NotebookCard {...sl.attrs('board')} className="syllabus-board">
       <div className="board-heading"><div><span className="handwriting-label"><T k="syllabus:your-study-map">{"Your chapters"}</T></span><p>{data.chapters.length} chapter{data.chapters.length === 1 ? '' : 's'} across {stripCounts.length} subject{stripCounts.length === 1 ? '' : 's'}.</p></div><span className="board-doodle" aria-hidden="true">✳</span></div>
@@ -295,6 +321,13 @@ export default function SyllabusPage() {
       </div>
       <div className="syllabus-board-footer"><span><GripVertical size={15} />{' '}<T k="syllabus:drag-the-grip-to-reorder-within-a-subjec">{"Drag to reorder chapters."}</T></span><span>{filtered.length} showing</span></div>
     </NotebookCard>
+    {pasting && <PasteChaptersDialog subjects={examSubjectList} defaultSubject={subjectFilter !== 'all' ? subjectFilter : examSubjectList[0] ?? 'Physics'} onClose={() => setPasting(false)} onImport={async (subject, names) => {
+      try {
+        const count = await importChapters(subject, names)
+        notify(count ? `${count} chapter${count === 1 ? '' : 's'} added to ${subject}.` : 'Every chapter in that list already exists.')
+        if (count) setPasting(false)
+      } catch (error) { notify(error instanceof Error ? error.message : 'Could not add the chapters.', 'error') }
+    }} />}
     {editing && <ChapterDialog chapter={editing} onClose={() => setEditing(null)} onSave={saveChapter} />}
     {createSubject && <ChapterDialog chapter={{ id: createId(), user_id: data.profile?.user_id, subject: createSubject, name: '', position: data.chapters.filter(item => item.subject === createSubject).length, status: 'Not Started', priority: 'Medium', importance: 'medium', weightage: null, notes: '', formula_notes: '', completed_on: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }} onClose={() => setCreateSubject(null)} onSave={saveChapter} isNew />}
     {deleteTarget && <ConfirmDialog title={`Remove “${deleteTarget.name}”?`} message="Its revisions are removed too. You can undo briefly." onCancel={() => setDeleteTarget(null)} onConfirm={() => void deleteChapter()} loading={deletingChapter} />}
@@ -373,5 +406,29 @@ function ChapterDialog({ chapter: initial, onClose, onSave, isNew = false }: { c
       {!isNew && <ChapterStageEditor chapter={chapter} />}
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose} disabled={saving}><T k="syllabus:cancel">{"Cancel"}</T></Button><Button loading={saving} onClick={() => void save()}>{saving ? 'Saving…' : isNew ? 'Add chapter' : 'Save notes'} <Check size={16} /></Button></div>
     </div>
+  </Dialog>
+}
+
+/** One chapter per line, for a whole subject at once. */
+function PasteChaptersDialog({ subjects, defaultSubject, onClose, onImport }: {
+  subjects: readonly Subject[]; defaultSubject: Subject; onClose: () => void
+  onImport: (subject: Subject, names: string[]) => Promise<void>
+}) {
+  const [subject, setSubject] = useState<Subject>(defaultSubject)
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const names = text.split('\n').map(line => line.replace(/^\s*[-*•\d.]+\s*/, '').trim()).filter(Boolean)
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (busy || !names.length) return
+    setBusy(true)
+    try { await onImport(subject, names.slice(0, 400)) } finally { setBusy(false) }
+  }
+  return <Dialog lk="syllabus:paste-a-chapter-list" title="Paste a chapter list" subtitle="One chapter per line." onClose={onClose}>
+    <form className="form-stack" noValidate onSubmit={submit}>
+      <Field lk="syllabus:l-subject" label="Subject"><select value={subject} onChange={event => setSubject(event.target.value)}>{subjects.map(item => <option key={item}>{item}</option>)}</select></Field>
+      <Field lk="syllabus:l-chapters" label="Chapters" hint={`${names.length} chapter${names.length === 1 ? '' : 's'} ready · duplicates are skipped`}><textarea rows={9} maxLength={20000} value={text} onChange={event => setText(event.target.value)} placeholder={'Kinematics\nLaws of Motion\nWork, Energy & Power'} /></Field>
+      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={busy} disabled={!names.length}>Add {names.length || ''} chapter{names.length === 1 ? '' : 's'}</Button></div>
+    </form>
   </Dialog>
 }

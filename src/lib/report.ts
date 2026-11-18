@@ -9,6 +9,7 @@ import type { AppData, TestRecord } from '../types'
 import { subjectsFor } from './exams/subjects'
 import { triggerDownload } from './backup'
 import { reportFileName, scopedReportData } from './export-counts'
+import type { Subject } from '../types/index.js'
 import { chosenExamTitle, isJeeSettings } from './jee/exam'
 
 export interface ReportSections {
@@ -287,6 +288,50 @@ export async function createPdfReport(data: AppData, options: ReportOptions): Pr
     pdfFooter(doc, 'STUDY NOTES')
   }
   doc.save(reportFileName('pdf'))
+}
+
+/**
+ * A printable formula sheet per subject: every `Chapter.formula_notes` line plus the formula
+ * cards, laid out for revision rather than for reading. Nothing is generated — a formula the
+ * student never typed cannot appear here, which is the honest version of "AI formula sheet".
+ */
+export async function createFormulaSheet(data: AppData, subject: Subject): Promise<void> {
+  const chapters = data.chapters.filter(chapter => chapter.subject === subject).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+  const cards = data.studyCards.filter(card => card.kind === 'formula' && chapters.some(chapter => chapter.id === card.chapter_id))
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
+  const width = doc.internal.pageSize.getWidth()
+  let y = 22
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(53, 68, 50)
+  doc.text(`${subject} formula sheet`, 15, y); y += 8
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(110, 112, 104)
+  doc.text(`Stracker · ${prettyDate(indiaToday())} · ${chapters.length} chapter${chapters.length === 1 ? '' : 's'} · ${cards.length} formula card${cards.length === 1 ? '' : 's'}`, 15, y); y += 9
+  let printed = 0
+  for (const chapter of chapters) {
+    const lines = chapter.formula_notes.split('\n').map(line => line.trim()).filter(Boolean)
+    const cardLines = cards.filter(card => card.chapter_id === chapter.id).map(card => card.back.trim()).filter(line => line && !lines.includes(line))
+    const all = [...lines, ...cardLines]
+    if (!all.length) continue
+    if (y > 250) { doc.addPage(); y = 20 }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(79, 98, 71)
+    doc.text(chapter.name, 15, y); y += 5.5
+    doc.setDrawColor(226, 222, 208); doc.line(15, y - 2.5, width - 15, y - 2.5)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(55, 59, 52)
+    for (const line of all) {
+      const wrapped = doc.splitTextToSize(line, width - 32) as string[]
+      if (y + wrapped.length * 4.6 > 280) { doc.addPage(); y = 20 }
+      doc.text(wrapped, 17, y)
+      y += wrapped.length * 4.6 + 1.2
+      printed += 1
+    }
+    y += 4
+  }
+  if (printed === 0) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(90, 92, 86)
+    doc.text(`No formula notes saved for ${subject} yet. Add them on a chapter in Syllabus, then export again.`, 15, y + 4, { maxWidth: width - 30 })
+  }
+  doc.setFontSize(8); doc.setTextColor(140, 142, 134)
+  doc.text('Only formulas you wrote down are printed. Nothing here is generated.', 15, 288)
+  doc.save(`stracker-formula-sheet-${subject.toLowerCase()}-${indiaToday()}.pdf`)
 }
 
 const docParagraph = (text: string, options: { bold?: boolean; size?: number; color?: string; font?: string; heading?: (typeof HeadingLevel)[keyof typeof HeadingLevel]; alignment?: (typeof AlignmentType)[keyof typeof AlignmentType]; spacing?: number } = {}) => new Paragraph({

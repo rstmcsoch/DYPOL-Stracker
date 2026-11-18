@@ -120,6 +120,35 @@ export function currentExamMode(data: AppData, today: string): ExamModeState {
   return { active: false, reason: days !== null && days > EXAM_MODE_WINDOW_DAYS ? `Exam Mode starts ${EXAM_MODE_WINDOW_DAYS} days before ${label}.` : 'The active exam date has passed.', label, daysLeft: days, track, boost: 1 }
 }
 
+/**
+ * Exam-mode has one switch but three honest phases. Students do not need "exam mode is on";
+ * they need to know whether this is the month to build, the month to consolidate, or the
+ * week to stop learning anything new. The phases are advisory copy only — the recommender
+ * still ranks real rows — but they change what the reason line says.
+ */
+export type CountdownPhase = 'build' | 'consolidate' | 'revise-only' | 'none'
+
+export interface CountdownShape {
+  phase: CountdownPhase
+  label: string
+  /** One sentence the Study-now card can show verbatim. */
+  guidance: string
+  /** Lead time before the exam, null when no date is set. */
+  daysLeft: number | null
+}
+
+export function countdownShape(data: AppData, today: string): CountdownShape {
+  const track = effectiveTrack(data.settings)
+  const days = daysUntilExam(trackExamDate(data, track), today)
+  const label = trackLabels(data.settings)[track]
+  if (days === null) return { phase: 'none', label: 'No date set', guidance: 'Add your exam date in Settings so the plan can count down with you.', daysLeft: null }
+  if (days < 0) return { phase: 'none', label: 'Date passed', guidance: `${label} has passed. Update the date in Settings to restart the countdown.`, daysLeft: days }
+  if (days <= 7) return { phase: 'revise-only', label: 'Revise only', guidance: `${countdownLabel(days)} to ${label}: revise, retry mistakes and sit timed papers. Nothing new goes in now.`, daysLeft: days }
+  if (days <= 30) return { phase: 'consolidate', label: 'Consolidate', guidance: `${countdownLabel(days)} to ${label}: consolidate. Finish started chapters, clear the retry list and keep one mock a week.`, daysLeft: days }
+  if (days <= 90) return { phase: 'build', label: 'Build', guidance: `${countdownLabel(days)} to ${label}: build. New chapters still have time to settle before the final month.`, daysLeft: days }
+  return { phase: 'build', label: 'Build', guidance: `${countdownLabel(days)} to ${label}. Plenty of runway — build breadth first, then depth.`, daysLeft: days }
+}
+
 export interface TrackReadiness {
   track: TrackId
   label: string

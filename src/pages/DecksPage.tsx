@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { AlarmClock, Check, Edit3, Eye, Plus, Sigma, Trash2, WandSparkles } from 'lucide-react'
+import { AlarmClock, Check, CheckCircle2, ClipboardPaste, Edit3, Eye, FileDown, Layers, Plus, Sigma, Trash2, WandSparkles } from 'lucide-react'
 import { Button, Dialog, EmptyState, Field, NotebookCard, OverflowMenu, PageHeader, ProgressBar, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
 import { ChapterSelect, ChipFilter } from '../components/jee/shared'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { createId } from '../lib/id'
+import { createFormulaSheet } from '../lib/report'
 import { indiaToday, prettyDate } from '../lib/date'
 import { reviewCard, dueCards, ratingPreview, RATING_LABELS } from '../lib/jee/cards'
 import { CARD_RATINGS, type CardKind, type CardRating, type Chapter, type StudyCard } from '../types'
@@ -29,6 +30,13 @@ export default function DecksPage() {
   // A card's subject is its chapter's subject; cards whose chapter is gone match no subject.
   const subjectOfChapter = useMemo(() => new Map(data.chapters.map(item => [item.id, item.subject])), [data.chapters])
   const dueOverall = useMemo(() => subject === 'all' ? allDue : allDue.filter(card => subjectOfChapter.get(card.chapter_id) === subject), [allDue, subject, subjectOfChapter])
+  // Soonest future card in the open chapter, so "nothing due" can say when to come back
+  // instead of leaving the student with a dead button and no plan.
+  const nextDue = useMemo(() => {
+    const chapter = data.chapters.find(item => item.id === chapterId)
+    if (!chapter) return null
+    return data.studyCards.filter(card => card.chapter_id === chapter.id).map(card => card.next_review_at?.slice(0, 10)).filter((date): date is string => Boolean(date) && date! > today).sort()[0] ?? null
+  }, [data.chapters, data.studyCards, chapterId, today])
   const setSubject = (next: string) => {
     setSubjectState(next)
     if (next === 'all' || subjectOfChapter.get(chapterId) === next) return
@@ -39,7 +47,9 @@ export default function DecksPage() {
     setChapterId(withDue && withDue.due > 0 ? withDue.id : inSubject[0]?.id ?? '')
   }
   const [kind, setKind] = useState<KindFilter>('all')
-  const [reviewing, setReviewing] = useState(false)
+  // Which queue is open: the chapter's due cards, or every due card across chapters.
+  const [reviewQueue, setReviewQueue] = useState<'chapter' | 'all' | null>(null)
+  const [pasting, setPasting] = useState(false)
   const [editing, setEditing] = useState<StudyCard | 'new' | null>(null)
   const chapter = data.chapters.find(item => item.id === chapterId)
   const cards = useMemo(() => data.studyCards.filter(card => card.chapter_id === chapterId && (kind === 'all' || card.kind === kind)).sort((a, b) => a.kind.localeCompare(b.kind) || a.position - b.position), [data.studyCards, chapterId, kind])
@@ -49,6 +59,13 @@ export default function DecksPage() {
   const remover = async (card: StudyCard) => {
     try { await remove('study_cards', card); notify('Card removed.') }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not remove this card.', 'error') }
+  }
+
+  /** Print a whole subject's formulas at once — the revision artefact students actually use. */
+  const exportSheet = async () => {
+    if (!chapter) return
+    try { await createFormulaSheet(data, chapter.subject); notify(`Formula sheet exported for ${chapter.subject}.`) }
+    catch (error) { notify(error instanceof Error ? error.message : 'Could not build the formula sheet.', 'error') }
   }
 
   const importFormulaNotes = async () => {
@@ -93,9 +110,16 @@ export default function DecksPage() {
 
     {!chapter ? <NotebookCard><EmptyState title={subject !== 'all' && !data.chapters.some(item => item.subject === subject) ? `No ${subject} chapters yet. Add one in Syllabus.` : 'Pick a chapter to open its decks.'} /></NotebookCard> : <>
       <div className="jee-deck-actions">
-        <Button onClick={() => setReviewing(true)} disabled={chapterDue.length === 0}><Eye size={16} /> Review {chapterDue.length} due</Button>
+        <Button onClick={() => setReviewQueue('chapter')} disabled={chapterDue.length === 0}><Eye size={16} /> Review {chapterDue.length} due</Button>
+        <Button variant="secondary" onClick={() => setReviewQueue('all')} disabled={dueOverall.length === 0}><Layers size={15} /> Review all {dueOverall.length} due</Button>
         {chapter.formula_notes.trim() && <Button variant="secondary" onClick={() => void importFormulaNotes()}><WandSparkles size={15} />{' '}<T k="decks:make-formula-cards-from-chapter-notes">{"Make formula cards from chapter notes"}</T></Button>}
+        <Button variant="quiet" onClick={() => setPasting(true)}><ClipboardPaste size={15} /> Paste cards</Button>
+        <Button variant="quiet" onClick={() => void exportSheet()} disabled={!chapter}><FileDown size={15} /> Formula sheet PDF</Button>
       </div>
+
+      {cards.length > 0 && chapterDue.length === 0 && <p className="jee-deck-rest-note">
+        <CheckCircle2 size={15} aria-hidden="true" /> Nothing due in this deck. {nextDue ? `Next card comes back ${prettyDate(nextDue)}` : 'Come back tomorrow'} — or review ahead now.
+      </p>}
 
       <SectionHeading title={`${chapter.name}`} note={`${cards.length} card${cards.length === 1 ? '' : 's'} in view · ${gaps.map(gap => `R${gap}`).join(' → ')} ladder`} action={<SubjectBadge subject={chapter.subject} />} />
       {cards.length === 0 ? <NotebookCard><EmptyState lk="decks:no-cards-in-this-deck-yet" icon={<Sigma size={24} />} title="No cards in this deck yet." action={<Button variant="secondary" size="sm" onClick={() => setEditing('new')}><Plus size={15} />{' '}<T k="decks:add-a-card">{"Add a card"}</T></Button>} /></NotebookCard>
@@ -120,7 +144,16 @@ export default function DecksPage() {
       </div>}
     </>}
 
-    {reviewing && chapter && <ReviewDialog cards={chapterDue} chapterName={chapter.name} gaps={gaps} onClose={() => setReviewing(false)} onRate={async (card, rating) => {
+    {pasting && chapter && <PasteCardsDialog chapter={chapter} onClose={() => setPasting(false)} onSave={async cards => {
+      await upsertMany('study_cards', cards)
+      notify(`${cards.length} card${cards.length === 1 ? '' : 's'} added to ${chapter.name}.`)
+    }} />}
+    {reviewQueue === 'chapter' && chapter && <ReviewDialog cards={chapterDue} chapterName={chapter.name} gaps={gaps} onClose={() => setReviewQueue(null)} onRate={async (card, rating) => {
+      const updated = reviewCard(card, rating, gaps, new Date())
+      await upsert('study_cards', updated)
+      return updated
+    }} />}
+    {reviewQueue === 'all' && <ReviewDialog cards={dueOverall} chapterName={subject === 'all' ? 'Every chapter' : subject} gaps={gaps} onClose={() => setReviewQueue(null)} onRate={async (card, rating) => {
       const updated = reviewCard(card, rating, gaps, new Date())
       await upsert('study_cards', updated)
       return updated
@@ -231,6 +264,51 @@ function CardDialog({ card, chapters, subjects, initialChapterId, positionFor, o
       <Field lk="decks:hint-optional" label="Hint (optional)"><input maxLength={2000} value={hint} onChange={event => setHint(event.target.value)} /></Field>
       {error && <p className="field-error" role="alert">{error}</p>}
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}><T k="decks:cancel">{"Cancel"}</T></Button><Button type="submit" loading={saving}>{card ? 'Save card' : 'Add card'} <Check size={16} /></Button></div>
+    </form>
+  </Dialog>
+}
+
+/**
+ * Paste a list of cards instead of typing them one at a time. One card per line, either
+ * `front | back` or a plain line (front = line, back = blank). Mirrors the existing
+ * "formula cards from chapter notes" import, but for anything the student has already written.
+ */
+function PasteCardsDialog({ chapter, onClose, onSave }: {
+  chapter: Chapter; onClose: () => void; onSave: (cards: StudyCard[]) => Promise<void>
+}) {
+  const [text, setText] = useState('')
+  const [kind, setKind] = useState<CardKind>('flashcard')
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const { notify } = useToast()
+  const lines = text.split('\n').map(line => line.trim()).filter(Boolean)
+  const parsed = lines.map((line, index) => {
+    const [front, ...rest] = line.split('|')
+    return { front: (front ?? '').trim().slice(0, 4900), back: rest.join('|').trim().slice(0, 9900), index }
+  }).filter(card => card.front.length > 0)
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (saving) return
+    if (!parsed.length) { setError('Add at least one line.'); return }
+    if (parsed.length > 300) { setError('Paste up to 300 cards at a time.'); return }
+    setSaving(true)
+    const now = new Date().toISOString()
+    try {
+      await onSave(parsed.map((card, offset) => ({
+        id: createId(), chapter_id: chapter.id, kind, front: card.front, back: card.back,
+        hint: '', position: offset, difficulty: null, reviews: 0, last_reviewed_at: null,
+        next_review_at: null, last_rating: null, created_at: now, updated_at: now
+      })))
+      onClose()
+    } catch (caught) { notify(caught instanceof Error ? caught.message : 'Could not add the cards.', 'error') }
+    finally { setSaving(false) }
+  }
+  return <Dialog lk="decks:paste-cards" title="Paste cards" subtitle="One card per line: front | back." onClose={onClose} className="jee-dialog">
+    <form className="form-stack" noValidate onSubmit={submit}>
+      <Field lk="decks:l-kind" label="Add as"><select value={kind} onChange={event => setKind(event.target.value as CardKind)}><option value="flashcard">Flashcards</option><option value="formula">Formulas</option></select></Field>
+      <Field lk="decks:l-cards" label="Cards" hint={`${parsed.length} ready · ${chapter.name}`}><textarea rows={8} maxLength={40000} value={text} onChange={event => { setText(event.target.value); setError(null) }} placeholder={'Newton’s second law | F = ma\nAngular momentum | L = Iω'} /></Field>
+      {error && <p className="field-error" role="alert">{error}</p>}
+      <div className="dialog-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={saving} disabled={!parsed.length}>Add {parsed.length || ''} card{parsed.length === 1 ? '' : 's'}</Button></div>
     </form>
   </Dialog>
 }

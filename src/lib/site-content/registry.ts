@@ -450,7 +450,7 @@ export const USER_NAV_ITEMS: ReadonlyArray<{ slug: string; to: string; label: st
   { slug: 'mistakes', to: '/mistakes', label: 'Mistake notebook' },
   { slug: 'retry', to: '/retry', label: 'Retry' },
   { slug: 'analytics', to: '/analytics', label: 'Analytics' },
-  { slug: 'revision', to: '/revision', label: 'Revisions' },
+  { slug: 'revision', to: '/revision', label: 'Revision desk' },
   { slug: 'decks', to: '/decks', label: 'Formulas & flashcards' },
   { slug: 'study-now', to: '/study-now', label: 'Study now' },
   { slug: 'planner', to: '/planner', label: 'Study plan' },

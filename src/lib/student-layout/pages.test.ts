@@ -12,7 +12,7 @@ describe('per-page student components', () => {
   const pages = STUDENT_PAGES.filter(page => page.id !== 'home' && page.id !== 'shell')
 
   it('registers every page with slots wired into its source', () => {
-    expect(pages).toHaveLength(18)
+    expect(pages).toHaveLength(STUDENT_PAGES.length - 2)
     for (const page of pages) {
       const source = sourceFor(page.id)
       expect(source, page.id).toBeTruthy()

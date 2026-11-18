@@ -5,7 +5,7 @@ import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 import { createId } from '../lib/id'
 import type { StudyActivity, Subject } from '../types'
-import { buildFocusSession, defaultTimerState as defaults, hasUnsavedFocus, isFocusMode, liveElapsedSeconds, safeCustomMinutes, sanitizeTimerState, type FocusMode, type TimerState } from '../lib/focus-timer'
+import { buildFocusSession, configuredDurations, defaultTimerState as defaults, hasUnsavedFocus, isFocusMode, liveElapsedSeconds, safeCustomMinutes, sanitizeTimerState, type FocusMode, type TimerState } from '../lib/focus-timer'
 export type { FocusMode } from '../lib/focus-timer'
 
 interface FocusContextValue extends TimerState {
@@ -29,7 +29,8 @@ interface FocusContextValue extends TimerState {
    * study_sessions row (idempotent per block); `save: false` discards it. Returns the
    * minutes saved (0 when nothing was recorded).
    */
-  endBlock: (save: boolean) => number
+  /** `notes` is "what I actually did", saved on the session the block writes. */
+  endBlock: (save: boolean, notes?: string) => number
 }
 
 const KEY = 'stracker-focus-state'
@@ -70,13 +71,31 @@ export function FocusProvider({ children, preview }: { children: ReactNode; prev
     try { sessionStorage.setItem(storageKey, JSON.stringify(timer)) } catch { /* A blocked session store does not stop the timer. */ }
   }, [timer, storageKey, persist])
 
+  // Settings own how long each mode runs. Only idle blocks adopt a new length, so changing
+  // the preference never yanks a timer that is already counting down.
+  useEffect(() => {
+    if (preview) return
+    const next = configuredDurations(data.settings)
+    setTimer(current => {
+      const changed = (['Pomodoro', 'Short Break', 'Long Break'] as const).some(mode => current.durations[mode] !== next[mode])
+      if (!changed) return current
+      const idle = !current.running && current.remainingSeconds === current.durations[current.mode] * 60
+      return {
+        ...current,
+        durations: { ...next, Custom: current.durations.Custom },
+        remainingSeconds: idle ? next[current.mode] * 60 : Math.min(current.remainingSeconds, next[current.mode] * 60)
+      }
+    })
+  }, [data.settings.focus_minutes, data.settings.short_break_minutes, data.settings.long_break_minutes, preview])
+
   /** Block ids already written in this tab, so a double End/Save/completion cannot double-log. */
   const loggedBlocks = useRef(new Set<string>())
 
-  const logSession = useCallback((state: TimerState, completed: boolean, endedAt = Date.now()): number => {
+  const logSession = useCallback((state: TimerState, completed: boolean, endedAt = Date.now(), notes?: string): number => {
     if (state.blockId && loggedBlocks.current.has(state.blockId)) return 0
-    const session = buildFocusSession(state, completed, endedAt, createId())
-    if (!session) return 0
+    const built = buildFocusSession(state, completed, endedAt, createId())
+    if (!built) return 0
+    const session = notes ? { ...built, notes: notes.slice(0, 2000) } : built
     loggedBlocks.current.add(session.id)
     upsert('study_sessions', session).catch(error => notify(error instanceof Error ? error.message : 'Session saved on this device but could not sync.', 'error'))
     return session.duration_minutes
@@ -146,7 +165,7 @@ export function FocusProvider({ children, preview }: { children: ReactNode; prev
     })
   }, [])
 
-  const endBlock = useCallback((save: boolean): number => {
+  const endBlock = useCallback((save: boolean, notes?: string): number => {
     const snapshot = timerRef.current
     const now = Date.now()
     // A block whose deadline already passed is a natural completion, not a partial one.
@@ -154,7 +173,7 @@ export function FocusProvider({ children, preview }: { children: ReactNode; prev
       finish(snapshot)
       return 0
     }
-    const minutes = save ? logSession(snapshot, false, now) : 0
+    const minutes = save ? logSession(snapshot, false, now, notes) : 0
     if (snapshot.blockId) loggedBlocks.current.add(snapshot.blockId)
     const next = freshBlock(snapshot)
     timerRef.current = next

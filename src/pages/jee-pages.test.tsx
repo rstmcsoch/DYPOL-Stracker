@@ -200,14 +200,16 @@ describe('What should I study now', () => {
 })
 
 describe('Dashboard snapshot', () => {
-  it('shows raw and weighted completion side by side and the streak rule', async () => {
+  it('is one "this week" strip, not a second dashboard of counts', async () => {
+    // Chapter counts live in the hero; the snapshot only adds what nothing else shows.
     harness.data = baseData({ chapters: [chapter('a', 'A', { status: 'Done', importance: 'high' }), chapter('b', 'B', { importance: 'low' })] })
     const { HomeSnapshot } = await import('../components/jee/HomeSnapshot')
     renderPage(<HomeSnapshot />)
-    expect(screen.getByText('Raw completion')).toBeTruthy()
-    expect(screen.getByText('Weighted completion')).toBeTruthy()
-    expect(screen.getAllByText('50%').length).toBeGreaterThan(0)
-    expect(screen.getByText('80%')).toBeTruthy()
+    expect(screen.getByText('THIS WEEK')).toBeTruthy()
+    expect(screen.getByText('studied')).toBeTruthy()
+    expect(screen.getByText('questions')).toBeTruthy()
+    expect(screen.queryByText('Raw completion')).toBeNull()
+    expect(screen.queryByText('Weighted completion')).toBeNull()
   })
 })
 

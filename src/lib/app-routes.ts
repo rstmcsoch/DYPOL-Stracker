@@ -3,7 +3,7 @@
  * or /mistakes/abc) is an unknown address and gets the in-app "Page not found" view.
  */
 export const APP_SECTION_PATHS = [
-  '/syllabus', '/tests', '/mistakes', '/retry', '/planner', '/revision', '/analytics', '/weak-areas',
+  '/syllabus', '/tests', '/mistakes', '/planner', '/revision', '/analytics', '/weak-areas',
   '/backup', '/settings', '/profile', '/focus', '/practice', '/pyqs', '/backlog', '/mock-analysis',
   '/decks', '/study-now'
 ] as const

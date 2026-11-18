@@ -168,7 +168,7 @@
 .jee-insights .jee-pad { display: grid; gap: 6px; }
 
 /* Decks */
-.jee-deck-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.jee-deck-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; }
 .jee-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
 .jee-deck-card { display: grid; gap: 8px; padding: 12px 14px; min-width: 0; }
 .jee-deck-card-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

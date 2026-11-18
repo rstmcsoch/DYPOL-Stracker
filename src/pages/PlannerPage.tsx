@@ -9,8 +9,9 @@ import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { createId } from '../lib/id'
 import { goalSchema, MAX_COUNT_GOAL, MAX_WEEKLY_STUDY_HOURS } from '../lib/goal-validation'
+import { goalProgress } from '../lib/jee/goals'
 import { taskInputSchema } from '../lib/task-validation'
-import { indiaDate, indiaToday, prettyDate } from '../lib/date'
+import { indiaToday, prettyDate } from '../lib/date'
 import { MAX_INPUT_DATE, MIN_INPUT_DATE, isValidInputDate } from '../lib/date-input'
 import { fmtDuration, fmtNumber } from '../lib/format'
 import type { DailyTask, GoalType, Priority, Subject, WeeklyGoal } from '../types'
@@ -282,11 +283,5 @@ function GoalDialog({ weekStart, onClose, onSave }: { weekStart: string; onClose
   </Dialog>
 }
 
-function getGoalProgress(goal: WeeklyGoal, data: ReturnType<typeof useData>['data']): number {
-  const end = format(addDays(parseISO(`${goal.week_start}T12:00:00`), 6), 'yyyy-MM-dd')
-  if (goal.goal_type === 'study_hours') return data.sessions.filter(session => indiaDate(session.started_at) >= goal.week_start && indiaDate(session.started_at) <= end).reduce((sum, session) => sum + session.duration_minutes, 0) / 60
-  if (goal.goal_type === 'tests') return data.tests.filter(test => test.test_date >= goal.week_start && test.test_date <= end).length
-  if (goal.goal_type === 'chapters') return data.chapters.filter(chapter => chapter.completed_on && chapter.completed_on >= goal.week_start && chapter.completed_on <= end).length
-  if (goal.goal_type === 'revisions') return data.revisions.filter(revision => revision.completed_at && indiaDate(revision.completed_at) >= goal.week_start && indiaDate(revision.completed_at) <= end).length
-  return goal.progress_value
-}
+/** Kept as the page-local name; the counting lives in lib/jee/goals so Home shows the same number. */
+const getGoalProgress = (goal: WeeklyGoal, data: ReturnType<typeof useData>['data']): number => goalProgress(goal, data)

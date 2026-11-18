@@ -42,7 +42,7 @@ describe('checkStudentLayout', () => {
         'home.countdown': { style: { background: 'token:paper-soft', borderRadius: '20px' } }
       },
       order: { 'home.hero': ['home.streak', 'home.countdown'] },
-      nav: { groups: ['planning', 'study', 'syllabus', 'tests', 'revision'], items: { study: ['/', '/practice', '/focus', '/backlog'] }, hidden: ['/retry'] },
+      nav: { groups: ['planning', 'study', 'syllabus', 'tests', 'revision'], items: { study: ['/', '/practice', '/focus', '/backlog'] }, hidden: ['/backlog'] },
       tokens: { 'light:accent': '#335599', 'dark:accent': '#99aaff', radius: '12px' }
     })
     const { document, problems } = checkStudentLayout(raw)

@@ -20,13 +20,13 @@ type SortKey = 'date' | 'score' | 'title'
 type TestFieldErrors = Record<string, string>
 type TestFormValues = {
   title: string; test_date: string; test_type: TestType; subject: Subject | ''; chapter_id: string;
-  marks: string; total: string; correct: string; wrong: string; skipped: string; questions: string; negative: string; time: string; notes: string;
+  marks: string; total: string; correct: string; wrong: string; skipped: string; questions: string; negative: string; time: string; percentile: string; notes: string;
   mockScores: Record<Subject, { marks: string; total: string }>; jeePattern: JeeFullPattern
 }
 const TEST_TYPES: TestType[] = ['Chapter Test', 'Subject Test', 'Full Mock', 'PYQ Practice']
 const blankValues = (subjects: readonly string[], schemeValue: ReturnType<typeof markingSchemeFor> = null, jeePattern: JeeFullPattern = 'main'): TestFormValues => ({
   title: '', test_date: indiaToday(), test_type: 'Chapter Test', subject: '', chapter_id: '', marks: '', total: '',
-  correct: '', wrong: '', skipped: '', questions: '', negative: '', time: '', notes: '', jeePattern,
+  correct: '', wrong: '', skipped: '', questions: '', negative: '', time: '', percentile: '', notes: '', jeePattern,
   mockScores: fullMockDefaults(schemeValue, subjects, jeePattern)
 })
 
@@ -126,7 +126,7 @@ export default function TestsPage() {
       marks_obtained: values.test_type === 'Full Mock' ? null : nullableNumberInput(values.marks),
       total_marks: values.test_type === 'Full Mock' ? null : nullableNumberInput(values.total),
       correct: nullableNumberInput(values.correct), wrong: nullableNumberInput(values.wrong), skipped: nullableNumberInput(values.skipped), total_questions: nullableNumberInput(values.questions),
-      negative_marks: nullableNumberInput(values.negative), time_minutes: nullableNumberInput(values.time), notes: values.notes.trim()
+      negative_marks: nullableNumberInput(values.negative), time_minutes: nullableNumberInput(values.time), percentile: nullableNumberInput(values.percentile), notes: values.notes.trim()
     })
     const errors: TestFieldErrors = parsed.success ? {} : displayFieldErrors(parsed.error.issues)
 
@@ -191,7 +191,7 @@ export default function TestsPage() {
       marks_obtained: completeMock ? mockMarks : retainLegacyMockScore ? existingTest?.marks_obtained ?? null : parsed.data.marks_obtained,
       total_marks: completeMock ? mockTotal : retainLegacyMockScore ? existingTest?.total_marks ?? null : parsed.data.total_marks,
       correct: parsed.data.correct, wrong: parsed.data.wrong, skipped: parsed.data.skipped, total_questions: parsed.data.total_questions ?? null,
-      negative_marks: parsed.data.negative_marks, time_minutes: parsed.data.time_minutes, notes: parsed.data.notes,
+      negative_marks: parsed.data.negative_marks, time_minutes: parsed.data.time_minutes, percentile: parsed.data.percentile ?? null, notes: parsed.data.notes,
       created_at: existingTest?.created_at ?? now, updated_at: now
     }
 
@@ -247,10 +247,10 @@ export default function TestsPage() {
   }
 
   return <div className="content-page tests-page">
-    <PageHeader layoutId="tests.header" title="Test history" doodle={<ChartNoAxesCombined size={20} />} action={<Button onClick={() => { setEditing(null); setPresetChapterId(null); setCreating(true) }}><Plus size={17} />{' '}<T k="tests:add-test">{"Add test"}</T></Button>} />
+    <PageHeader layoutId="tests.header" title="Tests" doodle={<ChartNoAxesCombined size={20} />} action={<Button onClick={() => { setEditing(null); setPresetChapterId(null); setCreating(true) }}><Plus size={17} />{' '}<T k="tests:add-test">{"Add test"}</T></Button>} />
     {!sl.hidden('summary') && <div {...sl.attrs('summary')} className="test-summary-grid"><NotebookCard className="test-summary-card"><span><T k="tests:tests-logged">{"TESTS LOGGED"}</T></span><strong>{data.tests.length}</strong><small><T k="tests:across-every-practice-type">{"Across every practice type"}</T></small></NotebookCard><NotebookCard className="test-summary-card"><span><T k="tests:average-score">{"AVERAGE SCORE"}</T></span><strong>{averageScore === null ? '—' : `${Math.round(averageScore)}%`}</strong><small>{average.count ? `Mean of ${average.count} usable test result${average.count === 1 ? '' : 's'}; one test counts once` : 'No usable scores in this view'}</small></NotebookCard><NotebookCard className="test-summary-card"><span><T k="tests:accuracy">{"ACCURACY"}</T></span><strong>{accuracy.rate === null ? '—' : `${Math.round(accuracy.rate)}%`}</strong><small>{accuracy.correct}/{accuracy.attempted || '—'} correct / attempted</small></NotebookCard><NotebookCard className="test-summary-card"><span><T k="tests:attempt-rate">{"ATTEMPT RATE"}</T></span><strong>{attempt.rate === null ? '—' : `${Math.round(attempt.rate)}%`}</strong><small>{attempt.attempted}/{attempt.total || '—'} attempted / total</small></NotebookCard></div>}
     <NotebookCard {...sl.attrs('board')} className="test-history-board">
-      <div className="test-board-top"><div><span className="handwriting-label"><T k="tests:every-attempt-matters">{"Test history"}</T></span><p>{sortedTests.length} test{sortedTests.length === 1 ? '' : 's'} in view</p></div><div className="test-board-doodle" aria-hidden="true">∿✦</div></div>
+      <div className="test-board-top"><div><span className="handwriting-label"><T k="tests:every-attempt-matters">{"Every attempt"}</T></span><p>{sortedTests.length} test{sortedTests.length === 1 ? '' : 's'} in view</p></div><div className="test-board-doodle" aria-hidden="true">∿✦</div></div>
       <div className="test-filter-row">
         <div className="search-field"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search title, notes or chapter…" aria-label="Search tests" />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div>
         <label className="filter-select"><ListFilter size={15} /><select aria-label="Filter by test type" value={typeFilter} onChange={event => setTypeFilter(event.target.value as 'all' | TestType)}><option value="all">All test types</option>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></label>
@@ -320,7 +320,7 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
       ...base, title: initial.title, test_date: initial.test_date, test_type: initial.test_type, subject: initial.subject ?? '', chapter_id: initial.chapter_id ?? '',
       marks: initial.marks_obtained?.toString() ?? '', total: initial.total_marks?.toString() ?? '', correct: initial.correct?.toString() ?? '',
       wrong: initial.wrong?.toString() ?? '', skipped: initial.skipped?.toString() ?? '', questions: initial.total_questions?.toString() ?? '', negative: initial.negative_marks?.toString() ?? '',
-      time: initial.time_minutes?.toString() ?? '', notes: initial.notes, mockScores: scores
+      time: initial.time_minutes?.toString() ?? '', percentile: initial.percentile?.toString() ?? '', notes: initial.notes, mockScores: scores
     }
   })
   const [saving, setSaving] = useState(false)
@@ -390,6 +390,7 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
       <Field lk="tests:total-questions-optional" lk2="tests:correct-wrong-skipped-must-fit-within-th" label="Total questions (optional)" error={errors.questions} hint="Correct + wrong + skipped can’t exceed this."><input type="number" min="1" max={100000} step="1" value={values.questions} onChange={event => patch('questions', event.target.value)} placeholder="e.g. 50" aria-invalid={errors.questions ? true : undefined} /></Field>
       <div className="form-grid three"><Field lk="tests:correct" label="Correct" error={errors.correct}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.correct} onChange={event => patch('correct', event.target.value)} placeholder="—" /></Field><Field lk="tests:wrong" label="Wrong" error={errors.wrong}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.wrong} onChange={event => patch('wrong', event.target.value)} placeholder="—" /></Field><Field lk="tests:skipped" label="Skipped" error={errors.skipped}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.skipped} onChange={event => patch('skipped', event.target.value)} placeholder="—" /></Field></div>
       <div className="form-grid two"><Field lk="tests:negative-marks" label="Negative marks" error={errors.negative_marks}><input type="number" min="0" max={MAX_NEGATIVE_MARKS} step="0.25" value={values.negative} onChange={event => patch('negative', event.target.value)} placeholder="No estimate" /></Field><Field lk="tests:time-taken-minutes" label="Time taken (minutes)" error={errors.time_minutes}><input type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={values.time} onChange={event => patch('time', event.target.value)} placeholder="Optional" /></Field></div>
+      <Field lk="tests:percentile-optional" label="Percentile (optional)" hint="From your coaching report, if it gives one. Never estimated." error={errors.percentile}><input type="number" min="0" max="100" step="0.01" value={values.percentile} onChange={event => patch('percentile', event.target.value)} placeholder="e.g. 92.4" /></Field>
       <Field lk="tests:l-notes" label="Notes" error={errors.notes}><textarea rows={3} maxLength={10_000} value={values.notes} onChange={event => patch('notes', event.target.value)} placeholder="What felt easy? What deserves another look?" /></Field>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}><T k="tests:cancel">{"Cancel"}</T></Button><Button type="submit" loading={saving}>{initial ? 'Save changes' : 'Save test'}</Button></div>
     </form>
@@ -409,7 +410,7 @@ function TestDetails({ test, onClose, onEdit }: { test: TestRecord; onClose: () 
   return <Dialog title={test.title} subtitle={`${test.test_type} · ${prettyDate(test.test_date)}`} onClose={onClose}>
     <div className="test-detail-content"><div className="test-detail-badges">{test.test_type === 'Full Mock' ? <StatusBadge tone="muted"><T k="tests:all-subjects">{"All subjects"}</T></StatusBadge> : <SubjectBadge subject={test.subject} />}<StatusBadge>{test.test_type}</StatusBadge>{chapter && <StatusBadge tone="muted">{chapter.name}</StatusBadge>}</div>
       {test.test_type === 'Full Mock' ? <><div className="detail-score-box"><strong>{overallScore ? parentScoreLabel : scores.length ? 'Overall result incomplete' : parentScoreLabel}</strong><span>{overallPercentage === null ? scores.length ? 'A comparable percentage needs valid marks and totals for every subject score.' : parentResultMessage : `${Math.round(overallPercentage)}% of combined subject totals`}</span></div>{subjectRows}</> : subjectRows ?? <div className="detail-score-box"><strong>{parentScoreLabel}</strong><span>{overallPercentage === null ? parentResultMessage : `${Math.round(overallPercentage)}% of total marks`}</span></div>}
-      <div className="test-detail-facts">{[['Correct', test.correct], ['Wrong', test.wrong], ['Skipped', test.skipped], ['Total questions', test.total_questions ?? null], ['Negative marks', test.negative_marks], ['Time taken', test.time_minutes == null ? null : `${test.time_minutes} min`]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value ?? '—'}</strong></div>)}</div>
+      <div className="test-detail-facts">{[['Correct', test.correct], ['Wrong', test.wrong], ['Skipped', test.skipped], ['Total questions', test.total_questions ?? null], ['Negative marks', test.negative_marks], ['Time taken', test.time_minutes == null ? null : `${test.time_minutes} min`], ['Percentile', test.percentile == null ? null : `${test.percentile}%`]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value ?? '—'}</strong></div>)}</div>
       {test.notes && <div className="test-detail-notes"><span className="eyebrow"><T k="tests:after-test-notes">{"AFTER-TEST NOTES"}</T></span><p>{test.notes}</p></div>}
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose}><T k="tests:close">{"Close"}</T></Button><Button onClick={onEdit}><T k="tests:edit-record">{"Edit record"}</T></Button></div>
     </div>

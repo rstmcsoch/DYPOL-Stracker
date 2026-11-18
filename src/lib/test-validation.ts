@@ -25,6 +25,8 @@ export const testFormSchema = z.object({
   total_questions: z.number().finite().int().min(1, 'Total questions must be at least 1.').max(100_000, 'Total questions can be at most 100,000.').nullable().optional(),
   negative_marks: negativeMarksSchema,
   time_minutes: timeMinutesSchema,
+  /** The student's own percentile, only when they know it. Optional so older rows stay valid. */
+  percentile: z.number().finite().min(0).max(100).multipleOf(0.01).nullable().optional(),
   notes: z.string().max(10_000, 'Notes can be at most 10,000 characters.')
 }).superRefine((value, context) => {
   const answered = (value.correct ?? 0) + (value.wrong ?? 0) + (value.skipped ?? 0)

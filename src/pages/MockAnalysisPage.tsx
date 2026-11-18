@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Check, Clock3, Edit3, Lightbulb, Plus, Trash2 } from 'lucide-react'
+import { ArrowRight, Check, Clock3, Edit3, Lightbulb, NotebookPen, Plus, Trash2 } from 'lucide-react'
 import { Button, Dialog, EmptyState, Field, NotebookCard, OverflowMenu, PageHeader, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
 import { Meter, Pct, minutesLabel, wholeNumber } from '../components/jee/shared'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { createId, stableId } from '../lib/id'
 import { prettyDate } from '../lib/date'
-import { categoryTotals, checkLostMarks, mockInsights, mockSummary, subjectTimeRows } from '../lib/jee/mock-analysis'
+import { categoryTotals, chapterRepeatOffenders, checkLostMarks, fixFirstList, mockInsights, mockSummary, percentileBand, subjectDeltas, subjectTimeRows } from '../lib/jee/mock-analysis'
+import { causeTotals, typeForCause } from '../lib/mistake-cause'
 import { validateErrorLog, type ErrorLogFormInput, type ErrorLogValue } from '../lib/jee/forms'
-import { ERROR_CATEGORIES, type AppData, type ErrorCategory, type Subject, type TestErrorLog, type TestRecord, type TestTimeEntry } from '../types'
+import { ERROR_CATEGORIES, type AppData, type ErrorCategory, type Mistake, type Subject, type TestErrorLog, type TestRecord, type TestTimeEntry } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
 import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
@@ -37,7 +38,28 @@ export default function MockAnalysisPage() {
   const summary = mockSummary(selected, data)
   const totals = categoryTotals(logs)
   const insights = mockInsights(selected, data)
+  const band = percentileBand(data, selected)
   const hasRecordedTime = data.testTimeEntries.some(entry => entry.test_id === selected.id)
+  // Same causes as the mistake notebook, so a slip is counted once whichever page saw it.
+  const causes = causeTotals(data.mistakes, data.testErrorLogs)
+  const deltas = subjectDeltas(selected, data)
+  const fixes = fixFirstList(selected, data)
+  const repeatChapters = chapterRepeatOffenders(data).slice(0, 5)
+  const canTurnIntoMistake = (log: TestErrorLog) => Boolean(log.chapter_id ?? data.chapters.find(chapter => chapter.subject === log.subject)?.id)
+
+  const turnIntoMistake = async (log: TestErrorLog) => {
+    const chapterId = log.chapter_id ?? data.chapters.find(chapter => chapter.subject === log.subject)?.id ?? ''
+    if (!chapterId) { notify('Add a chapter for this subject in Syllabus, then try again.', 'error'); return }
+    const now = new Date().toISOString()
+    const record: Mistake = {
+      id: createId(), chapter_id: chapterId, test_id: selected.id, cause: log.category, mistake_type: typeForCause(log.category),
+      question_note: log.note.trim() || `${log.category} in ${selected.title}${log.questions ? ` · ${log.questions} question${log.questions === 1 ? '' : 's'}` : ''}`,
+      solution_note: '', image_path: null, retry_later: true, retry_status: 'pending',
+      created_at: now, updated_at: now
+    }
+    try { await upsert('mistakes', record); notify('Saved to your mistake notebook, ready to retry.') }
+    catch (error) { notify(error instanceof Error ? error.message : 'Could not save the mistake note.', 'error') }
+  }
 
   const removeLog = async (log: TestErrorLog) => {
     try { await remove('test_error_logs', log); notify('Classification removed.') }
@@ -66,6 +88,27 @@ export default function MockAnalysisPage() {
 
     <section {...sl.attrs('analysis')} className="jee-analysis-grid">
       <div className="jee-analysis-col">
+        <SectionHeading title="Change since last mock" note={deltas[0]?.previousTitle ? `Compared with ${deltas[0].previousTitle}.` : 'Needs an earlier mock of the same type.'} />
+        <NotebookCard className="mock-deltas">
+          {deltas.length === 0 ? <p className="jee-pad jee-muted">No subject results recorded for this test yet.</p> : <div className="mock-delta-grid">{deltas.map(row => <div key={row.subject} className="mock-delta-row">
+            <span><SubjectBadge subject={row.subject as Subject} /></span>
+            <strong>{row.current === null ? '—' : `${Math.round(row.current)}%`}</strong>
+            <span className={row.delta === null ? 'jee-muted' : row.delta > 0 ? 'jee-up' : row.delta < 0 ? 'jee-down' : 'jee-muted'}>
+              {row.delta === null ? 'no earlier score' : `${row.delta > 0 ? '+' : ''}${Math.round(row.delta)} pts`}
+            </span>
+          </div>)}</div>}
+        </NotebookCard>
+
+        {repeatChapters.length > 0 && <>
+          <SectionHeading title="Repeat offenders" note="Chapters flagged in two or more of your last five tests." />
+          <NotebookCard className="mock-repeat"><ul>{repeatChapters.map(item => <li key={item.chapterId}>
+            <SubjectBadge subject={item.subject} />
+            <strong>{item.chapterName}</strong>
+            <span className="jee-muted">{item.mocks} of last 5 tests{item.questions ? ` · ${item.questions} questions` : ''}</span>
+            <button type="button" className="text-link" onClick={() => navigate(`/practice?chapter=${item.chapterId}`)}>Practise</button>
+          </li>)}</ul></NotebookCard>
+        </>}
+
         <SectionHeading title="Recorded time & attempts" note="Only what you entered." action={<Button variant="secondary" size="sm" onClick={() => setTiming(true)}><Clock3 size={15} /> {hasRecordedTime ? 'Edit' : 'Add'} time</Button>} />
         <NotebookCard>
           {times.length === 0 ? <div className="jee-pad"><p className="jee-muted"><T k="mock-analysis:no-time-or-attempt-data-recorded-for-thi">{"No timing data recorded for this test."}</T></p></div> : <div className="jee-subject-time-list">
@@ -92,6 +135,7 @@ export default function MockAnalysisPage() {
                 {log.note && <p className="jee-note">{log.note}</p>}
               </div>
               <OverflowMenu label={`Actions for ${log.category}`} items={[
+                ...(canTurnIntoMistake(log) ? [{ id: 'mistake', label: 'Turn into a mistake note', icon: <NotebookPen size={15} />, onSelect: () => void turnIntoMistake(log) }] : []),
                 { id: 'edit', label: 'Edit', icon: <Edit3 size={15} />, onSelect: () => setClassifying(log) },
                 { id: 'delete', label: 'Delete', icon: <Trash2 size={15} />, danger: true, onSelect: () => void removeLog(log) }
               ]} />
@@ -115,7 +159,43 @@ export default function MockAnalysisPage() {
           </div>}
         </NotebookCard>
 
+        <SectionHeading title="Causes across your notebook" note="Mistake notes and mock tags, counted the same way." />
+        <NotebookCard>
+          {causes.length === 0 ? <p className="jee-muted jee-pad">Tag a lost mark or save a mistake to see causes.</p> : <div className="jee-category-bars">
+            {causes.map(row => <div key={row.cause} className="jee-category-bar">
+              <div><span>{row.cause}</span><b>{row.total} · {row.mistakes} notes, {row.logs} tags</b></div>
+              <Meter value={(row.total / causes[0]!.total) * 100} label={`${row.cause} share`} tone="orange" />
+            </div>)}
+          </div>}
+        </NotebookCard>
+
+        <SectionHeading title="What to fix first" note="Ordered by marks recoverable, not by count." />
+        {fixes.length > 0 && <NotebookCard className="mock-fix-first">
+          <ol>{fixes.slice(0, 5).map((item, index) => <li key={`${item.label}-${index}`}>
+            <span className="mock-fix-rank">{index + 1}</span>
+            <div><strong>{item.label}</strong><small>{item.reason}</small></div>
+            <button type="button" className="text-link" onClick={() => navigate(item.to)}>Open <ArrowRight size={13} /></button>
+          </li>)}</ol>
+        </NotebookCard>}
+
         <SectionHeading title="Fix before your next mock" note="Each line shows its basis." />
+        <SectionHeading title="Where this score sits" note="A band, not a promise." />
+        <NotebookCard className="mock-percentile">
+          <div className="mock-percentile-head">
+            <strong>{band.percentile === null ? '—' : band.percentile.toFixed(1)}<small> %ile</small></strong>
+            <div>
+              <span className="jee-tag">{band.label}</span>
+              <p className="jee-muted">{band.note}</p>
+            </div>
+          </div>
+          {band.position !== null && <>
+            <div className="mock-percentile-track" role="img" aria-label={`Percentile ${band.percentile?.toFixed(1)} on a 0 to 100 scale`}>
+              <span style={{ width: `${band.position}%` }} />
+            </div>
+            <div className="mock-percentile-scale" aria-hidden="true"><span>0</span><span>50</span><span>90</span><span>100</span></div>
+          </>}
+        </NotebookCard>
+
         <NotebookCard className="jee-insights">
           {insights.length === 0 ? <div className="jee-pad"><Lightbulb size={18} aria-hidden="true" /><p className="jee-muted"><T k="mock-analysis:not-enough-data-yet">{"Not enough data yet."}</T></p></div> : <ul>
             {insights.map((insight, index) => <li key={index}>
