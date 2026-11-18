@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowUpRight, Bell, Clock3, ListChecks } from 'lucide-react'
+import { ArrowUpRight, Bell, ListChecks } from 'lucide-react'
 import { NotebookCard } from '../ui'
-import { Meter, Pct, minutesLabel } from './shared'
+import { Pct, minutesLabel } from './shared'
 import { useData } from '../../contexts/DataContext'
 import { indiaToday } from '../../lib/date'
 import { aggregatePractice, pyqCompletion, pyqProgressCounts } from '../../lib/jee/progress'
@@ -43,14 +43,35 @@ export function HomeSnapshot({ layoutAttrs, children }: { layoutAttrs?: Record<s
   return <section className="jee-snapshot jee-snapshot-line" aria-label="This week at a glance" {...layoutAttrs}>
     <NotebookCard className="jee-snap-card jee-snap-week">
       <div className="jee-snap-head"><span className="eyebrow"><T k="home:this-week">{"THIS WEEK"}</T></span><button type="button" className="jee-link" onClick={() => navigate('/analytics')}><T k="home:open">{"Open"}</T>{' '}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
-      <div className="jee-week-facts">
-        <div><Clock3 size={13} aria-hidden="true" /><strong>{minutesLabel(weekMinutes)}</strong><span>studied</span></div>
-        <div><strong>{practice.attempted.toLocaleString('en-IN')}</strong><span>questions</span><small><Pct value={practice.accuracy} /> accuracy</small></div>
-        {jee && <div><strong><Pct value={pyqMain.percent} /></strong><span>Main PYQs</span></div>}
-        <div><strong>{pyqCounts.doneYears.toLocaleString('en-IN')}</strong><span>PYQ chapter-years</span></div>
-        <button type="button" className="jee-week-backlog" onClick={() => navigate('/backlog')}><ListChecks size={13} aria-hidden="true" /> Backlog: <strong>{backlog.dueNow}</strong> due now · <strong>{backlog.dueTomorrow}</strong> tomorrow</button>
-      </div>
-      <Meter value={practice.accuracy} label="Practice accuracy" tone="blue" />
+      <ul className="jee-week-facts">
+        <li className="jee-week-fact">
+          <span>Studied</span>
+          <strong>{minutesLabel(weekMinutes)}</strong>
+          <small>this week</small>
+        </li>
+        <li className="jee-week-fact">
+          <span>Questions</span>
+          <strong>{practice.attempted.toLocaleString('en-IN')}</strong>
+          <small>{practice.accuracy === null ? 'no accuracy yet' : `${Math.round(practice.accuracy)}% accuracy`}</small>
+        </li>
+        {jee && <li className="jee-week-fact">
+          <span>Main PYQs</span>
+          <strong><Pct value={pyqMain.percent} /></strong>
+          <small>covered</small>
+        </li>}
+        <li className="jee-week-fact">
+          <span>PYQ chapter-years</span>
+          <strong>{pyqCounts.doneYears.toLocaleString('en-IN')}</strong>
+          <small>done</small>
+        </li>
+      </ul>
+      <button type="button" className="jee-week-backlog" onClick={() => navigate('/backlog')}>
+        <ListChecks size={14} aria-hidden="true" />
+        <span>Backlog</span>
+        <span className="jee-week-backlog-count">{backlog.dueNow} due now</span>
+        <span className="jee-week-backlog-sep" aria-hidden="true">·</span>
+        <span className="jee-week-backlog-count">{backlog.dueTomorrow} tomorrow</span>
+      </button>
     </NotebookCard>
 
     {children}

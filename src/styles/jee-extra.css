@@ -36,12 +36,79 @@
 .study-time-form-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
 
 /* --- Home weekly snapshot strip ------------------------------------------------------- */
-.jee-snap-week { display: grid; gap: 10px; }
-.jee-week-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr)); gap: 8px 14px; margin: 0; padding: 0; list-style: none; }
-.jee-week-facts li { display: grid; gap: 1px; min-width: 0; }
-.jee-week-facts span { color: var(--muted); font-size: 12px; letter-spacing: .01em; }
-.jee-week-facts strong { font: 400 19px/1.15 var(--font-number); color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.jee-week-facts small { color: var(--muted); font-size: max(.8125rem, calc(11px * var(--body-scale, 1))); }
+.jee-snap-week { display: grid; gap: 12px; }
+
+/* Four equal metric columns — label on top, number in the display face, note under it —
+   the same order the app's stat cards use, so this strip stops inventing its own style.
+   The icon is gone: it made the first row slightly taller than the rest and pushed the
+   numbers out of line with each other. */
+.jee-week-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 92px), 1fr));
+  margin: 0;
+  padding: 0 0 12px;
+  list-style: none;
+  border-bottom: 1px dashed var(--line);
+}
+.jee-week-fact {
+  display: grid;
+  align-content: start;
+  gap: 1px;
+  min-width: 0;
+  padding: 0 12px;
+  border-left: 1px solid var(--line);
+}
+.jee-week-fact:first-child { padding-left: 0; border-left: 0; }
+.jee-week-fact:last-child { padding-right: 0; }
+.jee-week-fact > span {
+  color: var(--muted);
+  font: 700 max(.8125rem, calc(10px * var(--body-scale, 1))) var(--font-body);
+  letter-spacing: .7px;
+  text-transform: uppercase;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.jee-week-fact > strong {
+  color: var(--ink);
+  font: 400 22px/1.15 var(--font-number);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  overflow-wrap: anywhere;
+}
+/* An unmeasured value should read as "nothing yet", not as a loud em dash. */
+.jee-week-fact > strong .jee-muted { color: var(--line-strong); }
+.jee-week-fact > small {
+  color: var(--muted);
+  font-size: max(.8125rem, calc(11px * var(--body-scale, 1)));
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* Backlog is a destination, so it reads as a quiet pill on its own row — not a fifth
+   metric squeezed into the numbers and not a bare bordered button. */
+.jee-week-backlog {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper-muted);
+  color: var(--ink-soft);
+  font: 600 12.5px var(--font-body);
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.jee-week-backlog:hover,
+.jee-week-backlog:focus-visible { border-color: var(--accent); color: var(--accent); background: var(--paper); }
+.jee-week-backlog > svg { color: var(--accent); flex: none; }
+.jee-week-backlog-count { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.jee-week-backlog:hover .jee-week-backlog-count,
+.jee-week-backlog:focus-visible .jee-week-backlog-count { color: var(--accent); }
+.jee-week-backlog-sep { color: var(--line-strong); }
 .jee-snap-strip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .jee-snap-strip-head h2 { margin: 0; font: 400 15px/1.2 var(--font-heading); letter-spacing: .04em; color: var(--ink-soft); }
 .jee-snap-strip-head a, .jee-snap-strip-head button { font-size: 12px; color: var(--accent); }
@@ -282,7 +349,10 @@
 .syllabus-header-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
 
 @media (max-width: 560px) {
-  .jee-snap-week .jee-week-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jee-snap-week .jee-week-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; }
+  .jee-week-fact:nth-child(odd) { padding-left: 0; border-left: 0; }
+  .jee-week-fact:nth-child(n+3) { padding-top: 12px; border-top: 1px solid var(--line); }
+  .jee-week-backlog { width: 100%; justify-content: center; }
   .study-time-actions { align-items: stretch; flex-direction: column; }
   .study-time-actions .study-minute-quick { justify-content: flex-start; }
   .streak-rest-row { gap: 6px; }

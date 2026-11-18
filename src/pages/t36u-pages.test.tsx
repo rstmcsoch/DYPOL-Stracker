@@ -131,8 +131,12 @@ describe('Home due tomorrow', () => {
     ] })
     const { HomeSnapshot } = await import('../components/jee/HomeSnapshot')
     renderPage(<HomeSnapshot />)
-    expect(screen.getByRole('button', { name: /Backlog: 2 due now/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /1 tomorrow/ })).toBeTruthy()
+    // One pill carries both counts, so the numbers still stay separate on screen.
+    const pill = screen.getByRole('button', { name: /Backlog/ })
+    expect(pill.textContent).toContain('2 due now')
+    expect(pill.textContent).toContain('1 tomorrow')
+    // A completed and a snoozed item due tomorrow must not inflate the number.
+    expect(pill.textContent).not.toContain('3')
   })
 })
 
