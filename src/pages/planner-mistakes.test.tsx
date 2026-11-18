@@ -128,3 +128,52 @@ describe('Retry list “Reveal my note”', () => {
     expect(screen.queryByText(/No note saved/)).toBeNull()
   })
 })
+
+describe('Mistake notebook layout', () => {
+  // These two sections previously had no stylesheet at all: the tab strip rendered as raw
+  // browser buttons and the card actions as five equal-weight text links. The classes are
+  // what the new CSS targets, so they are part of the contract now.
+  it('gives every tab a real class and a count pill', async () => {
+    harness.data = baseData({ mistakes: [mistake()] })
+    const { default: MistakesPage } = await import('./MistakesPage')
+    renderAt(<MistakesPage />, '/mistakes')
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs).toHaveLength(3)
+    for (const tab of tabs) expect(tab.className).toContain('mistake-tab')
+    expect(tabs[0]!.className).toContain('is-active')
+    expect(tabs[1]!.className).not.toContain('is-active')
+    for (const tab of tabs) expect(tab.querySelector('.mistake-tab-count')).toBeTruthy()
+  })
+
+  it('marks exactly one tab active at a time', async () => {
+    harness.data = baseData({ mistakes: [mistake()] })
+    const { default: MistakesPage } = await import('./MistakesPage')
+    renderAt(<MistakesPage />, '/mistakes')
+    fireEvent.click(screen.getByRole('tab', { name: /Retry list/ }))
+    const active = screen.getAllByRole('tab').filter(tab => tab.className.includes('is-active'))
+    expect(active).toHaveLength(1)
+    expect(active[0]!.textContent).toContain('Retry list')
+  })
+
+  it('renders card actions as styled buttons with one primary decision', async () => {
+    harness.data = baseData({ mistakes: [mistake({ retry_later: false })] })
+    const { default: MistakesPage } = await import('./MistakesPage')
+    renderAt(<MistakesPage />, '/mistakes')
+    const actions = document.querySelectorAll('.mistake-entry-actions .mistake-action')
+    expect(actions.length).toBeGreaterThanOrEqual(3)
+    // Exactly one filled button per card, so the eye knows where to go.
+    const primary = document.querySelectorAll('.mistake-entry-actions .mistake-action-primary')
+    expect(primary).toHaveLength(1)
+    expect(primary[0]!.textContent).toContain('Retry later')
+    // And no leftover text-link styling from the old layout.
+    expect(document.querySelector('.mistake-row-action')).toBeNull()
+  })
+
+  it('offers "Mark retried" as the primary action once a note is on the retry list', async () => {
+    harness.data = baseData({ mistakes: [mistake({ retry_later: true })] })
+    const { default: MistakesPage } = await import('./MistakesPage')
+    renderAt(<MistakesPage />, '/mistakes')
+    const primary = document.querySelector('.mistake-action-primary')
+    expect(primary?.textContent).toContain('Mark retried')
+  })
+})
