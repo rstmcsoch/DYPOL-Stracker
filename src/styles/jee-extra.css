@@ -358,6 +358,46 @@
   .jee-deck-actions .button { flex: 1 1 auto; justify-content: center; }
 }
 
+/* --- Analytics: syllabus progress card --------------------------------------------- */
+/* This card sits beside Mock target in the final two-column row. Give it the same
+   notebook-card inset so the header, subject rows and progress bars never touch
+   the outer border, especially when the grid collapses on smaller screens. */
+.syllabus-analytics-card {
+  min-width: 0;
+  min-height: 225px;
+  padding: 15px 16px;
+}
+.syllabus-analytics-card .chart-card-head {
+  min-width: 0;
+  gap: 12px;
+}
+.syllabus-analytics-card .chart-card-head > div:first-child {
+  min-width: 0;
+}
+.syllabus-analytics-card .chart-head-actions {
+  flex: 0 0 auto;
+  align-items: center;
+}
+.syllabus-analytics-card .subject-syllabus-list {
+  gap: 12px;
+  margin-top: 14px;
+}
+.syllabus-analytics-card .subject-syllabus-list > div {
+  min-width: 0;
+}
+.syllabus-analytics-card .subject-syllabus-list > div > div:first-child {
+  gap: 8px 12px;
+}
+@media (max-width: 560px) {
+  .syllabus-analytics-card {
+    min-height: 0;
+    padding: 12px 13px;
+  }
+  .syllabus-analytics-card .chart-card-head {
+    gap: 9px;
+  }
+}
+
 /* --- Mistake notebook: tabs, card actions --------------------------------------------- */
 /* These two blocks had no stylesheet at all, so the tab strip rendered as raw browser
    buttons and the card actions as five equal-weight text links. Both now use the same
