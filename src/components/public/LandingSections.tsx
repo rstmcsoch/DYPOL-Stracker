@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   AlarmClock, ArrowRight, BookOpen, CalendarCheck, Check, ChevronDown, ChevronUp, Compass,
-  ListChecks, LockKeyhole, NotebookPen, Repeat2, Shield, ShieldCheck, Sparkles, Target,
-  TrendingUp, Timer
+  KeyRound, ListChecks, LockKeyhole, NotebookPen, Repeat2, Shield, ShieldCheck, Sparkles, Target, ToggleLeft, TrendingUp, Timer
 } from 'lucide-react'
 import { useSiteText, useSiteValues } from '../../contexts/SiteContentContext'
 import { infoPageBody } from '../../lib/site-content/info-pages'
@@ -228,7 +227,16 @@ export function AiSection() {
         <h2 id="ai-title" className="hp-h2" data-se-key="public.ai.title">{t('public.ai.title')}</h2>
         <p className="hp-lede" data-se-key="public.ai.lede">{t('public.ai.lede')}</p>
         <dl className="hp-ai-facts">
-          {[1, 2, 3, 4].map(n => <div key={n} className={`hp-tone-${tone(n - 1)}`}>
+          {[1, 2, 3, 4].map((n, index) => <div key={n} className={`hp-ai-fact hp-tone-${tone(index)}`}>
+            <div className="hp-ai-fact-head">
+              <span className="hp-ai-fact-icon" aria-hidden="true">
+                {index === 0 ? <KeyRound size={18} strokeWidth={1.9} />
+                  : index === 1 ? <BookOpen size={18} strokeWidth={1.9} />
+                  : index === 2 ? <ShieldCheck size={18} strokeWidth={1.9} />
+                  : <ToggleLeft size={18} strokeWidth={1.9} />}
+              </span>
+              <span className="hp-ai-fact-index" aria-hidden="true">{String(n).padStart(2, '0')}</span>
+            </div>
             <dt>{t(`public.ai.fact_${n}.term`)}</dt>
             <dd>{t(`public.ai.fact_${n}.body`)}</dd>
           </div>)}
