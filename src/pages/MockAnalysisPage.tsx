@@ -182,11 +182,11 @@ export default function MockAnalysisPage() {
         <SectionHeading title="Where this score sits" note="A band, not a promise." />
         <NotebookCard className="mock-percentile">
           <div className="mock-percentile-head">
-            <strong>{band.percentile === null ? '—' : band.percentile.toFixed(1)}<small> %ile</small></strong>
-            <div>
+            <div className="mock-percentile-score">
+              <strong>{band.percentile === null ? '—' : band.percentile.toFixed(1)}<small> %ile</small></strong>
               <span className="jee-tag">{band.label}</span>
-              <p className="jee-muted">{band.note}</p>
             </div>
+            <p className="jee-muted">{band.note}</p>
           </div>
           {band.position !== null && <>
             <div className="mock-percentile-track" role="img" aria-label={`Percentile ${band.percentile?.toFixed(1)} on a 0 to 100 scale`}>
