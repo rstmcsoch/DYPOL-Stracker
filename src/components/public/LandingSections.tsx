@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   AlarmClock, ArrowRight, BookOpen, CalendarCheck, Check, ChevronDown, ChevronUp, Compass,
-  KeyRound, ListChecks, LockKeyhole, NotebookPen, Repeat2, Shield, ShieldCheck, SlidersHorizontal,
-  Sparkles, Target, ToggleLeft, TrendingUp, Timer
+  KeyRound, ListChecks, LockKeyhole, NotebookPen, Repeat2, Shield, ShieldCheck, Sparkles, Target, ToggleLeft, TrendingUp, Timer
 } from 'lucide-react'
 import { useSiteText, useSiteValues } from '../../contexts/SiteContentContext'
 import { infoPageBody } from '../../lib/site-content/info-pages'
