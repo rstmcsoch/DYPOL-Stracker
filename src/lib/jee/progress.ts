@@ -70,6 +70,12 @@ export interface PracticeAggregate {
   /** Accuracy over the most recent three practice blocks only. */
   recentAccuracy: number | null
   timeMinutes: number
+  /**
+   * Average seconds per attempted question, from blocks that recorded time.
+   * Null when no block has both a time and questions. Self-reported time is approximate,
+   * so this is shown as a pace reading, never as a score.
+   */
+  secondsPerQuestion: number | null
 }
 
 export const PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL = 20
@@ -89,8 +95,29 @@ export function aggregatePractice(sessions: PracticeSession[]): PracticeAggregat
     skipped: sum(sorted, item => item.skipped ?? 0),
     accuracy: attempted > 0 ? (correct / attempted) * 100 : null,
     recentAccuracy: recentAttempted > 0 ? (sum(recent, item => item.correct) / recentAttempted) * 100 : null,
-    timeMinutes: sum(sorted, item => item.time_minutes ?? 0)
+    timeMinutes: sum(sorted, item => item.time_minutes ?? 0),
+    secondsPerQuestion: (() => {
+      const timed = sorted.filter(item => item.time_minutes !== null && item.attempted > 0)
+      const timedAttempted = sum(timed, item => item.attempted)
+      const timedMinutes = sum(timed, item => item.time_minutes ?? 0)
+      return timedAttempted > 0 && timedMinutes > 0 ? (timedMinutes * 60) / timedAttempted : null
+    })()
   }
+}
+
+export type SpeedAccuracyBand = 'fast-accurate' | 'fast-loose' | 'slow-accurate' | 'slow-loose'
+
+/**
+ * The four practice quadrants, against the student's own weak-area threshold and a 90-second
+ * pace reference (JEE Main allows roughly 1 minute per question, Advanced more; 90 s is a
+ * middle marker, not a target). "Fast and accurate" is the only cell that needs no work.
+ */
+export function speedAccuracyBand(agg: PracticeAggregate, weakThreshold: number): SpeedAccuracyBand | null {
+  if (agg.accuracy === null || agg.secondsPerQuestion === null || agg.attempted < PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL) return null
+  const accurate = agg.accuracy >= weakThreshold
+  const fast = agg.secondsPerQuestion <= 90
+  if (accurate) return fast ? 'fast-accurate' : 'slow-accurate'
+  return fast ? 'fast-loose' : 'slow-loose'
 }
 
 export function practiceByChapter(data: AppData): Map<string, PracticeAggregate> {
@@ -124,17 +151,24 @@ export interface PyqCompletion {
   percent: number | null
   pendingYears: number[]
   doneYears: number[]
+  /** Question-level detail, present only for years where both counts were recorded. */
+  questions: { done: number; total: number; percent: number | null }
 }
 
 export function pyqCompletion(records: PyqRecord[], chapterId: string | null, exam: PYQExam, settings: AppSettings): PyqCompletion {
   const years = pyqYears(settings)
   const doneYears = years.filter(year => records.some(record => (chapterId === null || record.chapter_id === chapterId) && record.exam === exam && record.year === year && record.status === 'done'))
   const done = doneYears.length
+  const scoped = records.filter(record => (chapterId === null || record.chapter_id === chapterId) && record.exam === exam && years.includes(record.year))
+  const withCounts = scoped.filter(record => record.questions_total !== null && record.questions_total > 0)
+  const questionsDone = withCounts.reduce((sum, record) => sum + Math.min(record.questions_done ?? 0, record.questions_total ?? 0), 0)
+  const questionsTotal = withCounts.reduce((sum, record) => sum + (record.questions_total ?? 0), 0)
   return {
     exam, done, total: years.length,
     percent: years.length ? (done / years.length) * 100 : null,
     doneYears,
-    pendingYears: years.filter(year => !doneYears.includes(year))
+    pendingYears: years.filter(year => !doneYears.includes(year)),
+    questions: { done: questionsDone, total: questionsTotal, percent: questionsTotal > 0 ? (questionsDone / questionsTotal) * 100 : null }
   }
 }
 

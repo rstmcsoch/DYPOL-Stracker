@@ -24,7 +24,6 @@ export const routeLoaders = {
   '/syllabus': once(() => import('../pages/SyllabusPage')),
   '/tests': once(() => import('../pages/TestsPage')),
   '/mistakes': once(() => import('../pages/MistakesPage')),
-  '/retry': once(() => import('../pages/RetryPage')),
   '/planner': once(() => import('../pages/PlannerPage')),
   '/revision': once(() => import('../pages/RevisionPage')),
   '/analytics': once(() => import('../pages/AnalyticsPage')),

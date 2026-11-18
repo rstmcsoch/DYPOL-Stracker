@@ -46,6 +46,13 @@ export function defaultSettings(userId: string, ownerName = ''): AppSettings {
     boards_addon: false,
     onboarding_completed: false,
     extra_exams: [],
+    streak_rest_days: 1,
+    streak_rest_days_used: [],
+    streak_freezes_used: [],
+    subject_daily_targets: {},
+    focus_minutes: 25,
+    short_break_minutes: 5,
+    long_break_minutes: 15,
     created_at: now,
     updated_at: now
   }
@@ -108,6 +115,26 @@ export function normalizeSettings(row: Record<string, unknown>, userId: string):
     boards_addon: row.boards_addon === true,
     onboarding_completed: row.onboarding_completed === true,
     extra_exams: normalizeExtraExams(row.extra_exams),
+    streak_rest_days: Math.max(0, Math.min(2, asInt(row.streak_rest_days, fallback.streak_rest_days))),
+    streak_rest_days_used: Array.isArray(row.streak_rest_days_used)
+      ? [...new Set(row.streak_rest_days_used.filter((value): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)))].sort().slice(-60)
+      : fallback.streak_rest_days_used,
+    streak_freezes_used: Array.isArray(row.streak_freezes_used)
+      ? [...new Set(row.streak_freezes_used.filter((value): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)))].sort().slice(-24)
+      : fallback.streak_freezes_used,
+    subject_daily_targets: (() => {
+      const raw = row.subject_daily_targets
+      if (!raw || typeof raw !== 'object') return fallback.subject_daily_targets
+      const out: Partial<Record<Subject, number>> = {}
+      for (const subject of ['Physics', 'Chemistry', 'Maths'] as const) {
+        const value = (raw as Record<string, unknown>)[subject]
+        if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1440) out[subject] = Math.round(value)
+      }
+      return out
+    })(),
+    focus_minutes: Math.max(1, Math.min(180, asInt(row.focus_minutes, fallback.focus_minutes))),
+    short_break_minutes: Math.max(1, Math.min(60, asInt(row.short_break_minutes, fallback.short_break_minutes))),
+    long_break_minutes: Math.max(1, Math.min(120, asInt(row.long_break_minutes, fallback.long_break_minutes))),
     created_at: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : new Date().toISOString()
   }

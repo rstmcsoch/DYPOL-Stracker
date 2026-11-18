@@ -4,6 +4,8 @@ import { percent } from './format.js'
 import type {
   AppData, Chapter, MistakeType, Subject, TestChapterLink, TestRecord, TestSubjectScore
 } from '../types/index.js'
+import type { ErrorCategory } from '../types/index.js'
+import { causeOf } from './mistake-cause.js'
 import { SUBJECTS } from '../types/index.js'
 import { subjectsFor } from './exams/subjects.js'
 import { aggregateScoresBySubject } from './exams/marking.js'
@@ -277,30 +279,104 @@ export function getMistakeCounts(data: AppData): { type: MistakeType; count: num
   return types.map(type => ({ type, count: data.mistakes.filter(mistake => mistake.mistake_type === type).length }))
 }
 
-export function getSmartTip(data: AppData): string {
+/**
+ * Chapters where the same cause keeps repeating.
+ *
+ * One slip is noise; the same cause three times in a month in one chapter is a routine that
+ * needs changing. This is the only signal that looks at *repetition* rather than totals, and
+ * it is what the Home tip and the Weak-areas banner quote.
+ */
+export interface RepeatOffender {
+  chapterId: string
+  chapterName: string
+  subject: Subject
+  cause: ErrorCategory
+  /** Notes recorded in the window. */
+  count: number
+  /** Days between the first and the latest of them. */
+  spanDays: number
+  /** Where to act: chapter practice for this chapter. */
+  to: string
+}
+
+export function getRepeatOffenders(data: AppData, today: string, options: { days?: number; minCount?: number } = {}): RepeatOffender[] {
+  const days = options.days ?? 30
+  const minCount = options.minCount ?? 3
+  const cutoff = format(addDays(parseISO(`${today}T12:00:00`), -(days - 1)), 'yyyy-MM-dd')
+  const groups = new Map<string, { chapterId: string; cause: ErrorCategory; dates: string[] }>()
+  for (const mistake of data.mistakes) {
+    const day = indiaDate(mistake.created_at)
+    if (day < cutoff || day > today) continue
+    const cause = causeOf(mistake)
+    const key = `${mistake.chapter_id}|${cause}`
+    const group = groups.get(key) ?? { chapterId: mistake.chapter_id, cause, dates: [] }
+    group.dates.push(day)
+    groups.set(key, group)
+  }
+  const out: RepeatOffender[] = []
+  for (const group of groups.values()) {
+    if (group.dates.length < minCount) continue
+    const chapter = data.chapters.find(item => item.id === group.chapterId)
+    if (!chapter) continue
+    const sorted = [...group.dates].sort()
+    out.push({
+      chapterId: chapter.id, chapterName: chapter.name, subject: chapter.subject, cause: group.cause,
+      count: group.dates.length,
+      spanDays: differenceInCalendarDays(parseISO(`${sorted.at(-1)}T12:00:00`), parseISO(`${sorted[0]}T12:00:00`)) + 1,
+      to: `/practice?chapter=${chapter.id}`
+    })
+  }
+  return out.sort((a, b) => b.count - a.count || a.spanDays - b.spanDays || a.chapterName.localeCompare(b.chapterName))
+}
+
+export interface SmartTip {
+  text: string
+  /** Where the student can act on the tip. */
+  to: string
+  cta: string
+}
+
+/**
+ * The one-line tip used on Home, the weekly report and the PDF. It carries the route that
+ * actually fixes the problem it describes, so the card's button is not a generic "Analytics".
+ */
+export function getSmartTipAction(data: AppData): SmartTip {
+  // Repetition first: the same cause three times in a month in one chapter is far more
+  // actionable than any total, and it names both the chapter and the fix.
+  const repeat = getRepeatOffenders(data, indiaToday(), { days: 30, minCount: 3 })[0]
+  if (repeat) {
+    return {
+      text: `You have made ${repeat.count} ${repeat.cause.toLowerCase()} notes in ${repeat.chapterName} in the last 30 days. That is a routine problem, not bad luck — slow that step down.`,
+      to: repeat.to,
+      cta: `Practise ${repeat.chapterName}`.slice(0, 60)
+    }
+  }
   const counts = getMistakeCounts(data)
   const largest = [...counts].sort((a, b) => b.count - a.count)[0]
   if (largest && largest.count > 0 && counts.filter(item => item.count === largest.count).length === 1 && largest.type === 'Silly') {
-    return `Most of your recorded mistakes (${largest.count}) are silly mistakes. Add a 5-minute verification step to your test routine.`
+    return { text: `Most of your recorded mistakes (${largest.count}) are silly mistakes. Add a 5-minute verification step to your test routine.`, to: '/mistakes?tab=all', cta: 'Review the notebook' }
   }
   const subjects = getSubjectPerformance(data).filter(item => item.average !== null)
   if (subjects.length >= 2) {
     const lowest = [...subjects].sort((a, b) => (a.average ?? 0) - (b.average ?? 0))[0]
     const others = subjects.filter(item => item.subject !== lowest?.subject)
     if (lowest?.average !== null && lowest?.average !== undefined && others.length && others.every(item => item.average !== null && item.average - lowest.average! >= 10)) {
-      return `${lowest.subject} is currently below your other subject averages. Plan one focused practice block and review the last mistakes.`
+      return { text: `${lowest.subject} is currently below your other subject averages. Plan one focused practice block and review the last mistakes.`, to: `/practice?subject=${encodeURIComponent(lowest.subject)}`, cta: `Practise ${lowest.subject}` }
     }
   }
   const untested = countUntestedChapters(data)
-  if (untested >= 5) return `You have ${untested} untested chapters. Short chapter tests can reveal gaps before the next full mock.`
+  if (untested >= 5) return { text: `You have ${untested} untested chapters. Short chapter tests can reveal gaps before the next full mock.`, to: '/tests', cta: 'Log a chapter test' }
   const overdue = data.revisions.filter(item => !item.completed_at && item.due_on < indiaToday()).length
-  if (overdue > 0) return `You have ${overdue} overdue revision${overdue === 1 ? '' : 's'}. Clear the oldest one before adding low-priority tasks.`
+  if (overdue > 0) return { text: `You have ${overdue} overdue revision${overdue === 1 ? '' : 's'}. Clear the oldest one before adding low-priority tasks.`, to: '/revision', cta: 'Clear revisions' }
   const declining = getChapterPerformance(data).find(item => item.dropping)
-  if (declining) return `${declining.chapter.name} is down by ${Math.round((declining.results[1]?.percentage ?? 0) - (declining.latest ?? 0))} points on the latest test. Review the paper before attempting another.`
-  const untestedTotal = untested
-  if (untestedTotal > 0) return `${untestedTotal} chapter${untestedTotal === 1 ? ' is' : 's are'} still untested. Try a short test to establish a baseline.`
-  if (data.tasks.some(task => task.task_date === indiaToday() && !task.is_completed)) return 'Start with one high-priority task. A small, finished block is a good way into the day.'
-  return 'Your study data is up to date. Keep logging tests and focus sessions to make your next insight more useful.'
+  if (declining) return { text: `${declining.chapter.name} is down by ${Math.round((declining.results[1]?.percentage ?? 0) - (declining.latest ?? 0))} points on the latest test. Review the paper before attempting another.`, to: '/mock-analysis', cta: 'Open mock analysis' }
+  if (untested > 0) return { text: `${untested} chapter${untested === 1 ? ' is' : 's are'} still untested. Try a short test to establish a baseline.`, to: '/tests', cta: 'Log a chapter test' }
+  if (data.tasks.some(task => task.task_date === indiaToday() && !task.is_completed)) return { text: 'Start with one high-priority task. A small, finished block is a good way into the day.', to: '/planner', cta: 'Open today\'s plan' }
+  return { text: 'Your study data is up to date. Keep logging tests and focus sessions to make your next insight more useful.', to: '/analytics', cta: 'See analytics' }
+}
+
+export function getSmartTip(data: AppData): string {
+  return getSmartTipAction(data).text
 }
 
 /** One chart point: `date`, `overall`, plus one key per subject (null when not recorded). */

@@ -50,7 +50,16 @@ export const settingsSchema = z.object({
   onboarding_completed: z.boolean().default(false),
   // Extra exams a student adds in Settings (e.g. a state CET beside their main exam). Additive:
   // older rows and backups without the column default to none.
-  extra_exams: z.array(extraExamSchema).max(MAX_EXTRA_EXAMS, `Add up to ${MAX_EXTRA_EXAMS} extra exams.`).default([])
+  extra_exams: z.array(extraExamSchema).max(MAX_EXTRA_EXAMS, `Add up to ${MAX_EXTRA_EXAMS} extra exams.`).default([]),
+  // Streak rest days and focus lengths are additive: rows and exports written before they
+  // existed simply take the shipped defaults.
+  streak_rest_days: z.number().int().min(0).max(2).default(1),
+  streak_rest_days_used: z.array(dateValue).max(60).default([]),
+  streak_freezes_used: z.array(dateValue).max(24).default([]),
+  subject_daily_targets: z.partialRecord(z.enum(['Physics', 'Chemistry', 'Maths']), z.number().int().min(0).max(1440)).default({}),
+  focus_minutes: z.number().int().min(1).max(180).default(25),
+  short_break_minutes: z.number().int().min(1).max(60).default(5),
+  long_break_minutes: z.number().int().min(1).max(120).default(15)
 }).refine(value => value.weak_threshold < value.strong_threshold, {
   path: ['strong_threshold'],
   message: 'Strong above must be greater than Weak below.'

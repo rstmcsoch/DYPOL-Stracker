@@ -1,13 +1,13 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { AlertOctagon, Bell, CalendarDays, Check, Cloud, Database, KeyRound, LogOut, Palette, RotateCcw, Save, Shield, SlidersHorizontal, Target, Timer, Type, UserRound } from 'lucide-react'
+import { AlertOctagon, Bell, CalendarDays, Check, Cloud, Database, Flame, KeyRound, LogOut, Palette, RotateCcw, Save, Shield, SlidersHorizontal, Target, Timer, Type, UserRound } from 'lucide-react'
 import { Button, Dialog, Field, InfoTip, NotebookCard, PageHeader, StatusBadge } from '../components/ui'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import { useAppearancePreview, useReadingFontPreview } from '../contexts/AppearanceContext'
 import { useToast } from '../contexts/ToastContext'
-import { clearLocalUserData } from '../lib/database'
+import { clearLocalUserData, OWNER_DATA_TABLES, ownerDataCounts } from '../lib/database'
 import { supabase } from '../lib/supabase'
 import { readingFontOption, READING_FONT_OPTIONS } from '../lib/fonts'
 import { COLOR_THEME_OPTIONS } from '../lib/themes'
@@ -45,7 +45,7 @@ const TAB_FIELDS: Record<Exclude<SettingsTab, 'data'>, (keyof AppSettings)[]> = 
   account: ['owner_name'],
   exam: ['main_exam_date', 'advanced_exam_date', 'target_score', 'active_track', 'exam_mode', 'weight_high', 'weight_medium', 'weight_low', 'pyq_from_year', 'pyq_to_year', 'extra_exams'],
   appearance: ['theme', 'interface_font', 'color_theme'],
-  rhythm: ['weak_threshold', 'strong_threshold', 'dropping_threshold', 'revision_gaps', 'daily_study_goal_minutes', 'sound_enabled', 'reminders_enabled', 'reminder_time', 'reminder_types']
+  rhythm: ['weak_threshold', 'strong_threshold', 'dropping_threshold', 'revision_gaps', 'daily_study_goal_minutes', 'sound_enabled', 'reminders_enabled', 'reminder_time', 'reminder_types', 'streak_rest_days', 'subject_daily_targets', 'focus_minutes', 'short_break_minutes', 'long_break_minutes']
 }
 
 /** Field-level equality for persisted values, including arrays such as revision gaps. */
@@ -84,6 +84,7 @@ export default function SettingsPage() {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
   const [firstResetOpen, setFirstResetOpen] = useState(false)
   const [secondResetOpen, setSecondResetOpen] = useState(false)
+  const [resetCounts, setResetCounts] = useState<Awaited<ReturnType<typeof ownerDataCounts>> | null>(null)
   const [resetText, setResetText] = useState('')
   const [resetting, setResetting] = useState(false)
   const resettingRef = useRef(false)
@@ -276,8 +277,7 @@ export default function SettingsPage() {
           const { error } = await supabase.storage.from('mistake-images').remove(imagePaths)
           if (error) throw new Error('Could not remove uploaded images. No data was reset; retry after checking access.')
         }
-        const tables = ['mistakes','test_chapter_links','test_subject_scores','chapter_revisions','tests','daily_tasks','weekly_goals','study_sessions','chapters','app_settings','profiles'] as const
-        for (const table of tables) {
+        for (const table of OWNER_DATA_TABLES) {
           const { error } = await supabase.from(table).delete().eq('user_id', user.id)
           if (error) throw new Error('Cloud reset stopped because an owner-scoped record could not be deleted. Retry sync or contact your Supabase administrator.')
         }
@@ -426,6 +426,27 @@ export default function SettingsPage() {
 
             <NotebookCard className="settings-section"><SectionLabel lk="settings:daily-goal-focus" icon={<Timer size={18} />} title="Daily goal & focus" /><div className="settings-section-content"><div className="form-grid two"><Field lk="settings:daily-study-goal-hours" label="Daily study goal (hours)" error={errors.daily_study_goal_minutes}><input type="number" min={1 / 60} max="24" step="any" value={dailyGoalText} onChange={event => { setDailyGoalText(event.target.value); setErrors(current => { const next = { ...current }; delete next.daily_study_goal_minutes; return next }) }} /><span className="field-hint"><T k="settings:use-whole-minute-increments-for-example">{"Whole minutes only, e.g. 1.5 hours."}</T></span></Field><label className="sound-toggle"><input type="checkbox" checked={draft.sound_enabled} onChange={event => patch('sound_enabled', event.target.checked)} /><span className="toggle-visual" /><span><strong><T k="settings:focus-timer-sound">{"Focus timer sound"}</T></strong><small><T k="settings:play-a-soft-tone-when-a-focus-session-en">{"Play a sound when a session ends."}</T></small></span></label></div><div className="settings-note-line"><Bell size={15} /> Sound is generated locally in your browser; no audio is sent to a service.{draft.sound_enabled && <button className="text-button" type="button" onClick={playTestTone}>{soundTested ? 'Test tone played' : 'Try a tone'}</button>}</div></div></NotebookCard>
 
+            <NotebookCard className="settings-section"><SectionLabel lk="settings:subject-daily-targets" lk2="settings:split-the-daily-goal-by-subject" icon={<Target size={18} />} title="Per-subject daily targets" note="Leave blank to keep one goal for the whole day." />
+              <div className="settings-section-content"><div className="form-grid three">
+                {(['Physics', 'Chemistry', 'Maths'] as const).map(subject => <Field key={subject} lk={`settings:target-${subject.toLowerCase()}`} label={`${subject} (min)`}>
+                  <input type="number" min={0} max={1440} step="5" value={draft.subject_daily_targets?.[subject] ?? ''} placeholder="No target" onChange={event => {
+                    const next = { ...(draft.subject_daily_targets ?? {}) }
+                    if (event.target.value === '') delete next[subject]
+                    else next[subject] = Math.max(0, Math.min(1440, Math.round(Number(event.target.value))))
+                    patch('subject_daily_targets', next)
+                  }} />
+                </Field>)}
+              </div>
+              <p className="settings-note-line"><Target size={15} /> The Home study ring shows one arc per subject with a target. Minutes, not percentages.</p></div></NotebookCard>
+
+            <NotebookCard className="settings-section"><SectionLabel lk="settings:focus-lengths" lk2="settings:how-long-each-timer-block-runs" icon={<Timer size={18} />} title="Focus lengths" note="How long each timer block runs." /><div className="settings-section-content"><div className="form-grid three">
+              <Field lk="settings:focus-minutes" label="Focus (min)"><input type="number" min="1" max="180" step="1" value={draft.focus_minutes} onChange={event => patch('focus_minutes', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
+              <Field lk="settings:short-break-minutes" label="Short break (min)"><input type="number" min="1" max="60" step="1" value={draft.short_break_minutes} onChange={event => patch('short_break_minutes', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
+              <Field lk="settings:long-break-minutes" label="Long break (min)"><input type="number" min="1" max="120" step="1" value={draft.long_break_minutes} onChange={event => patch('long_break_minutes', event.target.value === '' ? Number.NaN : Number(event.target.value))} /></Field>
+            </div><p className="settings-note-line"><Timer size={15} /> The Focus page and the Home card use these lengths. A running block keeps its length.</p></div></NotebookCard>
+
+            <NotebookCard className="settings-section"><SectionLabel lk="settings:streak-rest-days" lk2="settings:how-often-a-rest-day-can-keep-the-streak" icon={<Flame size={18} />} title="Streak rest days" note="Protect the streak on a real off day." /><div className="settings-section-content"><Field lk="settings:rest-days-per-week" label="Rest days allowed per week"><select value={draft.streak_rest_days} onChange={event => patch('streak_rest_days', Number(event.target.value))}><option value={0}>None — strict streak</option><option value={1}>1 per week</option><option value={2}>2 per week</option></select></Field><p className="settings-note-line"><Flame size={15} /> A rest day bridges a gap without adding to the count. Only days you actually take are counted, and never more than the limit each week.</p></div></NotebookCard>
+
             <ReminderSettingsSection draft={draft} patch={patch} errors={errors} />
 
             <NotebookCard className="settings-section"><SectionLabel lk="settings:weak-area-thresholds" lk2="settings:bands-for-test-results" icon={<Target size={18} />} title="Weak-area thresholds" note="Bands for test results." /><div className="settings-section-content"><div className="form-grid three">
@@ -443,7 +464,7 @@ export default function SettingsPage() {
           <fieldset className="settings-form-fields">
             <NotebookCard className="settings-section backup-status-settings"><SectionLabel lk="settings:export-backup" lk2="settings:private-to-your-account-keep-an-export-s" icon={<Cloud size={18} />} title="Export & backup" note="Private to your account. Keep an export safe." /><div className="settings-section-content"><div className="backup-status-line"><div><strong>{data.settings.last_backup_at ? `Last backup ${new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(data.settings.last_backup_at))}` : 'No backup recorded yet'}</strong><span>{data.settings.last_backup_at ? 'JSON, PDF and DOCX exports live in Export & Backup.' : 'A JSON backup is the easiest way to keep a portable copy.'}</span></div><Button variant="secondary" type="button" onClick={() => navigate('/backup')}><T k="settings:open-export-backup">{"Open Export & backup"}</T></Button></div></div></NotebookCard>
 
-            <section className="danger-zone" aria-label="Danger zone"><div className="danger-zone-head"><div className="danger-icon"><AlertOctagon size={18} /></div><div><h2><T k="settings:danger-zone">{"Danger zone"}</T></h2><p><T k="settings:these-options-affect-your-entire-study-n">{"These affect your whole notebook."}</T></p></div></div><div className="danger-zone-row"><div><strong><T k="settings:reset-all-study-data">{"Reset all study data"}</T></strong><span><T k="settings:delete-your-cloud-records-mistake-images">{"Delete your cloud records, mistake images, and this device’s offline cache. This cannot be recovered unless you exported a backup."}</T></span></div><Button variant="danger" type="button" onClick={() => setFirstResetOpen(true)}><RotateCcw size={15} />{' '}<T k="settings:reset-all-data">{"Reset all data"}</T></Button></div></section>
+            <section className="danger-zone" aria-label="Danger zone"><div className="danger-zone-head"><div className="danger-icon"><AlertOctagon size={18} /></div><div><h2><T k="settings:danger-zone">{"Danger zone"}</T></h2><p><T k="settings:these-options-affect-your-entire-study-n">{"These affect your whole notebook."}</T></p></div></div><div className="danger-zone-row"><div><strong><T k="settings:reset-all-study-data">{"Reset all study data"}</T></strong><span><T k="settings:delete-your-cloud-records-mistake-images">{"Delete your cloud records, mistake images, and this device’s offline cache. This cannot be recovered unless you exported a backup."}</T></span></div><Button variant="danger" type="button" onClick={() => { setFirstResetOpen(true); setResetCounts(null); const userId = data.profile?.user_id ?? user?.id; if (userId) void ownerDataCounts(userId).then(setResetCounts).catch(() => setResetCounts(null)) }}><RotateCcw size={15} />{' '}<T k="settings:reset-all-data">{"Reset all data"}</T></Button></div></section>
           </fieldset>
         </form>
       </div>}
@@ -453,7 +474,8 @@ export default function SettingsPage() {
     <div className="settings-signout"><Button type="button" variant="quiet" onClick={() => void signOutFromSettings()} loading={signingOut}><LogOut size={15} />{' '}<T k="settings:sign-out">{"Sign out"}</T></Button></div>
 
     {passwordDialogOpen && <ChangePasswordDialog mode={googleOnly ? 'set' : 'change'} onClose={() => setPasswordDialogOpen(false)} />}
-    {firstResetOpen && <Dialog lk="settings:this-will-erase-your-study-history" lk2="settings:chapters-tests-mistakes-revisions-tasks" title="This will erase your study history." subtitle="Chapters, tests, mistakes, revisions, tasks, goals, sessions and uploaded images will be permanently removed from the cloud and this device." onClose={() => setFirstResetOpen(false)} className="dialog-danger"><div className="reset-warning"><AlertOctagon size={22} /><p><T k="settings:export-a-json-backup-first-if-you-may-wa">{"Export a JSON backup first if you may want to restore your data later. This reset does not delete your Supabase login account."}</T></p></div><div className="dialog-actions"><Button variant="secondary" onClick={() => setFirstResetOpen(false)}><T k="settings:keep-my-data">{"Keep my data"}</T></Button><Button variant="danger" onClick={() => { setFirstResetOpen(false); setSecondResetOpen(true) }}><T k="settings:continue-to-confirmation">{"Continue to confirmation"}</T></Button></div></Dialog>}
+    {firstResetOpen && <Dialog lk="settings:this-will-erase-your-study-history" lk2="settings:chapters-tests-mistakes-revisions-tasks" title="This will erase your study history." subtitle="Chapters, tests, mistakes, revisions, tasks, goals, sessions and uploaded images will be permanently removed from the cloud and this device." onClose={() => setFirstResetOpen(false)} className="dialog-danger"><div className="reset-warning"><AlertOctagon size={22} /><p><T k="settings:export-a-json-backup-first-if-you-may-wa">{"Export a JSON backup first if you may want to restore your data later. This reset does not delete your Supabase login account."}</T></p></div>
+      {resetCounts && resetCounts.some(row => row.count > 0) && <div className="reset-counts"><p className="reset-counts-head">On this device, this removes:</p><ul>{resetCounts.filter(row => row.count > 0).map(row => <li key={row.table}><strong>{row.count.toLocaleString('en-IN')}</strong> {row.label}</li>)}</ul></div>}<div className="dialog-actions"><Button variant="secondary" onClick={() => setFirstResetOpen(false)}><T k="settings:keep-my-data">{"Keep my data"}</T></Button><Button variant="danger" onClick={() => { setFirstResetOpen(false); setSecondResetOpen(true) }}><T k="settings:continue-to-confirmation">{"Continue to confirmation"}</T></Button></div></Dialog>}
     {secondResetOpen && <Dialog lk="settings:one-last-check" lk2="settings:to-confirm-type-reset-exactly-your-data" title="One last check." subtitle="To confirm, type RESET exactly. Your data will not be recoverable from Stracker after this." onClose={() => { setSecondResetOpen(false); setResetText('') }} className="dialog-danger"><Field lk="settings:type-reset-to-confirm" label="Type RESET to confirm"><input autoFocus autoComplete="off" value={resetText} onChange={event => setResetText(event.target.value)} /></Field><div className="dialog-actions"><Button variant="secondary" onClick={() => { setSecondResetOpen(false); setResetText('') }} disabled={resetting}><T k="settings:cancel">{"Cancel"}</T></Button><Button variant="danger" loading={resetting} disabled={resetText !== 'RESET'} onClick={() => void resetAll()}><AlertOctagon size={15} /> {resetting ? 'Resetting…' : 'Permanently reset'}</Button></div></Dialog>}
   </div>
 }

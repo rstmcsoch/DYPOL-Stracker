@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, BookOpen, CalendarCheck, Check, ChevronRight, Coffee, Focus, Link2, Moon, Pause, Play, RotateCcw, Search, Sparkles, Square, Timer, Unlink, X } from 'lucide-react'
 import { Button, Dialog, ProgressRing, SubjectBadge } from '../components/ui'
 import { useFocus, type FocusMode } from '../contexts/FocusContext'
+import { ManualStudyTimeDialog } from '../components/jee/ManualStudyTimeDialog'
 import { useData } from '../contexts/DataContext'
 import { indiaToday } from '../lib/date'
 import type { StudyActivity, Subject } from '../types'
@@ -34,6 +35,8 @@ export default function FocusPage() {
    * mode switch. `then` says what happens after the student picks Save or Discard.
    */
   const [confirmEnd, setConfirmEnd] = useState<null | { then: 'stay' | 'exit' | { mode: FocusMode } }>(null)
+  // Studying away from the timer (a lecture, a paper) still needs a way into the notebook.
+  const [loggingTime, setLoggingTime] = useState(false)
   const unsaved = timer.unsaved
   const focusBlock = isFocusMode(timer.mode)
   const selectedTask = data.tasks.find(task => task.id === timer.taskId)
@@ -61,11 +64,11 @@ export default function FocusPage() {
     if (mode === timer.mode) return
     if (unsaved) setConfirmEnd({ then: { mode } }); else timer.switchMode(mode)
   }
-  const resolveEnd = (save: boolean) => {
+  const resolveEnd = (save: boolean, notes?: string) => {
     const pending = confirmEnd
     setConfirmEnd(null)
     if (!pending) return
-    timer.endBlock(save)
+    timer.endBlock(save, notes)
     if (pending.then === 'exit') navigate('/')
     else if (typeof pending.then === 'object') timer.switchMode(pending.then.mode)
   }
@@ -115,8 +118,10 @@ export default function FocusPage() {
       {taskPickerOpen && <TaskLinkPicker tasks={data.tasks.filter(task => task.task_date === indiaToday())} linkedId={timer.taskId} onClose={() => setTaskPickerOpen(false)} onChoose={taskId => { timer.setTask(taskId); setTaskPickerOpen(false) }} />}
       </div>
       {!sl.hidden('footnote') && <div {...sl.attrs('footnote')} className="focus-footer-note"><Sparkles size={14} />{' '}<T k="focus:your-timer-keeps-going-if-you-step-away">{"Your timer keeps running when you leave. End the block to save your time."}</T></div>}
+      <button type="button" className="focus-log-time-link" onClick={() => setLoggingTime(true)}>{' '}<T k="focus:studied-without-the-timer">{"Studied without the timer? Add the time"}</T>{' '}</button>
     </main>
-    {confirmEnd && <EndBlockDialog seconds={timer.liveElapsed} onSave={() => resolveEnd(true)} onDiscard={() => resolveEnd(false)} onKeep={() => setConfirmEnd(null)} exiting={confirmEnd.then === 'exit'} />}
+    {confirmEnd && <EndBlockDialog seconds={timer.liveElapsed} onSave={notes => resolveEnd(true, notes)} onDiscard={() => resolveEnd(false)} onKeep={() => setConfirmEnd(null)} exiting={confirmEnd.then === 'exit'} />}
+    {loggingTime && <ManualStudyTimeDialog onClose={() => setLoggingTime(false)} />}
     <footer className="focus-bottom"><span><T k="focus:stracker">{"Stracker"}</T>{' '}<strong><T k="focus:by-dypol-labs">{"by DYPOL LABS"}</T></strong></span><span><T k="focus:press">{"Press"}</T>{' '}<kbd>Esc</kbd>{' '}<T k="focus:to-exit">{"to exit ·"}</T>{' '}<kbd>Space</kbd>{' '}<T k="focus:to-pause-or-resume">{"to pause or resume"}</T></span></footer>
   </div>
 }
@@ -195,15 +200,20 @@ function TaskLinkPicker({ tasks, linkedId, onClose, onChoose }: {
  * Save / discard / keep-studying confirmation for an unfinished focus block. The
  * minutes shown are the ones a save records: real elapsed time across every segment.
  */
-function EndBlockDialog({ seconds, onSave, onDiscard, onKeep, exiting }: { seconds: number; onSave: () => void; onDiscard: () => void; onKeep: () => void; exiting: boolean }) {
+function EndBlockDialog({ seconds, onSave, onDiscard, onKeep, exiting }: { seconds: number; onSave: (notes: string) => void; onDiscard: () => void; onKeep: () => void; exiting: boolean }) {
+  const [notes, setNotes] = useState('')
   const minutes = loggableMinutes(seconds)
   const studied = formatStudiedDuration(seconds)
   const title = minutes >= 1 ? `Save ${studied} of study time?` : `Only ${studied} studied`
   return <Dialog title={title} onClose={onKeep} className="dialog-narrow focus-end-dialog">
     <div className="focus-end-body">
       <p>{minutes >= 1 ? `You studied ${studied} in this block. ${Math.floor(seconds) % 60 === 0 ? 'Save it to your study time, or discard it.' : `Study time is logged in whole minutes, so saving adds ${minutes} min.`}` : 'Blocks under 30 seconds aren’t saved. Discard it or keep studying.'}</p>
+      <label className="focus-end-note">
+        <span><T k="focus:what-did-you-actually-do">{"What did you actually do?"}</T> <small className="field-hint inline">Optional, but it is what the weekly report quotes.</small></span>
+        <textarea rows={2} maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)} placeholder="Finished 12 DPP questions, still shaky on sign conventions" />
+      </label>
       <div className="focus-end-actions">
-        <Button variant="marker" onClick={onSave} disabled={minutes < 1}><Check size={15} /> {exiting ? 'Save & exit' : 'Save & end'}</Button>
+        <Button variant="marker" onClick={() => onSave(notes)} disabled={minutes < 1}><Check size={15} /> {exiting ? 'Save & exit' : 'Save & end'}</Button>
         <Button variant="secondary" onClick={onDiscard}><X size={15} /> {exiting ? 'Discard & exit' : 'Discard & end'}</Button>
         <Button variant="quiet" onClick={onKeep}><Play size={15} />{' '}<T k="focus:keep-studying">{"Keep studying"}</T></Button>
       </div>

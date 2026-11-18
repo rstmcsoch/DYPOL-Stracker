@@ -5,23 +5,38 @@ import { StudyNowCard } from '../components/jee/StudyNowCard'
 import { Meter, Pct } from '../components/jee/shared'
 import { useData } from '../contexts/DataContext'
 import { indiaToday } from '../lib/date'
-import { allTrackReadiness, countdownLabel, currentExamMode, trackLabels } from '../lib/jee/exam'
+import { allTrackReadiness, countdownLabel, countdownShape, currentExamMode, trackLabels } from '../lib/jee/exam'
 import { computeReminders, REMINDER_LABEL } from '../lib/jee/reminders'
 import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
+/**
+ * `/study-now` is now the expanded view of the Home recommendation card, not a separate
+ * destination in the sidebar: same card component (with the full ranked shortlist), plus
+ * the Exam-Mode and track-readiness detail that used to justify a whole page. Old links
+ * keep working.
+ */
 export default function StudyNowPage() {
-  const sl = usePageSlots('study-now')
   const { data } = useData()
   const navigate = useNavigate()
+  const sl = usePageSlots('study-now')
   const today = indiaToday()
   const mode = currentExamMode(data, today)
+  const shape = countdownShape(data, today)
   const tracks = allTrackReadiness(data, today)
   const labels = trackLabels(data.settings)
   const reminders = computeReminders(data, today)
   return <div className="content-page study-now-page">
-    <PageHeader layoutId="study-now.header" title="Study now" subtitle="Your most useful next task." />
-    <StudyNowCard />
+    <PageHeader layoutId="study-now.header" title="What to study now" subtitle="The full ranked shortlist behind your Home card." />
+    <StudyNowCard expanded />
+
+    {shape.phase !== 'none' && <NotebookCard className={`jee-countdown-shape phase-${shape.phase}`}>
+      <div className="jee-countdown-shape-head"><span className="jee-tag">{shape.label}</span><strong>{shape.daysLeft === null ? '' : countdownLabel(shape.daysLeft)}</strong></div>
+      <p>{shape.guidance}</p>
+      <div className="jee-countdown-steps" aria-label="Plan shape">
+        {(['build', 'consolidate', 'revise-only'] as const).map(phase => <span key={phase} className={shape.phase === phase ? 'is-active' : shape.phase === 'build' && phase !== 'build' ? '' : phase === 'revise-only' && shape.phase === 'consolidate' ? 'is-next' : ''}>{phase === 'build' ? 'Build' : phase === 'consolidate' ? 'Consolidate' : 'Revise only'}</span>)}
+      </div>
+    </NotebookCard>}
 
     <SectionHeading title="Exam Mode" note={mode.reason} action={<Button variant="secondary" size="sm" onClick={() => navigate('/settings')}><Settings2 size={15} />{' '}<T k="study-now:exam-settings">{"Exam settings"}</T></Button>} />
     <NotebookCard {...sl.attrs('exam-mode')} className="jee-exam-mode">

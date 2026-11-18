@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowDownRight, ArrowUpRight, ChevronDown, ChevronUp, Minus, Plus, Target, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight, ChevronDown, ChevronUp, Minus, Plus, Target, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react'
 import { Button, EmptyState, InfoTip, NotebookCard, PageHeader, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
-import { getChapterPerformance } from '../lib/analytics'
+import { getChapterPerformance, getRepeatOffenders } from '../lib/analytics'
 import { practiceByChapter, PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL, type PracticeAggregate } from '../lib/jee/progress'
 import { Meter, Pct } from '../components/jee/shared'
+import { causeTotals } from '../lib/mistake-cause'
+import { indiaToday } from '../lib/date'
 import type { Chapter, Subject } from '../types'
 import { useReportSubjects } from '../lib/exams/useExamSubjects'
 import { T } from '../lib/student-layout/T'
@@ -37,9 +39,34 @@ export default function WeakAreasPage() {
     .filter(item => item.agg.attempted >= PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL && item.agg.accuracy !== null && (item.agg.accuracy < data.settings.weak_threshold || item.agg.incorrect >= 40))
     .sort((a, b) => (a.agg.accuracy ?? 0) - (b.agg.accuracy ?? 0))
   const pageClass = `content-page weak-page${showAllTestedMobile ? ' mobile-tested-expanded' : ''}`
+  // Why marks go missing, from both the notebook and mock tags — the "what to fix" behind the "which chapter" table.
+  const causes = useMemo(() => causeTotals(
+    subject === 'all' ? data.mistakes : data.mistakes.filter(mistake => data.chapters.find(chapter => chapter.id === mistake.chapter_id)?.subject === subject),
+    subject === 'all' ? data.testErrorLogs : data.testErrorLogs.filter(log => log.subject === subject)
+  ), [data.mistakes, data.testErrorLogs, data.chapters, subject])
+  // The same cause repeating in one chapter is the strongest single signal in the notebook.
+  const repeats = useMemo(() => getRepeatOffenders(data, indiaToday(), { days: 30, minCount: 3 })
+    .filter(item => subject === 'all' || item.subject === subject).slice(0, 3), [data, subject])
 
   return <div className={pageClass}>
     <PageHeader layoutId="weak-areas.header" title="Weak areas" subtitle="Based on your last three results." doodle={<Target size={19} />} action={<label className="weak-subject-select"><span><T k="weak-areas:subject">{"Subject"}</T></span><select value={subject} onChange={event => { setSubject(event.target.value as 'all' | Subject); setShowAllTestedMobile(false); setShowUntested(false) }}><option value="all">All subjects</option>{subjectList.map(item => <option key={item}>{item}</option>)}</select></label>} />
+    {repeats.length > 0 && <section className="weak-section weak-repeat-section" aria-label="Repeating mistakes">
+      <SectionHeading title="Repeating mistakes" note="The same cause three or more times in 30 days." />
+      <div className="weak-repeat-list">{repeats.map(item => <NotebookCard key={`${item.chapterId}-${item.cause}`} className="weak-repeat-card">
+        <div className="weak-repeat-head"><SubjectBadge subject={item.subject} /><strong>{item.chapterName}</strong></div>
+        <p><b>{item.count}×</b> {item.cause.toLowerCase()} in {item.spanDays} day{item.spanDays === 1 ? '' : 's'}</p>
+        <button type="button" className="text-link" onClick={() => navigate(item.to)}>Practise this chapter <ArrowRight size={13} /></button>
+      </NotebookCard>)}</div>
+    </section>}
+
+    {causes.length > 0 && <section className="weak-section weak-cause-section" aria-label="Why marks go missing">
+      <SectionHeading title="Why marks go missing" note="Mistake notes and mock tags, in one vocabulary." />
+      <NotebookCard className="practice-signal-board">{causes.slice(0, 5).map(row => <div key={row.cause} className="practice-signal-row">
+        <div className="practice-signal-meter"><Meter value={(row.total / causes[0]!.total) * 100} label={`${row.cause} share`} tone="orange" /><b>{row.total}</b></div>
+        <small className="jee-muted">{row.cause} · {row.mistakes} note{row.mistakes === 1 ? '' : 's'}, {row.logs} mock tag{row.logs === 1 ? '' : 's'}</small>
+      </div>)}</NotebookCard>
+    </section>}
+
     {!sl.hidden('rule') && <div {...sl.attrs('rule')} className="weak-rule-banner"><span className="rule-pencil">✎</span><p><T k="weak-areas:current-bands">{"Current bands:"}</T>{' '}<strong>Weak &lt; {data.settings.weak_threshold}%</strong><span>·</span><strong>Okay {data.settings.weak_threshold}–{data.settings.strong_threshold}%</strong><span>·</span><strong>Strong &gt; {data.settings.strong_threshold}%</strong></p><button onClick={() => navigate('/settings')}><T k="weak-areas:adjust-in-settings">{"Adjust in Settings ↗"}</T></button></div>}
     <div {...sl.attrs('overview')} className="weak-overview-grid"><NotebookCard className="weak-overview-item weak-tint"><div><span className="weak-overview-icon"><TriangleAlert size={17} /></span><span className="eyebrow"><T k="weak-areas:needs-another-look">{"WEAK"}</T></span></div><strong>{weak.length}</strong><small>chapter{weak.length === 1 ? '' : 's'} below the weak-area threshold</small></NotebookCard><NotebookCard className="weak-overview-item dropping-tint"><div><span className="weak-overview-icon"><TrendingDown size={17} /></span><span className="eyebrow"><T k="weak-areas:dropping">{"DROPPING"}</T></span></div><strong>{dropCount}</strong><small>latest result fell by {data.settings.dropping_threshold} points or more</small></NotebookCard><NotebookCard className="weak-overview-item untested-tint"><div><span className="weak-overview-icon"><Target size={17} /></span><span className="eyebrow"><T k="weak-areas:no-baseline-yet">{"UNTESTED"}</T></span></div><strong>{untested.length}</strong><small><T k="weak-areas:untested-not-classified-as-weak">{"untested · not classified as weak"}</T></small></NotebookCard><NotebookCard className="weak-overview-item strong-tint"><div><span className="weak-overview-icon"><TrendingUp size={17} /></span><span className="eyebrow"><T k="weak-areas:feeling-steady">{"STRONG"}</T></span></div><strong>{strong.length}</strong><small>chapter{strong.length === 1 ? '' : 's'} at or above the strong threshold</small></NotebookCard></div>
 

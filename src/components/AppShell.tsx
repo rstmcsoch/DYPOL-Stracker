@@ -3,8 +3,8 @@ import { Suspense, useEffect, useMemo, useRef, useState, type MouseEvent as Reac
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Activity, AlarmClock, AlertTriangle, BookOpen, CalendarDays, Check,
-  ChevronRight, CircleHelp, Cloud, CloudOff, Compass, Focus, Home, Inbox, Layers, Library, ListChecks, Microscope,
-  NotebookPen, RotateCcw, Search, Settings, ShieldCheck, Sparkles, Timer, UserRound, X, Zap, ClipboardList, type LucideIcon
+  ChevronRight, CircleHelp, Cloud, CloudOff, Focus, Home, Inbox, Layers, Library, ListChecks, Microscope,
+  NotebookPen, Search, Settings, ShieldCheck, Sparkles, Timer, UserRound, X, Zap, ClipboardList, type LucideIcon
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
@@ -56,16 +56,15 @@ const navGroups: NavigationGroup[] = [
   { caption: 'TESTS', items: [
     { to: '/tests', label: 'Tests', icon: ListChecks },
     { to: '/mock-analysis', label: 'Mock analysis', icon: Microscope },
+    // Retry is a tab inside the notebook now, so the nav no longer advertises it twice.
     { to: '/mistakes', label: 'Mistake notebook', icon: NotebookPen },
-    { to: '/retry', label: 'Retry', icon: RotateCcw },
     { to: '/analytics', label: 'Analytics', icon: Activity }
   ] },
   { caption: 'REVISION', items: [
-    { to: '/revision', label: 'Revisions', icon: AlarmClock },
+    { to: '/revision', label: 'Revision desk', icon: AlarmClock },
     { to: '/decks', label: 'Formulas & flashcards', icon: Layers }
   ] },
   { caption: 'PLANNING', items: [
-    { to: '/study-now', label: 'Study now', icon: Compass },
     { to: '/planner', label: 'Study plan', icon: CalendarDays },
     { to: '/settings', label: 'Settings', icon: Settings }
   ] }
@@ -73,8 +72,9 @@ const navGroups: NavigationGroup[] = [
 /** Bottom bar on phones: the four daily destinations; everything else lives in the drawer. */
 const mobileBar: NavigationItem[] = [
   { to: '/', label: 'Home', icon: Home, exact: true },
+  { to: '/planner', label: 'Plan', icon: CalendarDays },
+  { to: '/focus', label: 'Focus', icon: Focus },
   { to: '/tests', label: 'Tests', icon: ListChecks },
-  { to: '/analytics', label: 'Analytics', icon: Activity },
   { to: '/profile', label: 'Profile', icon: UserRound }
 ]
 const allNav: NavigationItem[] = navGroups.flatMap(group => group.items)
@@ -234,6 +234,7 @@ export function AppFrame() {
             {group.items.filter(item => item.to !== '/settings' && !mobileBar.some(bar => bar.to === item.to)).map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} onClick={() => setDrawerOpen(false)} />)}
           </div>)}
         </nav>
+        <button type="button" className="drawer-help" onClick={() => { setDrawerOpen(false); setShortcutsOpen(true) }}><CircleHelp size={16} /> Shortcuts &amp; keyboard help <kbd>?</kbd></button>
         <div className="sheet-brand-credit">Stracker <span>by DYPOL LABS</span></div>
       </aside>
     </div>}

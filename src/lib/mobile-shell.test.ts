@@ -6,9 +6,12 @@ const responsive = readFileSync(`${process.cwd()}/src/styles/responsive.css`, 'u
 const app = readFileSync(`${process.cwd()}/src/App.tsx`, 'utf8')
 
 describe('mobile shell (Phase 1)', () => {
-  it('bottom bar is Home, Tests, Analytics, Profile — and nothing else', () => {
+  it('bottom bar is the five daily destinations — Home, Plan, Focus, Tests, Profile', () => {
+    // Planner and Focus are daily habits; Analytics is a weekly read, so it lives in the drawer.
     const bar = shell.slice(shell.indexOf('const mobileBar'), shell.indexOf('const allNav'))
-    for (const label of ["'Home'", "'Tests'", "'Analytics'", "'Profile'"]) expect(bar).toContain(label)
+    for (const label of ["'Home'", "'Plan'", "'Focus'", "'Tests'", "'Profile'"]) expect(bar).toContain(label)
+    expect(bar).not.toContain("'Analytics'")
+    expect(shell).toContain("to: '/analytics'")
     expect(bar).not.toContain('More')
     expect(shell).not.toContain('mobileMore')
     expect(app).toContain('path="profile"')

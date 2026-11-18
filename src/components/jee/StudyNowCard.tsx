@@ -16,7 +16,7 @@ export function useStudyNow(): StudyNowResult {
 }
 
 /** The signature recommendation. Reasons are shown by default in compact mode and always available behind "Why?". */
-export function StudyNowCard({ compact = false, layoutAttrs }: { compact?: boolean; layoutAttrs?: Record<string, string> }) {
+export function StudyNowCard({ compact = false, layoutAttrs, expanded = false }: { compact?: boolean; layoutAttrs?: Record<string, string>; expanded?: boolean }) {
   const result = useStudyNow()
   const navigate = useNavigate()
   const [showWhy, setShowWhy] = useState(false)
@@ -46,7 +46,9 @@ export function StudyNowCard({ compact = false, layoutAttrs }: { compact?: boole
         <Button id={whyButtonId} variant="quiet" size="sm" onClick={() => setShowWhy(value => !value)} aria-expanded={showWhy}>{showWhy ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Why this?</Button>
       </div>
       {showWhy && <WhyList primary={primary} alternatives={result.alternatives} />}
-      {!compact && result.alternatives.length > 0 && !showWhy && <p className="study-now-alt">Next up: {result.alternatives.slice(0, 2).map(item => item.title).join(' · ')}</p>}
+      {!expanded && <p className="study-now-alt"><button type="button" className="text-link" onClick={() => navigate('/study-now')}>{'See the full shortlist'} <ArrowRight size={13} /></button></p>}
+      {!compact && result.alternatives.length > 0 && !showWhy && <p className="study-now-alt">Next up: {result.alternatives.slice(0, expanded ? 4 : 2).map(item => item.title).join(' · ')}</p>}
+      {expanded && result.alternatives.length > 0 && <ol className="study-now-candidates" aria-label="Ranked alternatives">{result.alternatives.map((item, index) => <li key={item.id}><span className="study-now-rank">{index + 2}</span><div><strong>{item.title}</strong><small>{item.reasons.join('; ') || item.summary}</small></div><Button variant="quiet" size="sm" onClick={() => navigate(item.to)}>{item.actionLabel}</Button></li>)}</ol>}
     </> : <p className="study-now-summary muted">{result.emptyReason}</p>}
   </NotebookCard>
 }

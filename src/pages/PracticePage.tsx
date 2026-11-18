@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { BarChart3, Check, ClipboardList, Edit3, Plus, Target, Timer, Trash2 } from 'lucide-react'
 import { Button, Dialog, EmptyState, Field, NotebookCard, OverflowMenu, PageHeader, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
 import { ChapterSelect, ChipFilter, chapterWithSubject, Meter, Pct, SubjectSelect, minutesLabel } from '../components/jee/shared'
+import { speedAccuracyBand } from '../lib/jee/progress'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
 import { createId } from '../lib/id'
@@ -168,8 +169,16 @@ async function savePractice(id: string, value: PracticeValue, data: AppData, ups
   }
 }
 
+const PACE_LABEL: Record<Exclude<ReturnType<typeof speedAccuracyBand>, null>, string> = {
+  'fast-accurate': 'Fast & accurate',
+  'fast-loose': 'Fast but loose',
+  'slow-accurate': 'Slow but steady',
+  'slow-loose': 'Slow and losing marks'
+}
+
 function ChapterPracticeRow({ chapter, agg, weakThreshold, onLog }: { chapter: Chapter; agg: ReturnType<typeof aggregatePractice>; weakThreshold: number; onLog: () => void }) {
   const weak = agg.attempted >= PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL && agg.accuracy !== null && agg.accuracy < weakThreshold
+  const band = speedAccuracyBand(agg, weakThreshold)
   const trend = agg.recentAccuracy !== null && agg.accuracy !== null ? agg.recentAccuracy - agg.accuracy : null
   return <NotebookCard className={`jee-chapter-row ${weak ? 'is-weak' : ''}`}>
     <div className="jee-chapter-row-head">
@@ -182,7 +191,9 @@ function ChapterPracticeRow({ chapter, agg, weakThreshold, onLog }: { chapter: C
       <span>recent <b><Pct value={agg.recentAccuracy} digits={0} /></b>{trend !== null && trend !== 0 && <em className={trend > 0 ? 'jee-up' : 'jee-down'}>{trend > 0 ? '▲' : '▼'} {Math.abs(Math.round(trend))}</em>}</span>
       <span><b>{agg.incorrect}</b>{' '}<T k="practice:incorrect">{"incorrect"}</T></span>
       {agg.skipped > 0 && <span><b>{agg.skipped}</b>{' '}<T k="practice:skipped">{"skipped"}</T></span>}
+      {agg.secondsPerQuestion !== null && <span title="From practice blocks that recorded time"><b>{Math.round(agg.secondsPerQuestion)}s</b> per question</span>}
     </div>
+    {band && <p className={`practice-pace pace-${band}`}><span aria-hidden="true">{band.startsWith('fast') ? '⚡' : '🐢'}</span> {PACE_LABEL[band]}{band === 'fast-loose' ? ' — speed is costing marks. Slow down on the last step.' : band === 'slow-loose' ? ' — the concept is not there yet; revisit the notes before more questions.' : band === 'slow-accurate' ? ' — accurate, but timed papers will need more pace.' : ' — keep this pace.'}</p>}
     <Meter value={agg.accuracy} label={`${chapter.name} practice accuracy`} tone={weak ? 'orange' : 'green'} />
     <p className="jee-muted jee-small">{agg.sessions} block{agg.sessions === 1 ? '' : 's'}{agg.timeMinutes ? ` · ${minutesLabel(agg.timeMinutes)}` : ''}{agg.attempted < PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL ? ` · needs ${PRACTICE_MIN_ATTEMPTS_FOR_SIGNAL} questions before it flags weakness` : ''}</p>
   </NotebookCard>

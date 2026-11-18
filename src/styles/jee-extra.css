@@ -1,0 +1,234 @@
+/* Second half of the JEE feature stylesheet: the blocks added by the dashboard audit
+   (weekly goal, rest days, manual study time, cause tallies, PYQ question counts, practice
+   pace, pasted deck/syllabus imports). Kept apart from jee.css so each file stays readable;
+   both are imported from styles.css and use the same notebook tokens from base.css. */
+
+/* --- Weekly goal on Home -------------------------------------------------------------- */
+.streak-goal { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.streak-goal-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+.streak-goal-top strong { font: 400 20px/1.1 var(--font-number); color: var(--ink); font-variant-numeric: tabular-nums; }
+.streak-goal .meter, .streak-goal.meter { margin: 0; }
+.streak-goal-note { margin: 0; font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); color: var(--muted); }
+.streak-goal-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.streak-goal-foot .text-link, .streak-goal-empty .text-link { min-height: 32px; color: var(--accent); font: 600 13px var(--font-body); }
+.streak-goal-empty { gap: 4px; }
+.streak-goal-empty .streak-goal-top span { font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+.streak-goal-hit .streak-goal-top strong { color: var(--green); }
+
+/* --- Streak rest days ---------------------------------------------------------------- */
+.streak-rest-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.streak-rest-button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-soft); font: 600 13px var(--font-body); cursor: pointer; }
+.streak-rest-button:hover { border-color: var(--accent); color: var(--accent); }
+.streak-rest-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.streak-rest-button:disabled { opacity: .55; cursor: default; }
+.streak-rest-button.freeze { border-color: var(--accent); color: var(--accent); }
+.streak-rest-button.freeze:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.streak-rest-note { margin: 0; font-size: 12px; color: var(--muted); }
+.streak-rest-note.resting { color: var(--green); font-weight: 600; }
+
+/* --- Manual study time ---------------------------------------------------------------- */
+.study-time-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.study-minute-quick { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.study-minute-quick button { min-height: 34px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-soft); font: 600 12px var(--font-body); cursor: pointer; }
+.study-minute-quick button:hover, .study-minute-quick button.is-active { border-color: var(--accent); color: var(--accent); }
+.focus-log-time-link { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; margin: 14px auto 4px; padding: 6px 14px; border: 1px dashed var(--line); border-radius: 999px; background: transparent; color: var(--ink-soft); font: 600 13px var(--font-body); cursor: pointer; }
+.focus-log-time-link:hover { border-color: var(--accent); color: var(--accent); }
+.study-time-form-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
+
+/* --- Home weekly snapshot strip ------------------------------------------------------- */
+.jee-snap-week { display: grid; gap: 10px; }
+.jee-week-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr)); gap: 8px 14px; margin: 0; padding: 0; list-style: none; }
+.jee-week-facts li { display: grid; gap: 1px; min-width: 0; }
+.jee-week-facts span { color: var(--muted); font-size: 12px; letter-spacing: .01em; }
+.jee-week-facts strong { font: 400 19px/1.15 var(--font-number); color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.jee-week-facts small { color: var(--muted); font-size: max(.8125rem, calc(11px * var(--body-scale, 1))); }
+.jee-snap-strip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.jee-snap-strip-head h2 { margin: 0; font: 400 15px/1.2 var(--font-heading); letter-spacing: .04em; color: var(--ink-soft); }
+.jee-snap-strip-head a, .jee-snap-strip-head button { font-size: 12px; color: var(--accent); }
+
+/* --- Reset confirmation counts ------------------------------------------------------- */
+.reset-counts { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-muted); }
+.reset-counts-head { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); }
+.reset-counts ul { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink-soft); }
+.reset-counts strong { color: var(--ink); font-variant-numeric: tabular-nums; margin-right: 3px; }
+
+/* --- Repeating mistakes ------------------------------------------------------------- */
+.weak-repeat-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 10px; }
+.weak-repeat-card { display: grid; gap: 6px; padding: 12px 14px; }
+.weak-repeat-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.weak-repeat-head strong { font: 600 14px var(--font-body); color: var(--ink); overflow-wrap: anywhere; }
+.weak-repeat-card p { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.weak-repeat-card p b { font: 400 18px/1.1 var(--font-number); color: var(--red); margin-right: 3px; font-variant-numeric: tabular-nums; }
+.weak-repeat-card .text-link { justify-self: start; font-size: 13px; color: var(--accent); display: inline-flex; align-items: center; gap: 3px; min-height: 36px; }
+.mistake-row-action.card { display: inline-flex; align-items: center; gap: 3px; }
+
+/* --- Streak calendar ---------------------------------------------------------------- */
+.streak-calendar-card { padding: 14px 16px; }
+.streak-calendar-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.streak-calendar-head h2 { margin: 2px 0 3px; font: 400 17px/1.2 var(--font-heading); color: var(--ink); }
+.streak-calendar-head p { margin: 0; font-size: max(.8125rem, calc(12.5px * var(--body-scale, 1))); color: var(--muted); }
+.streak-calendar-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); color: var(--muted); }
+.streak-calendar-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.sc-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.streak-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.sc-cell { aspect-ratio: 1; min-height: 14px; border-radius: 4px; border: 1px solid var(--line); }
+.sc-studied { background: var(--green); border-color: var(--green); }
+.sc-rest { background: color-mix(in srgb, var(--accent) 30%, transparent); border-color: var(--accent); }
+.sc-freeze { background: repeating-linear-gradient(45deg, var(--accent) 0 3px, transparent 3px 6px); border-color: var(--accent); }
+.sc-off { background: var(--paper-muted); }
+.sc-dot.sc-studied { background: var(--green); border-color: var(--green); }
+.sc-dot.sc-rest { background: color-mix(in srgb, var(--accent) 30%, transparent); border-color: var(--accent); }
+.sc-dot.sc-freeze { background: repeating-linear-gradient(45deg, var(--accent) 0 3px, transparent 3px 6px); border-color: var(--accent); }
+.sc-dot.sc-off { background: var(--paper-muted); }
+@media (max-width: 560px) { .streak-calendar-grid { gap: 3px; } }
+
+/* --- Profile records, backup, sign-out ---------------------------------------------- */
+.profile-records, .profile-backup { padding: 14px 16px; }
+.profile-records-head h2 { margin: 2px 0 3px; font: 400 17px/1.2 var(--font-heading); color: var(--ink); }
+.profile-records-head p { margin: 0 0 10px; font-size: max(.8125rem, calc(12.5px * var(--body-scale, 1))); color: var(--muted); }
+.profile-record-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr)); gap: 10px; }
+.profile-record { display: grid; gap: 1px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.profile-record span { font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); color: var(--muted); }
+.profile-record strong { font: 400 20px/1.15 var(--font-number); color: var(--ink); font-variant-numeric: tabular-nums; }
+.profile-record small { font-size: max(.8125rem, calc(11.5px * var(--body-scale, 1))); color: var(--muted); overflow-wrap: anywhere; }
+.profile-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.profile-badge { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper-muted); color: var(--ink-soft); font: 600 12px var(--font-body); }
+.profile-backup-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; }
+.profile-backup-icon { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--paper-muted); color: var(--ink-soft); }
+.profile-backup-row strong { font-size: 14px; color: var(--ink); }
+.profile-backup-row p { margin: 1px 0 0; font-size: max(.8125rem, calc(12.5px * var(--body-scale, 1))); color: var(--muted); }
+.profile-backup-row .text-link { display: inline-flex; align-items: center; gap: 3px; min-height: 36px; color: var(--accent); font: 600 13px var(--font-body); white-space: nowrap; }
+.profile-signout { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 4px 0 12px; }
+.profile-signout span { font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); color: var(--muted); }
+@media (max-width: 560px) { .profile-backup-row { grid-template-columns: auto minmax(0, 1fr); } .profile-backup-row .text-link { grid-column: 2; justify-self: start; } }
+
+/* --- Drawer help -------------------------------------------------------------------- */
+.drawer-help { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: var(--ink-soft); font: 600 13px var(--font-body); text-align: left; cursor: pointer; }
+.drawer-help:hover { border-color: var(--accent); color: var(--accent); }
+.drawer-help kbd { margin-left: auto; padding: 1px 6px; border: 1px solid var(--line); border-radius: 6px; font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); color: var(--muted); }
+
+/* --- Analytics: time by subject, hours vs marks ------------------------------------- */
+.subject-time-bars { display: grid; gap: 8px; padding: 12px 14px; }
+.subject-time-row { display: grid; grid-template-columns: minmax(82px, auto) minmax(0, 1fr) auto auto; align-items: center; gap: 10px; }
+.subject-time-name { font-size: 13px; color: var(--ink-soft); min-width: 0; overflow-wrap: anywhere; }
+.subject-time-meter .meter, .subject-time-meter { margin: 0; }
+.subject-time-row b { font: 400 15px/1 var(--font-number); font-variant-numeric: tabular-nums; color: var(--ink); }
+.subject-time-row small { font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); color: var(--muted); min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+.subject-time-note { margin: 0; padding: 0 14px 12px; font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); color: var(--muted); }
+.time-marks-list { display: grid; gap: 2px; padding: 8px 14px 12px; }
+.time-marks-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.time-marks-row:last-child { border-bottom: 0; }
+.time-marks-avg { font: 400 18px/1.1 var(--font-number); color: var(--ink); font-variant-numeric: tabular-nums; }
+.time-marks-hours { color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) { .subject-time-row { grid-template-columns: minmax(0, 1fr) auto auto; } .subject-time-name { grid-column: 1 / -1; } }
+
+/* --- Mock analysis v2 ---------------------------------------------------------------- */
+.mock-deltas, .mock-repeat, .mock-fix-first { padding: 4px 0; }
+.mock-delta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 4px 16px; padding: 8px 14px; }
+.mock-delta-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 0; }
+.mock-delta-row strong { font: 400 17px/1.1 var(--font-number); font-variant-numeric: tabular-nums; }
+.mock-repeat ul, .mock-fix-first ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.mock-repeat li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.mock-repeat li:last-child { border-bottom: 0; }
+.mock-repeat li strong { color: var(--ink); }
+.mock-fix-first li { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.mock-fix-first li:last-child { border-bottom: 0; }
+.mock-fix-rank { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%; background: var(--paper-muted); color: var(--ink-soft); font: 600 12px var(--font-body); }
+.mock-fix-first li > div { display: grid; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.mock-fix-first li strong { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.mock-fix-first li small { color: var(--muted); font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); }
+.mock-fix-first .text-link, .mock-repeat .text-link { display: inline-flex; align-items: center; gap: 3px; min-height: 36px; color: var(--accent); font: 600 13px var(--font-body); white-space: nowrap; }
+
+/* --- Retry schedule ---------------------------------------------------------------- */
+.retry-overdue { color: var(--red); font-weight: 600; }
+
+/* --- PYQ question counts -------------------------------------------------------------- */
+.jee-pyq-question-line { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.jee-pyq-question-line b { color: var(--ink-soft); font-weight: 600; font-variant-numeric: tabular-nums; }
+.jee-pyq-question-line .meter { width: 46px; margin: 0; }
+
+/* --- Cause tallies (Weak areas, Mock analysis) ---------------------------------------- */
+.jee-cause-bars { display: grid; gap: 8px; margin: 8px 0 0; }
+.jee-cause-bars .practice-signal-row { padding: 6px 0; }
+.cause-tally { display: grid; gap: 4px; }
+.cause-tally-note { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+
+/* --- Practice pace band --------------------------------------------------------------- */
+.practice-pace { display: flex; align-items: flex-start; gap: 6px; margin: 6px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-soft); }
+.practice-pace.pace-fast-accurate { color: var(--green); }
+.practice-pace.pace-fast-loose { color: var(--red); }
+.practice-pace.pace-slow-loose { color: var(--red); }
+.practice-pace.pace-slow-accurate { color: var(--ink-soft); }
+
+/* --- Decks: nothing due --------------------------------------------------------------- */
+.jee-deck-rest-note { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: max(.8125rem, calc(12.5px * var(--body-scale, 1))); color: var(--ink-soft); }
+.jee-deck-rest-note svg { color: var(--green); flex: none; }
+
+/* --- Mock percentile band -------------------------------------------------------------- */
+.mock-percentile { display: grid; gap: 10px; }
+.mock-percentile-head { display: flex; align-items: flex-start; gap: 14px; }
+.mock-percentile-head strong { font: 400 30px/1 var(--font-number); color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mock-percentile-head strong small { font-size: 13px; color: var(--muted); }
+.mock-percentile-head p { margin: 5px 0 0; font-size: 12.5px; line-height: 1.4; }
+.mock-percentile-track { height: 7px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.mock-percentile-track span { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--green)); }
+.mock-percentile-scale { display: flex; justify-content: space-between; font-size: max(.8125rem, calc(11px * var(--body-scale, 1))); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* --- Sunday week digest --------------------------------------------------------------- */
+.week-digest { display: grid; gap: 8px; }
+.week-digest-range { font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); color: var(--muted); }
+.week-digest-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; }
+.week-digest-facts li { display: grid; gap: 1px; }
+.week-digest-facts strong { font: 400 18px/1.1 var(--font-number); color: var(--ink); font-variant-numeric: tabular-nums; }
+.week-digest-facts span { font-size: max(.8125rem, calc(11.5px * var(--body-scale, 1))); color: var(--muted); }
+.week-digest-action { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-soft); }
+.week-digest-empty { margin: 0; font-size: 13px; color: var(--muted); }
+.week-digest .jee-link { justify-self: start; }
+
+/* --- Per-subject daily targets ------------------------------------------------------- */
+.study-subject-targets { display: grid; gap: 5px; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--line); list-style: none; }
+.study-subject-targets li { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; padding-bottom: 4px; font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); color: var(--ink-soft); }
+.study-subject-targets li b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+.study-subject-targets li i { position: absolute; left: 0; bottom: 0; height: 2px; border-radius: 2px; background: var(--accent); max-width: 100%; }
+.study-subject-targets li.is-met i { background: var(--green); }
+.study-subject-targets li.is-met b { color: var(--green); }
+.subject-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--muted); }
+.subject-dot.subject-physics { background: var(--subject-physics); }
+.subject-dot.subject-chemistry { background: var(--subject-chemistry); }
+.subject-dot.subject-maths { background: var(--subject-maths); }
+
+/* --- Stalled chapters on Backlog ------------------------------------------------------ */
+.jee-stalled-list { display: grid; gap: 2px; margin: 0; padding: 0 0 2px; list-style: none; }
+.jee-stalled-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.jee-stalled-list li:last-child { border-bottom: 0; }
+.jee-stalled-list strong { color: var(--ink); overflow-wrap: anywhere; }
+
+/* --- Focus end-of-block note --------------------------------------------------------- */
+.focus-end-note { display: grid; gap: 5px; margin: 10px 0 2px; }
+.focus-end-note > span { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.focus-end-note textarea { width: 100%; min-height: 60px; resize: vertical; }
+
+/* --- Countdown-aware plan shape ------------------------------------------------------ */
+.jee-countdown-shape { padding: 12px 16px; display: grid; gap: 8px; }
+.jee-countdown-shape-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.jee-countdown-shape-head strong { font: 400 15px/1.1 var(--font-number); color: var(--ink-soft); }
+.jee-countdown-shape p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ink-soft); }
+.jee-countdown-steps { display: flex; flex-wrap: wrap; gap: 6px; }
+.jee-countdown-steps span { padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; font: 600 12px var(--font-body); color: var(--muted); }
+.jee-countdown-steps span.is-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.jee-countdown-steps span.is-next { border-color: var(--accent); color: var(--accent); }
+.jee-countdown-shape.phase-revise-only .jee-tag { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
+
+/* --- PYQ header actions -------------------------------------------------------------- */
+.pyq-header-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+
+/* --- Deck and syllabus imports -------------------------------------------------------- */
+.syllabus-header-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+
+@media (max-width: 560px) {
+  .jee-snap-week .jee-week-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .study-time-actions { align-items: stretch; flex-direction: column; }
+  .study-time-actions .study-minute-quick { justify-content: flex-start; }
+  .streak-rest-row { gap: 6px; }
+  .jee-deck-actions .button { flex: 1 1 auto; justify-content: center; }
+}

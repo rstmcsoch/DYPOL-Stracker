@@ -4,6 +4,7 @@ import type {
   PyqRecord, QueuedChange, Revision, StudyCard, StudySession, TestChapterLink, TestErrorLog,
   TestRecord, TestSubjectScore, TestTimeEntry, UserExamTrack, WeeklyGoal
 } from '../types'
+import type { TableName } from '../types'
 
 export interface CachedAsset {
   id: string
@@ -89,6 +90,42 @@ class StrackerDatabase extends Dexie {
 }
 
 export const localDb = new StrackerDatabase()
+
+/**
+ * Every owner-scoped table a cloud "reset all data" must clear, children before parents so
+ * foreign keys never block the wipe. Kept beside the local list above because the Settings
+ * page used to hardcode a shorter copy, which silently left practice, PYQ, backlog, card and
+ * error-log rows behind after a reset.
+ */
+export const OWNER_DATA_TABLES = [
+  'mistakes', 'test_chapter_links', 'test_subject_scores', 'test_error_logs', 'test_time_entries',
+  'chapter_revisions', 'tests', 'practice_sessions', 'pyq_records', 'chapter_stages', 'backlog_items',
+  'study_cards', 'daily_tasks', 'weekly_goals', 'study_sessions', 'user_exam_tracks', 'chapters',
+  'app_settings', 'profiles'
+] as const satisfies readonly TableName[]
+
+/** Human labels for the reset dialog, so a student sees what each count means. */
+export const DATA_TABLE_LABELS: Record<(typeof OWNER_DATA_TABLES)[number], string> = {
+  mistakes: 'mistakes', test_chapter_links: 'test chapter links', test_subject_scores: 'subject scores',
+  test_error_logs: 'error notes', test_time_entries: 'time entries', chapter_revisions: 'revisions',
+  tests: 'tests', practice_sessions: 'practice logs', pyq_records: 'PYQ records', chapter_stages: 'chapter stages',
+  backlog_items: 'backlog items', study_cards: 'cards', daily_tasks: 'tasks', weekly_goals: 'goals',
+  study_sessions: 'study sessions', user_exam_tracks: 'exam tracks', chapters: 'chapters',
+  app_settings: 'settings', profiles: 'profile'
+}
+
+/**
+ * Row counts per table for the reset confirmation. The list comes from `OWNER_DATA_TABLES`,
+ * so a table added later is counted automatically instead of being forgotten in the dialog.
+ */
+export async function ownerDataCounts(userId: string): Promise<{ table: (typeof OWNER_DATA_TABLES)[number]; label: string; count: number }[]> {
+  const rows: { table: (typeof OWNER_DATA_TABLES)[number]; label: string; count: number }[] = []
+  for (const table of OWNER_DATA_TABLES) {
+    try { rows.push({ table, label: DATA_TABLE_LABELS[table], count: await localDb.table(table).where('user_id').equals(userId).count() }) }
+    catch { rows.push({ table, label: DATA_TABLE_LABELS[table], count: 0 }) }
+  }
+  return rows
+}
 
 export async function clearLocalUserData(userId: string): Promise<void> {
   const tables = [

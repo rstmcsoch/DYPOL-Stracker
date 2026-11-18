@@ -29,7 +29,6 @@ const AuthCallbackPage = lazy(withChunkRecovery(() => import('./pages/AuthCallba
 const SyllabusPage = lazy(routeLoaders['/syllabus'])
 const TestsPage = lazy(routeLoaders['/tests'])
 const MistakesPage = lazy(routeLoaders['/mistakes'])
-const RetryPage = lazy(routeLoaders['/retry'])
 const PlannerPage = lazy(routeLoaders['/planner'])
 const RevisionPage = lazy(routeLoaders['/revision'])
 const AnalyticsPage = lazy(routeLoaders['/analytics'])
@@ -134,7 +133,8 @@ function AppRoutes() {
           <Route path="syllabus" element={<SyllabusPage />} />
           <Route path="tests" element={<TestsPage />} />
           <Route path="mistakes" element={<MistakesPage />} />
-          <Route path="retry" element={<RetryPage />} />
+          {/* /retry was merged into Mistakes as a tab; the redirect keeps old links working. */}
+          <Route path="retry" element={<Navigate to="/mistakes?tab=retry" replace />} />
           <Route path="planner" element={<PlannerPage />} />
           <Route path="revision" element={<RevisionPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />

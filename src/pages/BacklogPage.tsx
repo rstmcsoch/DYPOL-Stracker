@@ -21,7 +21,7 @@ const PRIORITY_RANK: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 }
 
 export default function BacklogPage() {
   const sl = usePageSlots('backlog')
-  const { data, upsert, remove } = useData()
+  const { data, upsert, upsertMany, remove } = useData()
   const { notify } = useToast()
   const [params, setParams] = useSearchParams()
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
@@ -49,6 +49,39 @@ export default function BacklogPage() {
   const completed = data.backlogItems.filter(item => item.status === 'done' && matches(item)).sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''))
   const dueNow = active.filter(item => item.due_on !== null && item.due_on <= today)
   const overdueCount = dueNow.filter(item => item.due_on !== null && item.due_on < today).length
+
+  const [pulling, setPulling] = useState(false)
+  /**
+   * Chapters that have been "Studying" for three weeks or more. A chapter that never moves
+   * is the most common silent failure in a self-study plan, and the fix is a real backlog
+   * row with a due date — not another reminder to "work on it".
+   */
+  const stalled = useMemo(() => {
+    const backlogChapters = new Set(data.backlogItems.filter(item => item.status !== 'done' && item.chapter_id).map(item => item.chapter_id))
+    return data.chapters
+      .filter(chapter => chapter.status === 'Studying' && !backlogChapters.has(chapter.id))
+      .map(chapter => ({ chapter, days: Math.max(0, Math.floor((Date.now() - new Date(chapter.updated_at).getTime()) / 86_400_000)) }))
+      .filter(item => item.days >= 21)
+      .sort((a, b) => b.days - a.days)
+  }, [data.chapters, data.backlogItems])
+
+  const pullStalled = async () => {
+    if (pulling || !stalled.length) return
+    setPulling(true)
+    const now = new Date().toISOString()
+    try {
+      await upsertMany('backlog_items', stalled.map(item => ({
+        id: createId(), title: `Finish ${item.chapter.name}`, type: 'Lecture' as const,
+        subject: item.chapter.subject, chapter_id: item.chapter.id,
+        priority: item.days >= 35 ? 'High' as const : 'Medium' as const,
+        due_on: plusDays(indiaToday(), 7), status: 'active' as const,
+        snoozed_until: null, completed_at: null,
+        notes: `Studying for ${item.days} days when added.`, created_at: now, updated_at: now
+      })))
+      notify(`${stalled.length} stalled chapter${stalled.length === 1 ? '' : 's'} added to the backlog, due in a week.`)
+    } catch (error) { notify(error instanceof Error ? error.message : 'Could not add the backlog items.', 'error') }
+    finally { setPulling(false) }
+  }
 
   const save = async (item: BacklogItem, patch: Partial<BacklogItem>) => {
     try { await upsert('backlog_items', { ...item, ...patch, updated_at: new Date().toISOString() }); return true }
@@ -129,6 +162,15 @@ export default function BacklogPage() {
         <label className="jee-select"><span><T k="backlog:group-by">{"Group by"}</T></span><select value={groupBy} onChange={event => setGroupBy(event.target.value as GroupBy)}><option value="due">Due date</option><option value="subject">Subject</option><option value="type">Type</option><option value="priority">Priority</option></select></label>
       </div>
     </NotebookCard>
+
+    {stalled.length > 0 && <section className="jee-backlog-group" aria-label="Stalled chapters">
+      <SectionHeading title="Stalled chapters" note="Studying for 21+ days. Turn them into backlog so they stop slipping." action={<Button variant="secondary" size="sm" onClick={() => void pullStalled()} loading={pulling}><Plus size={15} /> Add {stalled.length} to backlog</Button>} />
+      <NotebookCard><ul className="jee-stalled-list">{stalled.map(item => <li key={item.chapter.id}>
+        <SubjectBadge subject={item.chapter.subject} />
+        <strong>{item.chapter.name}</strong>
+        <span className="jee-muted">{item.days} days</span>
+      </li>)}</ul></NotebookCard>
+    </section>}
 
     {data.backlogItems.length === 0 ? <NotebookCard><EmptyState lk="backlog:backlog-is-empty" icon={<Check size={24} />} title="Backlog is empty." action={<Button variant="secondary" size="sm" onClick={() => setCreating(true)}><Plus size={15} />{' '}<T k="backlog:add-the-first-item">{"Add the first item"}</T></Button>} /></NotebookCard>
     : <>

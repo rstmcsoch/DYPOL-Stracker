@@ -22,6 +22,7 @@ export const PAGE_LABELS: Record<string, ReadonlyArray<readonly [string, string]
     ["set-your-date", "Set your date"],
     ["syllabus", "SYLLABUS"],
     ["this-week", "THIS WEEK"],
+    ["week-digest", "WEEK DIGEST"],
     ["today", "TODAY"],
     ["well-keep-the-countdown-honest", "Add it to start the countdown."],
     ["when-youre-ready", "when you’re ready."]
@@ -55,11 +56,13 @@ export const PAGE_LABELS: Record<string, ReadonlyArray<readonly [string, string]
     ["reset", "Reset"],
     ["search-chapters", "Search chapters…"],
     ["stracker", "Stracker"],
+    ["studied-without-the-timer", "Studied without the timer? Add the time"],
     ["subject", "Subject"],
     ["to-exit", "to exit ·"],
     ["to-pause-or-resume", "to pause or resume"],
     ["todays-task", "Today's task"],
     ["unlink-the-current-task", "Unlink the current task"],
+    ["what-did-you-actually-do", "What did you actually do?"],
     ["your-timer-keeps-going-if-you-step-away", "Your timer keeps running when you leave. End the block to save your time."]
   ],
   'backlog': [
@@ -146,6 +149,8 @@ export const PAGE_LABELS: Record<string, ReadonlyArray<readonly [string, string]
     ["no-chapters-yet", "No chapters yet."],
     ["order", "ORDER"],
     ["performance", "Performance"],
+    ["paste-a-chapter-list", "Paste a chapter list"],
+    ["paste-list", "Paste list"],
     ["priority", "Priority"],
     ["priority-2", "PRIORITY"],
     ["set-in-settings-exam-weighted-progress-m", "Medium by default. Change weights in Settings → Exam."],
@@ -198,10 +203,12 @@ export const PAGE_LABELS: Record<string, ReadonlyArray<readonly [string, string]
     ["chip-jee-advanced", "JEE Advanced"],
     ["chip-jee-main", "JEE Main"],
     ["chip-status", "Status"],
+    ["cancel", "Cancel"],
     ["clear", "Clear"],
     ["no-chapters-match", "No chapters match."],
     ["open-settings", "Open Settings"],
     ["reset", "Reset"],
+    ["save-counts", "Save counts"],
     ["selected", "selected"],
     ["set-a-pyq-year-range-in-settings", "Set a PYQ year range in Settings."],
     ["year-range", "Year range"],
@@ -224,7 +231,7 @@ export const PAGE_LABELS: Record<string, ReadonlyArray<readonly [string, string]
     ["edit", "Edit"],
     ["edit-record", "Edit record"],
     ["enter-each-result-that-you-have", "(enter each result that you have)"],
-    ["every-attempt-matters", "Test history"],
+    ["every-attempt-matters", "Every attempt"],
     ["export-options-are-in-backup", "Export options are in Backup"],
     ["from", "From"],
     ["full-mocks-match-every-subject-filter-an", "Full mocks show under every subject, as one combined result."],
@@ -279,6 +286,7 @@ export const PAGE_LABELS: Record<string, ReadonlyArray<readonly [string, string]
     ["why-did-it-happen", "Why did it happen?"]
   ],
   'mistakes': [
+    ["a-second-look", "READY TO RETRY"],
     ["add-a-mistake", "Add a mistake"],
     ["as-carefully-as-the-answer-patterns-emer", "too, not just the answer."],
     ["bring-it-back-for-another-attempt", "Try it again later."],
@@ -381,6 +389,9 @@ export const PAGE_LABELS: Record<string, ReadonlyArray<readonly [string, string]
     ["weak", "weak ·"],
     ["weakest-area", "Weakest area"],
     ["weighted-completion", "Weighted completion"],
+    ["where-the-hours-go", "Where the hours go"],
+    ["time-by-subject", "TIME BY SUBJECT"],
+    ["hours-versus-marks", "HOURS VS MARKS"],
     ["what-3-tests-unlock", "PREVIEW"],
     ["youll-see-your-marks-trend-subject-balan", ", you’ll see your performance trends here."]
   ],
@@ -600,8 +611,10 @@ export const PAGE_LABELS: Record<string, ReadonlyArray<readonly [string, string]
   ],
   'profile': [
     ["active-this-week", "active this week"],
+    ["consistency", "CONSISTENCY"],
     ["current-streak", "current streak"],
     ["longest-streak", "longest streak"],
+    ["personal-records", "PERSONAL RECORDS"],
     ["theme-reading-font-appearance-and-ai-set", "Theme, font and AI settings are under the gear icon."]
   ],
   'backup': [

@@ -104,18 +104,26 @@ describe('Mistake dialog Subject → Chapter', () => {
 })
 
 describe('Retry list “Reveal my note”', () => {
+  // The retry queue is the second tab of the Mistake notebook now (the old /retry page
+  // only redirects), so these read it through the notebook the student actually opens.
+  const openRetryTab = async () => {
+    const { default: MistakesPage } = await import('./MistakesPage')
+    renderAt(<MistakesPage />, '/mistakes?tab=retry')
+    const tab = screen.getByRole('tab', { name: /Retry list/ })
+    expect(tab.getAttribute('aria-selected')).toBe('true')
+    return tab
+  }
+
   it('explains when no note was saved instead of hiding the control', async () => {
-    harness.data = baseData({ mistakes: [mistake()] })
-    const { default: RetryPage } = await import('./RetryPage')
-    renderAt(<RetryPage />, '/retry')
+    harness.data = baseData({ mistakes: [mistake({ retry_later: true })] })
+    await openRetryTab()
     fireEvent.click(screen.getByText('Reveal my note'))
     expect(screen.getByText(/No note yet\. Edit it in/)).toBeTruthy()
   })
 
   it('shows the saved note when there is one', async () => {
-    harness.data = baseData({ mistakes: [mistake({ solution_note: 'W = −ΔU' })] })
-    const { default: RetryPage } = await import('./RetryPage')
-    renderAt(<RetryPage />, '/retry')
+    harness.data = baseData({ mistakes: [mistake({ retry_later: true, solution_note: 'W = −ΔU' })] })
+    await openRetryTab()
     expect(screen.getByText('W = −ΔU')).toBeTruthy()
     expect(screen.queryByText(/No note saved/)).toBeNull()
   })

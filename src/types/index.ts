@@ -143,6 +143,11 @@ export interface StudySession extends BaseRecord {
   mode: 'Pomodoro' | 'Short Break' | 'Long Break' | 'Custom'
   /** Which kind of studying this block was. Defaults to 'Practice' for legacy rows. */
   activity: StudyActivity
+  /**
+   * What the student actually did in the block. Optional: focus blocks saved before the
+   * field existed simply have none, and the timer never blocks on writing one.
+   */
+  notes?: string
 }
 
 /* ------------------------------------------------------------------ */
@@ -272,6 +277,11 @@ export interface TestRecord extends BaseRecord {
   total_questions?: number | null
   negative_marks: number | null
   time_minutes: number | null
+  /**
+   * The student's own percentile/rank band for this mock, when they know it (many coaching
+   * institutes publish one). Never derived or estimated: blank means "not recorded".
+   */
+  percentile?: number | null
   notes: string
 }
 
@@ -293,11 +303,24 @@ export interface Mistake extends BaseRecord {
   chapter_id: string
   test_id: string | null
   mistake_type: MistakeType
+  /**
+   * The detailed cause (same vocabulary as mock lost marks). Optional because rows saved
+   * before it existed only carry `mistake_type`; read it through `causeOf()`.
+   */
+  cause?: ErrorCategory | null
   question_note: string
   solution_note: string
   image_path: string | null
   retry_later: boolean
   retry_status: RetryStatus
+  /**
+   * Spaced retry date (ISO yyyy-mm-dd). Set to +7 days when a note joins the retry list,
+   * then +21 days after the first retry, so "retry later" stops meaning "someday".
+   * Optional: rows saved before the field existed fall back to `created_at`.
+   */
+  retry_due_on?: string | null
+  /** How many times this note has already been retried (0 = never). */
+  retry_count?: number
   image_data?: string | null
   image_preview?: string | null
   image_pending?: boolean
@@ -371,6 +394,28 @@ export interface AppSettings extends BaseRecord {
   onboarding_completed: boolean
   /** Extra exams added in Settings beside the main exam (label + optional date). */
   extra_exams: ExtraExam[]
+  /**
+   * How many rest days a week may pass without breaking the study streak (0 = strict).
+   * Rest days are recorded per calendar date in `streak_rest_days`.
+   */
+  streak_rest_days: number
+  /** ISO dates the student deliberately took as rest days (max one per week). */
+  streak_rest_days_used: string[]
+  /**
+   * ISO dates the student spent a monthly streak freeze on. One per calendar month, and only
+   * once a 7-day streak has been earned, so a freeze is a saved-up reward rather than a reset.
+   */
+  streak_freezes_used: string[]
+  /**
+   * Optional per-subject share of the daily goal, in minutes. Empty means "one number for
+   * the whole day" (the old behaviour). Minutes, not percentages, because a student thinks
+   * in "30 minutes of Chemistry", not in "17%".
+   */
+  subject_daily_targets: Partial<Record<Subject, number>>
+  /** Focus timer lengths, so Pomodoro is configurable instead of fixed at 25/5/15. */
+  focus_minutes: number
+  short_break_minutes: number
+  long_break_minutes: number
 }
 
 export interface ExtraExam {

@@ -1,4 +1,4 @@
-import type { StudyActivity, StudySession, Subject } from '../types'
+import type { AppSettings, StudyActivity, StudySession, Subject } from '../types'
 
 export type FocusMode = 'Pomodoro' | 'Short Break' | 'Long Break' | 'Custom'
 export interface TimerState {
@@ -22,6 +22,18 @@ export interface TimerState {
    * instead of creating a duplicate. Null until the first segment starts.
    */
   blockId: string | null
+}
+
+/** The student's configured lengths, with the shipped defaults for anything invalid. */
+export function configuredDurations(settings: Pick<AppSettings, 'focus_minutes' | 'short_break_minutes' | 'long_break_minutes'>): TimerState['durations'] {
+  const safe = (value: number | undefined, fallback: number, max: number) =>
+    Number.isInteger(value) && Number(value) >= 1 && Number(value) <= max ? Number(value) : fallback
+  return {
+    Pomodoro: safe(settings.focus_minutes, defaultTimerState.durations.Pomodoro, MAX_TIMER_MINUTES),
+    'Short Break': safe(settings.short_break_minutes, defaultTimerState.durations['Short Break'], 60),
+    'Long Break': safe(settings.long_break_minutes, defaultTimerState.durations['Long Break'], 120),
+    Custom: defaultTimerState.durations.Custom
+  }
 }
 
 export const defaultTimerState: TimerState = {

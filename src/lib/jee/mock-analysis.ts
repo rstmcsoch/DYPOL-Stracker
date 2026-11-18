@@ -184,4 +184,198 @@ export function mockSummary(test: TestRecord, data: AppData): { score: number | 
   return { score, taggedQuestions, taggedMarks: marksRows.length ? marksRows.reduce((sum, row) => sum + (row.marks_lost ?? 0), 0) : null }
 }
 
+export interface SubjectDelta {
+  subject: Subject
+  /** Percentage on this mock, or null when it was not recorded. */
+  current: number | null
+  /** Percentage on the previous full mock, or null when there is none. */
+  previous: number | null
+  delta: number | null
+  previousTitle: string | null
+}
+
+/**
+ * Subject-by-subject change against the previous mock of the same kind.
+ *
+ * Students compare themselves to their last paper, not to an absolute score, so the delta is
+ * the number worth showing — and it stays null (not zero) when either side is missing.
+ */
+export function subjectDeltas(test: TestRecord, data: AppData): SubjectDelta[] {
+  const earlier = [...data.tests]
+    .filter(item => item.id !== test.id && item.test_type === test.test_type && item.test_date < test.test_date)
+    .sort((a, b) => b.test_date.localeCompare(a.test_date))[0] ?? null
+  const scores = data.testSubjectScores.filter(score => score.test_id === test.id)
+  const previousScores = earlier ? data.testSubjectScores.filter(score => score.test_id === earlier.id) : []
+  const subjects = [...new Set([
+    ...examSubjects(data.settings),
+    ...scores.map(score => score.subject),
+    ...previousScores.map(score => score.subject)
+  ])]
+  return subjects.map(subject => {
+    const current = percentagesBySubject(scores).get(subject) ?? null
+    const previous = percentagesBySubject(previousScores).get(subject) ?? null
+    return {
+      subject,
+      // Rounded at the source: 55/100 is stored as 55.00000000000001 in floating point, and a
+      // percentage shown to a student should not carry that noise.
+      current: current === null ? null : round2(current),
+      previous: previous === null ? null : round2(previous),
+      delta: current !== null && previous !== null ? round2(current - previous) : null,
+      previousTitle: earlier?.title ?? null
+    }
+  }).filter(row => row.current !== null || row.previous !== null)
+}
+
+function percentagesBySubject(scores: AppData['testSubjectScores']): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const score of scores) {
+    const pct = subjectPercentage(score)
+    if (pct !== null) out.set(score.subject, pct)
+  }
+  return out
+}
+
+export interface ChapterRepeat {
+  chapterId: string
+  chapterName: string
+  subject: Subject
+  /** How many of the recent mocks flag this chapter. */
+  mocks: number
+  questions: number
+}
+
+/**
+ * Chapters flagged in two or more of the last `window` tests: the "repeat offender" list.
+ * A chapter that keeps appearing is a syllabus hole, not a one-off bad day.
+ */
+export function chapterRepeatOffenders(data: AppData, window = 5): ChapterRepeat[] {
+  const recent = [...data.tests].sort((a, b) => b.test_date.localeCompare(a.test_date)).slice(0, window)
+  const recentIds = new Set(recent.map(item => item.id))
+  const logs = data.testErrorLogs.filter(log => recentIds.has(log.test_id) && log.chapter_id)
+  const grouped = new Map<string, { mocks: Set<string>; questions: number }>()
+  for (const log of logs) {
+    if (!log.chapter_id) continue
+    const row = grouped.get(log.chapter_id) ?? { mocks: new Set<string>(), questions: 0 }
+    row.mocks.add(log.test_id)
+    row.questions += log.questions ?? 0
+    grouped.set(log.chapter_id, row)
+  }
+  const out: ChapterRepeat[] = []
+  for (const [chapterId, row] of grouped) {
+    if (row.mocks.size < 2) continue
+    const chapter = data.chapters.find(item => item.id === chapterId)
+    if (!chapter) continue
+    out.push({ chapterId, chapterName: chapter.name, subject: chapter.subject, mocks: row.mocks.size, questions: row.questions })
+  }
+  return out.sort((a, b) => b.mocks - a.mocks || b.questions - a.questions || a.chapterName.localeCompare(b.chapterName))
+}
+
+export interface FixFirst {
+  label: string
+  /** Marks that could plausibly be recovered, the ranking key. */
+  marks: number | null
+  reason: string
+  to: string
+}
+
+/**
+ * "What to fix first", ordered by marks recoverable rather than by raw count: five silly slips
+ * worth 20 marks outrank twelve untagged guesses worth nothing measured.
+ */
+export function fixFirstList(test: TestRecord, data: AppData): FixFirst[] {
+  const logs = data.testErrorLogs.filter(log => log.test_id === test.id)
+  const byCategory = new Map<ErrorCategory, { marks: number; questions: number }>()
+  for (const log of logs) {
+    const row = byCategory.get(log.category) ?? { marks: 0, questions: 0 }
+    row.marks += log.marks_lost ?? 0
+    row.questions += log.questions ?? 0
+    byCategory.set(log.category, row)
+  }
+  const items: FixFirst[] = [...byCategory.entries()]
+    .filter(([, row]) => row.marks > 0 || row.questions > 0)
+    .map(([category, row]) => ({
+      label: category,
+      marks: row.marks > 0 ? round2(row.marks) : null,
+      reason: `${row.questions || '—'} question${row.questions === 1 ? '' : 's'} tagged${row.marks > 0 ? `, ${round2(row.marks)} marks lost` : ', no marks entered'}`,
+      to: '/mistakes'
+    }))
+  const repeats = chapterRepeatOffenders(data).slice(0, 2)
+  for (const repeat of repeats) {
+    items.push({
+      label: `${repeat.chapterName} keeps appearing`,
+      marks: null,
+      reason: `Flagged in ${repeat.mocks} of your last 5 tests${repeat.questions ? ` · ${repeat.questions} questions` : ''}`,
+      to: `/practice?chapter=${repeat.chapterId}`
+    })
+  }
+  return items.sort((a, b) => (b.marks ?? -1) - (a.marks ?? -1))
+}
+
 export type { TestTimeEntry }
+
+/* ------------------------------------------------------------------ */
+/* Percentile band                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Rough JEE Main percentile from raw marks out of 300.
+ *
+ * This is a *band*, not a prediction, and it says so. JEE Main percentile depends on the
+ * session's normalisation and the whole candidate pool, neither of which we can see; the
+ * mapping below is a widely-quoted approximation. It is deliberately coarse (600-wide steps
+ * at the bottom, 100-wide near the top) because a precise-looking number would be a lie.
+ */
+export interface PercentileBand {
+  percentile: number | null
+  /** The exam's own percentile if the student typed one into the test form. */
+  reported: number | null
+  label: string
+  note: string
+  /** 0–100, where the estimate sits inside the band. Null when there is no estimate. */
+  position: number | null
+}
+
+const BANDS: Array<[number, number]> = [
+  [0, 0.5], [10, 1], [20, 3], [30, 6], [40, 10], [50, 15], [60, 21], [70, 28],
+  [80, 36], [90, 45], [100, 55], [110, 64], [120, 72], [130, 79], [140, 85],
+  [150, 90], [160, 93.5], [170, 96], [180, 97.5], [190, 98.5], [200, 99.1],
+  [210, 99.4], [220, 99.6], [230, 99.7], [240, 99.8], [250, 99.87], [260, 99.92],
+  [270, 99.96], [280, 99.98], [300, 99.995]
+]
+
+export function estimatePercentile(marks: number, total: number): number | null {
+  if (!Number.isFinite(marks) || !Number.isFinite(total) || total <= 0) return null
+  // Normalise to the 300-mark scale the bands are quoted on.
+  const scaled = Math.max(0, Math.min(300, (marks / total) * 300))
+  for (let index = 0; index < BANDS.length - 1; index += 1) {
+    const [lowMarks, lowP] = BANDS[index]!
+    const [highMarks, highP] = BANDS[index + 1]!
+    if (scaled <= highMarks) {
+      const span = highMarks - lowMarks
+      const ratio = span > 0 ? (scaled - lowMarks) / span : 0
+      // Never show a flat 100: nobody is at the very top of the candidate pool, and a
+      // rounded 99.995 would read as "100th percentile".
+      return Math.min(99.9, Math.round((lowP + (highP - lowP) * ratio) * 10) / 10)
+    }
+  }
+  return 99.9
+}
+
+export function percentileBand(data: AppData, test: TestRecord): PercentileBand {
+  const raw = test.percentile ?? null
+  // Same score source as the Analytics charts, so a full mock with subject rows counts too.
+  const score = getOverallTestScore(test, data.testSubjectScores)
+  const estimated = score ? estimatePercentile(score.marks, score.total) : null
+  // The reported number wins when present: it is the exam's own data, not our guess.
+  const value = raw ?? estimated
+  if (value === null) return { percentile: null, reported: raw, label: 'No percentile yet', note: 'Add marks to this test to see where it sits.', position: null }
+  const source = raw !== null ? 'reported' : 'estimated'
+  const band = value >= 99 ? 'Top 1%' : value >= 95 ? 'Top 5%' : value >= 90 ? 'Top 10%' : value >= 75 ? 'Top 25%' : value >= 50 ? 'Top half' : 'Below half'
+  return {
+    percentile: value,
+    reported: raw,
+    label: band,
+    note: source === 'reported' ? 'The percentile you entered for this paper.' : 'Estimated from marks out of 300. Session normalisation and the candidate pool move this by a few tenths of a percentile.',
+    position: Math.max(0, Math.min(100, value)),
+  }
+}
