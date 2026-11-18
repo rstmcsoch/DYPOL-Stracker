@@ -127,7 +127,6 @@
 .weak-repeat-card p { margin: 0; font-size: 13px; color: var(--ink-soft); }
 .weak-repeat-card p b { font: 400 18px/1.1 var(--font-number); color: var(--red); margin-right: 3px; font-variant-numeric: tabular-nums; }
 .weak-repeat-card .text-link { justify-self: start; font-size: 13px; color: var(--accent); display: inline-flex; align-items: center; gap: 3px; min-height: 36px; }
-.mistake-row-action.card { display: inline-flex; align-items: center; gap: 3px; }
 
 /* --- Streak calendar ---------------------------------------------------------------- */
 .streak-calendar-card { padding: 14px 16px; }
@@ -357,4 +356,156 @@
   .study-time-actions .study-minute-quick { justify-content: flex-start; }
   .streak-rest-row { gap: 6px; }
   .jee-deck-actions .button { flex: 1 1 auto; justify-content: center; }
+}
+
+/* --- Mistake notebook: tabs, card actions --------------------------------------------- */
+/* These two blocks had no stylesheet at all, so the tab strip rendered as raw browser
+   buttons and the card actions as five equal-weight text links. Both now use the same
+   language as Settings tabs and the shared Button component. */
+
+.mistake-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper-soft);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.mistake-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  background: transparent;
+  cursor: pointer;
+  font: 600 13.5px/1.2 var(--font-body);
+  white-space: nowrap;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.mistake-tab svg { color: var(--muted); flex: none; }
+.mistake-tab:hover { color: var(--ink); background: var(--paper-muted); }
+.mistake-tab.is-active {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--paper);
+  box-shadow: 0 2px 5px rgba(41, 51, 45, .05);
+}
+.mistake-tab.is-active svg { color: var(--accent); }
+.mistake-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The count is a quiet pill, tinted only once the tab is the one you are looking at. */
+.mistake-tab-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--paper-muted);
+  color: var(--muted);
+  font: 700 max(.8125rem, calc(10.5px * var(--body-scale, 1))) / 1 var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+.mistake-tab.is-active .mistake-tab-count { background: var(--accent-light); color: var(--accent-dark); }
+
+/* The overview card's shortcut is a real button now instead of a bare text link. */
+.mistake-stat-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 5px 10px;
+  border: 1px solid var(--tint-green-border, var(--line-strong));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font: 600 max(.8125rem, calc(12px * var(--body-scale, 1))) var(--font-body);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.mistake-stat-cta:hover { border-color: var(--accent); background: var(--paper); }
+.mistake-stat-cta svg { flex: none; }
+
+/* Card footer: state on the left, actions on the right, wrapping instead of overlapping. */
+.mistake-entry-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.mistake-entry-state { display: inline-flex; align-items: center; gap: 6px; }
+.mistake-entry-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+
+/* Buttons that look like buttons. Unstyled `.mistake-row-action` links were the single
+   biggest reason this section read as unfinished. */
+.mistake-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font: 600 12.5px/1.2 var(--font-body);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.mistake-action:hover { border-color: var(--accent); color: var(--accent); background: var(--paper-soft); }
+.mistake-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mistake-action svg { flex: none; color: var(--muted); }
+.mistake-action:hover svg { color: var(--accent); }
+/* Only one decision per card deserves the filled treatment. */
+.mistake-action-primary {
+  border-color: var(--accent-dark);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.mistake-action-primary svg { color: #fff; }
+.mistake-action-primary:hover { border-color: var(--accent-dark); background: var(--accent-dark); color: #fff; }
+.mistake-action-primary:hover svg { color: #fff; }
+
+/* The board footer's "Go to retry list" duplicated the tab above it; keep it as a plain
+   secondary button instead of a floating text link under the last card. */
+.mistake-board-footer { gap: 10px; }
+.mistake-board-footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 5px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font: 600 12.5px var(--font-body);
+  cursor: pointer;
+}
+.mistake-board-footer button:hover { border-color: var(--accent); color: var(--accent); }
+
+@media (max-width: 560px) {
+  .mistake-tabs { gap: 3px; padding: 4px; }
+  .mistake-tab { flex: 1 1 0; justify-content: center; min-height: 40px; padding: 7px 8px; gap: 5px; font-size: max(.8125rem, calc(12px * var(--body-scale, 1))); }
+  .mistake-tab svg { display: none; }
+  .mistake-entry-actions { width: 100%; margin-left: 0; }
+  .mistake-entry-actions .mistake-action { flex: 1 1 auto; }
+  .mistake-stat-cta { margin-left: 0; }
 }
