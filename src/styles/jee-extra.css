@@ -165,14 +165,70 @@
 .jee-deck-rest-note svg { color: var(--green); flex: none; }
 
 /* --- Mock percentile band -------------------------------------------------------------- */
-.mock-percentile { display: grid; gap: 10px; }
-.mock-percentile-head { display: flex; align-items: flex-start; gap: 14px; }
-.mock-percentile-head strong { font: 400 30px/1 var(--font-number); color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.mock-percentile-head strong small { font-size: 13px; color: var(--muted); }
-.mock-percentile-head p { margin: 5px 0 0; font-size: 12.5px; line-height: 1.4; }
-.mock-percentile-track { height: 7px; border-radius: 4px; background: var(--line); overflow: hidden; }
-.mock-percentile-track span { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--green)); }
-.mock-percentile-scale { display: flex; justify-content: space-between; font-size: max(.8125rem, calc(11px * var(--body-scale, 1))); color: var(--muted); font-variant-numeric: tabular-nums; }
+.mock-percentile {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 18px;
+}
+.mock-percentile-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+.mock-percentile-score {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+}
+.mock-percentile-head strong {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--ink);
+  font: 400 29px/1.15 var(--font-number);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mock-percentile-head strong small {
+  color: var(--muted);
+  font: 600 12px/1 var(--font-body);
+}
+.mock-percentile-head p {
+  max-width: 65ch;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.mock-percentile-track {
+  height: 7px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+.mock-percentile-track span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+}
+.mock-percentile-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: max(.8125rem, calc(11px * var(--body-scale, 1)));
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 560px) {
+  .mock-percentile { padding: 14px 15px; }
+  .mock-percentile-head strong { font-size: 27px; }
+}
 
 /* --- Sunday week digest --------------------------------------------------------------- */
 .week-digest { display: grid; gap: 8px; }
