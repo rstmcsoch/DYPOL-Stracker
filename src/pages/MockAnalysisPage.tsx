@@ -142,6 +142,23 @@ export default function MockAnalysisPage() {
             </li>)}
           </ul>}
         </NotebookCard>
+
+        <SectionHeading title="Where this score sits" note="A band, not a promise." />
+        <NotebookCard className="mock-percentile">
+          <div className="mock-percentile-head">
+            <div className="mock-percentile-score">
+              <strong>{band.percentile === null ? '—' : band.percentile.toFixed(1)}<small> %ile</small></strong>
+              <span className="jee-tag">{band.label}</span>
+            </div>
+            <p className="jee-muted">{band.note}</p>
+          </div>
+          {band.position !== null && <>
+            <div className="mock-percentile-track" role="img" aria-label={`Percentile ${band.percentile?.toFixed(1)} on a 0 to 100 scale`}>
+              <span style={{ width: `${band.position}%` }} />
+            </div>
+            <div className="mock-percentile-scale" aria-hidden="true"><span>0</span><span>50</span><span>90</span><span>100</span></div>
+          </>}
+        </NotebookCard>
       </div>
 
       <div className="jee-analysis-col">
@@ -169,32 +186,18 @@ export default function MockAnalysisPage() {
           </div>}
         </NotebookCard>
 
-        <SectionHeading title="What to fix first" note="Ordered by marks recoverable, not by count." />
-        {fixes.length > 0 && <NotebookCard className="mock-fix-first">
-          <ol>{fixes.slice(0, 5).map((item, index) => <li key={`${item.label}-${index}`}>
-            <span className="mock-fix-rank">{index + 1}</span>
-            <div><strong>{item.label}</strong><small>{item.reason}</small></div>
-            <button type="button" className="text-link" onClick={() => navigate(item.to)}>Open <ArrowRight size={13} /></button>
-          </li>)}</ol>
-        </NotebookCard>}
+        {fixes.length > 0 && <>
+          <SectionHeading title="What to fix first" note="Ordered by marks recoverable, not by count." />
+          <NotebookCard className="mock-fix-first">
+            <ol>{fixes.slice(0, 5).map((item, index) => <li key={`${item.label}-${index}`}>
+              <span className="mock-fix-rank">{index + 1}</span>
+              <div><strong>{item.label}</strong><small>{item.reason}</small></div>
+              <button type="button" className="text-link" onClick={() => navigate(item.to)}>Open <ArrowRight size={13} /></button>
+            </li>)}</ol>
+          </NotebookCard>
+        </>}
 
-        <SectionHeading title="Fix before your next mock" note="Each line shows its basis." />
-        <SectionHeading title="Where this score sits" note="A band, not a promise." />
-        <NotebookCard className="mock-percentile">
-          <div className="mock-percentile-head">
-            <div className="mock-percentile-score">
-              <strong>{band.percentile === null ? '—' : band.percentile.toFixed(1)}<small> %ile</small></strong>
-              <span className="jee-tag">{band.label}</span>
-            </div>
-            <p className="jee-muted">{band.note}</p>
-          </div>
-          {band.position !== null && <>
-            <div className="mock-percentile-track" role="img" aria-label={`Percentile ${band.percentile?.toFixed(1)} on a 0 to 100 scale`}>
-              <span style={{ width: `${band.position}%` }} />
-            </div>
-            <div className="mock-percentile-scale" aria-hidden="true"><span>0</span><span>50</span><span>90</span><span>100</span></div>
-          </>}
-        </NotebookCard>
+
 
         <NotebookCard className="jee-insights">
           {insights.length === 0 ? <div className="jee-pad"><Lightbulb size={18} aria-hidden="true" /><p className="jee-muted"><T k="mock-analysis:not-enough-data-yet">{"Not enough data yet."}</T></p></div> : <ul>
