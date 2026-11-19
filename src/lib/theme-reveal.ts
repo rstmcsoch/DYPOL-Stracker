@@ -2,19 +2,21 @@ import { flushSync } from 'react-dom'
 import '../styles/theme-reveal.css'
 
 /**
- * Light/night switch with a circular reveal that grows from the control that was pressed.
+ * Telegram-inspired light/night switch with a circular reveal that grows from the pressed control.
  *
- * Uses the View Transitions API: the browser snapshots the old page, `update` applies the new
- * theme synchronously (flushSync), and the new page is revealed through an expanding
- * `clip-path: circle()` on `::view-transition-new(root)` with `fill: 'both'` so frame 0 and
- * the final teardown frame never flash. Only the clip animates (compositor-friendly, no filters
- * or extra isolation buffers) for smooth performance on low-spec devices. Browsers without the
- * API, reduced-motion users and hidden tabs switch instantly. Presses during a running reveal
- * are ignored, and a safety cleanup watchdog guarantees a stalled transition can never stick.
+ * Uses the View Transitions API with pure CSS @keyframes (`theme-reveal-circle` in
+ * `src/styles/theme-reveal.css`):
+ * 1. Origin coordinates and max corner radius are written to `--theme-reveal-*` custom properties
+ *    on `<html>` synchronously BEFORE `startViewTransition()` is called.
+ * 2. Because the CSS keyframe with `fill-mode: both` is bound to `:root.theme-revealing::view-transition-new(root)`
+ *    before the pseudo-element tree is created, Frame 0 is clipped to `circle(0px ...)` from the
+ *    very first compositor frame — eliminating the 1-frame unclipped flash caused by waiting for
+ *    `transition.ready.then(() => root.animate(...))`.
+ * 3. Only `clip-path` animates on the compositor thread (zero JS animation loop, zero filters),
+ *    keeping transitions smooth on low-spec devices.
  */
-export const THEME_REVEAL_MS = 380
-const EASING = 'cubic-bezier(0.22, 1, 0.36, 1)'
-const CLEANUP_FALLBACK_MS = THEME_REVEAL_MS + 320
+export const THEME_REVEAL_MS = 560
+const CLEANUP_FALLBACK_MS = THEME_REVEAL_MS + 400
 
 type ViewTransitionLike = {
   ready: Promise<void>
@@ -25,12 +27,19 @@ type DocumentWithVT = Document & { startViewTransition?: (update: () => void) =>
 
 let running = false
 let currentRunId = 0
-let activeAnimation: Animation | null = null
 let activeTransition: ViewTransitionLike | null = null
 let cleanupTimer: ReturnType<typeof setTimeout> | null = null
 
 export function isThemeRevealRunning(): boolean {
   return running
+}
+
+function clearRevealStyles(root: HTMLElement): void {
+  root.classList.remove('theme-revealing')
+  root.style.removeProperty('--theme-reveal-x')
+  root.style.removeProperty('--theme-reveal-y')
+  root.style.removeProperty('--theme-reveal-r')
+  root.style.removeProperty('--theme-reveal-duration')
 }
 
 function finishRun(runId: number, root: HTMLElement): void {
@@ -39,13 +48,9 @@ function finishRun(runId: number, root: HTMLElement): void {
     clearTimeout(cleanupTimer)
     cleanupTimer = null
   }
-  if (activeAnimation) {
-    try { activeAnimation.cancel() } catch { /* already finished or detached */ }
-    activeAnimation = null
-  }
   activeTransition = null
   running = false
-  root.classList.remove('theme-revealing')
+  clearRevealStyles(root)
 }
 
 export function revealThemeChange(origin: Element | null | undefined, update: () => void, animate = true): void {
@@ -67,7 +72,13 @@ export function revealThemeChange(origin: Element | null | undefined, update: ()
   const runId = ++currentRunId
 
   running = true
+  // Write geometry + class BEFORE startViewTransition so CSS @keyframes binds on Frame 0.
+  root.style.setProperty('--theme-reveal-x', `${x}px`)
+  root.style.setProperty('--theme-reveal-y', `${y}px`)
+  root.style.setProperty('--theme-reveal-r', `${radius}px`)
+  root.style.setProperty('--theme-reveal-duration', `${THEME_REVEAL_MS}ms`)
   root.classList.add('theme-revealing')
+
   let transition: ViewTransitionLike
   try {
     transition = doc.startViewTransition.call(doc, () => { flushSync(update) })
@@ -85,13 +96,7 @@ export function revealThemeChange(origin: Element | null | undefined, update: ()
     finishRun(runId, root)
   }, CLEANUP_FALLBACK_MS)
 
-  transition.ready.then(() => {
-    if (runId !== currentRunId || typeof root.animate !== 'function') return
-    activeAnimation = root.animate(
-      { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
-      { duration: THEME_REVEAL_MS, easing: EASING, fill: 'both', pseudoElement: '::view-transition-new(root)' }
-    )
-  }).catch(() => {
+  transition.ready.catch(() => {
     finishRun(runId, root)
   })
 

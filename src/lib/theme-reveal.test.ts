@@ -10,7 +10,12 @@ function mockMotion(reduced: boolean) {
 
 afterEach(() => {
   delete (document as unknown as Doc).startViewTransition
-  document.documentElement.classList.remove('theme-revealing')
+  const root = document.documentElement
+  root.classList.remove('theme-revealing')
+  root.style.removeProperty('--theme-reveal-x')
+  root.style.removeProperty('--theme-reveal-y')
+  root.style.removeProperty('--theme-reveal-r')
+  root.style.removeProperty('--theme-reveal-duration')
   vi.restoreAllMocks()
 })
 
@@ -35,21 +40,31 @@ describe('revealThemeChange', () => {
     expect(start).not.toHaveBeenCalled()
   })
 
-  it('reveals through a view transition and ignores presses while it runs', async () => {
+  it('sets CSS reveal geometry synchronously before startViewTransition and ignores presses while running', async () => {
     mockMotion(false)
     let finish!: () => void
     const finished = new Promise<void>(resolve => { finish = resolve })
-    const start = vi.fn((cb: () => void) => { cb(); return { ready: new Promise<void>(() => {}), finished } })
+    const start = vi.fn((cb: () => void) => {
+      // Geometry and class must already be on <html> before the pseudo-tree is created (Frame-0 lock).
+      const root = document.documentElement
+      expect(root.classList.contains('theme-revealing')).toBe(true)
+      expect(root.style.getPropertyValue('--theme-reveal-x')).toMatch(/^\d+px$/)
+      expect(root.style.getPropertyValue('--theme-reveal-y')).toMatch(/^\d+px$/)
+      expect(root.style.getPropertyValue('--theme-reveal-r')).toMatch(/^\d+px$/)
+      expect(root.style.getPropertyValue('--theme-reveal-duration')).toBe(`${THEME_REVEAL_MS}ms`)
+      cb()
+      return { ready: new Promise<void>(() => {}), finished }
+    })
     ;(document as unknown as Doc).startViewTransition = start
     const update = vi.fn()
     revealThemeChange(button(), update)
     revealThemeChange(button(), update)
     expect(start).toHaveBeenCalledTimes(1)
     expect(update).toHaveBeenCalledTimes(1)
-    expect(document.documentElement.classList.contains('theme-revealing')).toBe(true)
     finish(); await finished; await Promise.resolve(); await Promise.resolve()
     expect(isThemeRevealRunning()).toBe(false)
     expect(document.documentElement.classList.contains('theme-revealing')).toBe(false)
+    expect(document.documentElement.style.getPropertyValue('--theme-reveal-x')).toBe('')
   })
 
   it('skips the reveal when the light/dark mode would not change', () => {
@@ -62,10 +77,9 @@ describe('revealThemeChange', () => {
     expect(update).toHaveBeenCalledTimes(1)
   })
 
-  it('uses fill: both and cleanly handles 6 consecutive switches without sticking', async () => {
+  it('uses pure CSS keyframes (no WAAPI .ready race) and cleanly handles 6 consecutive switches without sticking', async () => {
     mockMotion(false)
-    const cancel = vi.fn()
-    const animate = vi.fn(() => ({ cancel } as unknown as Animation))
+    const animate = vi.fn()
     document.documentElement.animate = animate as unknown as typeof document.documentElement.animate
     const update = vi.fn()
 
@@ -84,18 +98,15 @@ describe('revealThemeChange', () => {
       await Promise.resolve()
       expect(isThemeRevealRunning()).toBe(false)
       expect(document.documentElement.classList.contains('theme-revealing')).toBe(false)
+      expect(document.documentElement.style.getPropertyValue('--theme-reveal-duration')).toBe('')
     }
 
     expect(update).toHaveBeenCalledTimes(6)
-    expect(animate).toHaveBeenCalledTimes(6)
-    expect(cancel).toHaveBeenCalledTimes(6)
-    expect(animate).toHaveBeenLastCalledWith(
-      expect.objectContaining({ clipPath: expect.any(Array) }),
-      expect.objectContaining({ duration: THEME_REVEAL_MS, fill: 'both', pseudoElement: '::view-transition-new(root)' })
-    )
+    expect(animate).not.toHaveBeenCalled()
+    expect(THEME_REVEAL_MS).toBeGreaterThanOrEqual(500)
   })
 
-  it('releases the lock immediately when transition.ready rejects (AbortError)', async () => {
+  it('releases the lock and clears custom properties when transition.ready rejects (AbortError)', async () => {
     mockMotion(false)
     const start = vi.fn((cb: () => void) => {
       cb()
@@ -108,5 +119,6 @@ describe('revealThemeChange', () => {
     await Promise.resolve()
     expect(isThemeRevealRunning()).toBe(false)
     expect(document.documentElement.classList.contains('theme-revealing')).toBe(false)
+    expect(document.documentElement.style.getPropertyValue('--theme-reveal-r')).toBe('')
   })
 })
