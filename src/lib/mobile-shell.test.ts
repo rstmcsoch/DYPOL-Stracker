@@ -6,14 +6,26 @@ const responsive = readFileSync(`${process.cwd()}/src/styles/responsive.css`, 'u
 const app = readFileSync(`${process.cwd()}/src/App.tsx`, 'utf8')
 
 describe('mobile shell (Phase 1)', () => {
-  it('bottom bar is the five daily destinations — Home, Plan, Focus, Tests, Profile', () => {
-    // Planner and Focus are daily habits; Analytics is a weekly read, so it lives in the drawer.
+  it('bottom bar is the four portrait destinations in order — Home, Tests, Planner, Profile (Focus stays in the drawer)', () => {
+    // Keep the mobile bottom bar strictly 4 single-row tabs so it never wraps into the FAB stack.
     const bar = shell.slice(shell.indexOf('const mobileBar'), shell.indexOf('const allNav'))
-    for (const label of ["'Home'", "'Plan'", "'Focus'", "'Tests'", "'Profile'"]) expect(bar).toContain(label)
+    const expectedOrder = ["'Home'", "'Tests'", "'Planner'", "'Profile'"]
+    let prevIndex = -1
+    for (const label of expectedOrder) {
+      const idx = bar.indexOf(label)
+      expect(idx).toBeGreaterThan(prevIndex)
+      prevIndex = idx
+    }
+    expect(bar).not.toContain("'Focus'")
+    expect(bar).not.toContain("to: '/focus'")
+    expect(shell).toContain("to: '/focus'")
     expect(bar).not.toContain("'Analytics'")
     expect(shell).toContain("to: '/analytics'")
     expect(bar).not.toContain('More')
     expect(shell).not.toContain('mobileMore')
+    expect(shell).toContain("item.to === '/planner' ? item.label : navLabelFor(item.to, item.label, siteValues)")
+    expect(responsive).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))')
+    expect(responsive).toContain('grid-auto-flow: column')
     expect(app).toContain('path="profile"')
   })
 

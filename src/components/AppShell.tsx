@@ -69,12 +69,11 @@ const navGroups: NavigationGroup[] = [
     { to: '/settings', label: 'Settings', icon: Settings }
   ] }
 ]
-/** Bottom bar on phones: the four daily destinations; everything else lives in the drawer. */
+/** Bottom bar on phones: the four daily destinations; everything else (including Focus) lives in the drawer. */
 const mobileBar: NavigationItem[] = [
   { to: '/', label: 'Home', icon: Home, exact: true },
-  { to: '/planner', label: 'Plan', icon: CalendarDays },
-  { to: '/focus', label: 'Focus', icon: Focus },
   { to: '/tests', label: 'Tests', icon: ListChecks },
+  { to: '/planner', label: 'Planner', icon: CalendarDays },
   { to: '/profile', label: 'Profile', icon: UserRound }
 ]
 const allNav: NavigationItem[] = navGroups.flatMap(group => group.items)
@@ -223,16 +222,20 @@ export function AppFrame() {
     </main>
 
     <nav className="mobile-nav" aria-label="Mobile navigation" {...mobileNavSlot.attrs}>
-      {mobileBar.map(item => <MobileNavItem key={item.to} item={{ ...item, label: navLabelFor(item.to, item.label, siteValues) }} />)}
+      {mobileBar.map(item => <MobileNavItem key={item.to} item={{ ...item, label: item.to === '/planner' ? item.label : navLabelFor(item.to, item.label, siteValues) }} />)}
     </nav>
     {drawerOpen && <div className="mobile-drawer-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setDrawerOpen(false) }}>
       <aside className="mobile-drawer" id="mobile-drawer" role="dialog" aria-modal="true" aria-label="Navigation">
         <div className="mobile-drawer-head"><Brand compact /><span className="drawer-sync">{syncPill}</span></div>
         <nav className="mobile-drawer-nav" aria-label="All sections">
-          {groups.map(group => <div key={group.caption} className="mobile-drawer-group">
-            <div className="sheet-nav-caption">{(() => { const caption = navCaptionFor(group.caption, siteValues); return caption.charAt(0) + caption.slice(1).toLowerCase() })()}</div>
-            {group.items.filter(item => item.to !== '/settings' && !mobileBar.some(bar => bar.to === item.to)).map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} onClick={() => setDrawerOpen(false)} />)}
-          </div>)}
+          {groups.map(group => {
+            const items = group.items.filter(item => item.to !== '/settings' && !mobileBar.some(bar => bar.to === item.to))
+            if (!items.length) return null
+            return <div key={group.caption} className="mobile-drawer-group">
+              <div className="sheet-nav-caption">{(() => { const caption = navCaptionFor(group.caption, siteValues); return caption.charAt(0) + caption.slice(1).toLowerCase() })()}</div>
+              {items.map(item => <NavItem key={item.to} {...item} label={navLabelFor(item.to, item.label, siteValues)} onClick={() => setDrawerOpen(false)} />)}
+            </div>
+          })}
         </nav>
         <button type="button" className="drawer-help" onClick={() => { setDrawerOpen(false); setShortcutsOpen(true) }}><CircleHelp size={16} /> Shortcuts &amp; keyboard help <kbd>?</kbd></button>
         <div className="sheet-brand-credit">Stracker <span>by DYPOL LABS</span></div>
