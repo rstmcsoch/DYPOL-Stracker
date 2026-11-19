@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isThemeRevealRunning, revealThemeChange } from './theme-reveal'
+import { isThemeRevealRunning, revealThemeChange, THEME_REVEAL_MS } from './theme-reveal'
 
 type Doc = { startViewTransition?: unknown }
 
@@ -11,6 +11,7 @@ function mockMotion(reduced: boolean) {
 afterEach(() => {
   delete (document as unknown as Doc).startViewTransition
   document.documentElement.classList.remove('theme-revealing')
+  vi.restoreAllMocks()
 })
 
 describe('revealThemeChange', () => {
@@ -59,5 +60,53 @@ describe('revealThemeChange', () => {
     revealThemeChange(button(), update, false)
     expect(start).not.toHaveBeenCalled()
     expect(update).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses fill: both and cleanly handles 6 consecutive switches without sticking', async () => {
+    mockMotion(false)
+    const cancel = vi.fn()
+    const animate = vi.fn(() => ({ cancel } as unknown as Animation))
+    document.documentElement.animate = animate as unknown as typeof document.documentElement.animate
+    const update = vi.fn()
+
+    for (let i = 0; i < 6; i++) {
+      let finish!: () => void
+      const finished = new Promise<void>(resolve => { finish = resolve })
+      ;(document as unknown as Doc).startViewTransition = vi.fn((cb: () => void) => {
+        cb()
+        return { ready: Promise.resolve(), finished }
+      })
+      revealThemeChange(button(), update)
+      await Promise.resolve()
+      finish()
+      await finished
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(isThemeRevealRunning()).toBe(false)
+      expect(document.documentElement.classList.contains('theme-revealing')).toBe(false)
+    }
+
+    expect(update).toHaveBeenCalledTimes(6)
+    expect(animate).toHaveBeenCalledTimes(6)
+    expect(cancel).toHaveBeenCalledTimes(6)
+    expect(animate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ clipPath: expect.any(Array) }),
+      expect.objectContaining({ duration: THEME_REVEAL_MS, fill: 'both', pseudoElement: '::view-transition-new(root)' })
+    )
+  })
+
+  it('releases the lock immediately when transition.ready rejects (AbortError)', async () => {
+    mockMotion(false)
+    const start = vi.fn((cb: () => void) => {
+      cb()
+      return { ready: Promise.reject(new DOMException('Aborted', 'AbortError')), finished: new Promise<void>(() => {}) }
+    })
+    ;(document as unknown as Doc).startViewTransition = start
+    const update = vi.fn()
+    revealThemeChange(button(), update)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(isThemeRevealRunning()).toBe(false)
+    expect(document.documentElement.classList.contains('theme-revealing')).toBe(false)
   })
 })
