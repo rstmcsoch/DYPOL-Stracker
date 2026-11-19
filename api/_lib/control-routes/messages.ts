@@ -62,6 +62,8 @@ export async function messagesHandler(req: ApiRequest, res: ApiResponse): Promis
         if (!row) throw new ApiError(404, 'not_found', 'That message no longer exists.')
         const planned = (Array.isArray(row.attachments) ? row.attachments : []) as PlannedAttachment[]
         const files = await Promise.all(planned.map(async file => {
+          const safePath = typeof file.path === 'string' && file.path.startsWith(`${id}/`) && !file.path.includes('..') && !file.path.includes('\\')
+          if (!safePath) return { name: file.name, size: file.size, type: file.type, viewUrl: null, downloadUrl: null }
           const { data } = await admin.storage.from(CONTACT_BUCKET).createSignedUrl(file.path, SIGNED_URL_SECONDS, { download: file.name })
           const { data: view } = await admin.storage.from(CONTACT_BUCKET).createSignedUrl(file.path, SIGNED_URL_SECONDS)
           return { name: file.name, size: file.size, type: file.type, viewUrl: view?.signedUrl ?? null, downloadUrl: data?.signedUrl ?? null }
@@ -86,7 +88,7 @@ export async function messagesHandler(req: ApiRequest, res: ApiResponse): Promis
         query.order('created_at', { ascending: false }).range(from, from + MESSAGES_PAGE_SIZE - 1),
         unreadQuery()
       ])
-      if (error) throw new ApiError(503, 'messages_unavailable', 'Messages could not be loaded. Try again.')
+      if (error || unread.error) throw new ApiError(503, 'messages_unavailable', 'Messages could not be loaded. Try again.')
       sendJson(res, 200, {
         ok: true,
         page,

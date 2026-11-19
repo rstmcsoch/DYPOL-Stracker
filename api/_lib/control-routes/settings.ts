@@ -105,7 +105,8 @@ async function readSite(admin: SupabaseClient) {
 async function readMembers(admin: SupabaseClient) {
   const { data, error } = await admin.from('control_roles').select('user_id, role, granted_at, revoked_at').order('granted_at', { ascending: true })
   if (error) throw new ApiError(503, 'control_unavailable', 'Team members could not be loaded right now.')
-  const { data: overrides } = await admin.from('control_member_permissions').select('user_id, permission, allowed')
+  const { data: overrides, error: overridesError } = await admin.from('control_member_permissions').select('user_id, permission, allowed')
+  if (overridesError) throw new ApiError(503, 'control_unavailable', 'Team permissions could not be loaded right now.')
   return Promise.all(((data ?? []) as RoleRow[]).map(async row => {
     const active = !row.revoked_at
     let mfaEnrolled = false
@@ -140,11 +141,12 @@ async function readMatrix(admin: SupabaseClient) {
 }
 
 async function readActivity(admin: SupabaseClient) {
-  const { data } = await admin.from('control_audit_events')
+  const { data, error } = await admin.from('control_audit_events')
     .select('id, created_at, actor_id, actor_role, action, target_type, target_id, result, error_category, reason, before_summary, after_summary')
     .in('action', SETTINGS_ACTIVITY)
     .order('created_at', { ascending: false })
     .limit(50)
+  if (error) throw new ApiError(503, 'control_unavailable', 'Settings activity could not be loaded right now.')
   return (data ?? []) as Array<Record<string, unknown>>
 }
 
@@ -246,6 +248,7 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
       requirePermission(context, 'roles.manage')
       if (!assignableRoles(context.role).includes(body.role)) await refuse(context, 'role.assign', 'owner_only', 403, 'Only the owner can give the Owner or Admin role.')
       const email = body.email.toLowerCase()
+      if (email.includes('%') || !email.includes('@')) throw new ApiError(404, 'user_not_found', 'No Stracker account uses that email. The person must sign up first.')
       const { data: profile, error: profileError } = await admin.from('profiles').select('user_id, email').ilike('email', email).limit(2)
       if (profileError) throw new ApiError(503, 'control_unavailable', 'Accounts could not be searched right now.')
       const match = ((profile ?? []) as Array<{ user_id: string; email: string }>).filter(row => (row.email ?? '').toLowerCase() === email)
@@ -323,7 +326,8 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
     case 'permissions.member': {
       await ownerOnly(context, 'permissions.member')
       const targetId = body.userId
-      const { data: existing } = await admin.from('control_roles').select('role, revoked_at').eq('user_id', targetId).maybeSingle()
+      const { data: existing, error: existingError } = await admin.from('control_roles').select('role, revoked_at').eq('user_id', targetId).maybeSingle()
+      if (existingError) throw new ApiError(503, 'control_unavailable', 'Roles could not be checked. Nothing changed.')
       if (!existing || existing.revoked_at) throw new ApiError(409, 'no_change', 'This person has no active role.')
       if (existing.role === 'owner') throw new ApiError(409, 'owner_protected', 'The owner always has every permission.')
       await requireStepUp(context, { action: 'permissions.member', targetType: 'user', targetId })

@@ -14,6 +14,12 @@ type AuthUserRow = {
 
 type ProfileRow = { user_id: string; display_name: string | null }
 
+const parseTimestamp = (value: string | null | undefined): number => {
+  if (!value) return 0
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 /**
  * GET /api/control/users?q=&status=all|verified|unverified|suspended&sort=created_desc|created_asc|last_sign_in&page=1&pageSize=25
  * Reads Auth account metadata and public profile labels. Never returns study-content rows.
@@ -53,9 +59,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     })
 
     filtered.sort((a, b) => {
-      if (sort === 'created_asc') return Date.parse(a.created_at ?? '') - Date.parse(b.created_at ?? '')
-      if (sort === 'last_sign_in') return Date.parse(b.last_sign_in_at ?? '') - Date.parse(a.last_sign_in_at ?? '')
-      return Date.parse(b.created_at ?? '') - Date.parse(a.created_at ?? '')
+      if (sort === 'created_asc') return parseTimestamp(a.created_at) - parseTimestamp(b.created_at)
+      if (sort === 'last_sign_in') return parseTimestamp(b.last_sign_in_at) - parseTimestamp(a.last_sign_in_at)
+      return parseTimestamp(b.created_at) - parseTimestamp(a.created_at)
     })
     const pageUsers = filtered.slice(offset, offset + limit)
     const ids = pageUsers.map(user => user.id)

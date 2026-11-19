@@ -1,5 +1,5 @@
 import type { ApiRequest, ApiResponse } from '../http.js'
-import { sendJson } from '../http.js'
+import { ApiError, sendJson } from '../http.js'
 import { controlHandler } from '../control.js'
 
 /**
@@ -10,7 +10,7 @@ import { controlHandler } from '../control.js'
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   await controlHandler(req, res, ['GET'], { requireAal2: true, permission: 'roles.manage' }, async context => {
     const { data, error } = await context.admin.from('control_roles').select('user_id, role, granted_at, revoked_at').order('granted_at', { ascending: true })
-    if (error) throw new Error('roles_query_failed')
+    if (error) throw new ApiError(503, 'roles_unavailable', 'Role assignments could not be loaded right now. Try again shortly.')
     const assignments = await Promise.all((data ?? []).map(async row => {
       const { data: auth } = await context.admin.auth.admin.getUserById(row.user_id as string)
       return {
