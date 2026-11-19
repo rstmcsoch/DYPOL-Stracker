@@ -17,33 +17,35 @@ const cloudMock = vi.hoisted(() => ({
 }))
 
 vi.mock('../lib/supabase', () => {
+  const rowsForTable = (table: string) => {
+    if (table === 'app_settings') return cloudMock.remoteSettings ? [cloudMock.remoteSettings] : []
+    if (table === 'profiles') {
+      return [{
+        id: USER, user_id: USER, display_name: 'Master', email: 'master@example.com',
+        created_at: '2026-11-19T00:00:00.000Z', updated_at: '2026-11-19T00:00:00.000Z'
+      }]
+    }
+    if (table === 'user_exam_tracks') return defaultExamTracks(USER)
+    return []
+  }
+
   const from = (table: string) => ({
     select: () => ({
       eq: () => {
-        if (table === 'app_settings') {
-          return Promise.resolve({ data: cloudMock.remoteSettings ? [cloudMock.remoteSettings] : [], error: null })
-        }
-        if (table === 'profiles') {
-          return Promise.resolve({
-            data: [{
-              id: USER, user_id: USER, display_name: 'Master', email: 'master@example.com',
-              created_at: '2026-11-19T00:00:00.000Z', updated_at: '2026-11-19T00:00:00.000Z'
-            }],
-            error: null
+        const result = Promise.resolve({ data: rowsForTable(table), error: null })
+        return Object.assign(result, {
+          eq: () => ({
+            maybeSingle: () => Promise.resolve({ data: rowsForTable(table)[0] ?? null, error: null })
           })
-        }
-        if (table === 'user_exam_tracks') {
-          return Promise.resolve({ data: defaultExamTracks(USER), error: null })
-        }
-        return Promise.resolve({ data: [], error: null })
+        })
       }
     }),
     upsert: (rows: unknown) => {
       cloudMock.upserts.push({ table, rows })
-      if (table === 'app_settings' && cloudMock.failSettingsUpsert) {
-        return Promise.resolve({ error: { message: 'Cloud write refused for app_settings' } })
-      }
-      return Promise.resolve({ error: null })
+      const result = table === 'app_settings' && cloudMock.failSettingsUpsert
+        ? Promise.resolve({ error: { message: 'Cloud write refused for app_settings' } })
+        : Promise.resolve({ error: null })
+      return Object.assign(result, { setHeader: () => result })
     }
   })
   return {
@@ -64,9 +66,10 @@ import { DataProvider, useData } from './DataContext'
 import { ToastProvider } from './ToastContext'
 
 function Probe() {
-  const { data, syncState, syncError, pendingCount, updateSettings, refresh } = useData()
+  const { data, profileLoaded, syncState, syncError, pendingCount, updateSettings, refresh } = useData()
   return (
     <div>
+      <span data-testid="loaded">{String(profileLoaded)}</span>
       <span data-testid="theme">{data.settings.theme}</span>
       <span data-testid="font">{data.settings.interface_font}</span>
       <span data-testid="target">{data.settings.target_score}</span>
@@ -119,7 +122,8 @@ afterEach(async () => {
 describe('DataProvider local-only theme switching', () => {
   it('saves Light/Night mode locally without touching Supabase, sync_queue, or showing sync errors', async () => {
     renderHarness()
-    await waitFor(() => expect(screen.getByTestId('sync-state').textContent).toBe('synced'))
+    await waitFor(() => expect(screen.getByTestId('loaded').textContent).toBe('true'))
+    expect(screen.getByTestId('sync-state').textContent).toBe('synced')
     cloudMock.upserts = []
 
     fireEvent.click(screen.getByRole('button', { name: 'Switch dark' }))
@@ -138,7 +142,7 @@ describe('DataProvider local-only theme switching', () => {
 
   it('preserves the local Light/Night mode across a cloud refresh while still pulling other cloud settings', async () => {
     renderHarness()
-    await waitFor(() => expect(screen.getByTestId('sync-state').textContent).toBe('synced'))
+    await waitFor(() => expect(screen.getByTestId('loaded').textContent).toBe('true'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Switch dark' }))
     await waitFor(() => expect(screen.getByTestId('theme').textContent).toBe('dark'))
@@ -154,7 +158,7 @@ describe('DataProvider local-only theme switching', () => {
   it('continues syncing non-theme settings to Supabase normally', async () => {
     cloudMock.failSettingsUpsert = false
     renderHarness()
-    await waitFor(() => expect(screen.getByTestId('sync-state').textContent).toBe('synced'))
+    await waitFor(() => expect(screen.getByTestId('loaded').textContent).toBe('true'))
     cloudMock.upserts = []
 
     fireEvent.click(screen.getByRole('button', { name: 'Switch font' }))
