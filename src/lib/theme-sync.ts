@@ -3,6 +3,8 @@ import type { AppSettings, ThemeMode } from '../types'
 const sameValue = (left: unknown, right: unknown): boolean =>
   Object.is(left, right) || JSON.stringify(left) === JSON.stringify(right)
 
+const MISSING_COLUMN_RE = /Could not find the '([a-z0-9_]+)' column of '[a-z0-9_]+' in the schema cache/i
+
 /**
  * True when an `app_settings` update changes only the Light/Night display mode (`theme`)
  * (or makes no substantive change at all, ignoring `updated_at`).
@@ -33,4 +35,25 @@ export function preserveLocalTheme(cloudSettings: AppSettings, localTheme: Theme
     return cloudSettings.theme === localTheme ? cloudSettings : { ...cloudSettings, theme: localTheme }
   }
   return cloudSettings
+}
+
+/**
+ * Extracts the missing column name from a PostgREST PGRST204 schema-cache error when the
+ * browser sends a newer additive column that has not been migrated in Supabase yet.
+ */
+export function missingSchemaColumn(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const code = 'code' in error ? String((error as { code?: unknown }).code ?? '') : ''
+  const message = 'message' in error ? String((error as { message?: unknown }).message ?? '') : ''
+  if (code && code !== 'PGRST204') return null
+  return MISSING_COLUMN_RE.exec(message)?.[1] ?? null
+}
+
+/** Returns shallow copies of `rows` with `column` omitted so a cloud upsert can retry safely. */
+export function stripColumnFromRows(rows: Record<string, unknown>[], column: string): Record<string, unknown>[] {
+  return rows.map(row => {
+    const copy = { ...row }
+    delete copy[column]
+    return copy
+  })
 }
