@@ -134,6 +134,9 @@ async function runSanction(context: ControlContext, body: SanctionBody): Promise
     throw new ApiError(400, 'confirmation_mismatch', 'The confirmation email does not match this account. Nothing was deleted.')
   }
 
+  // Validate temporary ban window before consuming a single-use step-up confirmation.
+  const banWindow = body.action === 'ban' ? banDuration(body.permanent, body.until) : null
+
   const { data: banRow, error: banError } = await admin.from('account_bans').select('banned_until').eq('user_id', userId).maybeSingle()
   if (banError) throw new ApiError(503, 'control_unavailable', 'The account status could not be checked. Nothing was changed.')
   const activeBan = Boolean(banRow && (banRow.banned_until === null || Date.parse(banRow.banned_until) > Date.now()))
@@ -155,7 +158,7 @@ async function runSanction(context: ControlContext, body: SanctionBody): Promise
   }
 
   if (body.action === 'ban') {
-    const { duration, untilIso } = banDuration(body.permanent, body.until)
+    const { duration, untilIso } = banWindow!
     const { error: gotrueError } = await admin.auth.admin.updateUserById(userId, { ban_duration: duration })
     if (gotrueError) await fail('auth_update_failed', 502, 'The ban could not be applied by the authentication service. Nothing was changed; try again.')
     const { data: sanction, error: sanctionError } = await admin.from('account_sanctions')
@@ -186,7 +189,8 @@ async function runSanction(context: ControlContext, body: SanctionBody): Promise
     if (gotrueError) await fail('auth_update_failed', 502, 'The ban could not be lifted by the authentication service. Try again.')
     const { error: deleteError } = await admin.from('account_bans').delete().eq('user_id', userId)
     if (deleteError) await fail('sanction_write_failed', 503, 'The ban record could not be cleared. Try again.')
-    await admin.from('account_sanctions').insert({ user_id: userId, kind: 'unban', reason: body.reason || null, created_by: context.userId, created_by_role: context.role })
+    const { error: noticeError } = await admin.from('account_sanctions').insert({ user_id: userId, kind: 'unban', reason: body.reason || null, created_by: context.userId, created_by_role: context.role })
+    if (noticeError) logAIEvent('warn', 'control_unban_notice_failed', { code: noticeError.code ?? '' })
     await recordAuditEvent(admin, { ...audit, outcome: 'success', severity: 'notice', reason: body.reason, summary: { before: 'banned', after: 'active' } })
     return
   }
