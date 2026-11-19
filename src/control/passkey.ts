@@ -13,6 +13,8 @@ import { supabase, supabaseAuthStorageKey } from '../lib/supabase'
  *    Chrome's 5-second transient user activation waiting on a token refresh before WebAuthn starts.
  *  - Request modal mediation (`optional`) explicitly without passing a custom `signal`, so
  *    `@supabase/auth-js` uses its built-in pending-ceremony cancellation instead of overriding it.
+ *  - Forward the Cloudflare Turnstile `captchaToken` because Supabase Auth enforces project-wide
+ *    CAPTCHA protection on `signInWithPasskey()` as well as password/signup endpoints.
  *  - Inspect both the error and its `.cause` (where WebAuthn wrappers place browser DOMExceptions)
  *    and include a sanitized diagnostic summary in the owner-only alert so mobile/tablet Chrome
  *    errors are visible without DevTools.
@@ -24,7 +26,7 @@ export type PasskeyResult = { ok: true } | { ok: false; message: string }
 
 type PasskeyAuthClient = NonNullable<typeof supabase>['auth'] & {
   signInWithPasskey: (params?: {
-    options?: { mediation?: CredentialMediationRequirement; signal?: AbortSignal }
+    options?: { mediation?: CredentialMediationRequirement; signal?: AbortSignal; captchaToken?: string }
   }) => ReturnType<NonNullable<typeof supabase>['auth']['signInWithPasskey']>
 }
 
@@ -114,7 +116,7 @@ function logPasskeyFailure(stage: string, error: unknown): void {
   })
 }
 
-export async function verifyWithOwnerPasskey(): Promise<PasskeyResult> {
+export async function verifyWithOwnerPasskey(captchaToken?: string): Promise<PasskeyResult> {
   if (!supabase) return { ok: false, message: 'Cloud sign-in is not configured.' }
   if (typeof window !== 'undefined' && typeof window.PublicKeyCredential === 'undefined') {
     return { ok: false, message: 'This browser cannot use passkeys on this page. Open Stracker over HTTPS in a supported browser, or use your authenticator code.' }
@@ -134,7 +136,12 @@ export async function verifyWithOwnerPasskey(): Promise<PasskeyResult> {
   try {
     // Let @supabase/auth-js manage pending-ceremony cancellation natively (passing a custom
     // AbortSignal disables the SDK's built-in pending-ceremony abort).
-    result = await auth.signInWithPasskey({ options: { mediation: 'optional' } })
+    result = await auth.signInWithPasskey({
+      options: {
+        mediation: 'optional',
+        ...(captchaToken ? { captchaToken } : {})
+      }
+    })
   } catch (error) {
     logPasskeyFailure('ceremony', error)
     return { ok: false, message: passkeyErrorMessage(error) }
@@ -176,6 +183,9 @@ export function passkeyErrorMessage(error: unknown): string {
   const detail = formatPasskeyDiagnostic(info)
   const withDetail = (base: string): string => (detail ? `${base} (${detail})` : base)
 
+  if (/captcha_failed|captcha protection|captcha_token|captcha/.test(text)) {
+    return withDetail('The security check (Turnstile) did not complete. Wait for the green check above “Use passkey” and try again, or use your authenticator code.')
+  }
   if (/securityerror|relying party|rpid|rp id|origin.*not|invalid.*origin|domain/.test(text)) {
     return withDetail(`This browser blocked the passkey for ${host || 'this address'}. Open Stracker on https://dypol-stracker.vercel.app (not a preview URL) and check Supabase → Authentication → Passkeys (Relying Party ID: dypol-stracker.vercel.app).`)
   }
