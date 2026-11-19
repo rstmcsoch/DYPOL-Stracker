@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Monitor, Moon, Sun } from 'lucide-react'
+import './control-modern.css'
 import {
   CONTROL_THEME_OPTIONS, CONTROL_THEME_STORAGE_KEY, normalizeControlTheme, readControlThemePreference,
   resolveControlTheme, systemPrefersDark, writeControlThemePreference,
