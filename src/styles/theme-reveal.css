@@ -1,25 +1,47 @@
 /* Light/night circular reveal (src/lib/theme-reveal.ts).
-   Only ::view-transition-new(root) animates via WAAPI clip-path on the compositor thread.
-   Disabling the default root group/pair animations and offscreen isolation prevents frame-0/end
-   flashes and avoids an extra full-screen GPU buffer on low-spec devices. */
-::view-transition-group(root),
+   Driven purely by CSS @keyframes on ::view-transition-new(root) using --theme-reveal-x/y/r
+   set synchronously BEFORE startViewTransition(). Because the keyframe with `fill-mode: both`
+   is already bound at Frame 0, Chromium never paints an unclipped 1-frame flash of the new
+   theme while waiting for JS transition.ready — and the clip-path animation stays 100% on the
+   GPU compositor thread for smooth performance on low-spec devices. */
+@keyframes theme-reveal-circle {
+  from {
+    clip-path: circle(0px at var(--theme-reveal-x, 50%) var(--theme-reveal-y, 50%));
+  }
+  to {
+    clip-path: circle(var(--theme-reveal-r, 150vmax) at var(--theme-reveal-x, 50%) var(--theme-reveal-y, 50%));
+  }
+}
+
+::view-transition-group(root) {
+  animation: none;
+}
+
+::view-transition-image-pair(root) {
+  isolation: auto;
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
 }
-::view-transition-image-pair(root) {
-  isolation: auto;
-}
+
 ::view-transition-old(root) {
   z-index: 0;
 }
+
 ::view-transition-new(root) {
   z-index: 1;
+}
+
+:root.theme-revealing::view-transition-new(root) {
+  animation: theme-reveal-circle var(--theme-reveal-duration, 560ms) cubic-bezier(0.4, 0, 0.2, 1) both;
   will-change: clip-path;
 }
-/* Pause CSS transitions (including pseudo-elements) while the snapshot is taken and revealed,
-   using 0s duration instead of `transition: none` to avoid tearing down transition declarations. */
+
+/* Pause element-level CSS transitions (including pseudo-elements) while the snapshot is taken
+   and revealed so elements never capture mid-fade or flicker at teardown. */
 .theme-revealing,
 .theme-revealing *,
 .theme-revealing *::before,
