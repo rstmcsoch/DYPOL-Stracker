@@ -62,6 +62,25 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : 'The change could not be saved.'
 }
 
+function passkeyRegistrationErrorMessage(error: unknown): string {
+  const obj = error && typeof error === 'object' ? (error as { name?: string; code?: string; message?: string }) : null
+  const text = obj ? `${obj.name ?? ''} ${obj.code ?? ''} ${obj.message ?? ''}`.toLowerCase() : String(error ?? '').toLowerCase()
+  const host = typeof window !== 'undefined' ? window.location.host : ''
+  if (/invalidstateerror|already.*registered|exclude/.test(text)) {
+    return 'A passkey for this account is already saved on this device or password manager.'
+  }
+  if (/securityerror|relying party|rpid|rp id|origin.*not|invalid.*origin|domain/.test(text)) {
+    return `This browser blocked passkey setup for ${host || 'this address'}. Open Stracker on https://dypol-stracker.vercel.app (not a preview URL) and check Supabase → Authentication → Passkeys (Relying Party ID: dypol-stracker.vercel.app).`
+  }
+  if (/notsupportederror|not supported/.test(text)) {
+    return 'This browser profile does not support passkey creation. Check your device screen lock and Chrome password manager settings.'
+  }
+  if (/abort|cancel|notallowed|not allowed/.test(text)) {
+    return 'The passkey prompt was closed or denied by the browser. Click “Create passkey now” again, or check that your device screen lock is enabled.'
+  }
+  return 'The passkey was not added. Your device cancelled it, passkeys are off in Supabase, or Supabase wants this session confirmed with your authenticator code: confirm with the code and try again.'
+}
+
 /** One save = one fresh authenticator code. Returns a status line for the form. */
 function useSave() {
   const stepUp = useStepUp()
@@ -249,22 +268,43 @@ function PasskeysPanel({ data }: { data: SettingsResponse }) {
   const stepUp = useStepUp()
   const client = useQueryClient()
   const [busy, setBusy] = useState(false)
+  const [authorized, setAuthorized] = useState(false)
   const [status, setStatus] = useState<{ message: string; tone: 'ok' | 'crit' } | null>(null)
   const items = data.passkeys?.items ?? []
-  const add = async () => {
+
+  // Step 1: verify step-up with the server. Step 2 (`registerNow`) runs from a dedicated click
+  // button so Chrome/Chromium always has a fresh transient user activation for navigator.credentials.create().
+  const authorize = async () => {
     if (!supabase) return
     setBusy(true); setStatus(null)
     try {
       const allowed = await stepUp(() => controlFetch('settings', { method: 'POST', body: { action: 'passkey.authorize' } }))
       if (allowed === null) { setStatus({ message: 'Cancelled.', tone: 'crit' }); return }
-      const { error } = await supabase.auth.registerPasskey()
-      if (error) { setStatus({ message: 'The passkey was not added. Your device cancelled it, passkeys are off in Supabase, or Supabase wants this session confirmed with your authenticator code: confirm with the code and try again.', tone: 'crit' }); return }
-      await client.invalidateQueries({ queryKey: QUERY_KEY })
-      setStatus({ message: 'Passkey added. Next time, choose “Use passkey” on the two-step screen or when confirming a save.', tone: 'ok' })
+      setAuthorized(true)
+      setStatus({ message: 'Confirmed. Click “Create passkey now” so your browser opens the passkey prompt.', tone: 'ok' })
     } catch (error) {
       setStatus({ message: errorText(error), tone: 'crit' })
     } finally { setBusy(false) }
   }
+
+  const registerNow = async () => {
+    if (!supabase) return
+    if (typeof window !== 'undefined' && typeof window.PublicKeyCredential === 'undefined') {
+      setStatus({ message: 'This browser cannot create passkeys here. Open Stracker over HTTPS in a supported browser.', tone: 'crit' })
+      return
+    }
+    setBusy(true); setStatus(null)
+    try {
+      const { error } = await supabase.auth.registerPasskey()
+      if (error) { setStatus({ message: passkeyRegistrationErrorMessage(error), tone: 'crit' }); return }
+      setAuthorized(false)
+      await client.invalidateQueries({ queryKey: QUERY_KEY })
+      setStatus({ message: 'Passkey added. Next time, choose “Use passkey” on the two-step screen or when confirming a save.', tone: 'ok' })
+    } catch (error) {
+      setStatus({ message: passkeyRegistrationErrorMessage(error), tone: 'crit' })
+    } finally { setBusy(false) }
+  }
+
   const remove = async (passkeyId: string) => {
     setBusy(true); setStatus(null)
     try {
@@ -274,6 +314,7 @@ function PasskeysPanel({ data }: { data: SettingsResponse }) {
       setStatus({ message: errorText(error), tone: 'crit' })
     } finally { setBusy(false) }
   }
+
   return <Panel title="Passkeys (owner)" description="Only the owner can have passkeys. Use one (fingerprint, face or device PIN) instead of the authenticator code on the two-step screen and to confirm settings saves. Your authenticator code keeps working too.">
     {enabled === false && <p className="cc-note cc-note--warn">Passkeys are switched off for this Supabase project. Turn them on in Supabase → Authentication → Passkeys, with the site address dypol-stracker.vercel.app, then come back here.</p>}
     {items.length === 0 ? <p className="cc-muted">No passkeys yet.</p> : <ul className="cc-list">
@@ -282,7 +323,14 @@ function PasskeysPanel({ data }: { data: SettingsResponse }) {
         <Button size="sm" variant="ghost" disabled={busy} onClick={() => void remove(item.id)}><Trash2 size={14} aria-hidden="true" /> Remove</Button>
       </li>)}
     </ul>}
-    <div className="cc-form__actions"><Button variant="primary" disabled={busy || enabled !== true} onClick={() => void add()}><Fingerprint size={15} aria-hidden="true" /> {busy ? 'Working…' : 'Add a passkey on this device'}</Button></div>
+    <div className="cc-form__actions">
+      {authorized ? <>
+        <Button variant="primary" disabled={busy} onClick={() => void registerNow()}><Fingerprint size={15} aria-hidden="true" /> {busy ? 'Opening passkey prompt…' : 'Create passkey now'}</Button>
+        <Button variant="ghost" disabled={busy} onClick={() => { setAuthorized(false); setStatus(null) }}>Cancel</Button>
+      </> : (
+        <Button variant="primary" disabled={busy || enabled !== true} onClick={() => void authorize()}><Fingerprint size={15} aria-hidden="true" /> {busy ? 'Working…' : 'Add a passkey on this device'}</Button>
+      )}
+    </div>
     {status && <SaveStatus message={status.message} tone={status.tone} />}
   </Panel>
 }
