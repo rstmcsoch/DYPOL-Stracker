@@ -1,0 +1,1042 @@
+/* Control Centre — Modern Multi-Color Semantic & Pill UI Layer
+ * Scoped strictly to .cc-root so public pages and the student notebook are completely untouched.
+ * Inspired by Radix Colors, Linear, Vercel Geist, and Stripe Dashboard:
+ *  - 7 perceptual semantic hues calibrated separately for Operations Night (dark) and Daylight (light)
+ *  - Pill-shaped buttons, tabs, segmented controls, search inputs, filter chips, and status badges
+ *  - Per-section sidebar navigation accents so every console area is recognizable at a glance
+ *  - Zero functional or layout-breaking changes; respects prefers-reduced-motion.
+ */
+
+/* ==========================================================================
+   1. Semantic Multi-Color Tokens (Dark default + Light override)
+   ========================================================================== */
+.cc-root {
+  --cc-bg: #0b0d12;
+  --cc-sidebar: #0f1219;
+  --cc-surface: #141821;
+  --cc-surface-2: #1b2130;
+  --cc-input: #0e1118;
+  --cc-border: #262e3f;
+  --cc-border-soft: #1c2230;
+  --cc-border-strong: #39445c;
+  --cc-hover: #212838;
+  --cc-text: #f1f4f9;
+  --cc-text-2: #b8c2d1;
+  --cc-muted: #8a95a8;
+  --cc-radius: 14px;
+  --cc-radius-sm: 10px;
+  --cc-radius-pill: 999px;
+
+  /* Tangerine — Brand Primary */
+  --cc-accent: #f97316;
+  --cc-accent-hover: #fb923c;
+  --cc-accent-press: #ea580c;
+  --cc-accent-soft: rgba(249, 115, 22, 0.14);
+  --cc-accent-border: rgba(249, 115, 22, 0.42);
+  --cc-accent-text: #fdba74;
+  --cc-on-accent: #180902;
+
+  /* Emerald — Allow, Save, Approve, Active, Healthy */
+  --cc-ok: #22c55e;
+  --cc-ok-hover: #4ade80;
+  --cc-ok-soft: rgba(34, 197, 94, 0.14);
+  --cc-ok-border: rgba(34, 197, 94, 0.42);
+  --cc-ok-text: #86efac;
+  --cc-on-ok: #041d0e;
+
+  /* Crimson — Delete, Ban, Remove, Revoke, Site Down */
+  --cc-crit: #f43f5e;
+  --cc-crit-hover: #fb7185;
+  --cc-crit-soft: rgba(244, 63, 94, 0.15);
+  --cc-crit-border: rgba(244, 63, 94, 0.46);
+  --cc-crit-text: #fda4af;
+  --cc-crit-text-strong: #fecdd3;
+  --cc-danger-soft: rgba(244, 63, 94, 0.15);
+
+  /* Amber — Warn, Caution, Maintenance, Drafts */
+  --cc-warn: #f59e0b;
+  --cc-warn-hover: #fbbf24;
+  --cc-warn-soft: rgba(245, 158, 11, 0.15);
+  --cc-warn-border: rgba(245, 158, 11, 0.44);
+  --cc-warn-text: #fcd34d;
+
+  /* Cobalt — Users, Analytics, Info, Export */
+  --cc-info: #38bdf8;
+  --cc-info-hover: #7dd3fc;
+  --cc-info-soft: rgba(56, 189, 248, 0.14);
+  --cc-info-border: rgba(56, 189, 248, 0.42);
+  --cc-info-text: #7dd3fc;
+
+  /* Violet — Stracker AI, Passkeys, Owner & Roles */
+  --cc-violet: #a78bfa;
+  --cc-violet-hover: #c4b5fd;
+  --cc-violet-soft: rgba(167, 139, 250, 0.15);
+  --cc-violet-border: rgba(167, 139, 250, 0.44);
+  --cc-violet-text: #ddd6fe;
+  --cc-on-violet: #160c2e;
+
+  /* Teal — Messages, Domains, Support */
+  --cc-teal: #2dd4bf;
+  --cc-teal-soft: rgba(45, 212, 191, 0.14);
+  --cc-teal-border: rgba(45, 212, 191, 0.42);
+  --cc-teal-text: #99f6e4;
+
+  --cc-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.24);
+  --cc-shadow-md: 0 12px 32px rgba(0, 0, 0, 0.42);
+  --cc-overlay-soft: rgba(255, 255, 255, 0.03);
+}
+
+.cc-root[data-cc-theme='light'] {
+  --cc-bg: #f4f6fa;
+  --cc-sidebar: #eef1f7;
+  --cc-surface: #ffffff;
+  --cc-surface-2: #f1f4f9;
+  --cc-input: #ffffff;
+  --cc-border: #d5dce6;
+  --cc-border-soft: #e6ebf2;
+  --cc-border-strong: #b6c2d3;
+  --cc-hover: #e7ecf4;
+  --cc-text: #111827;
+  --cc-text-2: #334155;
+  --cc-muted: #526074;
+
+  /* Tangerine */
+  --cc-accent: #c2410c;
+  --cc-accent-hover: #9a3412;
+  --cc-accent-press: #7c2d12;
+  --cc-accent-soft: #fff7ed;
+  --cc-accent-border: #fdba74;
+  --cc-accent-text: #9a3412;
+  --cc-on-accent: #ffffff;
+
+  /* Emerald */
+  --cc-ok: #15803d;
+  --cc-ok-hover: #166534;
+  --cc-ok-soft: #ecfdf5;
+  --cc-ok-border: #86efac;
+  --cc-ok-text: #14532d;
+  --cc-on-ok: #ffffff;
+
+  /* Crimson */
+  --cc-crit: #be123c;
+  --cc-crit-hover: #9f1239;
+  --cc-crit-soft: #fff1f2;
+  --cc-crit-border: #fda4af;
+  --cc-crit-text: #be123c;
+  --cc-crit-text-strong: #881337;
+  --cc-danger-soft: #fff1f2;
+
+  /* Amber */
+  --cc-warn: #b45309;
+  --cc-warn-hover: #92400e;
+  --cc-warn-soft: #fffbeb;
+  --cc-warn-border: #fcd34d;
+  --cc-warn-text: #78350f;
+
+  /* Cobalt */
+  --cc-info: #1d4ed8;
+  --cc-info-hover: #1e40af;
+  --cc-info-soft: #eff6ff;
+  --cc-info-border: #93c5fd;
+  --cc-info-text: #1e3a8a;
+
+  /* Violet */
+  --cc-violet: #6d28d9;
+  --cc-violet-hover: #5b21b6;
+  --cc-violet-soft: #f5f3ff;
+  --cc-violet-border: #c4b5fd;
+  --cc-violet-text: #4c1d95;
+  --cc-on-violet: #ffffff;
+
+  /* Teal */
+  --cc-teal: #0f766e;
+  --cc-teal-soft: #f0fdfa;
+  --cc-teal-border: #5eead4;
+  --cc-teal-text: #115e59;
+
+  --cc-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+  --cc-shadow-md: 0 12px 30px rgba(15, 23, 42, 0.12);
+  --cc-overlay-soft: rgba(15, 23, 42, 0.025);
+}
+
+html:has(.cc-root[data-cc-theme='light']),
+body:has(.cc-root[data-cc-theme='light']) { background: #f4f6fa; }
+html:has(.cc-root[data-cc-theme='dark']),
+body:has(.cc-root[data-cc-theme='dark']) { background: #0b0d12; }
+
+/* ==========================================================================
+   2. Sidebar Navigation — Pill Items & Per-Section Semantic Accents
+   ========================================================================== */
+.cc-root .cc-sidebar {
+  background: var(--cc-sidebar);
+  border-right: 1px solid var(--cc-border-soft);
+}
+
+.cc-root .cc-nav {
+  padding: 12px 10px 14px;
+  gap: 16px;
+}
+
+.cc-root .cc-nav__group {
+  gap: 3px;
+}
+
+.cc-root .cc-nav__label {
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  padding: 6px 12px 4px;
+}
+
+.cc-root .cc-nav a {
+  --nav-hue: var(--cc-accent);
+  --nav-soft: var(--cc-accent-soft);
+  --nav-border: var(--cc-accent-border);
+  --nav-text: var(--cc-accent-text);
+  min-height: 38px;
+  padding: 6px 12px;
+  border-radius: var(--cc-radius-pill);
+  border: 1px solid transparent;
+  font-weight: 550;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.12s ease;
+}
+
+.cc-root .cc-nav a svg {
+  color: var(--nav-hue);
+  flex: none;
+  opacity: 0.88;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.cc-root .cc-nav a:hover {
+  background: var(--nav-soft);
+  border-color: transparent;
+  color: var(--cc-text);
+}
+
+.cc-root .cc-nav a:hover svg {
+  opacity: 1;
+}
+
+.cc-root .cc-nav a.is-active {
+  background: var(--nav-soft);
+  border-color: var(--nav-border);
+  color: var(--cc-text);
+  font-weight: 650;
+  box-shadow: var(--cc-shadow-sm);
+}
+
+.cc-root .cc-nav a.is-active svg {
+  color: var(--nav-hue);
+  opacity: 1;
+}
+
+.cc-root .cc-nav a.is-active::before {
+  left: -10px;
+  top: 9px;
+  bottom: 9px;
+  width: 3.5px;
+  border-radius: var(--cc-radius-pill);
+  background: var(--nav-hue);
+}
+
+.cc-root .cc-shell--collapsed .cc-nav a {
+  width: 40px;
+  height: 40px;
+  margin-inline: auto;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* Per-section semantic color mapping */
+.cc-root .cc-nav a[href$="/control-panel"],
+.cc-root .cc-nav a[href$="/control-panel/"] {
+  --nav-hue: var(--cc-accent);
+  --nav-soft: var(--cc-accent-soft);
+  --nav-border: var(--cc-accent-border);
+  --nav-text: var(--cc-accent-text);
+}
+
+.cc-root .cc-nav a[href*="/users"] {
+  --nav-hue: var(--cc-info);
+  --nav-soft: var(--cc-info-soft);
+  --nav-border: var(--cc-info-border);
+  --nav-text: var(--cc-info-text);
+}
+
+.cc-root .cc-nav a[href*="/messages"] {
+  --nav-hue: var(--cc-teal);
+  --nav-soft: var(--cc-teal-soft);
+  --nav-border: var(--cc-teal-border);
+  --nav-text: var(--cc-teal-text);
+}
+
+.cc-root .cc-nav a[href*="/analytics"] {
+  --nav-hue: var(--cc-info);
+  --nav-soft: var(--cc-info-soft);
+  --nav-border: var(--cc-info-border);
+  --nav-text: var(--cc-info-text);
+}
+
+.cc-root .cc-nav a[href*="/ai"] {
+  --nav-hue: var(--cc-violet);
+  --nav-soft: var(--cc-violet-soft);
+  --nav-border: var(--cc-violet-border);
+  --nav-text: var(--cc-violet-text);
+}
+
+.cc-root .cc-nav a[href*="/appearance"] {
+  --nav-hue: var(--cc-warn);
+  --nav-soft: var(--cc-warn-soft);
+  --nav-border: var(--cc-warn-border);
+  --nav-text: var(--cc-warn-text);
+}
+
+.cc-root .cc-nav a[href*="/exams"] {
+  --nav-hue: var(--cc-ok);
+  --nav-soft: var(--cc-ok-soft);
+  --nav-border: var(--cc-ok-border);
+  --nav-text: var(--cc-ok-text);
+}
+
+.cc-root .cc-nav a[href*="/settings"] {
+  --nav-hue: var(--cc-ok);
+  --nav-soft: var(--cc-ok-soft);
+  --nav-border: var(--cc-ok-border);
+  --nav-text: var(--cc-ok-text);
+}
+
+.cc-root .cc-nav a[href*="/security"],
+.cc-root .cc-nav a[href*="/roles"] {
+  --nav-hue: var(--cc-violet);
+  --nav-soft: var(--cc-violet-soft);
+  --nav-border: var(--cc-violet-border);
+  --nav-text: var(--cc-violet-text);
+}
+
+.cc-root .cc-nav a[href*="/audit"] {
+  --nav-hue: var(--cc-warn);
+  --nav-soft: var(--cc-warn-soft);
+  --nav-border: var(--cc-warn-border);
+  --nav-text: var(--cc-warn-text);
+}
+
+.cc-root .cc-nav a[href*="/health"] {
+  --nav-hue: var(--cc-ok);
+  --nav-soft: var(--cc-ok-soft);
+  --nav-border: var(--cc-ok-border);
+  --nav-text: var(--cc-ok-text);
+}
+
+.cc-root .cc-nav a[href*="/about"] {
+  --nav-hue: var(--cc-teal);
+  --nav-soft: var(--cc-teal-soft);
+  --nav-border: var(--cc-teal-border);
+  --nav-text: var(--cc-teal-text);
+}
+
+/* ==========================================================================
+   3. Topbar, Search Pill, Theme Pill Switcher & Account Menu
+   ========================================================================== */
+.cc-root .cc-topbar {
+  background: color-mix(in srgb, var(--cc-sidebar) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--cc-border-soft);
+  box-shadow: var(--cc-shadow-sm);
+}
+
+.cc-root .cc-search-btn {
+  border-radius: var(--cc-radius-pill);
+  padding: 0 14px;
+  min-height: 36px;
+  background: var(--cc-surface);
+  border-color: var(--cc-border);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.cc-root .cc-search-btn:hover {
+  border-color: var(--cc-info-border);
+  background: var(--cc-surface-2);
+}
+
+.cc-root .cc-search-btn svg {
+  color: var(--cc-info);
+}
+
+.cc-root .cc-theme-switch {
+  border-radius: var(--cc-radius-pill);
+  padding: 3px;
+  gap: 2px;
+  background: var(--cc-surface);
+  border: 1px solid var(--cc-border);
+}
+
+.cc-root .cc-theme-switch__option {
+  border-radius: var(--cc-radius-pill);
+  min-height: 28px;
+  padding: 0 11px;
+  transition: background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.cc-root .cc-theme-switch__option[aria-checked='true'] {
+  background: var(--cc-surface-2);
+  color: var(--cc-text);
+  box-shadow: var(--cc-shadow-sm), inset 0 0 0 1px var(--cc-border-strong);
+}
+
+.cc-root #cc-theme-light[aria-checked='true'] {
+  background: var(--cc-warn-soft);
+  color: var(--cc-warn-text);
+  box-shadow: inset 0 0 0 1px var(--cc-warn-border);
+}
+
+.cc-root #cc-theme-light[aria-checked='true'] svg {
+  color: var(--cc-warn);
+}
+
+.cc-root #cc-theme-dark[aria-checked='true'] {
+  background: var(--cc-violet-soft);
+  color: var(--cc-violet-text);
+  box-shadow: inset 0 0 0 1px var(--cc-violet-border);
+}
+
+.cc-root #cc-theme-dark[aria-checked='true'] svg {
+  color: var(--cc-violet);
+}
+
+.cc-root #cc-theme-system[aria-checked='true'] {
+  background: var(--cc-teal-soft);
+  color: var(--cc-teal-text);
+  box-shadow: inset 0 0 0 1px var(--cc-teal-border);
+}
+
+.cc-root #cc-theme-system[aria-checked='true'] svg {
+  color: var(--cc-teal);
+}
+
+.cc-root .cc-avatar {
+  border-radius: var(--cc-radius-pill);
+  border-color: var(--cc-violet-border);
+  background: var(--cc-violet-soft);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.cc-root .cc-avatar:hover,
+.cc-root .cc-avatar[aria-expanded='true'] {
+  border-color: var(--cc-violet);
+  background: var(--cc-surface-2);
+}
+
+.cc-root .cc-menu__list {
+  border-radius: var(--cc-radius);
+  box-shadow: var(--cc-shadow-md);
+  padding: 8px;
+}
+
+.cc-root .cc-menu__list button,
+.cc-root .cc-menu__list a {
+  border-radius: var(--cc-radius-sm);
+}
+
+.cc-root .cc-menu__list .is-danger {
+  color: var(--cc-crit-text);
+}
+
+.cc-root .cc-menu__list .is-danger:hover {
+  background: var(--cc-crit-soft);
+  color: var(--cc-crit-text-strong);
+}
+
+/* ==========================================================================
+   4. Pill Buttons & Semantic Action Coloring
+   ========================================================================== */
+.cc-root .cc-btn {
+  border-radius: var(--cc-radius-pill);
+  min-height: 36px;
+  padding: 0 16px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.1s ease;
+}
+
+.cc-root .cc-btn--sm {
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+
+/* Default / Secondary Pill */
+.cc-root .cc-btn--default {
+  background: var(--cc-surface-2);
+  border-color: var(--cc-border);
+  color: var(--cc-text);
+}
+
+.cc-root .cc-btn--default:hover:not(:disabled) {
+  background: var(--cc-hover);
+  border-color: var(--cc-border-strong);
+}
+
+/* Primary Pill */
+.cc-root .cc-btn--primary {
+  background: var(--cc-accent);
+  border-color: var(--cc-accent);
+  color: var(--cc-on-accent);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--cc-accent) 28%, transparent);
+}
+
+.cc-root .cc-btn--primary:hover:not(:disabled) {
+  background: var(--cc-accent-hover);
+  border-color: var(--cc-accent-hover);
+}
+
+/* Danger / Delete / Ban Pill — Unmistakable Crimson Red */
+.cc-root .cc-btn--danger {
+  background: var(--cc-crit-soft);
+  border-color: var(--cc-crit-border);
+  color: var(--cc-crit-text);
+}
+
+.cc-root .cc-btn--danger:hover:not(:disabled) {
+  background: var(--cc-crit);
+  border-color: var(--cc-crit);
+  color: #ffffff;
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--cc-crit) 32%, transparent);
+}
+
+/* Confirming destructive actions inside dialogs: solid crimson right away */
+.cc-root .cc-dialog__footer .cc-btn--danger {
+  background: var(--cc-crit);
+  border-color: var(--cc-crit);
+  color: #ffffff;
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--cc-crit) 32%, transparent);
+}
+
+.cc-root .cc-dialog__footer .cc-btn--danger:hover:not(:disabled) {
+  background: var(--cc-crit-hover);
+  border-color: var(--cc-crit-hover);
+}
+
+/* Allow / Save / Approve / Lift Ban / Confirm — Emerald Green Pills */
+.cc-root .cc-savebar .cc-btn--primary,
+.cc-root .cc-user-actions .cc-btn--primary,
+.cc-root .cc-dialog__footer .cc-btn--primary,
+.cc-root .cc-form__actions .cc-btn--primary,
+.cc-root .cc-btn--success {
+  background: var(--cc-ok);
+  border-color: var(--cc-ok);
+  color: var(--cc-on-ok);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--cc-ok) 28%, transparent);
+}
+
+.cc-root .cc-savebar .cc-btn--primary:hover:not(:disabled),
+.cc-root .cc-user-actions .cc-btn--primary:hover:not(:disabled),
+.cc-root .cc-dialog__footer .cc-btn--primary:hover:not(:disabled),
+.cc-root .cc-form__actions .cc-btn--primary:hover:not(:disabled),
+.cc-root .cc-btn--success:hover:not(:disabled) {
+  background: var(--cc-ok-hover);
+  border-color: var(--cc-ok-hover);
+}
+
+/* Warn / Caution Pill — Amber */
+.cc-root .cc-user-actions .cc-btn--default,
+.cc-root .cc-btn--warning {
+  background: var(--cc-warn-soft);
+  border-color: var(--cc-warn-border);
+  color: var(--cc-warn-text);
+}
+
+.cc-root .cc-user-actions .cc-btn--default:hover:not(:disabled),
+.cc-root .cc-btn--warning:hover:not(:disabled) {
+  background: var(--cc-warn);
+  border-color: var(--cc-warn);
+  color: #181002;
+}
+
+/* Passkey Verification Pill — Signature Violet */
+.cc-root .cc-passkey-option .cc-btn--primary,
+.cc-root .cc-btn--violet {
+  background: var(--cc-violet);
+  border-color: var(--cc-violet);
+  color: var(--cc-on-violet);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--cc-violet) 32%, transparent);
+}
+
+.cc-root .cc-passkey-option .cc-btn--primary:hover:not(:disabled),
+.cc-root .cc-btn--violet:hover:not(:disabled) {
+  background: var(--cc-violet-hover);
+  border-color: var(--cc-violet-hover);
+}
+
+/* Apply Filters / Export CSV / Info Actions — Cobalt */
+.cc-root .cc-filters__actions .cc-btn--primary,
+.cc-root .cc-btn--info {
+  background: var(--cc-info);
+  border-color: var(--cc-info);
+  color: #061826;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--cc-info) 28%, transparent);
+}
+
+.cc-root[data-cc-theme='light'] .cc-filters__actions .cc-btn--primary,
+.cc-root[data-cc-theme='light'] .cc-btn--info {
+  color: #ffffff;
+}
+
+.cc-root .cc-filters__actions .cc-btn--primary:hover:not(:disabled),
+.cc-root .cc-btn--info:hover:not(:disabled) {
+  background: var(--cc-info-hover);
+  border-color: var(--cc-info-hover);
+}
+
+.cc-root .cc-page-header__actions .cc-btn--default {
+  background: var(--cc-info-soft);
+  border-color: var(--cc-info-border);
+  color: var(--cc-info-text);
+}
+
+.cc-root .cc-page-header__actions .cc-btn--default:hover:not(:disabled) {
+  background: var(--cc-info);
+  border-color: var(--cc-info);
+  color: #ffffff;
+}
+
+.cc-root .cc-btn--ghost {
+  border-radius: var(--cc-radius-pill);
+}
+
+.cc-root .cc-btn--ghost:hover:not(:disabled) {
+  background: var(--cc-surface-2);
+  border-color: var(--cc-border-soft);
+}
+
+/* ==========================================================================
+   5. Floating Pill Tabs (.cc-tabs) & Segmented Controls (.cc-segmented)
+   ========================================================================== */
+.cc-root .cc-tabs {
+  display: inline-flex;
+  max-width: 100%;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--cc-border);
+  border-radius: var(--cc-radius-pill);
+  background: var(--cc-surface);
+  box-shadow: var(--cc-shadow-sm);
+  margin-bottom: 20px;
+}
+
+.cc-root .cc-tabs__link {
+  --tab-hue: var(--cc-accent);
+  --tab-soft: var(--cc-accent-soft);
+  --tab-border: var(--cc-accent-border);
+  --tab-text: var(--cc-accent-text);
+  padding: 7px 15px;
+  border-radius: var(--cc-radius-pill);
+  border: 1px solid transparent;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--cc-muted);
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.cc-root .cc-tabs__link::after {
+  display: none;
+}
+
+.cc-root .cc-tabs__link:hover {
+  color: var(--cc-text);
+  background: var(--cc-surface-2);
+}
+
+.cc-root .cc-tabs__link.is-active,
+.cc-root .cc-tabs__link[aria-current='page'] {
+  background: var(--tab-soft);
+  border-color: var(--tab-border);
+  color: var(--tab-text);
+  text-shadow: none;
+  box-shadow: var(--cc-shadow-sm);
+}
+
+/* Per-tab semantic hues (Settings & Appearance) */
+.cc-root .cc-tabs__link[href*="/site"] {
+  --tab-soft: var(--cc-warn-soft);
+  --tab-border: var(--cc-warn-border);
+  --tab-text: var(--cc-warn-text);
+}
+
+.cc-root .cc-tabs__link[href*="/access"] {
+  --tab-soft: var(--cc-ok-soft);
+  --tab-border: var(--cc-ok-border);
+  --tab-text: var(--cc-ok-text);
+}
+
+.cc-root .cc-tabs__link[href*="/security"],
+.cc-root .cc-tabs__link[href*="/permissions"] {
+  --tab-soft: var(--cc-violet-soft);
+  --tab-border: var(--cc-violet-border);
+  --tab-text: var(--cc-violet-text);
+}
+
+.cc-root .cc-tabs__link[href*="/roles"] {
+  --tab-soft: var(--cc-info-soft);
+  --tab-border: var(--cc-info-border);
+  --tab-text: var(--cc-info-text);
+}
+
+.cc-root .cc-tabs__link[href*="/domain"],
+.cc-root .cc-tabs__link[href*="/navigation"] {
+  --tab-soft: var(--cc-teal-soft);
+  --tab-border: var(--cc-teal-border);
+  --tab-text: var(--cc-teal-text);
+}
+
+.cc-root .cc-tabs__link[href*="/activity"] {
+  --tab-soft: var(--cc-warn-soft);
+  --tab-border: var(--cc-warn-border);
+  --tab-text: var(--cc-warn-text);
+}
+
+.cc-root .cc-tabs__link[href*="/public"] {
+  --tab-soft: var(--cc-info-soft);
+  --tab-border: var(--cc-info-border);
+  --tab-text: var(--cc-info-text);
+}
+
+.cc-root .cc-tabs__link[href*="/publishing"] {
+  --tab-soft: var(--cc-ok-soft);
+  --tab-border: var(--cc-ok-border);
+  --tab-text: var(--cc-ok-text);
+}
+
+/* Segmented Controls — Elevated Pill Track */
+.cc-root .cc-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border-radius: var(--cc-radius-pill);
+  border: 1px solid var(--cc-border);
+  background: var(--cc-surface);
+  box-shadow: var(--cc-shadow-sm);
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.cc-root .cc-segmented button {
+  border-radius: var(--cc-radius-pill);
+  border: 1px solid transparent;
+  min-height: 30px;
+  padding: 0 13px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cc-muted);
+  white-space: nowrap;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.cc-root .cc-segmented button:hover {
+  color: var(--cc-text);
+  background: var(--cc-surface-2);
+}
+
+.cc-root .cc-segmented button.is-active,
+.cc-root .cc-segmented button[aria-pressed='true'],
+.cc-root .cc-segmented button[aria-selected='true'] {
+  background: var(--cc-info-soft);
+  border-color: var(--cc-info-border);
+  color: var(--cc-info-text);
+  box-shadow: var(--cc-shadow-sm);
+}
+
+/* ==========================================================================
+   6. Badges, Pills, Toggle Switches & Filter Chips
+   ========================================================================== */
+.cc-root .cc-pill,
+.cc-root .cc-badge {
+  border-radius: var(--cc-radius-pill);
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.005em;
+}
+
+.cc-root .cc-pill--ok,
+.cc-root .cc-badge--ok {
+  color: var(--cc-ok-text);
+  border-color: var(--cc-ok-border);
+  background: var(--cc-ok-soft);
+}
+
+.cc-root .cc-pill--ok svg {
+  color: var(--cc-ok);
+}
+
+.cc-root .cc-badge--warn {
+  color: var(--cc-warn-text);
+  border-color: var(--cc-warn-border);
+  background: var(--cc-warn-soft);
+}
+
+.cc-root .cc-badge--crit {
+  color: var(--cc-crit-text);
+  border-color: var(--cc-crit-border);
+  background: var(--cc-crit-soft);
+}
+
+.cc-root .cc-badge--info {
+  color: var(--cc-info-text);
+  border-color: var(--cc-info-border);
+  background: var(--cc-info-soft);
+}
+
+.cc-root .cc-badge--violet {
+  color: var(--cc-violet-text);
+  border-color: var(--cc-violet-border);
+  background: var(--cc-violet-soft);
+}
+
+.cc-root .cc-badge--neutral {
+  color: var(--cc-text-2);
+  border-color: var(--cc-border);
+  background: var(--cc-surface-2);
+}
+
+/* Toggle Switches — Emerald when ON */
+.cc-root .cc-switch {
+  width: 42px;
+  height: 24px;
+  border-radius: var(--cc-radius-pill);
+  border: 1px solid var(--cc-border-strong);
+  background: var(--cc-surface-2);
+}
+
+.cc-root .cc-switch__thumb {
+  width: 18px;
+  height: 18px;
+  top: 2px;
+  left: 2px;
+}
+
+.cc-root .cc-switch[aria-checked='true'] {
+  background: var(--cc-ok);
+  border-color: var(--cc-ok);
+}
+
+.cc-root .cc-switch[aria-checked='true'] .cc-switch__thumb {
+  transform: translateX(18px);
+  background: #ffffff;
+}
+
+/* Ban-length & Filter Chips */
+.cc-root .cc-chip {
+  border-radius: var(--cc-radius-pill);
+  padding: 0 14px;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.cc-root .cc-chip.is-active {
+  background: var(--cc-warn-soft);
+  border-color: var(--cc-warn-border);
+  color: var(--cc-warn-text);
+}
+
+/* ==========================================================================
+   7. Panels, KPI Stat Cards, Modernized Inputs & Alert Notes
+   ========================================================================== */
+.cc-root .cc-panel {
+  border-radius: var(--cc-radius);
+  border-color: var(--cc-border-soft);
+  box-shadow: var(--cc-shadow-sm);
+  overflow: hidden;
+}
+
+.cc-root .cc-panel__header {
+  padding: 18px 20px 14px;
+  background: color-mix(in srgb, var(--cc-surface-2) 45%, var(--cc-surface));
+}
+
+.cc-root .cc-panel__body {
+  padding: 18px 20px;
+}
+
+/* KPI Stat Cards — Distinct Multi-Color Top Accents & Pill Period Tags */
+.cc-root .cc-stat {
+  border-radius: var(--cc-radius);
+  border: 1px solid var(--cc-border-soft);
+  border-top: 3px solid var(--cc-info);
+  padding: 16px 18px;
+  box-shadow: var(--cc-shadow-sm);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cc-root .cc-kpis > .cc-stat:nth-child(4n + 1):not(.cc-stat--ok):not(.cc-stat--warn):not(.cc-stat--crit) {
+  border-top-color: var(--cc-info);
+}
+
+.cc-root .cc-kpis > .cc-stat:nth-child(4n + 2):not(.cc-stat--ok):not(.cc-stat--warn):not(.cc-stat--crit) {
+  border-top-color: var(--cc-violet);
+}
+
+.cc-root .cc-kpis > .cc-stat:nth-child(4n + 3):not(.cc-stat--ok):not(.cc-stat--warn):not(.cc-stat--crit) {
+  border-top-color: var(--cc-teal);
+}
+
+.cc-root .cc-kpis > .cc-stat:nth-child(4n + 4):not(.cc-stat--ok):not(.cc-stat--warn):not(.cc-stat--crit) {
+  border-top-color: var(--cc-accent);
+}
+
+.cc-root .cc-stat--ok {
+  border-top-color: var(--cc-ok);
+}
+
+.cc-root .cc-stat--warn {
+  border-top-color: var(--cc-warn);
+}
+
+.cc-root .cc-stat--crit {
+  border-top-color: var(--cc-crit);
+}
+
+.cc-root .cc-stat--link:hover {
+  transform: translateY(-2px);
+  border-color: var(--cc-border-strong);
+  box-shadow: var(--cc-shadow-md);
+}
+
+.cc-root .cc-stat__period {
+  border-radius: var(--cc-radius-pill);
+  padding: 1px 8px;
+  background: var(--cc-surface-2);
+  border-color: var(--cc-border-soft);
+}
+
+/* Search & Form Fields */
+.cc-root .cc-search {
+  border-radius: var(--cc-radius-pill);
+  padding: 0 16px;
+  border-color: var(--cc-border);
+  background: var(--cc-input);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cc-root .cc-search:focus-within {
+  border-color: var(--cc-info);
+  box-shadow: 0 0 0 3px var(--cc-info-soft);
+}
+
+.cc-root .cc-input,
+.cc-root .cc-select select {
+  border-radius: var(--cc-radius-sm);
+  border-color: var(--cc-border);
+  padding: 9px 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cc-root .cc-input:focus,
+.cc-root .cc-select select:focus {
+  border-color: var(--cc-info);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--cc-info-soft);
+}
+
+.cc-root .cc-input.is-invalid {
+  border-color: var(--cc-crit);
+  box-shadow: 0 0 0 3px var(--cc-crit-soft);
+}
+
+.cc-root .cc-field > label {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--cc-text);
+}
+
+/* Notes, Warnings & Errors */
+.cc-root .cc-note {
+  border-radius: var(--cc-radius-sm);
+  border-left: 3px solid var(--cc-info);
+  background: var(--cc-surface-2);
+  padding: 11px 14px;
+}
+
+.cc-root .cc-note--warn {
+  border-color: var(--cc-warn-border);
+  border-left: 3px solid var(--cc-warn);
+  background: var(--cc-warn-soft);
+  color: var(--cc-warn-text);
+}
+
+.cc-root .cc-note--crit {
+  border-color: var(--cc-crit-border);
+  border-left: 3px solid var(--cc-crit);
+  background: var(--cc-crit-soft);
+  color: var(--cc-crit-text-strong);
+}
+
+.cc-root .cc-error {
+  border-radius: var(--cc-radius);
+  border: 1px solid var(--cc-crit-border);
+  border-left: 4px solid var(--cc-crit);
+  background: var(--cc-crit-soft);
+}
+
+/* Dialogs, Savebar, Disclosures & Tables */
+.cc-root .cc-dialog {
+  border-radius: 16px;
+  box-shadow: var(--cc-shadow-md);
+}
+
+.cc-root .cc-savebar {
+  border-radius: var(--cc-radius-pill);
+  padding: 10px 16px 10px 20px;
+  border-color: var(--cc-border-strong);
+  box-shadow: var(--cc-shadow-md);
+}
+
+.cc-root .cc-disclosure,
+.cc-root .cc-copy-section {
+  border-radius: var(--cc-radius-sm);
+}
+
+.cc-root .cc-sanction {
+  border-radius: var(--cc-radius-sm);
+}
+
+.cc-root .cc-table thead th {
+  background: color-mix(in srgb, var(--cc-surface-2) 65%, var(--cc-surface));
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cc-root .cc-activity__row,
+.cc-root .cc-quick a {
+  border-radius: var(--cc-radius-sm);
+}
+
+@media (max-width: 767px) {
+  .cc-root .cc-tabs {
+    border-radius: 16px;
+    padding: 4px;
+  }
+  .cc-root .cc-savebar {
+    border-radius: var(--cc-radius);
+    padding: 12px 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-root .cc-nav a,
+  .cc-root .cc-nav a svg,
+  .cc-root .cc-btn,
+  .cc-root .cc-tabs__link,
+  .cc-root .cc-segmented button,
+  .cc-root .cc-theme-switch__option,
+  .cc-root .cc-stat,
+  .cc-root .cc-search,
+  .cc-root .cc-input,
+  .cc-root .cc-chip {
+    transition: none;
+  }
+  .cc-root .cc-stat--link:hover {
+    transform: none;
+  }
+}
