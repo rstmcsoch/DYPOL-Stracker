@@ -8,6 +8,7 @@ import { defaultExamTracks, defaultSettings } from '../lib/defaults'
 import type { AppSettings } from '../types'
 
 const USER = 'a3f147d2-b7cf-53bd-a461-0d3cfed00001'
+const CLOUD_USER = { id: USER, email: 'master@example.com', displayName: 'Master', isLocal: false }
 
 const cloudMock = vi.hoisted(() => ({
   upserts: [] as Array<{ table: string; rows: unknown }>,
@@ -52,9 +53,7 @@ vi.mock('../lib/supabase', () => {
 })
 
 vi.mock('./AuthContext', () => ({
-  useAuth: () => ({
-    user: { id: USER, email: 'master@example.com', displayName: 'Master', isLocal: false }
-  })
+  useAuth: () => ({ user: CLOUD_USER })
 }))
 
 vi.mock('./SiteContentContext', () => ({
@@ -103,7 +102,12 @@ function renderHarness() {
 beforeEach(() => {
   cloudMock.upserts = []
   cloudMock.failSettingsUpsert = true
-  cloudMock.remoteSettings = { ...defaultSettings(USER, 'Master'), theme: 'light', onboarding_completed: true }
+  cloudMock.remoteSettings = {
+    ...defaultSettings(USER, 'Master'),
+    theme: 'light',
+    exam_id: 'cuet-ug',
+    onboarding_completed: true
+  }
 })
 
 afterEach(async () => {
@@ -157,5 +161,6 @@ describe('DataProvider local-only theme switching', () => {
 
     await waitFor(() => expect(screen.getByTestId('font').textContent).toBe('sora'))
     await waitFor(() => expect(cloudMock.upserts.some(call => call.table === 'app_settings')).toBe(true))
+    await waitFor(async () => expect(await localDb.sync_queue.where('user_id').equals(USER).count()).toBe(0))
   })
 })
