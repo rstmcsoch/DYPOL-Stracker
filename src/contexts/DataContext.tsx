@@ -8,6 +8,7 @@ import { isOwnedStoragePath } from '../lib/storage-path'
 import { createId } from '../lib/id'
 import { relatedRowsForRemoval } from '../lib/data-relations'
 import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
+import { isThemeOnlySettingsChange, preserveLocalTheme } from '../lib/theme-sync'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 import { OP_AT_HEADER, queuedOperationTime, SYNC_REFUSED_EVENT } from '../lib/account-notices'
 import { useAuth } from './AuthContext'
@@ -292,7 +293,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
           const localTime = String(change.record.updated_at ?? change.queued_at)
           const remoteTime = typeof remote?.updated_at === 'string' ? remote.updated_at : ''
           if (remote && remoteTime > localTime) {
-            const normalized = change.table === 'app_settings' ? normalizeSettings(remote, userId) : remote
+            const normalized = change.table === 'app_settings'
+              ? preserveLocalTheme(normalizeSettings(remote, userId), (await localDb.app_settings.get(userId))?.theme)
+              : remote
             await localDb.table(change.table).put(normalized as object)
             setData(current => updateOne(current, change.table, normalized as Record<string, unknown>))
           } else {
@@ -344,9 +347,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (error) throw error
         return [table, (data ?? []) as unknown as Record<string, unknown>[]] as const
       }))
+      const localTheme = (await localDb.app_settings.get(userId))?.theme
       const next = emptyData(userId)
       for (const [table, rawRows] of fetched) {
-        let rows = table === 'app_settings' ? rawRows.map(row => normalizeSettings(row, userId) as unknown as Record<string, unknown>) : rawRows
+        let rows = table === 'app_settings'
+          ? rawRows.map(row => preserveLocalTheme(normalizeSettings(row, userId), localTheme) as unknown as Record<string, unknown>)
+          : rawRows
         if (table === 'mistakes') {
           rows = await Promise.all(rawRows.map(async row => {
             const cached = queryDataRef.current?.mistakes.find(item => item.id === row.id)
@@ -484,7 +490,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return () => { if (undoTimeout.current) clearTimeout(undoTimeout.current) }
   }, [undoAvailable, undoVersion, userId, finalizeDeleted])
 
-  const upsertMany = useCallback(async <T extends TableName>(table: T, inputs: RecordFor<T>[]) => {
+  const upsertMany = useCallback(async <T extends TableName>(table: T, inputs: RecordFor<T>[], options?: { localOnly?: boolean }) => {
     if (!userId) throw new Error('Sign in to save changes.')
     if (!inputs.length) return
     let records = inputs.map(input => withOwner(table, input as unknown as Record<string, unknown>, userId))
@@ -506,6 +512,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     })
     setData(current => records.reduce((next, row) => updateOne(next, table, row), current))
+    if (options?.localOnly) return
     if (supabase && !user?.isLocal && navigator.onLine) {
       const cloud = supabase
       // Queue first so a closed tab or crash mid-request still syncs later; cleared on success.
@@ -560,7 +567,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // joins the load already in flight, so a mutation is never built from defaults while the saved row
       // is still on its way from IndexedDB.
       const loaded = await queryClient.ensureQueryData<AppData>({ queryKey: key, queryFn: () => readLocal(userId), staleTime: Infinity })
-      await upsertMany('app_settings', [mutate(loaded.settings)])
+      const nextSettings = mutate(loaded.settings)
+      await upsertMany('app_settings', [nextSettings], { localOnly: isThemeOnlySettingsChange(loaded.settings, nextSettings) })
       // upsertMany commits the row to the query cache before any cloud round trip, so this is the saved row.
       return queryClient.getQueryData<AppData>(key)?.settings ?? loaded.settings
     })
