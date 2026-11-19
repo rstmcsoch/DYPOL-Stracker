@@ -1,7 +1,29 @@
-/* Light/night circular reveal (src/lib/theme-reveal.ts). The browser's default root crossfade is
-   replaced by a clip-path circle animated from script; the old snapshot simply stays underneath. */
+/* Light/night circular reveal (src/lib/theme-reveal.ts).
+   Only ::view-transition-new(root) animates via WAAPI clip-path on the compositor thread.
+   Disabling the default root group/pair animations and offscreen isolation prevents frame-0/end
+   flashes and avoids an extra full-screen GPU buffer on low-spec devices. */
+::view-transition-group(root),
 ::view-transition-old(root),
-::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-::view-transition-new(root) { z-index: 1; }
-/* Colour transitions would fade inside the circle; the reveal is the transition. */
-.theme-revealing, .theme-revealing * { transition: none !important; }
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-image-pair(root) {
+  isolation: auto;
+}
+::view-transition-old(root) {
+  z-index: 0;
+}
+::view-transition-new(root) {
+  z-index: 1;
+  will-change: clip-path;
+}
+/* Pause CSS transitions (including pseudo-elements) while the snapshot is taken and revealed,
+   using 0s duration instead of `transition: none` to avoid tearing down transition declarations. */
+.theme-revealing,
+.theme-revealing *,
+.theme-revealing *::before,
+.theme-revealing *::after {
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}

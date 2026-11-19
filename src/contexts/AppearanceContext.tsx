@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useData } from './DataContext'
 import { useToast } from './ToastContext'
 import { applyReadingFont, clearReadingFont, normalizeReadingFont } from '../lib/fonts'
@@ -70,7 +70,9 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   const [appearancePreview, setAppearancePreview] = useState<AppearancePreview | null>(null)
   const [saving, setSaving] = useState(false)
   // The header switch shows its choice at once (and inside the theme reveal) while the save is in flight.
+  // Tracking the latest request id prevents earlier queued saves from flipping the UI back and forth.
   const [pendingTheme, setPendingTheme] = useState<ThemeMode | null>(null)
+  const themeRequestId = useRef(0)
 
   const settings = data.settings
   // An unsaved Settings draft (if any) wins while Settings is open; otherwise the saved values.
@@ -78,10 +80,6 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   const colorTheme = normalizeColorTheme(appearancePreview?.color_theme ?? settings.color_theme)
   const resolvedTheme: ResolvedTheme = theme === 'auto' ? (systemPrefersDark ? 'dark' : 'light') : theme
   const readingFont = fontPreview ?? normalizeReadingFont(settings.interface_font)
-
-  useEffect(() => {
-    if (pendingTheme !== null && settings.theme === pendingTheme) setPendingTheme(null)
-  }, [pendingTheme, settings.theme])
 
   // Layout phase so a flushSync'd switch is on <html> before the reveal snapshots the new page.
   useLayoutEffect(() => {
@@ -121,8 +119,11 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   }, [notify, updateSettings])
 
   const setTheme = useCallback((next: ThemeMode) => {
+    const requestId = ++themeRequestId.current
     setPendingTheme(next)
-    void persistAppearance({ theme: next }).then(saved => { if (!saved) setPendingTheme(null) })
+    void persistAppearance({ theme: next }).finally(() => {
+      if (themeRequestId.current === requestId) setPendingTheme(null)
+    })
   }, [persistAppearance])
 
   const setColorTheme = useCallback((next: ColorTheme) => {
