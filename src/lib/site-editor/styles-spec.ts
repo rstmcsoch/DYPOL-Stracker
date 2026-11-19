@@ -10,6 +10,8 @@ const LENGTH_AUTO = new RegExp(`^(?:${LEN}|auto)$`)
 const BOX = new RegExp(`^(?:${LEN}|auto)(?: (?:${LEN}|auto)){0,3}$`)
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/
 const RGB = /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(?:,\s*(?:0|1|0?\.\d{1,3})\s*)?\)$/
+const UNSAFE_CSS_URL = /["'()\\\r\n;{}\s]/
+const isSafeCssUrl = (value: string): boolean => !UNSAFE_CSS_URL.test(value) && /^(?:https:\/\/|\/(?!\/))/.test(value)
 
 /** Theme colours an editor may pick; each maps to an existing homepage CSS variable. */
 export const COLOR_TOKENS: Record<string, string> = {
@@ -96,7 +98,7 @@ export const STYLE_PROPS: readonly StyleProp[] = [
   { key: 'borderStyle', label: 'Border style', group: 'Appearance', check: options('solid', 'dashed', 'dotted', 'none'), css: value => `--sb-border-style:${value};border-style:${value}` },
   { key: 'borderRadius', label: 'Corner radius', group: 'Appearance', check: pattern(BOX), css: plain('border-radius') },
   { key: 'shadow', label: 'Shadow', group: 'Appearance', check: options(...Object.keys(SHADOWS)), css: value => `box-shadow:${SHADOWS[value]}` },
-  { key: 'backgroundImage', label: 'Background image', group: 'Appearance', check: { kind: 'media' }, css: value => `background-image:url("${value}")` },
+  { key: 'backgroundImage', label: 'Background image', group: 'Appearance', check: { kind: 'media' }, css: value => (isSafeCssUrl(value) ? `background-image:url("${value}")` : '') },
   { key: 'backgroundSize', label: 'Background size', group: 'Appearance', check: options('cover', 'contain', 'auto'), css: plain('background-size') },
   { key: 'backgroundPosition', label: 'Background position', group: 'Appearance', check: options(...Object.keys(FOCUS)), css: value => `background-position:${FOCUS[value]}` },
   { key: 'overflow', label: 'Overflow', group: 'Appearance', check: options('visible', 'hidden', 'auto'), css: value => `overflow:${value === 'auto' ? 'auto' : value}` },
@@ -138,7 +140,7 @@ export function checkStyleValue(prop: StyleProp, value: unknown, isMedia: (value
   if (check.kind === 'pattern') return check.re.test(value) ? value : null
   if (check.kind === 'options') return check.options.includes(value) ? value : null
   if (check.kind === 'color') return isColor(value) ? value : null
-  if (check.kind === 'media') return isMedia(value) ? value : null
+  if (check.kind === 'media') return isMedia(value) && isSafeCssUrl(value) ? value : null
   const number = Number(value)
   if (!/^-?\d+(\.\d+)?$/.test(value) || !Number.isFinite(number) || number < check.min || number > check.max) return null
   if (check.int && !Number.isInteger(number)) return null

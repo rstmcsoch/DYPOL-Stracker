@@ -14,7 +14,7 @@ const handlers: Record<string, Handler> = {
 /** Dispatch related Control Center endpoints through one Vercel serverless function. */
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   const route = new URL(req.url ?? '/', 'http://localhost').searchParams.get('route') ?? ''
-  const selected = handlers[route]
+  const selected = Object.prototype.hasOwnProperty.call(handlers, route) ? handlers[route] : undefined
   if (!selected) {
     sendJson(res, 404, { error: 'not_found', message: 'Control route not found.' })
     return
