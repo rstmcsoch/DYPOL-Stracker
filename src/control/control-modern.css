@@ -1,64 +1,66 @@
 /* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
-/* Hallmark · redesign · genre: modern-minimal · theme: monochrome-obsidian-alabaster
- * anchor: monochrome (pure white on obsidian dark / pure black on alabaster light) · zero orange
+/* Hallmark · redesign · genre: modern-minimal · theme: skydash-monochrome-pro
+ * inspiration: BootstrapDash Skydash vertical-default geometry (18px sculpted cards, lifted
+ *   sidebar + solid inverted active nav item, spacious table-first workstation, 3-to-5s KPI scan)
+ * anchor: pure monochrome (crisp white on obsidian dark / pitch black on alabaster light) · zero orange
  * typography: Poppins (self-hosted 400/600/700, font-synthesis: none safe) + tabular numerals
  * Scoped strictly to .cc-root so public pages and the student notebook remain untouched.
  */
 
 /* ==========================================================================
-   1. Locked Design Tokens — Obsidian Dark (default) & Alabaster Light
+   1. Locked Design Tokens — Dark-First Obsidian & Crisp Alabaster Light
    ========================================================================== */
 .cc-root {
   /* Typography */
   --cc-font: 'Poppins', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --cc-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
 
-  /* Surfaces (Neutral Carbon Monochrome — zero blue/orange cast) */
-  --cc-bg: oklch(12.5% 0.003 260);
-  --cc-sidebar: oklch(10.5% 0.003 260);
-  --cc-surface: oklch(15.5% 0.003 260);
-  --cc-surface-2: oklch(19.5% 0.004 260);
-  --cc-surface-3: oklch(23.5% 0.004 260);
-  --cc-input: oklch(11.5% 0.003 260);
-  --cc-hover: oklch(21.5% 0.004 260);
+  /* Surfaces (Dark-First Carbon — cards lift cleanly off deep obsidian canvas) */
+  --cc-bg: oklch(11.5% 0.004 260);
+  --cc-sidebar: oklch(14.5% 0.004 260);
+  --cc-surface: oklch(16% 0.004 260);
+  --cc-surface-2: oklch(20.5% 0.005 260);
+  --cc-surface-3: oklch(24.5% 0.005 260);
+  --cc-input: oklch(12.5% 0.004 260);
+  --cc-hover: oklch(21.5% 0.005 260);
 
   /* Hairline Borders */
-  --cc-border: oklch(26% 0.004 260);
-  --cc-border-soft: oklch(21% 0.003 260);
-  --cc-border-strong: oklch(36% 0.005 260);
+  --cc-border: oklch(25.5% 0.005 260);
+  --cc-border-soft: oklch(21% 0.004 260);
+  --cc-border-strong: oklch(36% 0.006 260);
 
   /* Ink Hierarchy */
-  --cc-text: oklch(97% 0.002 260);
-  --cc-text-2: oklch(78% 0.004 260);
-  --cc-muted: oklch(60% 0.005 260);
+  --cc-text: oklch(97.5% 0.002 260);
+  --cc-text-2: oklch(78% 0.005 260);
+  --cc-muted: oklch(61% 0.006 260);
 
-  /* Primary Accent — Crisp White in Dark Mode (Zero Orange) */
+  /* Primary Accent — Pure White in Dark Mode (Zero Orange) */
   --cc-accent: oklch(98.5% 0 0);
   --cc-accent-hover: oklch(90% 0 0);
-  --cc-accent-press: oklch(82% 0 0);
+  --cc-accent-press: oklch(83% 0 0);
   --cc-accent-soft: oklch(98.5% 0 0 / 0.09);
   --cc-accent-border: oklch(98.5% 0 0 / 0.24);
   --cc-accent-text: oklch(98.5% 0 0);
   --cc-on-accent: oklch(11% 0 0);
 
-  /* Focus Ring — High-Contrast Monochrome */
+  /* Focus Ring — Instant High-Contrast Monochrome */
   --cc-focus: oklch(98.5% 0 0);
   --cc-focus-ring: oklch(98.5% 0 0 / 0.16);
 
-  /* Surgical Semantics (Used ONLY for meaning, never decorative) */
+  /* Surgical Semantics (Status & Destructive/Positive Actions Only) */
   --cc-ok: oklch(68% 0.155 155);
   --cc-ok-hover: oklch(74% 0.155 155);
   --cc-ok-soft: oklch(68% 0.155 155 / 0.13);
   --cc-ok-border: oklch(68% 0.155 155 / 0.34);
-  --cc-ok-text: oklch(82% 0.12 155);
+  --cc-ok-text: oklch(83% 0.12 155);
   --cc-on-ok: oklch(13% 0.03 155);
 
   --cc-crit: oklch(63% 0.205 22);
   --cc-crit-hover: oklch(69% 0.205 22);
   --cc-crit-soft: oklch(63% 0.205 22 / 0.13);
   --cc-crit-border: oklch(63% 0.205 22 / 0.38);
-  --cc-crit-text: oklch(80% 0.14 22);
-  --cc-crit-text-strong: oklch(88% 0.1 22);
+  --cc-crit-text: oklch(81% 0.14 22);
+  --cc-crit-text-strong: oklch(89% 0.1 22);
   --cc-on-crit: oklch(99% 0 0);
   --cc-danger-soft: var(--cc-crit-soft);
 
@@ -66,34 +68,39 @@
   --cc-warn-hover: oklch(82% 0.145 85);
   --cc-warn-soft: oklch(77% 0.145 85 / 0.13);
   --cc-warn-border: oklch(77% 0.145 85 / 0.36);
-  --cc-warn-text: oklch(86% 0.11 85);
+  --cc-warn-text: oklch(87% 0.11 85);
   --cc-on-warn: oklch(16% 0.03 85);
 
   --cc-info: oklch(72% 0.11 245);
   --cc-info-soft: oklch(72% 0.11 245 / 0.13);
   --cc-info-border: oklch(72% 0.11 245 / 0.34);
-  --cc-info-text: oklch(83% 0.09 245);
+  --cc-info-text: oklch(84% 0.09 245);
 
-  /* Chart & Grid Accents */
-  --cc-chart-base: oklch(34% 0.004 260);
-  --cc-chart-base-hover: oklch(46% 0.005 260);
+  /* Charts, Backdrops & Rows */
+  --cc-chart-base: oklch(34% 0.005 260);
+  --cc-chart-base-hover: oklch(46% 0.006 260);
   --cc-grid-dot: oklch(98% 0 0 / 0.05);
-  --cc-topbar-bg: oklch(10.5% 0.003 260 / 0.86);
+  --cc-topbar-bg: oklch(14.5% 0.004 260 / 0.88);
   --cc-scrim-bg: oklch(5% 0 0 / 0.72);
-  --cc-row-hover: oklch(98% 0 0 / 0.028);
+  --cc-row-hover: oklch(98% 0 0 / 0.03);
+  --cc-skeleton-a: oklch(20% 0.004 260);
+  --cc-skeleton-b: oklch(25% 0.005 260);
 
-  /* Geometry & Elevation */
-  --cc-radius: 12px;
-  --cc-radius-sm: 8px;
-  --cc-radius-xs: 6px;
+  /* Skydash-Inspired Soft Sculpted Geometry */
+  --cc-radius: 18px;
+  --cc-radius-md: 12px;
+  --cc-radius-sm: 10px;
+  --cc-radius-xs: 8px;
   --cc-radius-pill: 999px;
+
+  /* Ambient Soft Elevation */
   --cc-shadow-xs: 0 1px 2px oklch(0% 0 0 / 0.28);
-  --cc-shadow-sm: 0 2px 8px oklch(0% 0 0 / 0.32);
-  --cc-shadow-md: 0 16px 40px oklch(0% 0 0 / 0.52);
+  --cc-shadow-card: 0 6px 24px oklch(0% 0 0 / 0.28), 0 1px 2px oklch(0% 0 0 / 0.24);
+  --cc-shadow-sm: 0 4px 14px oklch(0% 0 0 / 0.32);
+  --cc-shadow-md: 0 20px 48px oklch(0% 0 0 / 0.56);
 
   /* Motion */
   --cc-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --cc-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   font-family: var(--cc-font);
   font-weight: 400;
@@ -104,24 +111,24 @@
 }
 
 .cc-root[data-cc-theme='light'] {
-  /* Surfaces (Architectural Alabaster) */
-  --cc-bg: oklch(97.6% 0.002 260);
-  --cc-sidebar: oklch(95.6% 0.002 260);
+  /* Surfaces (Skydash-style soft mist canvas + pure white lifted sidebar & cards) */
+  --cc-bg: oklch(96.4% 0.004 260);
+  --cc-sidebar: oklch(100% 0 0);
   --cc-surface: oklch(100% 0 0);
-  --cc-surface-2: oklch(94.4% 0.003 260);
-  --cc-surface-3: oklch(91.2% 0.003 260);
+  --cc-surface-2: oklch(95.2% 0.004 260);
+  --cc-surface-3: oklch(91.8% 0.005 260);
   --cc-input: oklch(100% 0 0);
-  --cc-hover: oklch(93.5% 0.003 260);
+  --cc-hover: oklch(94.8% 0.004 260);
 
   /* Hairline Borders */
-  --cc-border: oklch(88% 0.004 260);
-  --cc-border-soft: oklch(92% 0.003 260);
-  --cc-border-strong: oklch(76% 0.005 260);
+  --cc-border: oklch(90% 0.004 260);
+  --cc-border-soft: oklch(93.2% 0.004 260);
+  --cc-border-strong: oklch(78% 0.006 260);
 
   /* Ink Hierarchy */
-  --cc-text: oklch(14% 0.004 260);
-  --cc-text-2: oklch(34% 0.005 260);
-  --cc-muted: oklch(50% 0.006 260);
+  --cc-text: oklch(15% 0.005 260);
+  --cc-text-2: oklch(35% 0.006 260);
+  --cc-muted: oklch(51% 0.007 260);
 
   /* Primary Accent — Pitch Black in Light Mode (Zero Orange) */
   --cc-accent: oklch(14% 0 0);
@@ -134,14 +141,14 @@
 
   /* Focus Ring */
   --cc-focus: oklch(14% 0 0);
-  --cc-focus-ring: oklch(14% 0 0 / 0.14);
+  --cc-focus-ring: oklch(14% 0 0 / 0.13);
 
   /* Surgical Semantics (Light-Calibrated Contrast) */
   --cc-ok: oklch(48% 0.145 155);
   --cc-ok-hover: oklch(42% 0.145 155);
-  --cc-ok-soft: oklch(48% 0.145 155 / 0.09);
+  --cc-ok-soft: oklch(48% 0.145 155 / 0.095);
   --cc-ok-border: oklch(48% 0.145 155 / 0.28);
-  --cc-ok-text: oklch(36% 0.12 155);
+  --cc-ok-text: oklch(35% 0.12 155);
   --cc-on-ok: oklch(100% 0 0);
 
   --cc-crit: oklch(52% 0.205 22);
@@ -165,34 +172,37 @@
   --cc-info-border: oklch(48% 0.14 250 / 0.26);
   --cc-info-text: oklch(38% 0.13 250);
 
-  /* Chart & Grid Accents */
-  --cc-chart-base: oklch(84% 0.004 260);
-  --cc-chart-base-hover: oklch(72% 0.005 260);
+  /* Charts, Backdrops & Rows */
+  --cc-chart-base: oklch(84% 0.005 260);
+  --cc-chart-base-hover: oklch(72% 0.006 260);
   --cc-grid-dot: oklch(14% 0 0 / 0.055);
-  --cc-topbar-bg: oklch(97.6% 0.002 260 / 0.86);
+  --cc-topbar-bg: oklch(100% 0 0 / 0.9);
   --cc-scrim-bg: oklch(14% 0 0 / 0.42);
   --cc-row-hover: oklch(14% 0 0 / 0.025);
+  --cc-skeleton-a: oklch(93% 0.004 260);
+  --cc-skeleton-b: oklch(97% 0.003 260);
 
-  /* Elevation */
-  --cc-shadow-xs: 0 1px 2px oklch(14% 0 0 / 0.06);
-  --cc-shadow-sm: 0 2px 8px oklch(14% 0 0 / 0.06);
-  --cc-shadow-md: 0 16px 36px oklch(14% 0 0 / 0.12);
+  /* Ambient Soft Elevation */
+  --cc-shadow-xs: 0 1px 2px oklch(15% 0.01 260 / 0.05);
+  --cc-shadow-card: 0 6px 24px oklch(15% 0.01 260 / 0.055), 0 1px 2px oklch(15% 0.01 260 / 0.04);
+  --cc-shadow-sm: 0 4px 14px oklch(15% 0.01 260 / 0.07);
+  --cc-shadow-md: 0 20px 44px oklch(15% 0.01 260 / 0.14);
 }
 
 html:has(.cc-root[data-cc-theme='light']),
 body:has(.cc-root[data-cc-theme='light']) {
-  background: oklch(97.6% 0.002 260);
+  background: oklch(96.4% 0.004 260);
   overflow-x: clip;
 }
 
 html:has(.cc-root[data-cc-theme='dark']),
 body:has(.cc-root[data-cc-theme='dark']) {
-  background: oklch(12.5% 0.003 260);
+  background: oklch(11.5% 0.004 260);
   overflow-x: clip;
 }
 
 /* ==========================================================================
-   2. Typography — Poppins (400 Normal / 600 Semibold / 700 Bold Only)
+   2. Typography — Poppins (400 / 600 / 700) & Tabular Numerals
    ========================================================================== */
 .cc-root,
 .cc-root button,
@@ -227,6 +237,7 @@ body:has(.cc-root[data-cc-theme='dark']) {
   background: var(--cc-accent);
   color: var(--cc-on-accent);
   font-weight: 700;
+  border-radius: var(--cc-radius-sm);
 }
 
 .cc-root .cc-page-header {
@@ -235,7 +246,7 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 .cc-root .cc-page-header h1 {
-  font-size: clamp(1.375rem, 1.8vw, 1.625rem);
+  font-size: clamp(1.375rem, 1.9vw, 1.65rem);
   font-weight: 700;
   letter-spacing: -0.028em;
   line-height: 1.2;
@@ -273,40 +284,41 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 /* ==========================================================================
-   3. Shell, Architectural Sidebar & Topbar
+   3. Classic Left Sidebar + Collapsible Icon Rail + Crisp Topbar
    ========================================================================== */
 .cc-root .cc-shell {
-  grid-template-columns: 244px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
 }
 
 .cc-root .cc-shell--collapsed {
-  grid-template-columns: 68px minmax(0, 1fr);
+  grid-template-columns: 74px minmax(0, 1fr);
 }
 
 .cc-root .cc-sidebar {
   background: var(--cc-sidebar);
   border-right: 1px solid var(--cc-border-soft);
+  box-shadow: var(--cc-shadow-xs);
 }
 
 .cc-root .cc-sidebar__brand {
-  min-height: 58px;
-  padding: 12px 14px;
+  min-height: 62px;
+  padding: 14px 18px;
   border-bottom: 1px solid var(--cc-border-soft);
 }
 
 .cc-root .cc-brand strong {
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 .cc-root .cc-nav {
-  padding: 14px 10px;
+  padding: 16px 12px;
   gap: 18px;
 }
 
 .cc-root .cc-nav__group {
-  gap: 2px;
+  gap: 3px;
 }
 
 .cc-root .cc-nav__label {
@@ -315,20 +327,20 @@ body:has(.cc-root[data-cc-theme='dark']) {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--cc-muted);
-  padding: 4px 10px 5px;
+  padding: 4px 12px 5px;
 }
 
 .cc-root .cc-nav a,
 .cc-root .cc-nav__search {
-  min-height: 36px;
-  padding: 6px 10px;
+  min-height: 40px;
+  padding: 8px 12px;
   border-radius: var(--cc-radius-sm);
   border: 1px solid transparent;
   font-size: 13.5px;
   font-weight: 400;
   color: var(--cc-text-2);
   white-space: nowrap;
-  transition: background-color 0.14s var(--cc-ease-out), color 0.14s var(--cc-ease-out), border-color 0.14s var(--cc-ease-out);
+  transition: background-color 0.14s var(--cc-ease-out), color 0.14s var(--cc-ease-out), border-color 0.14s var(--cc-ease-out), box-shadow 0.14s var(--cc-ease-out);
 }
 
 .cc-root .cc-nav a svg,
@@ -349,37 +361,40 @@ body:has(.cc-root[data-cc-theme='dark']) {
   color: var(--cc-text);
 }
 
+/* Skydash-inspired Solid High-Contrast Active Nav Item (Black in Light / White in Dark) */
 .cc-root .cc-nav a.is-active {
-  background: var(--cc-surface-2);
-  border-color: var(--cc-border);
-  color: var(--cc-text);
+  background: var(--cc-accent);
+  border-color: var(--cc-accent);
+  color: var(--cc-on-accent);
   font-weight: 600;
-  box-shadow: var(--cc-shadow-xs);
+  box-shadow: var(--cc-shadow-sm);
 }
 
 .cc-root .cc-nav a.is-active svg {
-  color: var(--cc-text);
+  color: var(--cc-on-accent);
 }
 
 .cc-root .cc-nav a.is-active::before {
-  left: -10px;
-  top: 8px;
-  bottom: 8px;
-  width: 2.5px;
-  border-radius: var(--cc-radius-pill);
-  background: var(--cc-accent);
+  display: none;
 }
 
-.cc-root .cc-shell--collapsed .cc-nav a {
-  width: 38px;
-  height: 38px;
+/* Folded Icon-Only Rail */
+.cc-root .cc-shell--collapsed .cc-nav {
+  padding-inline: 10px;
+}
+
+.cc-root .cc-shell--collapsed .cc-nav a,
+.cc-root .cc-shell--collapsed .cc-nav__search {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
   margin-inline: auto;
   padding: 0;
-  border-radius: var(--cc-radius-sm);
+  border-radius: var(--cc-radius-md);
 }
 
 .cc-root .cc-sidebar__footer {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-top: 1px solid var(--cc-border-soft);
 }
 
@@ -390,14 +405,14 @@ body:has(.cc-root[data-cc-theme='dark']) {
   letter-spacing: -0.01em;
 }
 
-/* Sticky Hairline Topbar */
+/* Sticky Sculpted Topbar */
 .cc-root .cc-topbar {
-  min-height: 58px;
+  min-height: 62px;
   background: var(--cc-topbar-bg);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--cc-border-soft);
-  padding: 8px clamp(14px, 2.4vw, 28px);
+  padding: 10px clamp(16px, 2.4vw, 30px);
 }
 
 .cc-root .cc-crumbs ol {
@@ -411,11 +426,11 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 .cc-root .cc-search-btn {
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 13px;
   border-radius: var(--cc-radius-sm);
-  background: var(--cc-surface);
-  border: 1px solid var(--cc-border);
+  background: var(--cc-surface-2);
+  border: 1px solid var(--cc-border-soft);
   color: var(--cc-muted);
   font-size: 13px;
   font-weight: 400;
@@ -425,7 +440,7 @@ body:has(.cc-root[data-cc-theme='dark']) {
 
 .cc-root .cc-search-btn:hover {
   border-color: var(--cc-border-strong);
-  background: var(--cc-surface-2);
+  background: var(--cc-surface);
   color: var(--cc-text);
 }
 
@@ -434,14 +449,14 @@ body:has(.cc-root[data-cc-theme='dark']) {
   font-size: 10.5px;
   font-weight: 600;
   color: var(--cc-muted);
-  background: var(--cc-surface-2);
+  background: var(--cc-surface);
   border: 1px solid var(--cc-border);
   border-bottom-width: 1px;
-  border-radius: 5px;
-  padding: 1px 5px;
+  border-radius: 6px;
+  padding: 1px 6px;
 }
 
-/* Theme Segmented Control — Pure Monochrome Thumb */
+/* Theme Segmented Switcher */
 .cc-root .cc-theme-switch {
   display: inline-flex;
   align-items: center;
@@ -453,8 +468,8 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 .cc-root .cc-theme-switch__option {
-  min-height: 26px;
-  padding: 0 9px;
+  min-height: 28px;
+  padding: 0 10px;
   border-radius: var(--cc-radius-xs);
   border: 1px solid transparent;
   font-size: 12px;
@@ -491,7 +506,7 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 .cc-root .cc-menu__list {
-  border-radius: var(--cc-radius);
+  border-radius: 14px;
   background: var(--cc-surface);
   border: 1px solid var(--cc-border);
   box-shadow: var(--cc-shadow-md);
@@ -506,7 +521,7 @@ body:has(.cc-root[data-cc-theme='dark']) {
 
 .cc-root .cc-menu__list button,
 .cc-root .cc-menu__list a {
-  border-radius: var(--cc-radius-sm);
+  border-radius: var(--cc-radius-xs);
   font-size: 13px;
   font-weight: 600;
 }
@@ -532,12 +547,12 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 /* ==========================================================================
-   4. Buttons — Crisp 8px Craft, Inverted Black/White Primary, Surgical Semantics
+   4. Buttons — Soft-Rounded 10px Tactile Controls, Monochrome Primary
    ========================================================================== */
 .cc-root .cc-btn {
   border-radius: var(--cc-radius-sm);
-  min-height: 36px;
-  padding: 0 14px;
+  min-height: 38px;
+  padding: 0 16px;
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -550,12 +565,12 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 .cc-root .cc-btn--sm {
-  min-height: 30px;
-  padding: 0 11px;
+  min-height: 32px;
+  padding: 0 12px;
   font-size: 12.5px;
+  border-radius: var(--cc-radius-xs);
 }
 
-/* Secondary / Default */
 .cc-root .cc-btn--default {
   background: var(--cc-surface);
   border: 1px solid var(--cc-border);
@@ -610,7 +625,7 @@ body:has(.cc-root[data-cc-theme='dark']) {
   border-color: var(--cc-crit-hover);
 }
 
-/* Explicit Save / Allow / Confirm Actions — Surgical Emerald */
+/* Explicit Save / Allow / Confirm — Surgical Emerald */
 .cc-root .cc-savebar .cc-btn--primary,
 .cc-root .cc-user-actions .cc-btn--primary,
 .cc-root .cc-btn--success {
@@ -626,7 +641,7 @@ body:has(.cc-root[data-cc-theme='dark']) {
   border-color: var(--cc-ok-hover);
 }
 
-/* Warn / Caution Action — Surgical Amber */
+/* Warn / Caution — Surgical Amber */
 .cc-root .cc-user-actions .cc-btn--default,
 .cc-root .cc-btn--warning {
   background: var(--cc-warn-soft);
@@ -641,7 +656,6 @@ body:has(.cc-root[data-cc-theme='dark']) {
   color: var(--cc-on-warn);
 }
 
-/* Ghost */
 .cc-root .cc-btn--ghost {
   background: transparent;
   border-color: transparent;
@@ -655,23 +669,23 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 /* ==========================================================================
-   5. Tabs (.cc-tabs) & Segmented Controls (.cc-segmented) — Architectural Track
+   5. Tabs (.cc-tabs) & Segmented Controls (.cc-segmented)
    ========================================================================== */
 .cc-root .cc-tabs {
   display: inline-flex;
   max-width: 100%;
-  gap: 2px;
-  padding: 3px;
+  gap: 3px;
+  padding: 4px;
   border: 1px solid var(--cc-border-soft);
-  border-radius: 10px;
+  border-radius: var(--cc-radius-md);
   background: var(--cc-surface-2);
   margin-bottom: 22px;
   overflow-x: auto;
 }
 
 .cc-root .cc-tabs__link {
-  padding: 6px 13px;
-  border-radius: 7px;
+  padding: 7px 14px;
+  border-radius: var(--cc-radius-xs);
   border: 1px solid transparent;
   font-size: 13px;
   font-weight: 600;
@@ -700,9 +714,9 @@ body:has(.cc-root[data-cc-theme='dark']) {
 .cc-root .cc-segmented {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 10px;
+  gap: 3px;
+  padding: 4px;
+  border-radius: var(--cc-radius-md);
   border: 1px solid var(--cc-border-soft);
   background: var(--cc-surface-2);
   max-width: 100%;
@@ -710,10 +724,10 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 .cc-root .cc-segmented button {
-  border-radius: 7px;
+  border-radius: var(--cc-radius-xs);
   border: 1px solid transparent;
-  min-height: 28px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 13px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--cc-muted);
@@ -739,18 +753,34 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 /* ==========================================================================
-   6. Badges, Pills, Toggles & Chips
+   6. Status Badges (Dot + Label + Color — Clear State Feedback), Toggles & Chips
    ========================================================================== */
 .cc-root .cc-pill,
 .cc-root .cc-badge {
   border-radius: var(--cc-radius-pill);
-  padding: 2px 9px;
+  padding: 3px 10px;
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.005em;
   line-height: 1.5;
   white-space: nowrap;
 }
+
+.cc-root .cc-badge--ok::before,
+.cc-root .cc-badge--warn::before,
+.cc-root .cc-badge--crit::before,
+.cc-root .cc-badge--info::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.cc-root .cc-badge--ok::before { background: var(--cc-ok); }
+.cc-root .cc-badge--warn::before { background: var(--cc-warn); }
+.cc-root .cc-badge--crit::before { background: var(--cc-crit); }
+.cc-root .cc-badge--info::before { background: var(--cc-info); }
 
 .cc-root .cc-pill--ok,
 .cc-root .cc-badge--ok {
@@ -787,18 +817,17 @@ body:has(.cc-root[data-cc-theme='dark']) {
   background: var(--cc-surface-2);
 }
 
-/* Toggle Switches — Crisp Emerald when ON */
 .cc-root .cc-switch {
-  width: 40px;
-  height: 22px;
+  width: 42px;
+  height: 24px;
   border-radius: var(--cc-radius-pill);
   border: 1px solid var(--cc-border-strong);
   background: var(--cc-surface-2);
 }
 
 .cc-root .cc-switch__thumb {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   top: 2px;
   left: 2px;
   background: var(--cc-muted);
@@ -814,10 +843,9 @@ body:has(.cc-root[data-cc-theme='dark']) {
   background: var(--cc-on-ok);
 }
 
-/* Chips */
 .cc-root .cc-chip {
   border-radius: var(--cc-radius-pill);
-  padding: 0 12px;
+  padding: 0 13px;
   font-size: 12.5px;
   font-weight: 600;
   white-space: nowrap;
@@ -831,92 +859,92 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 /* ==========================================================================
-   7. Panels, KPI Cards, Charts, Tables & Form Controls
+   7. Skydash-Inspired Sculpted Panels, 3-to-5s KPI Cards & Table-First Grids
    ========================================================================== */
 .cc-root .cc-panel {
   border-radius: var(--cc-radius);
   background: var(--cc-surface);
-  border: 1px solid var(--cc-border);
-  box-shadow: var(--cc-shadow-xs);
+  border: 1px solid var(--cc-border-soft);
+  box-shadow: var(--cc-shadow-card);
   overflow: hidden;
 }
 
 .cc-root .cc-panel__header {
-  padding: 18px 22px 14px;
+  padding: 20px 24px 16px;
   background: var(--cc-surface);
   border-bottom: 1px solid var(--cc-border-soft);
 }
 
 .cc-root .cc-panel__title {
-  font-size: 14.5px;
+  font-size: 15.5px;
   font-weight: 700;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.018em;
 }
 
 .cc-root .cc-panel__desc {
   font-size: 13px;
   font-weight: 400;
   color: var(--cc-muted);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .cc-root .cc-panel__body {
-  padding: 20px 22px;
+  padding: 22px 24px;
 }
 
-/* KPI Stat Cards — Clean Architectural Monochrome (Zero Rainbow Stripes) */
+/* 3-to-5-Second Rule KPI Cards — Spacious, Soft-Rounded 18px, Tabular Numerals */
 .cc-root .cc-kpis {
-  gap: 14px;
-  margin-bottom: 20px;
+  gap: 16px;
+  margin-bottom: 22px;
 }
 
 .cc-root .cc-stat {
   border-radius: var(--cc-radius);
   background: var(--cc-surface);
-  border: 1px solid var(--cc-border);
-  border-top: 1px solid var(--cc-border);
-  padding: 18px 20px;
-  gap: 6px;
-  box-shadow: var(--cc-shadow-xs);
-  transition: border-color 0.14s var(--cc-ease-out), transform 0.14s var(--cc-ease-out), box-shadow 0.14s var(--cc-ease-out);
+  border: 1px solid var(--cc-border-soft);
+  border-top: 1px solid var(--cc-border-soft);
+  padding: 20px 22px;
+  gap: 8px;
+  box-shadow: var(--cc-shadow-card);
+  transition: border-color 0.16s var(--cc-ease-out), transform 0.16s var(--cc-ease-out), box-shadow 0.16s var(--cc-ease-out);
 }
 
 .cc-root .cc-stat--ok {
-  border-left: 3px solid var(--cc-ok);
+  border-left: 3.5px solid var(--cc-ok);
 }
 
 .cc-root .cc-stat--warn {
-  border-left: 3px solid var(--cc-warn);
+  border-left: 3.5px solid var(--cc-warn);
 }
 
 .cc-root .cc-stat--crit {
-  border-left: 3px solid var(--cc-crit);
+  border-left: 3.5px solid var(--cc-crit);
 }
 
 .cc-root .cc-stat--link:hover {
   border-color: var(--cc-border-strong);
-  transform: translateY(-1px);
-  box-shadow: var(--cc-shadow-sm);
+  transform: translateY(-2px);
+  box-shadow: var(--cc-shadow-md);
 }
 
 .cc-root .cc-stat__label {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--cc-muted);
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
 }
 
 .cc-root .cc-stat__value {
-  font-size: 27px;
+  font-size: 30px;
   font-weight: 700;
   letter-spacing: -0.032em;
-  line-height: 1.15;
+  line-height: 1.12;
   color: var(--cc-text);
   font-variant-numeric: tabular-nums;
 }
 
 .cc-root .cc-stat__value--small {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
 }
 
@@ -928,7 +956,7 @@ body:has(.cc-root[data-cc-theme='dark']) {
 
 .cc-root .cc-stat__period {
   border-radius: var(--cc-radius-pill);
-  padding: 1px 8px;
+  padding: 2px 9px;
   font-size: 11px;
   font-weight: 600;
   background: var(--cc-surface-2);
@@ -954,10 +982,11 @@ body:has(.cc-root[data-cc-theme='dark']) {
   background: var(--cc-chart-base);
 }
 
-/* Inputs & Search */
+/* Inputs & Search Toolbar */
 .cc-root .cc-search {
   border-radius: var(--cc-radius-sm);
-  padding: 0 12px;
+  padding: 0 14px;
+  min-height: 42px;
   border: 1px solid var(--cc-border);
   background: var(--cc-input);
   transition: border-color 0.14s var(--cc-ease-out), box-shadow 0.14s var(--cc-ease-out);
@@ -971,10 +1000,11 @@ body:has(.cc-root[data-cc-theme='dark']) {
 .cc-root .cc-input,
 .cc-root .cc-select select {
   border-radius: var(--cc-radius-sm);
+  min-height: 42px;
   border: 1px solid var(--cc-border);
   background: var(--cc-input);
   color: var(--cc-text);
-  padding: 9px 12px;
+  padding: 9px 13px;
   font-size: 13.5px;
   font-weight: 400;
   transition: border-color 0.14s var(--cc-ease-out), box-shadow 0.14s var(--cc-ease-out);
@@ -1007,9 +1037,14 @@ body:has(.cc-root[data-cc-theme='dark']) {
   font-weight: 600;
 }
 
-/* Tables */
+/* Table-First Workstation Styling */
+.cc-root .cc-table-wrap {
+  border-radius: var(--cc-radius-md);
+}
+
 .cc-root .cc-table {
   font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .cc-root .cc-table thead th {
@@ -1019,87 +1054,145 @@ body:has(.cc-root[data-cc-theme='dark']) {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--cc-muted);
-  padding: 10px 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--cc-border-soft);
+}
+
+.cc-root .cc-table thead th:first-child {
+  border-top-left-radius: var(--cc-radius-sm);
+  border-bottom-left-radius: var(--cc-radius-sm);
+}
+
+.cc-root .cc-table thead th:last-child {
+  border-top-right-radius: var(--cc-radius-sm);
+  border-bottom-right-radius: var(--cc-radius-sm);
 }
 
 .cc-root .cc-table td,
 .cc-root .cc-table tbody th {
-  padding: 12px 14px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--cc-border-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.cc-root .cc-table tbody tr:last-child td,
+.cc-root .cc-table tbody tr:last-child th {
+  border-bottom: 0;
 }
 
 .cc-root .cc-table tbody tr:hover {
   background: var(--cc-row-hover);
 }
 
-/* Notes, Errors, Dialogs & Savebar */
+/* Clear State Feedback — Loading, Empty, Error & Notes */
+.cc-root .cc-skeleton span {
+  border-radius: var(--cc-radius-xs);
+  background: linear-gradient(90deg, var(--cc-skeleton-a) 25%, var(--cc-skeleton-b) 50%, var(--cc-skeleton-a) 75%);
+  background-size: 200% 100%;
+}
+
+.cc-root .cc-empty {
+  border-radius: 14px;
+  padding: 32px 24px;
+  border: 1px dashed var(--cc-border-strong);
+  background: var(--cc-surface-2);
+}
+
+.cc-root .cc-empty strong {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
 .cc-root .cc-note {
-  border-radius: var(--cc-radius-sm);
+  border-radius: var(--cc-radius-md);
   background: var(--cc-surface-2);
   border: 1px solid var(--cc-border-soft);
-  padding: 11px 14px;
+  padding: 12px 15px;
   font-size: 13px;
   color: var(--cc-text-2);
 }
 
 .cc-root .cc-note--warn {
   border-color: var(--cc-warn-border);
-  border-left: 3px solid var(--cc-warn);
+  border-left: 3.5px solid var(--cc-warn);
   background: var(--cc-warn-soft);
   color: var(--cc-warn-text);
 }
 
 .cc-root .cc-note--crit {
   border-color: var(--cc-crit-border);
-  border-left: 3px solid var(--cc-crit);
+  border-left: 3.5px solid var(--cc-crit);
   background: var(--cc-crit-soft);
   color: var(--cc-crit-text-strong);
 }
 
 .cc-root .cc-error {
-  border-radius: var(--cc-radius);
+  border-radius: 14px;
   border: 1px solid var(--cc-crit-border);
-  border-left: 3px solid var(--cc-crit);
+  border-left: 3.5px solid var(--cc-crit);
   background: var(--cc-crit-soft);
+  padding: 16px 18px;
 }
 
 .cc-root .cc-scrim {
   background: var(--cc-scrim-bg);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
 }
 
 .cc-root .cc-dialog {
-  border-radius: 14px;
+  border-radius: 20px;
   background: var(--cc-surface);
   border: 1px solid var(--cc-border);
   box-shadow: var(--cc-shadow-md);
 }
 
+.cc-root .cc-dialog__header {
+  padding: 20px 22px 12px;
+}
+
 .cc-root .cc-dialog__header h2 {
-  font-size: 17px;
+  font-size: 17.5px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
+.cc-root .cc-dialog__body {
+  padding: 10px 22px 18px;
+}
+
+.cc-root .cc-dialog__footer {
+  padding: 14px 22px;
+}
+
 .cc-root .cc-savebar {
-  border-radius: var(--cc-radius);
-  padding: 10px 16px 10px 18px;
+  border-radius: 16px;
+  padding: 12px 18px 12px 20px;
   background: var(--cc-surface);
   border: 1px solid var(--cc-border-strong);
   box-shadow: var(--cc-shadow-md);
 }
 
 .cc-root .cc-launcher {
-  border-radius: 14px;
+  border-radius: 18px;
   background: var(--cc-surface);
   border: 1px solid var(--cc-border);
   box-shadow: var(--cc-shadow-md);
 }
 
+.cc-root .cc-launcher__list li {
+  border-radius: var(--cc-radius-sm);
+}
+
 .cc-root .cc-launcher__list li.is-active {
-  background: var(--cc-surface-2);
-  color: var(--cc-text);
+  background: var(--cc-accent);
+  color: var(--cc-on-accent);
+}
+
+.cc-root .cc-launcher__list li.is-active .cc-launcher__label,
+.cc-root .cc-launcher__list li.is-active .cc-launcher__detail,
+.cc-root .cc-launcher__list li.is-active .cc-launcher__kind {
+  color: var(--cc-on-accent);
 }
 
 .cc-root .cc-bullets li::before {
@@ -1108,7 +1201,7 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 /* ==========================================================================
-   8. Gate / Two-Step Verification — Architectural Monochrome (Zero Orange)
+   8. Gate / Two-Step Verification — Sculpted Monochrome Card (Zero Orange)
    ========================================================================== */
 .cc-root .cc-gate {
   background-color: var(--cc-bg);
@@ -1117,12 +1210,12 @@ body:has(.cc-root[data-cc-theme='dark']) {
 }
 
 .cc-root .cc-gate__card {
-  width: min(440px, 100%);
+  width: min(448px, 100%);
   background: var(--cc-surface);
-  border: 1px solid var(--cc-border);
-  border-top: 1px solid var(--cc-border);
-  border-radius: 16px;
-  padding: 32px clamp(20px, 4vw, 32px);
+  border: 1px solid var(--cc-border-soft);
+  border-top: 1px solid var(--cc-border-soft);
+  border-radius: 22px;
+  padding: 34px clamp(22px, 4vw, 34px);
   box-shadow: var(--cc-shadow-md);
   gap: 18px;
 }
@@ -1146,7 +1239,7 @@ body:has(.cc-root[data-cc-theme='dark']) {
 
 .cc-root .cc-steps li {
   border-radius: var(--cc-radius-pill);
-  padding: 4px 10px;
+  padding: 5px 11px;
   font-size: 12px;
   font-weight: 600;
   border-color: var(--cc-border-soft);
@@ -1165,9 +1258,9 @@ body:has(.cc-root[data-cc-theme='dark']) {
   background: var(--cc-accent-soft);
 }
 
-/* Passkey CTA — Pure Inverted Black/White */
 .cc-root .cc-passkey-option .cc-btn--primary {
-  min-height: 42px;
+  min-height: 44px;
+  border-radius: var(--cc-radius-md);
   font-weight: 600;
   background: var(--cc-accent);
   border-color: var(--cc-accent);
@@ -1198,24 +1291,28 @@ body:has(.cc-root[data-cc-theme='dark']) {
   .cc-root .cc-content {
     padding: 20px 14px 36px;
   }
+  .cc-root .cc-panel {
+    border-radius: 16px;
+  }
   .cc-root .cc-panel__header {
-    padding: 15px 16px 12px;
+    padding: 16px 18px 12px;
   }
   .cc-root .cc-panel__body {
-    padding: 16px;
+    padding: 16px 18px;
   }
   .cc-root .cc-stat {
-    padding: 14px 16px;
+    border-radius: 16px;
+    padding: 16px 18px;
   }
   .cc-root .cc-stat__value {
-    font-size: 22px;
+    font-size: 24px;
   }
   .cc-root .cc-tabs {
-    border-radius: 10px;
+    border-radius: var(--cc-radius-md);
     padding: 3px;
   }
   .cc-root .cc-savebar {
-    border-radius: var(--cc-radius);
+    border-radius: 14px;
     padding: 12px 14px;
   }
 }
