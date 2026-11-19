@@ -4,7 +4,7 @@ import { clientKeyHash } from '../_lib/control.js'
 /**
  * Exercises the real console endpoints against a scripted Supabase client. The fake client
  * decides which JWT claims, role rows and rate results exist, so every test checks what the
- * server does with them: 401 / 403 / 409 / 429 / 503 and whether a write was attempted.
+ * server does with them: 401 / 403 / 409 / 410 / 429 / 503 and whether a write was attempted.
  */
 const world = vi.hoisted(() => ({
   claims: null as Record<string, unknown> | null,
@@ -276,7 +276,7 @@ describe('console authentication and authorization', () => {
   })
 })
 
-describe('account access changes', () => {
+describe('account access changes (retired legacy route)', () => {
   const suspendBody = (overrides: Record<string, unknown> = {}) => ({
     userId: TARGET,
     action: 'suspend',
@@ -285,100 +285,27 @@ describe('account access changes', () => {
     ...overrides
   })
 
-  it('refuses a suspension without a recent authenticator verification and makes no change', async () => {
-    world.claims = claimsFor(OWNER, 'aal2', 3 * 60 * 60)
-    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody()))
-    expect(res.statusCode).toBe(403)
-    expect(res.body).toMatchObject({ error: 'reauthentication_required' })
-    expect(world.updates).toHaveLength(0)
-  })
-
-  it('refuses a suspension when the session has no TOTP verification at all', async () => {
-    world.claims = claimsFor(OWNER, 'aal2', null)
-    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody()))
-    expect(res.statusCode).toBe(403)
-    expect(world.updates).toHaveLength(0)
-  })
-
   it('refuses an aal1 session even with a recent password sign-in', async () => {
     world.claims = claimsFor(OWNER, 'aal1', null)
     const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody()))
     expect(res.statusCode).toBe(403)
     expect(res.body).toMatchObject({ error: 'mfa_required' })
+    expect(world.updates).toHaveLength(0)
   })
 
-  it('suspends with a fresh TOTP, a reason, and a matching typed email, then audits it', async () => {
+  it('returns 410 route_retired for an authenticated owner at aal2 and never mutates the account', async () => {
     world.claims = claimsFor(OWNER, 'aal2', 60)
     const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody()))
-    expect(res.statusCode).toBe(200)
-    expect(world.updates).toEqual([{ id: TARGET, attributes: { ban_duration: '876000h' } }])
-    const audit = world.writes.find(write => write.table === 'control_audit_events')
-    expect(audit?.row).toMatchObject({ action: 'user.suspend', result: 'success', target_id: TARGET, actor_id: OWNER })
-    expect(JSON.stringify(audit?.row)).not.toMatch(/token|password|totp/i)
-  })
-
-  it('requires the target email to be typed correctly before changing anything', async () => {
-    world.claims = claimsFor(OWNER, 'aal2', 60)
-    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody({ confirmEmail: 'someone-else@example.com' })))
-    expect(res.statusCode).toBe(400)
-    expect(res.body).toMatchObject({ error: 'confirmation_mismatch' })
+    expect(res.statusCode).toBe(410)
+    expect(res.body).toMatchObject({ error: 'route_retired' })
     expect(world.updates).toHaveLength(0)
   })
 
-  it('will not let the owner suspend their own account', async () => {
+  it('rejects non-POST methods with 405', async () => {
     world.claims = claimsFor(OWNER, 'aal2', 60)
-    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody({ userId: OWNER, confirmEmail: 'owner@example.com' })))
-    expect(res.statusCode).toBe(409)
-    expect(res.body).toMatchObject({ error: 'self_action_blocked' })
+    const res = await call('user-access', request('GET', '/api/control/user-access'))
+    expect(res.statusCode).toBe(405)
     expect(world.updates).toHaveLength(0)
-  })
-
-  it('protects other administrator accounts from suspension through the console, and records the refusal', async () => {
-    world.claims = claimsFor(OWNER, 'aal2', 60)
-    world.roles[TARGET] = { role: 'administrator', revoked_at: null }
-    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody()))
-    expect(res.statusCode).toBe(409)
-    expect(res.body).toMatchObject({ error: 'owner_protected' })
-    expect(world.updates).toHaveLength(0)
-    expect(world.writes.find(write => write.row.action === 'user.suspend')?.row).toMatchObject({ result: 'denied', error_category: 'owner_protected', target_id: TARGET, actor_id: OWNER })
-  })
-
-  it('rejects unexpected body fields such as a role grant attempt', async () => {
-    world.claims = claimsFor(OWNER, 'aal2', 60)
-    const res = await call('user-access', request('POST', '/api/control/user-access', { ...suspendBody(), role: 'owner', banned_until: null }))
-    expect(res.statusCode).toBe(400)
-    expect(world.updates).toHaveLength(0)
-  })
-
-  it('rejects a short or missing reason', async () => {
-    world.claims = claimsFor(OWNER, 'aal2', 60)
-    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody({ reason: 'no' })))
-    expect(res.statusCode).toBe(400)
-    expect(world.updates).toHaveLength(0)
-  })
-
-  it('rejects malformed target identifiers', async () => {
-    world.claims = claimsFor(OWNER, 'aal2', 60)
-    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody({ userId: "' OR 1=1 --" })))
-    expect(res.statusCode).toBe(400)
-  })
-
-  it('does not report success when the authentication service refuses the change', async () => {
-    world.claims = claimsFor(OWNER, 'aal2', 60)
-    world.updateError = { message: 'upstream' }
-    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody()))
-    expect(res.statusCode).toBe(502)
-    expect(res.body).toMatchObject({ error: 'auth_update_failed' })
-    const audit = world.writes.find(write => write.table === 'control_audit_events')
-    expect(audit?.row).toMatchObject({ result: 'error' })
-  })
-
-  it('reports no-op requests as conflicts instead of re-applying them', async () => {
-    world.claims = claimsFor(OWNER, 'aal2', 60)
-    world.users[TARGET] = { id: TARGET, email: 'target@example.com', banned_until: new Date(Date.now() + 86_400_000).toISOString() }
-    const res = await call('user-access', request('POST', '/api/control/user-access', suspendBody()))
-    expect(res.statusCode).toBe(409)
-    expect(res.body).toMatchObject({ error: 'no_change' })
   })
 })
 
