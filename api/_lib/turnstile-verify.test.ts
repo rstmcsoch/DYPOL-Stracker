@@ -16,10 +16,17 @@ describe('turnstileSecret', () => {
 describe('verifyTurnstile', () => {
   const prod = { VERCEL_ENV: 'production', TURNSTILE_SECRET_KEY: 'real-secret' }
   it('accepts a confirmed token with the expected action', async () => {
-    await expect(verifyTurnstile('t', 'contact', { env: prod, fetcher: ok({ success: true, action: 'contact' }) })).resolves.toBeUndefined()
+    await expect(verifyTurnstile('t', 'contact', { env: prod, fetcher: ok({ success: true, action: 'contact', hostname: 'dypol-stracker.vercel.app' }) })).resolves.toBeUndefined()
   })
   it('rejects a token issued for another form', async () => {
     await expect(verifyTurnstile('t', 'contact', { env: prod, fetcher: ok({ success: true, action: 'login' }) })).rejects.toMatchObject({ status: 400, code: 'captcha_failed' })
+  })
+  it('rejects a production token with a missing or empty action', async () => {
+    await expect(verifyTurnstile('t', 'contact', { env: prod, fetcher: ok({ success: true }) })).rejects.toMatchObject({ status: 400, code: 'captcha_failed' })
+    await expect(verifyTurnstile('t', 'contact', { env: prod, fetcher: ok({ success: true, action: '' }) })).rejects.toMatchObject({ status: 400, code: 'captcha_failed' })
+  })
+  it('rejects a production token issued for another hostname', async () => {
+    await expect(verifyTurnstile('t', 'contact', { env: prod, fetcher: ok({ success: true, action: 'contact', hostname: 'evil.example' }) })).rejects.toMatchObject({ status: 400, code: 'captcha_failed' })
   })
   it('rejects unconfirmed, missing and oversized tokens', async () => {
     await expect(verifyTurnstile('t', 'contact', { env: prod, fetcher: ok({ success: false }) })).rejects.toMatchObject({ status: 400 })

@@ -15,6 +15,7 @@ export const TURNSTILE_SECRET_ENV = 'TURNSTILE_SECRET_KEY'
 export const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
 /** Cloudflare's documented "always passes" test secret (public, not a credential). */
 export const TURNSTILE_TEST_SECRET = '1x0000000000000000000000000000000AA'
+const DEFAULT_ALLOWED_HOSTNAMES = ['dypol-stracker.vercel.app']
 const VERIFY_TIMEOUT_MS = 8_000
 
 type Env = Record<string, string | undefined>
@@ -42,7 +43,7 @@ export async function verifyTurnstile(token: unknown, expectedAction: string, op
   }
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS)
-  let result: { success?: unknown; action?: unknown; 'error-codes'?: unknown }
+  let result: { success?: unknown; action?: unknown; hostname?: unknown; 'error-codes'?: unknown }
   try {
     const response = await fetcher(TURNSTILE_VERIFY_URL, {
       method: 'POST',
@@ -58,10 +59,16 @@ export async function verifyTurnstile(token: unknown, expectedAction: string, op
     clearTimeout(timer)
   }
   const isTestSecret = secret === TURNSTILE_TEST_SECRET
-  const actionOk = isTestSecret || typeof result.action !== 'string' || !result.action || result.action === expectedAction
-  if (result.success !== true || !actionOk) {
+  const actionOk = isTestSecret || result.action === expectedAction
+  const allowedHostnames = new Set([
+    ...DEFAULT_ALLOWED_HOSTNAMES,
+    ...(env.VERCEL_PROJECT_PRODUCTION_URL ? [env.VERCEL_PROJECT_PRODUCTION_URL.trim().toLowerCase()] : []),
+    ...(env.VERCEL_URL ? [env.VERCEL_URL.trim().toLowerCase()] : [])
+  ])
+  const hostnameOk = isTestSecret || typeof result.hostname !== 'string' || !result.hostname || allowedHostnames.has(result.hostname.trim().toLowerCase())
+  if (result.success !== true || !actionOk || !hostnameOk) {
     const codes = Array.isArray(result['error-codes']) ? result['error-codes'].filter(code => typeof code === 'string').slice(0, 3).join(',') : ''
-    logAIEvent('info', 'turnstile_rejected', { codes, action_mismatch: !actionOk })
+    logAIEvent('info', 'turnstile_rejected', { codes, action_mismatch: !actionOk, hostname_mismatch: !hostnameOk })
     throw new ApiError(400, 'captcha_failed', FAILED_MESSAGE)
   }
 }
