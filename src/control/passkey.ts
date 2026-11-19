@@ -11,10 +11,11 @@ import { supabase, supabaseAuthStorageKey } from '../lib/supabase'
  * Chrome/Chromium notes:
  *  - Read the existing session synchronously from storage when available so we do not burn
  *    Chrome's 5-second transient user activation waiting on a token refresh before WebAuthn starts.
- *  - Abort any lingering WebAuthn ceremony before starting a new one so Chrome never rejects
- *    with `NotAllowedError` ("A request is already pending").
- *  - Request modal mediation (`optional`) explicitly so Chromium opens the passkey picker rather
- *    than silently failing or waiting on Conditional UI.
+ *  - Request modal mediation (`optional`) explicitly without passing a custom `signal`, so
+ *    `@supabase/auth-js` uses its built-in pending-ceremony cancellation instead of overriding it.
+ *  - Inspect both the error and its `.cause` (where WebAuthn wrappers place browser DOMExceptions)
+ *    and include a sanitized diagnostic summary in the owner-only alert so mobile/tablet Chrome
+ *    errors are visible without DevTools.
  *
  * The ceremony replaces this tab's session, so the previous session is signed out on the
  * server afterwards (best effort) instead of being left valid in the background.
@@ -27,7 +28,55 @@ type PasskeyAuthClient = NonNullable<typeof supabase>['auth'] & {
   }) => ReturnType<NonNullable<typeof supabase>['auth']['signInWithPasskey']>
 }
 
-let activePasskeyAbort: AbortController | null = null
+interface ExtractedPasskeyError {
+  name: string
+  code: string
+  status: number | null
+  message: string
+  causeName: string
+  causeCode: string
+  causeMessage: string
+}
+
+function asErrorRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function extractPasskeyError(error: unknown): ExtractedPasskeyError {
+  const obj = asErrorRecord(error)
+  const cause = asErrorRecord(obj?.cause)
+  return {
+    name: cleanString(obj?.name),
+    code: cleanString(obj?.code),
+    status: typeof obj?.status === 'number' && Number.isFinite(obj.status) ? obj.status : null,
+    message: obj ? cleanString(obj.message) : cleanString(error),
+    causeName: cleanString(cause?.name),
+    causeCode: cleanString(cause?.code),
+    causeMessage: cleanString(cause?.message)
+  }
+}
+
+function formatPasskeyDiagnostic(info: ExtractedPasskeyError): string {
+  const parts: string[] = []
+  const tag = info.code || (info.name && info.name !== 'Error' ? info.name : '')
+  if (tag) parts.push(tag)
+  if (info.causeCode && info.causeCode !== tag) parts.push(info.causeCode)
+  else if (info.causeName && info.causeName !== 'Error' && info.causeName !== tag) parts.push(info.causeName)
+  if (info.status !== null) parts.push(`HTTP ${info.status}`)
+  const rawMessage = info.causeMessage || info.message
+  const safeMessage = rawMessage
+    .replace(/Bearer\s+\S+/gi, '[redacted]')
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[redacted]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120)
+  if (safeMessage && safeMessage.toLowerCase() !== tag.toLowerCase()) parts.push(safeMessage)
+  return parts.join(' · ')
+}
 
 function readStoredSession(): { userId: string; accessToken: string } | null {
   if (typeof localStorage === 'undefined' || !supabaseAuthStorageKey) return null
@@ -52,11 +101,17 @@ function readStoredSession(): { userId: string; accessToken: string } | null {
 
 function logPasskeyFailure(stage: string, error: unknown): void {
   if (typeof console === 'undefined') return
-  const obj = error && typeof error === 'object' ? (error as { name?: unknown; code?: unknown; message?: unknown }) : null
-  const name = typeof obj?.name === 'string' ? obj.name : ''
-  const code = typeof obj?.code === 'string' ? obj.code : ''
+  const info = extractPasskeyError(error)
   const host = typeof window !== 'undefined' ? window.location.host : ''
-  console.warn('[control:passkey]', { stage, name, code, host })
+  console.warn('[control:passkey]', {
+    stage,
+    name: info.name,
+    code: info.code,
+    status: info.status,
+    causeName: info.causeName,
+    causeCode: info.causeCode,
+    host
+  })
 }
 
 export async function verifyWithOwnerPasskey(): Promise<PasskeyResult> {
@@ -74,29 +129,21 @@ export async function verifyWithOwnerPasskey(): Promise<PasskeyResult> {
   }
   if (!previous) return { ok: false, message: 'Your session has ended. Sign in again.' }
 
-  // Cancel any stale WebAuthn ceremony so Chrome/Chromium never throws "already pending".
-  if (activePasskeyAbort) {
-    try { activePasskeyAbort.abort() } catch { /* ignore */ }
-  }
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
-  activePasskeyAbort = controller
-
   const auth = supabase.auth as PasskeyAuthClient
   let result
   try {
-    result = await auth.signInWithPasskey(
-      controller ? { options: { mediation: 'optional', signal: controller.signal } } : { options: { mediation: 'optional' } }
-    )
+    // Let @supabase/auth-js manage pending-ceremony cancellation natively (passing a custom
+    // AbortSignal disables the SDK's built-in pending-ceremony abort).
+    result = await auth.signInWithPasskey({ options: { mediation: 'optional' } })
   } catch (error) {
     logPasskeyFailure('ceremony', error)
     return { ok: false, message: passkeyErrorMessage(error) }
-  } finally {
-    if (activePasskeyAbort === controller) activePasskeyAbort = null
   }
 
   if (result.error || !result.data?.user) {
-    logPasskeyFailure('verify', result.error)
-    return { ok: false, message: passkeyErrorMessage(result.error) }
+    const err = result.error ?? { code: 'no_session_returned', message: 'Supabase returned no user session.' }
+    logPasskeyFailure('verify', err)
+    return { ok: false, message: passkeyErrorMessage(err) }
   }
   if (result.data.user.id !== previous.userId) {
     // Someone else's passkey on this device: never continue as a different account here.
@@ -121,27 +168,31 @@ async function endPreviousSession(accessToken: string): Promise<void> {
 }
 
 export function passkeyErrorMessage(error: unknown): string {
-  const obj = error && typeof error === 'object' ? (error as { name?: string; code?: string; message?: string }) : null
-  const text = obj ? `${obj.name ?? ''} ${obj.code ?? ''} ${obj.message ?? ''}`.toLowerCase() : String(error ?? '').toLowerCase()
+  const info = extractPasskeyError(error)
+  const text = [info.name, info.code, info.message, info.causeName, info.causeCode, info.causeMessage]
+    .join(' ')
+    .toLowerCase()
   const host = typeof window !== 'undefined' ? window.location.host : ''
+  const detail = formatPasskeyDiagnostic(info)
+  const withDetail = (base: string): string => (detail ? `${base} (${detail})` : base)
 
   if (/securityerror|relying party|rpid|rp id|origin.*not|invalid.*origin|domain/.test(text)) {
-    return `This browser blocked the passkey for ${host || 'this address'}. Open Stracker on https://dypol-stracker.vercel.app (not a preview URL) and check Supabase → Authentication → Passkeys (Relying Party ID: dypol-stracker.vercel.app).`
+    return withDetail(`This browser blocked the passkey for ${host || 'this address'}. Open Stracker on https://dypol-stracker.vercel.app (not a preview URL) and check Supabase → Authentication → Passkeys (Relying Party ID: dypol-stracker.vercel.app).`)
   }
-  if (/webauthn_verification_failed|backup.*eligible|flag inconsistency/.test(text)) {
-    return 'Supabase rejected the passkey verification (this can happen if a synced passkey changed state). Try again, re-add the passkey in Settings → Security, or use your authenticator code.'
+  if (/webauthn_verification_failed|credential verification failed|backup.*eligible|flag inconsistency/.test(text)) {
+    return withDetail('Supabase rejected the passkey verification (known issue when a synced passkey changes state after registration). Re-add the passkey in Settings → Security, or use your authenticator code.')
   }
   if (/webauthn_challenge_expired|challenge.*expired/.test(text)) {
-    return 'The passkey request timed out before it finished. Click “Use passkey” to try again.'
+    return withDetail('The passkey request timed out before it finished. Click “Use passkey” to try again.')
   }
   if (/notsupportederror|not supported/.test(text)) {
-    return 'This browser profile does not support this passkey. Check that your device screen lock and Chrome password manager are enabled, or use your authenticator code.'
+    return withDetail('This browser profile does not support this passkey. Check that your device screen lock and Chrome password manager are enabled, or use your authenticator code.')
   }
   if (/disabled|not enabled|passkey.*off/.test(text)) {
-    return 'Passkeys are switched off for this project. Use your authenticator code.'
+    return withDetail('Passkeys are switched off for this project. Use your authenticator code.')
   }
-  if (/abort|cancel|notallowed|not allowed|already pending/.test(text)) {
-    return 'The passkey prompt was closed or denied by the browser. Make sure you are on the exact saved domain, your device screen lock is on, and no passkey extension is blocking Chrome — then try again, or use your authenticator code.'
+  if (/abort|cancel|notallowed|not allowed|already pending|error_ceremony_aborted/.test(text)) {
+    return withDetail('The passkey prompt was closed or denied by the browser. Make sure you are on the exact saved domain, your device screen lock is on, and no passkey extension is blocking Chrome — then try again, or use your authenticator code.')
   }
-  return 'Your passkey could not be verified. Try again, or use your authenticator code.'
+  return withDetail('Your passkey could not be verified. Try again, or use your authenticator code.')
 }
