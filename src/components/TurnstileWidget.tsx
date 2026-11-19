@@ -13,12 +13,14 @@ export interface TurnstileHandle {
 const TOKEN_WAIT_MS = 20_000
 
 /**
- * The theme of the page around the widget: public pages (sign-in, sign-up, reset, contact) carry
- * their Light / Night choice on a `data-public-theme` wrapper; signed-in pages use `data-theme`
- * on the document root.
+ * The theme of the page around the widget: Control Centre carries its Light / Dark choice on
+ * `data-cc-theme`, public pages (sign-in, sign-up, reset, contact) use `data-public-theme`, and
+ * signed-in notebook pages use `data-theme` on the document root.
  */
 function pageTheme(element: HTMLElement | null): 'light' | 'dark' {
   if (typeof document === 'undefined') return 'light'
+  const control = element?.closest<HTMLElement>('[data-cc-theme]')?.dataset.ccTheme
+  if (control) return control === 'dark' ? 'dark' : 'light'
   const scoped = element?.closest<HTMLElement>('[data-public-theme]')?.dataset.publicTheme
   if (scoped) return scoped === 'dark' ? 'dark' : 'light'
   return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
@@ -32,7 +34,7 @@ function usePageTheme(container: RefObject<HTMLDivElement | null>): 'light' | 'd
     update()
     if (typeof MutationObserver === 'undefined') return
     const observer = new MutationObserver(update)
-    observer.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['data-theme', 'data-public-theme'] })
+    observer.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['data-theme', 'data-public-theme', 'data-cc-theme'] })
     return () => observer.disconnect()
   }, [container])
   return theme

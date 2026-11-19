@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ShieldCheck, LogOut, Check, Fingerprint } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { TurnstileWidget, type TurnstileHandle } from '../components/TurnstileWidget'
 import { Button } from './ui'
 import { BrandMark } from './BrandMark'
 import { MfaChallengeForm, MfaEnrollment } from './MfaPanels'
@@ -32,20 +33,31 @@ export function GateFrame({ children, title, subtitle }: { children: React.React
 /**
  * Owner's "Use passkey" option. Shown only when the server says this session belongs to the
  * owner AND a passkey is registered; the server separately refuses passkeys for every other role.
+ * Includes the Cloudflare Turnstile widget because Supabase Auth enforces project-wide CAPTCHA
+ * protection on `signInWithPasskey()` as well as password/signup endpoints.
  */
 export function PasskeyOption({ onVerified, label = 'Use passkey' }: { onVerified: () => void | Promise<void>; label?: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const captcha = useRef<TurnstileHandle>(null)
   const run = async () => {
     setBusy(true)
     setError(null)
-    const result = await verifyWithOwnerPasskey()
-    setBusy(false)
+    let result: Awaited<ReturnType<typeof verifyWithOwnerPasskey>>
+    try {
+      const captchaToken = await captcha.current?.getToken()
+      result = await verifyWithOwnerPasskey(captchaToken)
+    } finally {
+      // Turnstile tokens are single-use: always start a fresh check for the next attempt.
+      captcha.current?.reset()
+      setBusy(false)
+    }
     if (!result.ok) { setError(result.message); return }
     await onVerified()
   }
   return (
     <div className="cc-passkey-option">
+      {supabase && <TurnstileWidget ref={captcha} action="passkey" />}
       <Button variant="primary" onClick={() => void run()} disabled={busy}><Fingerprint size={16} aria-hidden="true" /> {busy ? 'Waiting for your passkey…' : label}</Button>
       {error && <p className="cc-field__error" role="alert">{error}</p>}
       <p className="cc-divider-text" aria-hidden="true"><span>or enter your authenticator code</span></p>
