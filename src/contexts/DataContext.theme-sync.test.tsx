@@ -13,6 +13,7 @@ const CLOUD_USER = { id: USER, email: 'master@example.com', displayName: 'Master
 const cloudMock = vi.hoisted(() => ({
   upserts: [] as Array<{ table: string; rows: unknown }>,
   failSettingsUpsert: true,
+  missingColumns: [] as string[],
   remoteSettings: null as AppSettings | null
 }))
 
@@ -42,9 +43,18 @@ vi.mock('../lib/supabase', () => {
     }),
     upsert: (rows: unknown) => {
       cloudMock.upserts.push({ table, rows })
-      const result = table === 'app_settings' && cloudMock.failSettingsUpsert
-        ? Promise.resolve({ error: { message: 'Cloud write refused for app_settings' } })
-        : Promise.resolve({ error: null })
+      const list = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [rows as Record<string, unknown>]
+      const unknownCol = cloudMock.missingColumns.find(col => list.some(row => col in row))
+      const result = unknownCol
+        ? Promise.resolve({
+          error: {
+            code: 'PGRST204',
+            message: `Could not find the '${unknownCol}' column of '${table}' in the schema cache`
+          }
+        })
+        : table === 'app_settings' && cloudMock.failSettingsUpsert
+          ? Promise.resolve({ error: { message: 'Cloud write refused for app_settings' } })
+          : Promise.resolve({ error: null })
       return Object.assign(result, { setHeader: () => result })
     }
   })
@@ -105,6 +115,7 @@ function renderHarness() {
 beforeEach(() => {
   cloudMock.upserts = []
   cloudMock.failSettingsUpsert = true
+  cloudMock.missingColumns = []
   cloudMock.remoteSettings = {
     ...defaultSettings(USER, 'Master'),
     theme: 'light',
@@ -155,8 +166,36 @@ describe('DataProvider local-only theme switching', () => {
     expect((await localDb.app_settings.get(USER))?.theme).toBe('dark')
   })
 
-  it('continues syncing non-theme settings to Supabase normally', async () => {
+  it('drops a leftover theme-only app_settings item already stuck in sync_queue without hitting Supabase', async () => {
+    const staleLocal = {
+      ...cloudMock.remoteSettings!,
+      theme: 'dark' as const,
+      updated_at: '2026-11-19T13:30:00.000Z'
+    }
+    await localDb.app_settings.put(staleLocal)
+    await localDb.sync_queue.add({
+      user_id: USER,
+      table: 'app_settings',
+      operation: 'upsert',
+      id: USER,
+      record: staleLocal as unknown as Record<string, unknown>,
+      queued_at: '2026-11-19T13:30:00.000Z'
+    })
+
+    renderHarness()
+    await waitFor(() => expect(screen.getByTestId('loaded').textContent).toBe('true'))
+
+    expect(screen.getByTestId('sync-state').textContent).toBe('synced')
+    expect(screen.getByTestId('sync-error').textContent).toBe('')
+    expect(screen.getByTestId('pending').textContent).toBe('0')
+    expect(await localDb.sync_queue.where('user_id').equals(USER).count()).toBe(0)
+    expect(screen.getByTestId('theme').textContent).toBe('dark')
+    expect(cloudMock.upserts.filter(call => call.table === 'app_settings')).toEqual([])
+  })
+
+  it('continues syncing non-theme settings to Supabase normally and recovers from unmigrated PGRST204 columns', async () => {
     cloudMock.failSettingsUpsert = false
+    cloudMock.missingColumns = ['subject_daily_targets']
     renderHarness()
     await waitFor(() => expect(screen.getByTestId('loaded').textContent).toBe('true'))
     cloudMock.upserts = []
@@ -166,5 +205,6 @@ describe('DataProvider local-only theme switching', () => {
     await waitFor(() => expect(screen.getByTestId('font').textContent).toBe('sora'))
     await waitFor(() => expect(cloudMock.upserts.some(call => call.table === 'app_settings')).toBe(true))
     await waitFor(async () => expect(await localDb.sync_queue.where('user_id').equals(USER).count()).toBe(0))
+    expect(screen.getByTestId('sync-error').textContent).toBe('')
   })
 })

@@ -8,7 +8,7 @@ import { isOwnedStoragePath } from '../lib/storage-path'
 import { createId } from '../lib/id'
 import { relatedRowsForRemoval } from '../lib/data-relations'
 import { validatePersistedRecords, validateUndoRestores } from '../lib/record-validation'
-import { isThemeOnlySettingsChange, preserveLocalTheme } from '../lib/theme-sync'
+import { isThemeOnlySettingsChange, missingSchemaColumn, preserveLocalTheme, stripColumnFromRows } from '../lib/theme-sync'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 import { OP_AT_HEADER, queuedOperationTime, SYNC_REFUSED_EVENT } from '../lib/account-notices'
 import { useAuth } from './AuthContext'
@@ -184,6 +184,26 @@ function cleanForCloud(row: Record<string, unknown>): Record<string, unknown> {
   return clean
 }
 
+async function upsertCloudRows(
+  cloud: NonNullable<typeof supabase>,
+  table: TableName,
+  rows: Record<string, unknown>[],
+  opAt?: string
+): Promise<{ error: unknown }> {
+  let payload = rows
+  const stripped = new Set<string>()
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const request = cloud.from(table).upsert(payload)
+    const { error } = opAt ? await request.setHeader(OP_AT_HEADER, opAt) : await request
+    if (!error) return { error: null }
+    const missing = missingSchemaColumn(error)
+    if (!missing || stripped.has(missing)) return { error }
+    stripped.add(missing)
+    payload = stripColumnFromRows(payload, missing)
+  }
+  return { error: new Error(`Could not sync ${table} after skipping unmigrated columns.`) }
+}
+
 function withOwner(table: TableName, row: Record<string, unknown>, userId: string): Record<string, unknown> {
   const now = new Date().toISOString()
   const record: Record<string, unknown> = { ...row, user_id: userId, updated_at: now }
@@ -292,7 +312,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
           if (readError) throw readError
           const localTime = String(change.record.updated_at ?? change.queued_at)
           const remoteTime = typeof remote?.updated_at === 'string' ? remote.updated_at : ''
-          if (remote && remoteTime > localTime) {
+          if (change.table === 'app_settings' && remote && isThemeOnlySettingsChange(
+            normalizeSettings(remote, userId),
+            normalizeSettings(change.record, userId)
+          )) {
+            // Leftover theme-only queue entry from before Light/Night became local-only: drop it without syncing.
+          } else if (remote && remoteTime > localTime) {
             const normalized = change.table === 'app_settings'
               ? preserveLocalTheme(normalizeSettings(remote, userId), (await localDb.app_settings.get(userId))?.theme)
               : remote
@@ -306,7 +331,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
               if (change.queueId !== undefined) await localDb.sync_queue.put(change)
               setData(current => updateOne(current, change.table, prepared))
             }
-            const { error } = await supabase.from(change.table).upsert(cleanForCloud(prepared)).setHeader(OP_AT_HEADER, queuedOperationTime(change))
+            const { error } = await upsertCloudRows(supabase, change.table, [cleanForCloud(prepared)], queuedOperationTime(change))
             if (error) throw error
             if (change.table === 'mistakes' && 'image_previous_path' in prepared) {
               const cleaned = await retirePreviousMistakeImage(prepared)
@@ -525,7 +550,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             await localDb.table(table).bulkPut(records as object[])
             setData(current => records.reduce((next, row) => updateOne(next, table, row), current))
           }
-          const { error } = await cloud.from(table).upsert(records.map(cleanForCloud))
+          const { error } = await upsertCloudRows(cloud, table, records.map(cleanForCloud))
           if (error) throw error
           trackWrite('succeeded', table, records)
           if (table === 'mistakes') {
@@ -739,7 +764,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
               setData(current => updateOne(current, 'mistakes', prepared))
             }
           }
-          const { error } = await supabase.from(restore.table).upsert(cleanForCloud(prepared))
+          const { error } = await upsertCloudRows(supabase, restore.table, [cleanForCloud(prepared)])
           if (error) throw error
           if (restore.table === 'mistakes' && 'image_previous_path' in prepared) {
             const cleaned = await retirePreviousMistakeImage(prepared)

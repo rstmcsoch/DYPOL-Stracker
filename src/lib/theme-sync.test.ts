@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultSettings } from './defaults'
-import { isThemeOnlySettingsChange, preserveLocalTheme } from './theme-sync'
+import { isThemeOnlySettingsChange, missingSchemaColumn, preserveLocalTheme, stripColumnFromRows } from './theme-sync'
 
 const USER_ID = 'a3f147d2-b7cf-53bd-a461-0d3cfed00001'
 
@@ -29,5 +29,16 @@ describe('theme-only local sync guard', () => {
     expect(preserveLocalTheme(cloud, 'auto')).toEqual({ ...cloud, theme: 'auto' })
     expect(preserveLocalTheme(cloud, 'light')).toBe(cloud)
     expect(preserveLocalTheme(cloud, undefined)).toBe(cloud)
+  })
+
+  it('extracts unmigrated column names from PostgREST PGRST204 errors and strips them cleanly', () => {
+    expect(missingSchemaColumn({
+      code: 'PGRST204',
+      message: "Could not find the 'subject_daily_targets' column of 'app_settings' in the schema cache"
+    })).toBe('subject_daily_targets')
+    expect(missingSchemaColumn({ code: '42501', message: 'row-level security violation' })).toBeNull()
+    expect(stripColumnFromRows([{ id: '1', subject_daily_targets: {}, theme: 'dark' }], 'subject_daily_targets')).toEqual([
+      { id: '1', theme: 'dark' }
+    ])
   })
 })
