@@ -483,3 +483,344 @@ html[data-app-font='active'] .app-shell .jee-snapshot { grid-template-columns: r
   html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item + .jee-split-item { border-left: 0; border-top: 1px solid var(--line); }
   html[data-app-font='active'] .app-shell .jee-snapshot .jee-split-item strong { font-size: 16px; }
 }
+
+/* ------------------------------------ Theme-matched pills & narrow-viewport hardening
+   1. Harmonize secondary toolbar controls (Planner week navigation & date jump,
+      Home rest-day & weekly-goal actions, mistake & study-time action buttons)
+      with Stracker's ink-outlined pill buttons across Light, Dark, and custom
+      color palettes.
+   2. Prevent narrow mobile viewports from wrapping button labels awkwardly or
+      clipping date inputs / toolbars.
+   3. Redesign Home's `.hero-row` strictly on mobile (`<= 960px`, desktop
+      untouched) from two tall vertical rectangles into stacked sculpted bento
+      cards with rounded stat sub-tiles and zero dead vertical voids. */
+
+html[data-app-font='active'] .app-shell .week-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+}
+
+html[data-app-font='active'] .app-shell .week-card-head > div {
+  min-width: 0;
+}
+
+html[data-app-font='active'] .app-shell .week-arrows {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+html[data-app-font='active'] .app-shell .week-arrows button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1.5px solid var(--app-edge);
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 2px 2px 0 var(--app-hard);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+html[data-app-font='active'] .app-shell .week-arrows button:has(svg) {
+  width: 38px;
+  padding: 0;
+}
+
+html[data-app-font='active'] .app-shell .week-arrows button:hover:not(:disabled) {
+  border-color: var(--app-edge);
+  color: #1c2433;
+  background: var(--app-yellow);
+}
+
+html[data-app-font='active'][data-color] .app-shell .week-arrows button:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+html[data-app-font='active'] .app-shell .week-arrows .planner-jump-date {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 148px;
+  max-width: 100%;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1.5px solid var(--app-edge);
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--paper-soft);
+  box-shadow: 2px 2px 0 var(--app-hard);
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-app-font='active'] .app-shell .week-arrows .planner-jump-date:focus-visible {
+  border-color: var(--app-edge);
+  outline: none;
+  box-shadow: 3px 3px 0 var(--app-accent-solid);
+}
+
+html[data-app-font='active'] .app-shell .streak-rest-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 14px;
+  border: 1.5px solid var(--app-edge);
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 2px 2px 0 var(--app-hard);
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+html[data-app-font='active'] .app-shell .streak-rest-button:hover:not(:disabled) {
+  border-color: var(--app-edge);
+  color: #1c2433;
+  background: var(--app-yellow);
+}
+
+html[data-app-font='active'][data-color] .app-shell .streak-rest-button:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+html[data-app-font='active'] .app-shell :is(.streak-goal-empty, .streak-goal-foot) .text-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 5px 14px;
+  border: 1.5px solid var(--app-edge);
+  border-radius: 999px;
+  color: var(--text-accent);
+  background: var(--paper);
+  box-shadow: 2px 2px 0 var(--app-hard);
+  text-decoration: none;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+html[data-app-font='active'] .app-shell :is(.streak-goal-empty, .streak-goal-foot) .text-link:hover:not(:disabled) {
+  border-color: var(--app-edge);
+  color: #1c2433;
+  background: var(--app-yellow);
+}
+
+html[data-app-font='active'][data-color] .app-shell :is(.streak-goal-empty, .streak-goal-foot) .text-link:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+html[data-app-font='active'] .app-shell :is(.mistake-action, .mistake-stat-cta, .mistake-board-footer button, .study-time-actions button) {
+  border: 1.5px solid var(--app-edge);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 var(--app-hard);
+  white-space: nowrap;
+  min-height: 36px;
+}
+
+html[data-app-font='active'] .app-shell .mistake-action-primary {
+  color: var(--button-primary-ink);
+  background: var(--button-primary-bg);
+}
+
+html[data-app-font='active'] .app-shell .mistake-action-primary:hover:not(:disabled) {
+  background: var(--button-primary-hover);
+}
+
+html[data-app-font='active'] .app-shell :is(.study-time-actions, .section-heading, .page-header-action, .filter-controls, .test-filter-row, .mistake-toolbar, .retry-filters) {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  html[data-app-font='active'] .app-shell .week-card-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  html[data-app-font='active'] .app-shell .week-arrows {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  html[data-app-font='active'] .app-shell .week-arrows .planner-jump-date {
+    flex: 1 1 156px;
+    min-width: 148px;
+  }
+
+  html[data-app-font='active'] .app-shell :is(.button, button, input[type='date'], select) {
+    max-width: 100%;
+  }
+
+  html[data-app-font='active'] .app-shell .jee-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Mobile-only Home hero redesign: stack Exam Countdown and Study Streak into
+   full-width sculpted bento cards with rounded sub-tiles so phones never render
+   two skinny vertical rectangles with dead space. Desktop (> 960px) untouched. */
+@media (max-width: 960px) {
+  html[data-app-font='active'] .app-shell .hero-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-card {
+    border-radius: 24px;
+    padding: 18px 18px 16px;
+    min-height: 0;
+    overflow: hidden;
+    box-shadow: 3px 3px 0 var(--app-hard), var(--shadow);
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-card::before {
+    display: none;
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    padding: 5px 12px;
+    border: 1.5px solid var(--app-edge);
+    border-radius: 999px;
+    background: var(--paper);
+    box-shadow: 2px 2px 0 var(--app-hard);
+    white-space: nowrap;
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-unset,
+  html[data-app-font='active'] .app-shell .countdown-main {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-unset .button-marker {
+    white-space: nowrap;
+    align-self: flex-start;
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-footer {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line-strong);
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-footer .mini-exam {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper-soft);
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-star {
+    pointer-events: none;
+    opacity: .55;
+  }
+
+  html[data-app-font='active'] .app-shell .streak-card {
+    border: 1.5px solid var(--app-edge);
+    border-radius: 24px;
+    padding: 18px 18px 16px;
+    box-shadow: 3px 3px 0 var(--app-hard), var(--shadow);
+    overflow: hidden;
+  }
+
+  html[data-app-font='active'] .app-shell .streak-card .card-kicker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  html[data-app-font='active'] .app-shell .streak-bottom {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 12px 0;
+    padding: 0;
+    border: 0;
+  }
+
+  html[data-app-font='active'] .app-shell .streak-bottom .streak-separator {
+    display: none;
+  }
+
+  html[data-app-font='active'] .app-shell .streak-bottom > span:not(.streak-separator) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--paper-soft);
+  }
+
+  html[data-app-font='active'] .app-shell .streak-rule {
+    margin: 0 0 12px;
+    max-width: 100%;
+    line-height: 1.45;
+  }
+
+  html[data-app-font='active'] .app-shell .streak-goal,
+  html[data-app-font='active'] .app-shell .streak-goal-empty {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--paper-soft);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  html[data-app-font='active'] .app-shell .streak-sun {
+    pointer-events: none;
+    opacity: .35;
+  }
+}
+
+@media (max-width: 359px) {
+  html[data-app-font='active'] .app-shell .countdown-footer,
+  html[data-app-font='active'] .app-shell .streak-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
