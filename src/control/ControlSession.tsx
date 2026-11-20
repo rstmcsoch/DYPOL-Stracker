@@ -1,15 +1,22 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { controlFetch, ControlApiError, type SessionResponse } from './api'
-import { IDLE_TIMEOUT_MS, idleState } from './policy'
+import { CONSOLE_BASE, IDLE_TIMEOUT_MS, idleState } from './policy'
+import { formatIstDaysLeft } from '../lib/control-role-governance'
+import './owner-readonly.css'
 
 /** Hard maximum lifetime for any Control Centre session (6 hours), regardless of activity. */
 export const CONTROL_SESSION_MAX_AGE_MS = 6 * 60 * 60 * 1000
 
 const SESSION_EXPIRED_NOTICE = 'Your 6-hour Control Centre session has ended. Sign in again to continue.'
 
-type SessionPayload = SessionResponse & {
+export type SessionPayload = SessionResponse & {
+  ownerReadOnly?: boolean
+  ownerRemovalStatus?: string | null
+  removalDaysRemaining?: number | null
+  removalTargetDateIst?: string | null
   sessionStartedAt?: number | null
   sessionExpiresAt?: number | null
   maxSessionSeconds?: number
@@ -25,22 +32,18 @@ export type ControlPhase =
   | { kind: 'mfa'; passkey?: boolean; owner?: boolean }
   | { kind: 'denied' }
   | { kind: 'error'; message: string }
-  | { kind: 'granted'; session: SessionResponse }
+  | { kind: 'granted'; session: SessionPayload }
 
-interface ControlSessionValue {
+export interface ControlSessionValue {
   phase: ControlPhase
   idle: 'active' | 'warning' | 'expired'
-  lastActivity: () => number
-  /** Re-reads the server state (after an MFA step, a sign-in, or a manual retry). */
   refresh: () => Promise<void>
-  /** Signs out of this browser, or of every session when scope is 'global'. */
   signOut: (scope?: 'local' | 'global') => Promise<void>
-  /** Counts as user activity: resets the idle clock. */
   markActive: () => void
+  lastActivity: () => number
 }
 
 const ControlSessionContext = createContext<ControlSessionValue | null>(null)
-
 const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'touchstart', 'wheel'] as const
 
 export function ControlSessionProvider({ children }: { children: ReactNode }) {
@@ -90,18 +93,9 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
           setPhase({ kind: 'denied' })
           return
         }
-        if (error.code === 'mfa_required') {
-          setPhase({ kind: 'mfa' })
-          return
-        }
       }
       setPhase({ kind: 'error', message: error instanceof Error ? error.message : 'The Control Centre could not be reached.' })
     }
-  }, [])
-
-  const markActive = useCallback(() => {
-    activity.current = Date.now()
-    setIdle('active')
   }, [])
 
   const signOut = useCallback(async (scope: 'local' | 'global' = 'local') => {
@@ -110,10 +104,17 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
     if (mounted.current) setPhase({ kind: 'signed_out' })
   }, [])
 
+  const markActive = useCallback(() => {
+    activity.current = Date.now()
+    setIdle('active')
+  }, [])
+
+  const lastActivity = useCallback(() => activity.current, [])
+
   useEffect(() => {
     mounted.current = true
+    void refresh()
     if (!supabase) {
-      void refresh()
       return () => { mounted.current = false }
     }
     const { data: subscription } = supabase.auth.onAuthStateChange(event => {
@@ -131,7 +132,6 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
         setTimeout(() => { if (mounted.current) void refresh() }, 0)
       }
     })
-    void refresh()
     return () => {
       mounted.current = false
       subscription.subscription.unsubscribe()
@@ -188,16 +188,79 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [active, sessionExpiresAt, signOut])
 
+  // Global view-only lockout across EVERY Control Centre page while an authority is in a
+  // removal countdown (30-day owner / 7-day non-owner) or 2-day owner restore review.
+  const grantedSession = phase.kind === 'granted' ? phase.session : null
+  const isReadOnly = grantedSession?.ownerReadOnly === true
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (!isReadOnly) {
+      delete document.documentElement.dataset.ccOwnerReadonly
+      return
+    }
+    document.documentElement.dataset.ccOwnerReadonly = 'true'
+    const blockFormSubmit = (event: Event) => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+      // Allow read-only search/filter forms and step-up verification dialogs.
+      if (target.closest('[role="dialog"], .cc-filters, [role="search"], .cc-restore-zone')) return
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    document.addEventListener('submit', blockFormSubmit, true)
+    return () => {
+      document.removeEventListener('submit', blockFormSubmit, true)
+      delete document.documentElement.dataset.ccOwnerReadonly
+    }
+  }, [isReadOnly])
+
   const value = useMemo<ControlSessionValue>(() => ({
     phase,
     idle,
-    lastActivity: () => activity.current,
     refresh,
     signOut,
-    markActive
-  }), [phase, idle, refresh, signOut, markActive])
+    markActive,
+    lastActivity
+  }), [phase, idle, refresh, signOut, markActive, lastActivity])
 
-  return <ControlSessionContext.Provider value={value}>{children}</ControlSessionContext.Provider>
+  const daysLabel = typeof grantedSession?.removalDaysRemaining === 'number'
+    ? formatIstDaysLeft(grantedSession.removalDaysRemaining)
+    : null
+  const targetDateLabel = grantedSession?.removalTargetDateIst ? `${grantedSession.removalTargetDateIst} IST` : null
+
+  return (
+    <ControlSessionContext.Provider value={value}>
+      {isReadOnly && grantedSession && (
+        <div className="cc-global-readonly-banner" role="alert">
+          <div className="cc-global-readonly-banner__body">
+            <AlertTriangle size={18} aria-hidden="true" />
+            <div>
+              <strong>View-only mode — all settings &amp; actions disabled.</strong>{' '}
+              {grantedSession.role === 'owner' && grantedSession.ownerRemovalStatus === 'review_restore' ? (
+                <>
+                  Your 2-day Owner restore review is active{daysLabel ? ` (${daysLabel}` : ''}{targetDateLabel ? `, restoring on ${targetDateLabel})` : daysLabel ? ')' : ''}. You can view the Control Centre, but all edits stay locked until your Owner role is automatically restored. No one can pause or cancel this process.
+                </>
+              ) : grantedSession.role === 'owner' ? (
+                <>
+                  Your 30-day Owner removal countdown is active{daysLabel ? ` (${daysLabel}` : ''}{targetDateLabel ? `, scheduled for ${targetDateLabel})` : daysLabel ? ')' : ''}. You can browse and view the Control Centre, but you cannot edit or change anything. Only the restore review button in Roles &amp; members is enabled.
+                </>
+              ) : (
+                <>
+                  Your 7-day role removal countdown is active{daysLabel ? ` (${daysLabel}` : ''}{targetDateLabel ? `, scheduled for ${targetDateLabel})` : daysLabel ? ')' : ''}. You can view the Control Centre, but all settings, features, and actions are disabled.
+                </>
+              )}
+            </div>
+          </div>
+          {grantedSession.role === 'owner' && (
+            <a className="cc-global-readonly-banner__link" href={`${CONSOLE_BASE}/settings/roles`}>
+              Open Roles &amp; members →
+            </a>
+          )}
+        </div>
+      )}
+      {children}
+    </ControlSessionContext.Provider>
+  )
 }
 
 export function useControlSession(): ControlSessionValue {
