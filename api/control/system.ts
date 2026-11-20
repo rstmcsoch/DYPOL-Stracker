@@ -2,11 +2,13 @@ import type { ApiRequest, ApiResponse } from '../_lib/http.js'
 import { sendJson } from '../_lib/http.js'
 import overviewHandler from '../_lib/control-routes/overview.js'
 import healthHandler from '../_lib/control-routes/health.js'
+import turnstileClearanceHandler from '../_lib/control-routes/turnstile-clearance.js'
 
 type Handler = (req: ApiRequest, res: ApiResponse) => Promise<void>
 const handlers: Record<string, Handler> = {
   'overview': overviewHandler,
   'health': healthHandler,
+  'turnstile-clearance': turnstileClearanceHandler,
 }
 
 /** Dispatch related Control Center endpoints through one Vercel serverless function. */
