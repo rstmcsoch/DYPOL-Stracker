@@ -194,3 +194,31 @@ describe('Stracker AI floating window on phones', () => {
     expect(css).toContain('bottom: calc(var(--fab-bottom) + var(--fab-size) + 12px)')
   })
 })
+
+describe('theme-matched responsive controls & mobile Home hero', () => {
+  const homeLook = readFileSync(`${process.cwd()}/src/styles/app-home-look.css`, 'utf8')
+
+  it('styles Planner week controls and date jump as wrapping theme pills that do not clip on narrow screens', () => {
+    expect(homeLook).toContain('.week-card-head')
+    expect(homeLook).toContain('.week-arrows button')
+    expect(homeLook).toContain('.week-arrows .planner-jump-date')
+    expect(homeLook).toContain('border: 1.5px solid var(--app-edge)')
+    expect(homeLook).toContain('box-shadow: 2px 2px 0 var(--app-hard)')
+    expect(homeLook).toContain('white-space: nowrap')
+    expect(homeLook).toContain('flex: 1 1 156px')
+    expect(homeLook).toContain('.streak-rest-button')
+    expect(homeLook).toContain(':is(.streak-goal-empty, .streak-goal-foot) .text-link')
+  })
+
+  it('redesigns the Home hero into stacked sculpted bento cards strictly at max-width: 960px', () => {
+    const mobileHeroBlock = homeLook.slice(homeLook.indexOf('@media (max-width: 960px)'))
+    expect(mobileHeroBlock).toContain('.hero-row')
+    expect(mobileHeroBlock).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(mobileHeroBlock).toContain('.countdown-card')
+    expect(mobileHeroBlock).toContain('.countdown-badge')
+    expect(mobileHeroBlock).toContain('.countdown-footer')
+    expect(mobileHeroBlock).toContain('.streak-card')
+    expect(mobileHeroBlock).toContain('.streak-bottom')
+    expect(mobileHeroBlock).toContain('.streak-goal')
+  })
+})
