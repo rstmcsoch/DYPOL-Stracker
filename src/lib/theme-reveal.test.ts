@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isThemeRevealRunning, revealThemeChange, THEME_REVEAL_MS } from './theme-reveal'
 
@@ -125,7 +126,7 @@ describe('revealThemeChange', () => {
   })
 
   it('uses a non-stalling one-flow easing curve and reduced-motion CSS guard', () => {
-    const css = readFileSync(new URL('../styles/theme-reveal.css', import.meta.url), 'utf8')
+    const css = readFileSync(resolve(process.cwd(), 'src/styles/theme-reveal.css'), 'utf8')
     expect(css).toContain('cubic-bezier(0.30, 0.02, 0.52, 0.72)')
     expect(css).not.toContain('cubic-bezier(0.4, 0, 0.2, 1)')
     expect(css).toContain('@media (prefers-reduced-motion: reduce)')
