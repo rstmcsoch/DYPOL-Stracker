@@ -1,5 +1,5 @@
 /**
- * Cloudflare Turnstile (bot check) for the email/password auth forms.
+ * Cloudflare Turnstile (bot check) for the email/password auth forms and owner passkey step-up.
  *
  * The site key is public. Supabase Auth verifies the token server-side with the secret key,
  * which lives only in the Supabase Auth settings — never in this repository or the browser.
@@ -29,17 +29,21 @@ export interface TurnstileRenderOptions {
   theme?: 'light' | 'dark' | 'auto'
   size?: 'normal' | 'compact' | 'flexible'
   appearance?: 'always' | 'execute' | 'interaction-only'
+  execution?: 'render' | 'execute'
   action?: string
   callback?: (token: string) => void
   'error-callback'?: (code?: string) => boolean | void
   'expired-callback'?: () => void
   'timeout-callback'?: () => void
+  'before-interactive-callback'?: () => void
+  'after-interactive-callback'?: () => void
   'refresh-expired'?: 'auto' | 'manual' | 'never'
   'response-field'?: boolean
 }
 
 export interface TurnstileApi {
   render: (container: HTMLElement, options: TurnstileRenderOptions) => string | undefined
+  execute?: (widgetId?: string) => void
   reset: (widgetId?: string) => void
   remove: (widgetId?: string) => void
   getResponse: (widgetId?: string) => string | undefined
@@ -51,7 +55,7 @@ declare global {
 
 let loading: Promise<TurnstileApi> | null = null
 
-/** Loads the official script once, on first use (only the auth pages ever call this). */
+/** Loads the official script once, on first use (only the auth / passkey surfaces call this). */
 export function loadTurnstile(): Promise<TurnstileApi> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no_window'))
   if (window.turnstile) return Promise.resolve(window.turnstile)
