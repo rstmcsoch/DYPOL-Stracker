@@ -125,10 +125,15 @@ describe('revealThemeChange', () => {
     expect(document.documentElement.style.getPropertyValue('--theme-reveal-r')).toBe('')
   })
 
-  it('uses a non-stalling one-flow easing curve and reduced-motion CSS guard', () => {
+  it('uses a non-stalling one-flow easing curve, tactile toggle icon/thumb motion, and reduced-motion guard', () => {
     const css = readFileSync(resolve(process.cwd(), 'src/styles/theme-reveal.css'), 'utf8')
     expect(css).toContain('cubic-bezier(0.30, 0.02, 0.52, 0.72)')
     expect(css).not.toContain('cubic-bezier(0.4, 0, 0.2, 1)')
+    expect(css).toContain('@keyframes theme-thumb-to-dark')
+    expect(css).toContain('@keyframes theme-thumb-to-light')
+    expect(css).toContain('@keyframes theme-icon-activate-moon')
+    expect(css).toContain('@keyframes theme-icon-activate-sun')
+    expect(css).toContain('.theme-toggle:active')
     expect(css).toContain('@media (prefers-reduced-motion: reduce)')
   })
 })
