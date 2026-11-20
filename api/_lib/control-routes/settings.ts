@@ -45,9 +45,10 @@ export { deleteAllFactors } from '../control-role-removals.js'
  *
  * Owner & role-removal governance:
  *   - Owners cannot change another owner's role (403 owner_protected).
- *   - Removing another owner requires explicit self-consent from that targeted owner, which starts
- *     a 30-day IST countdown with full Control Centre read-only lockout. During those 30 days, the
- *     locked owner may submit an unstoppable 2-day restore review (`role.removal.restore_review`).
+ *   - Removing another owner requires approval from all active owners, with the targeted owner
+ *     giving final confirmation, which starts a 30-day IST countdown with full Control Centre
+ *     read-only lockout. During those 30 days, the locked owner may submit an unstoppable 2-day
+ *     restore review (`role.removal.restore_review`).
  *   - Removing any non-owner role requires unanimous approval from every active unrestricted owner,
  *     then starts a 7-day IST countdown before automatic revocation.
  *
@@ -122,7 +123,7 @@ async function emailOf(admin: SupabaseClient, userId: string): Promise<string> {
 
 /**
  * Active owners who are NOT currently locked in a 30-day removal countdown or 2-day restore review.
- * Only unrestricted active owners can approve non-owner removals or count toward the last-owner floor.
+ * Only unrestricted active owners can approve removals or count toward the last-owner floor.
  */
 async function activeUnrestrictedOwnerIds(admin: SupabaseClient, openRemovals: readonly RoleRemovalRow[]): Promise<string[]> {
   const { data, error } = await admin.from('control_roles').select('user_id, role, revoked_at')
@@ -189,15 +190,15 @@ async function readRemovals(
   return Promise.all(openRows.map(async row => {
     const isOwnerTarget = row.target_role === 'owner'
     const approvedBy = Array.isArray(row.approved_by) ? row.approved_by : []
-    const requiredApprovers = isOwnerTarget ? 1 : Math.max(1, activeOwnerIds.length)
-    const approvedCount = isOwnerTarget
-      ? (approvedBy.includes(row.target_user_id) ? 1 : 0)
-      : activeOwnerIds.filter(ownerId => approvedBy.includes(ownerId)).length
-    const canApprove = row.status === 'pending_approval' && (
-      isOwnerTarget
-        ? context.userId === row.target_user_id && !context.ownerReadOnly
-        : context.role === 'owner' && !context.ownerReadOnly && !approvedBy.includes(context.userId)
-    )
+    const requiredApprovers = Math.max(1, activeOwnerIds.length)
+    const approvedCount = activeOwnerIds.filter(ownerId => approvedBy.includes(ownerId)).length
+    const otherActiveOwners = activeOwnerIds.filter(ownerId => ownerId !== row.target_user_id)
+    const otherOwnersApproved = otherActiveOwners.every(ownerId => approvedBy.includes(ownerId))
+    const canApprove = row.status === 'pending_approval' &&
+      context.role === 'owner' &&
+      !context.ownerReadOnly &&
+      !approvedBy.includes(context.userId) &&
+      (!isOwnerTarget || context.userId !== row.target_user_id || otherOwnersApproved)
     const canRequestRestore = isOwnerTarget && row.status === 'countdown' && context.userId === row.target_user_id
     const [targetEmail, initiatedByEmail] = await Promise.all([
       emailOf(admin, row.target_user_id),
@@ -441,6 +442,7 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
           await refuse(context, 'role.remove', 'last_owner', 409, 'Stracker must always keep at least one active owner.', targetId)
         }
         await requireStepUp(context, { action: 'role.removal.request', targetType: 'user', targetId })
+        const initialApprovedBy = [context.userId]
         const { error } = await admin.from('control_role_removals').insert({
           id: removalId,
           target_user_id: targetId,
@@ -448,7 +450,7 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
           status: 'pending_approval',
           initiated_by: context.userId,
           initiated_at: nowIso,
-          approved_by: [],
+          approved_by: initialApprovedBy,
           countdown_started_at: null,
           effective_on_ist: null,
           restore_requested_at: null,
@@ -458,10 +460,11 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
         })
         if (error) {
           if (error.code === '23505') throw new ApiError(409, 'removal_already_pending', 'A removal request is already active for this owner.')
+          if (error.code === '42P01' || error.code === 'PGRST205') throw new ApiError(503, 'migration_required', 'The role-removal governance table is not set up in Supabase yet. Run migration 20261120000000_control_role_removal_governance.sql in Supabase SQL Editor.')
           throw new ApiError(502, 'save_failed', 'The owner removal request could not be created. Nothing changed.')
         }
-        await audit(context, 'role.removal.request', 'user', targetId, { target_role: 'owner', status: 'pending_approval', removal_id: removalId }, undefined, 'critical')
-        sendJson(res, 200, { ok: true, removalId, userId: targetId, targetRole: 'owner', status: 'pending_approval', requiresTargetConsent: true })
+        await audit(context, 'role.removal.request', 'user', targetId, { target_role: 'owner', status: 'pending_approval', removal_id: removalId, approved_count: initialApprovedBy.length, required_approvers: activeOwnerIds.length }, undefined, 'critical')
+        sendJson(res, 200, { ok: true, removalId, userId: targetId, targetRole: 'owner', status: 'pending_approval', approvedCount: initialApprovedBy.length, requiredApprovers: activeOwnerIds.length, requiresTargetConsent: true })
         return
       }
 
@@ -489,6 +492,7 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
       })
       if (error) {
         if (error.code === '23505') throw new ApiError(409, 'removal_already_pending', 'A removal request is already active for this person.')
+        if (error.code === '42P01' || error.code === 'PGRST205') throw new ApiError(503, 'migration_required', 'The role-removal governance table is not set up in Supabase yet. Run migration 20261120000000_control_role_removal_governance.sql in Supabase SQL Editor.')
         throw new ApiError(502, 'save_failed', 'The removal request could not be created. Nothing changed.')
       }
       await audit(context, 'role.removal.request', 'user', targetId, {
@@ -523,40 +527,54 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
       const nowIso = now.toISOString()
 
       if (row.target_role === 'owner') {
-        if (context.userId !== row.target_user_id) {
-          await refuse(context, 'role.removal.approve', 'target_owner_only', 403, 'Only the targeted owner can approve their own removal.', row.target_user_id)
+        if (context.role !== 'owner' || context.ownerReadOnly) {
+          await refuse(context, 'role.removal.approve', 'owner_only', 403, 'Only active owners can approve an owner removal.', row.target_user_id)
         }
         const otherActiveOwners = activeOwnerIds.filter(id => id !== row.target_user_id)
         if (otherActiveOwners.length < 1) {
           await refuse(context, 'role.removal.approve', 'last_owner', 409, 'Stracker must always keep at least one active owner.', row.target_user_id)
         }
+        const currentApproved = Array.isArray(row.approved_by) ? row.approved_by : []
+        if (currentApproved.includes(context.userId)) {
+          throw new ApiError(409, 'already_approved', 'You have already approved this removal request.')
+        }
+        const isTargetOwner = context.userId === row.target_user_id
+        if (isTargetOwner && !otherActiveOwners.every(id => currentApproved.includes(id))) {
+          await refuse(context, 'role.removal.approve', 'other_owners_required_first', 409, 'All other active owners must approve before the targeted owner gives final confirmation.', row.target_user_id)
+        }
         await requireStepUp(context, { action: 'role.removal.approve', targetType: 'user', targetId: row.target_user_id })
-        const effectiveOnIst = addIstDays(now, OWNER_REMOVAL_COUNTDOWN_DAYS)
+        const nextApproved = [...currentApproved, context.userId]
+        const allApproved = hasAllOwnerApprovals(activeOwnerIds, nextApproved) && nextApproved.includes(row.target_user_id)
+        const nextStatus = allApproved ? 'countdown' : 'pending_approval'
+        const effectiveOnIst = allApproved ? addIstDays(now, OWNER_REMOVAL_COUNTDOWN_DAYS) : null
         const { error } = await admin
           .from('control_role_removals')
           .update({
-            status: 'countdown',
-            approved_by: [context.userId],
-            countdown_started_at: nowIso,
-            effective_on_ist: effectiveOnIst,
+            status: nextStatus,
+            approved_by: nextApproved,
+            ...(allApproved ? { countdown_started_at: nowIso, effective_on_ist: effectiveOnIst } : {}),
             updated_at: nowIso
           })
           .eq('id', row.id)
         if (error) throw new ApiError(502, 'save_failed', 'The removal approval could not be saved. Nothing changed.')
+        const approvedCount = activeOwnerIds.filter(ownerId => nextApproved.includes(ownerId)).length
         await audit(context, 'role.removal.approve', 'user', row.target_user_id, {
           target_role: 'owner',
-          status: 'countdown',
+          status: nextStatus,
           removal_id: row.id,
-          effective_on_ist: effectiveOnIst,
-          countdown_days: OWNER_REMOVAL_COUNTDOWN_DAYS
-        }, undefined, 'critical')
+          approved_count: approvedCount,
+          required_approvers: activeOwnerIds.length,
+          ...(effectiveOnIst ? { effective_on_ist: effectiveOnIst, countdown_days: OWNER_REMOVAL_COUNTDOWN_DAYS } : {})
+        }, undefined, allApproved ? 'critical' : 'warning')
         sendJson(res, 200, {
           ok: true,
           removalId: row.id,
-          status: 'countdown',
+          status: nextStatus,
+          approvedCount,
+          requiredApprovers: activeOwnerIds.length,
           effectiveOnIst,
-          daysRemaining: OWNER_REMOVAL_COUNTDOWN_DAYS,
-          ownerReadOnly: true
+          daysRemaining: allApproved ? OWNER_REMOVAL_COUNTDOWN_DAYS : null,
+          ownerReadOnly: allApproved && isTargetOwner
         })
         return
       }

@@ -432,7 +432,7 @@ function RolesTab({ data, readOnly }: { data: SettingsResponse; readOnly: boolea
       <SaveStatus message={save.message} tone={save.tone} />
     </Panel>
 
-    <Panel title="Team" description="Owners cannot change another owner’s role. Removing an owner requires that owner’s explicit confirmation and starts a 30-day IST countdown with read-only access. Removing any other role requires unanimous approval from all active owners and runs a 7-day IST countdown.">
+    <Panel title="Team" description="Owners cannot change another owner’s role. Removing an owner requires approval from all active owners with the targeted owner giving final confirmation, starting a 30-day IST countdown with read-only access. Removing any other role requires unanimous approval from all active owners and runs a 7-day IST countdown.">
       {active.length === 0 ? <EmptyState title="No team members" body="Give a role above." /> : <div className="cc-table-wrap" tabIndex={0}>
         <table className="cc-table">
           <thead><tr><th scope="col">Account</th><th scope="col">Role</th><th scope="col">Authenticator</th><th scope="col">Since</th><th scope="col"><span className="cc-sr-only">Actions</span></th></tr></thead>
@@ -464,7 +464,7 @@ function RolesTab({ data, readOnly }: { data: SettingsResponse; readOnly: boolea
     <div className="cc-restore-zone">
       <Panel
         title="Pending & scheduled removals"
-        description="Countdowns run in Indian Standard Time (IST) and count whole days only. Owner removals need the targeted owner’s confirmation (30 days, read-only, with an unstoppable 2-day self-restore review). Non-owner removals need every active owner’s approval (7 days)."
+        description="Countdowns run in Indian Standard Time (IST) and count whole days only. Owner removals need all active owners to approve with the targeted owner giving final confirmation (30 days, read-only, with an unstoppable 2-day self-restore review). Non-owner removals need every active owner’s approval (7 days)."
       >
         {removals.length === 0 ? (
           <p className="cc-muted">No pending or scheduled role removals right now.</p>
@@ -484,10 +484,7 @@ function RolesTab({ data, readOnly }: { data: SettingsResponse; readOnly: boolea
                     <div className="cc-removal-card__head">
                       <strong>{item.targetEmail || item.targetUserId.slice(0, 8)}</strong>
                       <Badge tone={isOwnerTarget ? 'ok' : 'neutral'}>{roleLabel}</Badge>
-                      {item.status === 'pending_approval' && isOwnerTarget && (
-                        <Badge tone="warn">Awaiting owner consent</Badge>
-                      )}
-                      {item.status === 'pending_approval' && !isOwnerTarget && (
+                      {item.status === 'pending_approval' && (
                         <Badge tone="warn">Approvals: {item.approvedCount} / {item.requiredApprovers} owners</Badge>
                       )}
                       {item.status === 'countdown' && (
@@ -503,7 +500,7 @@ function RolesTab({ data, readOnly }: { data: SettingsResponse; readOnly: boolea
                     </div>
                     <p className="cc-removal-card__meta">
                       {item.status === 'pending_approval' && isOwnerTarget && (
-                        <>Requested by {item.initiatedByEmail || 'an owner'}. Nothing changes until the targeted owner accepts their removal.</>
+                        <>Requested by {item.initiatedByEmail || 'an owner'}. All active owners ({item.requiredApprovers}) must approve, with the targeted owner giving final confirmation before the 30-day IST countdown starts.</>
                       )}
                       {item.status === 'pending_approval' && !isOwnerTarget && (
                         <>Requested by {item.initiatedByEmail || 'an owner'}. Every active owner ({item.requiredApprovers}) must approve before the 7-day IST countdown starts.</>
@@ -520,12 +517,12 @@ function RolesTab({ data, readOnly }: { data: SettingsResponse; readOnly: boolea
                     </p>
                   </div>
                   <div className="cc-removal-card__actions">
-                    {item.canApprove && isOwnerTarget && (
+                    {item.canApprove && isOwnerTarget && item.targetUserId === data.me.userId && (
                       <Button size="sm" variant="danger" disabled={save.busy} onClick={() => setConfirmOwnerConsent(item)}>
                         Approve my removal
                       </Button>
                     )}
-                    {item.canApprove && !isOwnerTarget && (
+                    {item.canApprove && (!isOwnerTarget || item.targetUserId !== data.me.userId) && (
                       <Button
                         size="sm"
                         variant="primary"
@@ -570,6 +567,7 @@ function RolesTab({ data, readOnly }: { data: SettingsResponse; readOnly: boolea
             })}
           </ul>
         )}
+        <SaveStatus message={save.message} tone={save.tone} />
       </Panel>
     </div>
 
@@ -577,7 +575,7 @@ function RolesTab({ data, readOnly }: { data: SettingsResponse; readOnly: boolea
       danger
       title={`Remove ${removing.email}?`}
       description={removing.role === 'owner'
-        ? 'This creates an owner removal request. Nothing changes until this owner explicitly reviews the notice and confirms their own removal, which starts a 30-day IST countdown in read-only mode.'
+        ? 'This creates an owner removal request. All active owners must approve, with this owner giving final confirmation after reviewing the notice, which starts a 30-day IST countdown in read-only mode.'
         : 'This starts a governed removal request. Once every active owner approves it, a 7-day IST countdown begins before their role, authenticator, passkeys, and sessions are revoked. Their student account and study data stay.'}
       onClose={() => setRemoving(null)}
       footer={<>
@@ -590,7 +588,7 @@ function RolesTab({ data, readOnly }: { data: SettingsResponse; readOnly: boolea
             void save.run(
               { action: 'role.remove', userId: target.userId },
               target.role === 'owner'
-                ? `Owner removal request sent to ${target.email}. They must approve it before the 30-day IST countdown starts.`
+                ? `Owner removal request sent to ${target.email}. All active owners (with ${target.email} giving final confirmation) must approve before the 30-day IST countdown starts.`
                 : `Removal workflow started for ${target.email}.`
             )
           }}
