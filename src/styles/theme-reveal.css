@@ -6,9 +6,9 @@
    GPU compositor thread for smooth performance on low-spec devices.
 
    Easing note: A circular wipe exits off the farthest viewport corner (bottom-left from the
-   top-right toggle) rather than coming to rest inside the screen. Curves with y2 = 1 (such as
-   cubic-bezier(0.4, 0, 0.2, 1)) brake to near-zero velocity over the last ~180-200ms, causing
-   a visible pause across the bottom-left corner on every screen size. Using y2 < 1
+   top-right toggle) rather than coming to rest inside the screen. Heavy ease-out curves with
+   y2 = 1 brake to near-zero velocity over the final ~180-200ms, causing a visible pause across
+   the bottom-left corner on every screen size. Using y2 < 1
    (cubic-bezier(0.30, 0.02, 0.52, 0.72)) launches gently from the toggle and glides cleanly
    through the farthest corner in one uninterrupted flow. */
 @keyframes theme-reveal-circle {
