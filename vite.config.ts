@@ -19,6 +19,25 @@ function spaNotFoundPage(): Plugin {
   }
 }
 
+/**
+ * Splits large, rarely changing third-party packages into dedicated cacheable chunks so browsers
+ * fetch them in parallel over HTTP/2 and keep them cached across app deploys.
+ */
+function vendorChunkFor(id: string): string | undefined {
+  if (!id.includes('node_modules')) return undefined
+  if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) return 'vendor-react'
+  if (/[\\/]node_modules[\\/]@supabase[\\/]/.test(id)) return 'vendor-supabase'
+  if (/[\\/]node_modules[\\/]@tanstack[\\/]/.test(id)) return 'vendor-query'
+  if (/[\\/]node_modules[\\/]dexie[\\/]/.test(id)) return 'vendor-dexie'
+  if (/[\\/]node_modules[\\/](recharts|d3-[^\\/]+|victory-vendor)[\\/]/.test(id)) return 'vendor-charts'
+  if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) return 'vendor-icons'
+  if (/[\\/]node_modules[\\/]date-fns[\\/]/.test(id)) return 'vendor-dates'
+  if (/[\\/]node_modules[\\/]zod[\\/]/.test(id)) return 'vendor-zod'
+  if (/[\\/]node_modules[\\/](jspdf|docx|jszip|html2canvas|canvg|fflate)[\\/]/.test(id)) return 'vendor-export'
+  if (/[\\/]node_modules[\\/](react-markdown|remark-[^\\/]+|unified|mdast-[^\\/]+|micromark[^\\/]*|hast-[^\\/]+|unist-[^\\/]+)[\\/]/.test(id)) return 'vendor-markdown'
+  return undefined
+}
+
 export default defineConfig({
   plugins: [
     react(),
@@ -29,20 +48,17 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/favicon-32.png', 'icons/icon-192.png', 'icons/icon-maskable-512.png'],
       manifest: {
-        name: 'Stracker — Exam Study Notebook',
+        name: 'Stracker — JEE 2027 Study Notebook',
         short_name: 'Stracker',
-        description: 'A private study notebook for exam plans, revision, tests and focus sessions — by DYPOL LABS.',
+        description: 'A private study notebook for JEE 2027 plans, revision, tests and focus sessions — by DYPOL LABS.',
         theme_color: '#f7f4ec',
         background_color: '#f7f4ec',
         display: 'standalone',
-        // The installed app is usable in either orientation: the layout adapts to the
-        // available width and height instead of assuming portrait.
-        orientation: 'any',
         start_url: '/',
+        scope: '/',
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
         ]
       },
       workbox: {
@@ -67,7 +83,15 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    sourcemap: false,
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: vendorChunkFor
+      }
+    }
+  },
   server: { host: '0.0.0.0', allowedHosts: true },
-  preview: { host: '0.0.0.0', allowedHosts: true },
-  build: { sourcemap: false, chunkSizeWarningLimit: 1000 }
+  preview: { host: '0.0.0.0', allowedHosts: true }
 })

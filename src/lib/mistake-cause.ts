@@ -1,5 +1,6 @@
 import type { ErrorCategory, MistakeType } from '../types/index.js'
 import { ERROR_CATEGORIES } from '../types/index.js'
+import { indiaDate, plusDays } from './date.js'
 
 /**
  * One vocabulary for "why did I lose this mark".
@@ -96,12 +97,8 @@ export const RETRY_GAP_DAYS = [7, 21] as const
  * IST calendar date first, because a 23:30 IST study note is stored as the previous UTC day.
  */
 function addDays(value: string, days: number): string {
-  const istDate = /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? value
-    : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value))
-  const date = new Date(`${istDate}T12:00:00+05:30`)
-  date.setUTCDate(date.getUTCDate() + days)
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+  const istDate = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : indiaDate(value)
+  return plusDays(istDate, days)
 }
 
 /**

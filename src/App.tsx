@@ -1,19 +1,13 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { routeLoaders } from './lib/route-preload'
+import { publicRouteLoaders } from './lib/public-preload'
 import { withChunkRecovery } from './lib/chunk-recovery'
 import { ChunkErrorBoundary } from './components/ChunkErrorBoundary'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { AppearanceProvider } from './contexts/AppearanceContext'
 import { SiteContentProvider } from './contexts/SiteContentContext'
-import { DataProvider } from './contexts/DataContext'
-import { AIProvider } from './contexts/AIContext'
-import { FocusProvider } from './contexts/FocusContext'
-import { StudentLayoutProvider } from './contexts/StudentLayoutContext'
 import { ToastProvider } from './contexts/ToastContext'
-import { AppFrame } from './components/AppShell'
-import { AccountNoticeGate } from './components/AccountNoticeGate'
 import { LoaderCircle } from 'lucide-react'
 import { TelemetryTracker } from './components/TelemetryTracker'
 import NotFoundPage from './pages/NotFoundPage'
@@ -22,10 +16,11 @@ import { SiteStatusProvider } from './components/site/SiteStatusContext'
 import { SiteGate } from './components/site/SiteGate'
 
 const LandingPage = lazy(withChunkRecovery(() => import('./pages/LandingPage')))
-const LoginPage = lazy(withChunkRecovery(() => import('./pages/LoginPage')))
-const SignupPage = lazy(withChunkRecovery(() => import('./pages/SignupPage')))
-const ResetPasswordPage = lazy(withChunkRecovery(() => import('./pages/ResetPasswordPage')))
-const AuthCallbackPage = lazy(withChunkRecovery(() => import('./pages/AuthCallbackPage')))
+const ProtectedAppShell = lazy(withChunkRecovery(() => import('./components/ProtectedAppShell')))
+const LoginPage = lazy(publicRouteLoaders['/login'])
+const SignupPage = lazy(publicRouteLoaders['/signup'])
+const ResetPasswordPage = lazy(publicRouteLoaders['/reset-password'])
+const AuthCallbackPage = lazy(publicRouteLoaders['/auth/callback'])
 const SyllabusPage = lazy(routeLoaders['/syllabus'])
 const TestsPage = lazy(routeLoaders['/tests'])
 const MistakesPage = lazy(routeLoaders['/mistakes'])
@@ -46,49 +41,35 @@ const StudyNowPage = lazy(routeLoaders['/study-now'])
 // Private operations console: lazy-loaded so its code and styles never reach the public or
 // notebook bundles, and are not even downloaded by a visitor without a Stracker session.
 const ControlPanelApp = lazy(() => import('./control/ControlPanelApp'))
-const InfoPage = lazy(withChunkRecovery(() => import('./pages/InfoPage')))
-const ContactPage = lazy(withChunkRecovery(() => import('./pages/ContactPage')))
+const InfoPage = lazy(publicRouteLoaders['/about'])
+const ContactPage = lazy(publicRouteLoaders['/contact'])
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 },
-    mutations: { retry: 0 }
+    queries: { staleTime: 60_000, retry: 1 }
   }
 })
 
-function AppLoading({ label = 'Opening your notebook…' }: { label?: string }) {
-  return <div className="app-loading"><div className="loading-mark"><span>S</span><i>✳</i></div><LoaderCircle size={18} className="spin" /><span>{label}</span></div>
+function AppLoading({ label = 'Opening your study notebook…' }: { label?: string }) {
+  return <div className="app-loading"><LoaderCircle className="spin" size={26} /><span>{label}</span></div>
 }
 
 function RouteLoading() {
-  return <div className="route-loading"><LoaderCircle size={22} className="spin" /><span>Just a moment…</span></div>
+  return <div className="route-loading"><span>Just a moment…</span></div>
 }
 
-/**
- * Authenticated application shell. While the session is still being restored nothing
- * else is rendered, so a signed-in reload never flashes the public pages (and a
- * signed-out reload never flashes the notebook).
- */
 function ProtectedApp() {
   const { user, loading } = useAuth()
   const location = useLocation()
   if (loading) return <AppLoading />
   if (!user) return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
-  return <SiteGate kind="app"><DataProvider key={user.id}>
-    <AIProvider>
-      <AppearanceProvider>
-        <FocusProvider key={user.id}>
-          <StudentLayoutProvider><AppFrame /></StudentLayoutProvider>
-        </FocusProvider>
-      </AppearanceProvider>
-    </AIProvider>
-  </DataProvider>{/* After the app in the DOM so its popup sits above any other dialog. */}{!user.isLocal && <AccountNoticeGate key={user.id} userId={user.id} />}</SiteGate>
+  return <SiteGate kind="app"><Suspense fallback={<AppLoading />}><ProtectedAppShell user={user} /></Suspense></SiteGate>
 }
 
 /**
- * The root route. Logged-out visitors get the public homepage; authenticated users
- * continue straight into the notebook on the same URL, so the installed app and any
- * saved bookmark keep working exactly as before.
+ * Root route: visitors see the public product homepage at `/`; signed-in users
+ * enter the notebook directly. Checking session loading here prevents any flash
+ * of the homepage before a restored session lands on the dashboard.
  */
 function RootRoute() {
   const { user, loading } = useAuth()
@@ -101,12 +82,14 @@ function RootRoute() {
   return <SiteContentProvider><Outlet /></SiteContentProvider>
 }
 
-/** /login and /signup are for visitors only: a signed-in user is sent into the notebook. */
+/**
+ * Auth routes (`/login`, `/signup`) are for signed-out visitors. Someone who already
+ * has an active session is sent straight to the notebook instead of seeing a login form.
+ */
 function PublicOnly({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
-  const location = useLocation()
-  if (loading) return <AppLoading label="Checking your session…" />
-  if (user) return <Navigate to="/" replace state={{ from: location.pathname }} />
+  if (loading) return <AppLoading label="Opening Stracker…" />
+  if (user) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
