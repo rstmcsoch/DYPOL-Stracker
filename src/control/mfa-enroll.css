@@ -1,0 +1,171 @@
+/* First-time two-step verification (TOTP enrollment) layout inside the Control Centre gate.
+ * Widens the gate card cleanly during setup, keeps the manual setup key strictly horizontal
+ * with the Copy key button positioned directly beneath it, and organizes the QR code,
+ * verification form, and recovery note cleanly across desktop and mobile viewports.
+ */
+
+.cc-root .cc-gate__card:has(.cc-enroll) {
+  width: min(700px, 100%);
+}
+
+.cc-root .cc-enroll {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 20px 24px;
+  align-items: start;
+}
+
+.cc-root .cc-enroll__qr {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid var(--cc-border-soft);
+  box-shadow: var(--cc-shadow-xs);
+  color: #27272a;
+  width: 100%;
+  max-width: 232px;
+}
+
+.cc-root .cc-enroll__qr-frame {
+  width: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.cc-root .cc-enroll__qr-frame img {
+  display: block;
+  width: 100%;
+  max-width: 192px;
+  height: auto;
+  border-radius: 6px;
+}
+
+.cc-root .cc-enroll__qr-caption {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #52525b;
+  text-align: center;
+}
+
+.cc-root .cc-enroll__qr-caption svg {
+  flex: none;
+  margin-top: 2px;
+  color: #27272a;
+}
+
+.cc-root .cc-enroll__steps {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.cc-root .cc-enroll__intro {
+  display: grid;
+  gap: 8px;
+}
+
+.cc-root .cc-enroll__intro h3 {
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--cc-text);
+}
+
+.cc-root .cc-enroll__intro ol {
+  padding-left: 18px;
+  color: var(--cc-text-2);
+  font-size: 13px;
+  line-height: 1.55;
+  display: grid;
+  gap: 5px;
+}
+
+/* Manual setup key card: label on top, horizontal key in the middle, Copy button below */
+.cc-root .cc-secret {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--cc-border);
+  border-radius: var(--cc-radius-md, 12px);
+  background: var(--cc-surface-2);
+  min-width: 0;
+}
+
+.cc-root .cc-secret__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cc-muted);
+}
+
+.cc-root .cc-secret__code {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: var(--cc-radius-xs, 8px);
+  border: 1px solid var(--cc-border-soft);
+  background: var(--cc-input);
+  color: var(--cc-text);
+  font-family: var(--cc-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-wrap: normal;
+  word-break: normal;
+  user-select: all;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cc-root .cc-secret__actions {
+  display: flex;
+  align-items: center;
+}
+
+.cc-root .cc-secret__copy {
+  width: 100%;
+  justify-content: center;
+}
+
+.cc-root .cc-enroll__form {
+  gap: 12px;
+}
+
+.cc-root .cc-enroll__submit {
+  justify-content: stretch;
+}
+
+.cc-root .cc-enroll__note {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+@media (max-width: 639px) {
+  .cc-root .cc-gate__card:has(.cc-enroll) {
+    width: 100%;
+  }
+
+  .cc-root .cc-enroll {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .cc-root .cc-enroll__qr {
+    justify-self: center;
+    max-width: 248px;
+  }
+}

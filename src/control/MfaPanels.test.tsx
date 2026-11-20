@@ -1,17 +1,22 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 const listFactors = vi.fn()
 const challengeAndVerify = vi.fn()
-vi.mock('../lib/supabase', () => ({ supabase: { auth: { mfa: { listFactors, challengeAndVerify } } } }))
+const enroll = vi.fn()
+const unenroll = vi.fn()
+vi.mock('../lib/supabase', () => ({ supabase: { auth: { mfa: { listFactors, challengeAndVerify, enroll, unenroll } } } }))
 
-const { MfaChallengeForm } = await import('./MfaPanels')
+const { MfaChallengeForm, MfaEnrollment } = await import('./MfaPanels')
 const { mfaErrorMessage } = await import('./mfa-errors')
 
 beforeEach(() => {
   listFactors.mockResolvedValue({ data: { totp: [{ id: 'old', status: 'unverified' }, { id: 'f1', status: 'verified' }], all: [] }, error: null })
   challengeAndVerify.mockReset()
+  enroll.mockReset()
+  unenroll.mockReset()
 })
 afterEach(() => cleanup())
 
@@ -58,6 +63,37 @@ describe('MfaChallengeForm', () => {
     await enter('12a45')
     fireEvent.submit(screen.getByLabelText('Six-digit code').closest('form')!)
     expect(challengeAndVerify).not.toHaveBeenCalled()
+  })
+})
+
+describe('MfaEnrollment layout', () => {
+  it('renders the manual setup key horizontally with the Copy key button directly below it', async () => {
+    enroll.mockResolvedValueOnce({
+      data: {
+        id: 'new-factor',
+        totp: {
+          qr_code: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+          secret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'
+        }
+      },
+      error: null
+    })
+
+    render(<MfaEnrollment onVerified={vi.fn()} />)
+
+    const secretCode = await screen.findByLabelText('Manual setup key')
+    const copyButton = screen.getByRole('button', { name: 'Copy key' })
+    const secretBox = secretCode.closest('.cc-secret')
+    expect(secretBox).toBeTruthy()
+    expect(secretBox?.contains(copyButton)).toBe(true)
+    // Copy button appears after the setup key in DOM order (stacked below it).
+    expect(secretCode.compareDocumentPosition(copyButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    const css = readFileSync('src/control/mfa-enroll.css', 'utf8')
+    expect(css).toContain('flex-direction: column')
+    expect(css).toContain('white-space: nowrap')
+    expect(css).toContain('overflow-wrap: normal')
+    expect(css).toContain('.cc-gate__card:has(.cc-enroll)')
   })
 })
 

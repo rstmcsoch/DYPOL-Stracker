@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { KeyRound, QrCode, ShieldCheck } from 'lucide-react'
+import { Check, Copy, KeyRound, QrCode, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Button, Field, Spinner } from './ui'
 import { mfaErrorMessage } from './mfa-errors'
+import './mfa-enroll.css'
 
 const CODE_PATTERN = /^\d{6}$/
 
@@ -154,30 +155,56 @@ export function MfaEnrollment({ onVerified }: { onVerified: () => void | Promise
   return (
     <div className="cc-enroll">
       <div className="cc-enroll__qr">
-        <img src={state.qr} alt="QR code to add Control Centre to an authenticator app" width={184} height={184} />
-        <QrCode size={14} aria-hidden="true" /> <span>Scan with Google Authenticator, 1Password, Authy or another TOTP app.</span>
+        <div className="cc-enroll__qr-frame">
+          <img src={state.qr} alt="QR code to add Control Centre to an authenticator app" width={184} height={184} />
+        </div>
+        <p className="cc-enroll__qr-caption">
+          <QrCode size={14} aria-hidden="true" />
+          <span>Scan with Google Authenticator, 1Password, Authy or another TOTP app.</span>
+        </p>
       </div>
       <div className="cc-enroll__steps">
-        <h3>Set up your authenticator</h3>
-        <ol>
-          <li>Scan the QR code, or enter the setup key manually.</li>
-          <li>Enter the six-digit code the app shows to finish enrollment.</li>
-        </ol>
-        <div className="cc-secret">
-          <span>Setup key</span>
-          <code aria-label="Manual setup key">{state.secret}</code>
-          <Button size="sm" variant="ghost" onClick={copySecret}>{copied ? 'Copied' : 'Copy key'}</Button>
+        <div className="cc-enroll__intro">
+          <h3>Set up your authenticator</h3>
+          <ol>
+            <li>Scan the QR code, or enter the setup key manually.</li>
+            <li>Enter the six-digit code the app shows to finish enrollment.</li>
+          </ol>
         </div>
-        <form className="cc-form" onSubmit={submit} noValidate>
+        <div className="cc-secret">
+          <span className="cc-secret__label">Setup key</span>
+          <code className="cc-secret__code" aria-label="Manual setup key">{state.secret}</code>
+          <div className="cc-secret__actions">
+            <Button size="sm" variant="default" className="cc-secret__copy" onClick={copySecret}>
+              {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+              {copied ? 'Copied' : 'Copy key'}
+            </Button>
+          </div>
+        </div>
+        <form className="cc-form cc-enroll__form" onSubmit={submit} noValidate>
           <Field label="Six-digit code" htmlFor="cc-enroll-code" error={error}>
-            <input id="cc-enroll-code" className="cc-input cc-input--code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ''))} disabled={busy} />
+            <input
+              id="cc-enroll-code"
+              className="cc-input cc-input--code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="000000"
+              maxLength={6}
+              value={code}
+              onChange={event => setCode(event.target.value.replace(/\D/g, ''))}
+              disabled={busy}
+            />
           </Field>
-          <div className="cc-form__actions">
-            <Button variant="primary" type="submit" disabled={busy || code.length !== 6}><ShieldCheck size={16} aria-hidden="true" /> {busy ? 'Verifying…' : 'Activate and continue'}</Button>
+          <div className="cc-form__actions cc-enroll__submit">
+            <Button variant="primary" type="submit" className="cc-btn--block" disabled={busy || code.length !== 6}>
+              <ShieldCheck size={16} aria-hidden="true" /> {busy ? 'Verifying…' : 'Activate and continue'}
+            </Button>
           </div>
         </form>
-        <p className="cc-note">Lost your device? Recovery does not use a hidden bypass. See the recovery procedure in docs/control-center.md.</p>
       </div>
+      <p className="cc-note cc-enroll__note">
+        Lost your device? Recovery does not use a hidden bypass — contact the owner or follow the Supabase recovery procedure.
+      </p>
     </div>
   )
 }
