@@ -21,10 +21,12 @@ import {
   type AuditSummaryValue,
   type ControlRole
 } from './control-policy.js'
+import { checkUserRemovalState } from './control-role-removals.js'
+import type { RoleRemovalStatus } from '../../src/lib/control-role-governance.js'
 
 /**
  * Trusted server-side context for a console request. It is produced only after the bearer
- * JWT has been verified by the Auth server (getClaims), the account has an active owner row
+ * JWT has been verified by the Auth server (getClaims), the account has an active role row
  * in public.control_roles, and (when required) the session is at aal2.
  */
 export interface ControlContext {
@@ -32,6 +34,10 @@ export interface ControlContext {
   role: ControlRole
   /** Effective permissions (owner: all; others: role matrix + per-person overrides). */
   permissions: ReadonlySet<Permission>
+  /** True when an owner is in their 30-day removal countdown or 2-day restore review (strict read-only). */
+  ownerReadOnly: boolean
+  /** Current open removal workflow status for this user, if any. */
+  ownerRemovalStatus: RoleRemovalStatus | null
   aal: string
   /** How this session completed the console's second step: authenticator code, owner passkey, or not yet. */
   assurance: 'totp' | 'passkey' | null
@@ -163,6 +169,11 @@ export interface AuthorizeOptions {
    * security settings). A missing permission answers 403 permission_denied.
    */
   permission: Permission | null | ((req: ApiRequest) => Permission | null)
+  /**
+   * Only Settings sets this true so an owner in removal countdown can submit the 2-day
+   * self-restore review while every other Settings action is still refused inside settings.ts.
+   */
+  allowDuringOwnerReadOnly?: boolean
 }
 
 /** Loads the effective permissions for an active role holder. Fails closed. */
@@ -184,6 +195,7 @@ export async function loadPermissions(admin: SupabaseClient, userId: string, rol
  *   401 unauthenticated          no bearer token, or the Auth server rejects it
  *   401 session_expired          the 6-hour absolute Control Centre session limit elapsed
  *   403 access_not_granted       a valid account without an active owner role
+ *   403 owner_removal_readonly   an owner in 30-day removal countdown attempted a write action
  *   403 mfa_required             an owner whose session is not aal2 (when required)
  *   429 rate_limited             per-account or per-IP limit exceeded
  *   503 control_unavailable      server configuration or the role lookup is unavailable
@@ -238,6 +250,13 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
     throw new ApiError(401, 'session_expired', 'Your 6-hour Control Centre session has ended. Sign in again to continue.')
   }
 
+  // Reconcile any open role removal countdown or 2-day restore review for this authority.
+  const removalState = await checkUserRemovalState(admin, userId, role, requestId)
+  if (removalState.finalized) {
+    await recordDeniedAccess(admin, userId, requestId, 'role_removed', role)
+    throw new ApiError(403, 'access_not_granted', 'Access not granted.')
+  }
+
   const aal = typeof claims.aal === 'string' ? claims.aal : 'aal1'
   const assurance = consoleAssurance(role, aal, claims.amr)
   if (assurance.passkeyRefused) {
@@ -253,6 +272,19 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
     throw new ApiError(403, 'mfa_required', 'Complete two-step verification to continue.', { reason: 'aal2_required' })
   }
 
+  // Hardcore read-only enforcement for owners in 30-day removal countdown or 2-day restore review:
+  // they can view the Control Centre (GET/HEAD) and submit the restore review in Settings → Roles,
+  // but EVERY other mutating request across the entire Control Centre is blocked server-side.
+  const method = (req.method ?? 'GET').toUpperCase()
+  if (removalState.ownerReadOnly && method !== 'GET' && method !== 'HEAD' && !options.allowDuringOwnerReadOnly) {
+    await recordDeniedAccess(admin, userId, requestId, 'owner_removal_readonly', role)
+    throw new ApiError(
+      403,
+      'owner_removal_readonly',
+      'Your Control Centre access is read-only during your owner removal countdown. You can only submit a restore review in Settings → Roles.'
+    )
+  }
+
   const permissions = await loadPermissions(admin, userId, role)
   const needed = typeof options.permission === 'function' ? options.permission(req) : options.permission
   if (needed && !permissions.has(needed)) {
@@ -264,6 +296,8 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
     userId,
     role,
     permissions,
+    ownerReadOnly: removalState.ownerReadOnly,
+    ownerRemovalStatus: removalState.removalStatus,
     aal,
     assurance: assurance.method,
     mfaAt: assurance.verifiedAt,

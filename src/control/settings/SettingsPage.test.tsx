@@ -24,6 +24,7 @@ function base(role: 'owner' | 'administrator', permissions: string[]): SettingsR
     me: { userId: 'owner-id', role, permissions: permissions as never, assignableRoles: role === 'owner' ? ['owner', 'administrator', 'moderator', 'viewer'] : [] },
     site: { maintenanceEnabled: false, maintenanceMessage: '', siteDown: false, signupEnabled: true, signinEnabled: true, updatedAt: null },
     members: role === 'owner' ? [{ userId: 'owner-id', email: 'owner@example.org', role: 'owner', grantedAt: '2026-10-01T00:00:00Z', revokedAt: null, active: true, mfaEnrolled: true, overrides: {} }, { userId: 'm1', email: 'helper@example.org', role: 'viewer', grantedAt: '2026-11-01T00:00:00Z', revokedAt: null, active: true, mfaEnrolled: false, overrides: {} }] : null,
+    removals: role === 'owner' ? [] : null,
     matrix: role === 'owner' ? { administrator: {}, moderator: {}, viewer: {} } as never : null,
     activity: role === 'owner' ? [] : null,
     passkeys: role === 'owner' ? { available: true, items: [] } : null
@@ -81,6 +82,87 @@ describe('Settings', () => {
     fireEvent.click(dialogButtons[dialogButtons.length - 1]!)
     fireEvent.click(await screen.findByRole('button', { name: 'Mock verify code' }))
     await waitFor(() => expect(calls.find(call => call.init?.method === 'POST')?.init?.body).toEqual({ action: 'role.remove', userId: 'm1' }))
+  })
+
+  it('shows green Owner badges simultaneously on all owners with no role-change dropdown', async () => {
+    settings = base('owner', ['roles.manage'])
+    settings.members = [
+      { userId: 'owner-id', email: 'owner1@example.org', role: 'owner', grantedAt: '2026-10-01T00:00:00Z', revokedAt: null, active: true, mfaEnrolled: true, overrides: {} },
+      { userId: 'owner-2', email: 'owner2@example.org', role: 'owner', grantedAt: '2026-11-20T07:54:00Z', revokedAt: null, active: true, mfaEnrolled: true, overrides: {} }
+    ]
+    renderAt('/control-panel/settings/roles')
+    await screen.findByText('owner2@example.org')
+    expect(screen.queryByLabelText('Role of owner2@example.org')).toBeNull()
+    const ownerBadges = document.querySelectorAll('.cc-badge--ok')
+    const ownerLabels = [...ownerBadges].filter(el => el.textContent?.trim() === 'Owner')
+    expect(ownerLabels).toHaveLength(2)
+  })
+
+  it('shows concern notice before owner self-approval and sends role.removal.approve after confirm', async () => {
+    settings = base('owner', ['roles.manage'])
+    settings.removals = [{
+      id: 'rem-owner-1',
+      targetUserId: 'owner-id',
+      targetEmail: 'owner@example.org',
+      targetRole: 'owner',
+      status: 'pending_approval',
+      initiatedBy: 'owner-2',
+      initiatedByEmail: 'owner2@example.org',
+      initiatedAt: '2026-11-20T08:00:00Z',
+      approvedBy: [],
+      requiredApprovers: 1,
+      approvedCount: 0,
+      canApprove: true,
+      canRequestRestore: false,
+      countdownStartedAt: null,
+      effectiveOnIst: null,
+      daysRemaining: null,
+      restoreRequestedAt: null,
+      restoreOnIst: null,
+      restoreDaysRemaining: null
+    }]
+    renderAt('/control-panel/settings/roles')
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve my removal' }))
+    expect(await screen.findByText('Important notice: confirm removing yourself as Owner')).toBeTruthy()
+    expect(screen.getByText(/30-day Indian Standard Time/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm my removal' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock verify code' }))
+    await waitFor(() => expect(calls.find(call => call.init?.method === 'POST')?.init?.body).toEqual({ action: 'role.removal.approve', removalId: 'rem-owner-1' }))
+  })
+
+  it('locks editing in read-only mode while allowing the 2-day self-restore review button', async () => {
+    settings = base('owner', ['settings.site', 'roles.manage'])
+    settings.me.ownerReadOnly = true
+    settings.me.ownerRemovalStatus = 'countdown'
+    settings.removals = [{
+      id: 'rem-owner-cd',
+      targetUserId: 'owner-id',
+      targetEmail: 'owner@example.org',
+      targetRole: 'owner',
+      status: 'countdown',
+      initiatedBy: 'owner-2',
+      initiatedByEmail: 'owner2@example.org',
+      initiatedAt: '2026-11-20T08:00:00Z',
+      approvedBy: ['owner-id'],
+      requiredApprovers: 1,
+      approvedCount: 1,
+      canApprove: false,
+      canRequestRestore: true,
+      countdownStartedAt: '2026-11-20T08:05:00Z',
+      effectiveOnIst: '2026-12-20',
+      daysRemaining: 30,
+      restoreRequestedAt: null,
+      restoreOnIst: null,
+      restoreDaysRemaining: null
+    }]
+    renderAt('/control-panel/settings/roles')
+    expect(await screen.findByText(/Read-only mode active/)).toBeTruthy()
+    expect((screen.getByRole('button', { name: /Give role/ }) as HTMLButtonElement).disabled).toBe(true)
+    const restoreBtn = screen.getByRole('button', { name: /Submit review to reclaim Owner role/ })
+    expect((restoreBtn as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(restoreBtn)
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock verify code' }))
+    await waitFor(() => expect(calls.find(call => call.init?.method === 'POST')?.init?.body).toEqual({ action: 'role.removal.restore_review', removalId: 'rem-owner-cd' }))
   })
 
   it('shows passkeys only to the owner and explains when Supabase has them switched off', async () => {
@@ -193,4 +275,3 @@ describe('Settings', () => {
     expect([...nav.querySelectorAll('a')].map(a => a.textContent)).not.toContain('Email domains')
   })
 })
-

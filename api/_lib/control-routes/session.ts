@@ -25,6 +25,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       role: context.role,
       // Only after aal2: what this role holder may open. Before MFA the browser learns nothing more.
       permissions: granted ? [...context.permissions] : [],
+      ownerReadOnly: granted ? context.ownerReadOnly : false,
+      ownerRemovalStatus: granted ? context.ownerRemovalStatus : null,
       aal: context.aal,
       method: context.assurance,
       passkey,
