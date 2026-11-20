@@ -2,7 +2,14 @@
    --------------------------------------------------------------------------
    Identity is fixed Patrick Hand (sizes reduced 5-10% Oct 2026: display/h1/metric -10%, h2 -8%, h3 -5%). --font-body / --body-scale are the only values
    selected from Reading font settings. Legacy component styles may still size and
-   space elements, but family and role rules below keep them in the right layer. */
+   space elements, but family and role rules below keep them in the right layer.
+
+   Responsive typography tiers (CSS-only, no JS device detection):
+   - Desktop (>960px landscape, >1100px portrait): preserved default scale below.
+   - Tablet portrait & intermediate (max-width: 960px, or max-width: 1100px portrait):
+     compact, phone-adjacent proportions including iPad Pro-class portrait viewports.
+   - Mobile phones (max-width: 640px) with narrow-phone heading tuning (max-width: 360px):
+     16px body and input floors preserved; small disclaimers/notices left subordinate. */
 
 :root {
   --type-brand-size: 1.575rem;
@@ -10,17 +17,33 @@
   --type-h1-size: 1.8rem;
   --type-h2-size: 1.38rem;
   --type-h3-size: 1.1875rem;
+  --type-h4-size: 1.0625rem;
   --type-empty-size: 1.1875rem;
   --type-metric-size: 1.8rem;
   --type-body-size: 1rem;
+  --type-secondary-size: .9375rem;
   --type-nav-size: .9375rem;
   --type-button-size: .9375rem;
   --type-input-size: 1rem;
+  --type-label-size: .875rem;
   --type-caption-size: .875rem;
   --type-overline-size: .75rem;
   --type-badge-size: .75rem;
   --type-table-size: .9375rem;
   --type-alert-size: .9375rem;
+
+  --type-display-lh: 1.08;
+  --type-h1-lh: 1.08;
+  --type-h2-lh: 1.15;
+  --type-h3-lh: 1.2;
+  --type-h4-lh: 1.25;
+  --type-body-lh: 1.55;
+  --type-secondary-lh: 1.45;
+  --type-nav-lh: 1.4;
+  --type-button-lh: 1.2;
+  --type-input-lh: 1.4;
+  --type-caption-lh: 1.45;
+  --type-table-lh: 1.45;
 }
 
 /* Fixed identity roles: these rules never use --body-scale or the saved font. */
@@ -29,6 +52,7 @@
 .type-h1,
 .type-h2,
 .type-h3,
+.type-h4,
 .type-empty,
 .type-metric {
   color: var(--text-primary);
@@ -37,11 +61,12 @@
   text-wrap: pretty;
 }
 .type-brand { font-size: var(--type-brand-size) !important; line-height: .98 !important; }
-.type-display { font-size: var(--type-display-size) !important; line-height: 1.08 !important; }
-.type-h1 { font-size: var(--type-h1-size) !important; line-height: 1.08 !important; }
-.type-h2 { font-size: var(--type-h2-size) !important; line-height: 1.15 !important; }
-.type-h3 { font-size: var(--type-h3-size) !important; line-height: 1.2 !important; }
-.type-empty { font-size: var(--type-empty-size) !important; line-height: 1.2 !important; }
+.type-display { font-size: var(--type-display-size) !important; line-height: var(--type-display-lh) !important; }
+.type-h1 { font-size: var(--type-h1-size) !important; line-height: var(--type-h1-lh) !important; }
+.type-h2 { font-size: var(--type-h2-size) !important; line-height: var(--type-h2-lh) !important; }
+.type-h3 { font-size: var(--type-h3-size) !important; line-height: var(--type-h3-lh) !important; }
+.type-h4 { font-size: var(--type-h4-size) !important; line-height: var(--type-h4-lh) !important; }
+.type-empty { font-size: var(--type-empty-size) !important; line-height: var(--type-h3-lh) !important; }
 .type-metric {
   font-size: var(--type-metric-size) !important;
   line-height: 1.1 !important;
@@ -55,21 +80,28 @@
   font-family: var(--font-body) !important;
   font-size: max(var(--type-body-size), calc(var(--type-body-size) * var(--body-scale))) !important;
   font-weight: 400 !important;
-  line-height: 1.55 !important;
+  line-height: var(--type-body-lh) !important;
+}
+.type-secondary {
+  color: var(--text-muted);
+  font-family: var(--font-body) !important;
+  font-size: max(var(--type-overline-size), calc(var(--type-secondary-size) * var(--body-scale))) !important;
+  font-weight: 400 !important;
+  line-height: var(--type-secondary-lh) !important;
 }
 .type-nav {
   color: var(--text-primary);
   font-family: var(--font-body) !important;
   font-size: calc(var(--type-nav-size) * var(--body-scale)) !important;
   font-weight: 500 !important;
-  line-height: 1.4 !important;
+  line-height: var(--type-nav-lh) !important;
   overflow-wrap: anywhere;
 }
 .type-button {
   font-family: var(--font-body) !important;
   font-size: calc(var(--type-button-size) * var(--body-scale)) !important;
   font-weight: 600 !important;
-  line-height: 1.2 !important;
+  line-height: var(--type-button-lh) !important;
   text-wrap: pretty;
 }
 .type-input {
@@ -77,14 +109,14 @@
   font-family: var(--font-body) !important;
   font-size: max(var(--type-input-size), calc(var(--type-input-size) * var(--body-scale))) !important;
   font-weight: 400 !important;
-  line-height: 1.4 !important;
+  line-height: var(--type-input-lh) !important;
 }
 .type-caption {
   color: var(--text-muted);
   font-family: var(--font-body) !important;
   font-size: max(var(--type-overline-size), calc(var(--type-caption-size) * var(--body-scale))) !important;
   font-weight: 400 !important;
-  line-height: 1.45 !important;
+  line-height: var(--type-caption-lh) !important;
 }
 .type-overline {
   color: var(--text-muted);
@@ -106,7 +138,7 @@
   font-family: var(--font-body) !important;
   font-size: calc(var(--type-table-size) * var(--body-scale)) !important;
   font-weight: 400 !important;
-  line-height: 1.45 !important;
+  line-height: var(--type-table-lh) !important;
 }
 .type-alert {
   color: var(--text-primary);
@@ -127,15 +159,17 @@
   font-family: var(--font-identity) !important;
   font-weight: 400 !important;
 }
-.app-shell h1 { font-size: var(--type-h1-size) !important; line-height: 1.08 !important; }
-.app-shell h2 { font-size: var(--type-h2-size) !important; line-height: 1.15 !important; }
-.app-shell h3 { font-size: var(--type-h3-size) !important; line-height: 1.2 !important; }
+.app-shell h1 { font-size: var(--type-h1-size) !important; line-height: var(--type-h1-lh) !important; }
+.app-shell h2 { font-size: var(--type-h2-size) !important; line-height: var(--type-h2-lh) !important; }
+.app-shell h3 { font-size: var(--type-h3-size) !important; line-height: var(--type-h3-lh) !important; }
+.app-shell h4 { font-size: var(--type-h4-size) !important; line-height: var(--type-h4-lh) !important; }
 /* Explicit utility classes outrank legacy component sizes without affecting identity. */
 .app-shell .type-brand { font-size: var(--type-brand-size) !important; line-height: .98 !important; }
-.app-shell .type-display { font-size: var(--type-display-size) !important; line-height: 1.08 !important; }
-.app-shell .type-h1 { font-size: var(--type-h1-size) !important; line-height: 1.08 !important; }
-.app-shell .type-h2 { font-size: var(--type-h2-size) !important; line-height: 1.15 !important; }
-.app-shell .type-h3, .app-shell .type-empty { font-size: var(--type-h3-size) !important; line-height: 1.2 !important; }
+.app-shell .type-display { font-size: var(--type-display-size) !important; line-height: var(--type-display-lh) !important; }
+.app-shell .type-h1 { font-size: var(--type-h1-size) !important; line-height: var(--type-h1-lh) !important; }
+.app-shell .type-h2 { font-size: var(--type-h2-size) !important; line-height: var(--type-h2-lh) !important; }
+.app-shell .type-h3, .app-shell .type-empty { font-size: var(--type-h3-size) !important; line-height: var(--type-h3-lh) !important; }
+.app-shell .type-h4 { font-size: var(--type-h4-size) !important; line-height: var(--type-h4-lh) !important; }
 .app-shell .type-metric { font-size: var(--type-metric-size) !important; line-height: 1.1 !important; }
 .app-shell :is(.type-metric, .progress-ring-label, .ring-value, .jee-stat > strong) > small {
   color: var(--text-muted);
@@ -144,8 +178,8 @@
   font-weight: 400 !important;
   line-height: 1.3 !important;
 }
-.app-shell :is(h4, h5, h6) { line-height: 1.25; }
-.app-shell .focus-main > h1 { font-size: var(--type-display-size) !important; line-height: 1.08 !important; }
+.app-shell :is(h5, h6) { line-height: 1.25; }
+.app-shell .focus-main > h1 { font-size: var(--type-display-size) !important; line-height: var(--type-display-lh) !important; }
 .app-shell .focus-clock { font-size: clamp(56px, 27cqw, 108px) !important; line-height: 1 !important; letter-spacing: 2px; }
 .app-shell :is(.brand-type, .brand-mark > span, .loading-mark, .footer-credit, .sheet-brand-credit) {
   color: var(--text-primary);
@@ -172,8 +206,24 @@
   font-family: var(--font-body) !important;
   font-size: max(1rem, calc(1rem * var(--body-scale))) !important;
   font-weight: 400 !important;
-  line-height: 1.55 !important;
+  line-height: var(--type-body-lh) !important;
   overflow-wrap: anywhere;
+}
+
+/* Bold inline emphasis retains its parent's font size rather than stepping up a scale level. */
+.app-shell :is(p, li, dd, td, th, .type-body, .type-secondary, .study-now-summary) :is(b, strong) {
+  font-size: inherit;
+  font-weight: 600;
+}
+
+/* Secondary descriptions and already-compact helper paragraphs stay subordinate to body copy. */
+.app-shell :is(.page-header p, .section-heading p, .chart-card-head p, .settings-section-heading p) {
+  font-size: max(var(--type-overline-size), calc(var(--type-secondary-size) * var(--body-scale))) !important;
+  line-height: var(--type-secondary-lh) !important;
+}
+.app-shell :is(p.jee-small, p.study-now-alt, p.study-now-summary.muted) {
+  font-size: max(var(--type-overline-size), calc(var(--type-caption-size) * var(--body-scale))) !important;
+  line-height: var(--type-caption-lh) !important;
 }
 
 /* Sidebar, ordinary navigation and repeated list/table data use the content layer. */
@@ -186,7 +236,12 @@
 .app-shell :is(.nav-link, .mobile-nav-item) {
   font-size: calc(var(--type-nav-size) * var(--body-scale));
   font-weight: 500;
-  line-height: 1.4;
+  line-height: var(--type-nav-lh);
+}
+.app-shell .field-label {
+  font-size: calc(var(--type-label-size) * var(--body-scale));
+  font-weight: 500;
+  line-height: 1.35;
 }
 .app-shell :is(.nav-caption, .nav-divider, .eyebrow, .card-kicker, .countdown-label,
   .test-summary-card > span, .focus-context-head, .focus-clock-caption,
@@ -209,7 +264,10 @@
   font-family: var(--font-body) !important;
   font-size: calc(var(--type-table-size) * var(--body-scale)) !important;
   font-weight: 400 !important;
-  line-height: 1.45 !important;
+  line-height: var(--type-table-lh) !important;
+}
+.app-shell table th {
+  font-weight: 600 !important;
 }
 .app-shell :is(.recharts-cartesian-axis-tick text, .recharts-legend-item-text) {
   font-family: var(--font-body) !important;
@@ -221,7 +279,7 @@
   font-family: var(--font-body) !important;
   font-size: max(1rem, calc(1rem * var(--body-scale))) !important;
   font-weight: 400 !important;
-  line-height: 1.55 !important;
+  line-height: var(--type-body-lh) !important;
 }
 .app-shell :is(.field-hint, .field-error, .settings-note-line, .settings-unsaved-note,
   .settings-save-state, .user-copy span, .task-meta, .progress-bar-caption,
@@ -229,7 +287,7 @@
   font-family: var(--font-body) !important;
   font-size: max(var(--type-overline-size), calc(var(--type-caption-size) * var(--body-scale))) !important;
   font-weight: 400 !important;
-  line-height: 1.45 !important;
+  line-height: var(--type-caption-lh) !important;
 }
 
 /* Buttons and native controls (including modal/popover portals) always use the
@@ -240,14 +298,14 @@ html[data-app-font='active'] button,
   font-family: var(--font-body) !important;
   font-size: calc(var(--type-button-size) * var(--body-scale)) !important;
   font-weight: 600 !important;
-  line-height: 1.2 !important;
+  line-height: var(--type-button-lh) !important;
 }
 html[data-app-font='active'] :is(input, select, textarea, option, optgroup),
 .app-shell :is(input, select, textarea, option, optgroup) {
   font-family: var(--font-body) !important;
   font-size: max(var(--type-input-size), calc(var(--type-input-size) * var(--body-scale))) !important;
   font-weight: 400 !important;
-  line-height: 1.4 !important;
+  line-height: var(--type-input-lh) !important;
 }
 html[data-app-font='active'] ::placeholder,
 .app-shell ::placeholder {
@@ -291,21 +349,21 @@ html[data-app-font='active'] :is(small, kbd),
   font-family: var(--font-identity) !important;
   font-weight: 400 !important;
 }
-.auth-page-public h1 { font-size: var(--type-display-size); line-height: 1.08; }
-.auth-page-public h2 { font-size: var(--type-h2-size); line-height: 1.15; }
-.auth-page-public h3 { font-size: var(--type-h3-size); line-height: 1.2; }
-.auth-page-public p { font-family: var(--font-default-reading) !important; font-size: max(1rem, calc(1rem * var(--body-scale))) !important; font-weight: 400 !important; line-height: 1.55 !important; }
+.auth-page-public h1 { font-size: var(--type-display-size); line-height: var(--type-display-lh); }
+.auth-page-public h2 { font-size: var(--type-h2-size); line-height: var(--type-h2-lh); }
+.auth-page-public h3 { font-size: var(--type-h3-size); line-height: var(--type-h3-lh); }
+.auth-page-public p { font-family: var(--font-default-reading) !important; font-size: max(1rem, calc(1rem * var(--body-scale))) !important; font-weight: 400 !important; line-height: var(--type-body-lh) !important; }
 .auth-page-public :is(button, .button, .text-button) {
   font-family: var(--font-default-reading) !important;
   font-size: var(--type-button-size);
   font-weight: 600 !important;
-  line-height: 1.2;
+  line-height: var(--type-button-lh);
 }
 .auth-page-public :is(input, select, textarea, option, optgroup) {
   font-family: var(--font-default-reading) !important;
   font-size: var(--type-input-size);
   font-weight: 400 !important;
-  line-height: 1.4;
+  line-height: var(--type-input-lh);
 }
 .auth-page-public ::placeholder {
   color: var(--text-muted);
@@ -318,7 +376,7 @@ html[data-app-font='active'] :is(small, kbd),
   font-family: var(--font-default-reading) !important;
   font-size: var(--type-nav-size);
   font-weight: 500 !important;
-  line-height: 1.4;
+  line-height: var(--type-nav-lh);
 }
 .auth-page-public :is(.field-error, .form-error, .form-notice, [role='alert'], [role='status']) {
   color: var(--text-primary);
@@ -351,7 +409,7 @@ html[data-app-font='active'] .pub-page :where(*) {
   font-weight: 400 !important;
 }
 .pub-page { --font-body: var(--font-identity); --body-scale: 1; }
-.pub-page p { font-size: max(1rem, calc(1rem * var(--body-scale))) !important; line-height: 1.55 !important; }
+.pub-page p { font-size: max(1rem, calc(1rem * var(--body-scale))) !important; line-height: var(--type-body-lh) !important; }
 
 /* These are content descriptions and controls inside the live preview. Its heading is
    deliberately excluded so it continues to demonstrate the fixed identity face. */
@@ -383,7 +441,77 @@ html[data-app-font='active'] .pub-page :where(*) {
 }
 .app-shell .task-row-copy > strong { white-space: normal; text-overflow: clip; }
 
+/* Tier B — Portrait tablets & intermediate screens (641px–960px, plus wider portrait
+   tablets up to 1100px such as iPad Pro 1024×1366). Keeps typography compact and close
+   to regular phone proportions rather than enlarged desktop sizes. */
+@media (max-width: 960px), (max-width: 1100px) and (orientation: portrait) {
+  :root:root {
+    --type-brand-size: clamp(1.4375rem, 1.38rem + .14vw, 1.5rem);
+    --type-display-size: clamp(1.75rem, 1.62rem + .24vw, 1.875rem);
+    --type-h1-size: clamp(1.5625rem, 1.48rem + .14vw, 1.625rem);
+    --type-h2-size: clamp(1.25rem, 1.19rem + .12vw, 1.3125rem);
+    --type-h3-size: clamp(1.125rem, 1.07rem + .1vw, 1.1875rem);
+    --type-h4-size: clamp(1rem, .96rem + .08vw, 1.0625rem);
+    --type-empty-size: clamp(1.125rem, 1.07rem + .1vw, 1.1875rem);
+    --type-metric-size: clamp(1.5625rem, 1.46rem + .2vw, 1.6875rem);
+    --type-body-size: 1rem;
+    --type-secondary-size: .90625rem;
+    --type-nav-size: .875rem;
+    --type-button-size: .90625rem;
+    --type-input-size: 1rem;
+    --type-label-size: .84375rem;
+    --type-caption-size: .8125rem;
+    --type-badge-size: .75rem;
+    --type-table-size: .875rem;
+    --type-alert-size: .90625rem;
+
+    --type-display-lh: 1.12;
+    --type-h1-lh: 1.18;
+    --type-h2-lh: 1.22;
+    --type-h3-lh: 1.25;
+    --type-h4-lh: 1.25;
+    --type-body-lh: 1.55;
+    --type-secondary-lh: 1.45;
+    --type-nav-lh: 1.35;
+    --type-button-lh: 1.2;
+    --type-caption-lh: 1.4;
+    --type-table-lh: 1.4;
+
+    /* Keep layout.css heading tokens aligned with the responsive tier. */
+    --fs-section: var(--type-h2-size);
+    --fs-card-title: var(--type-h3-size);
+  }
+  .app-shell .study-now-title {
+    font-size: var(--type-h3-size) !important;
+    line-height: var(--type-h3-lh) !important;
+  }
+}
+
+/* Tier A — Mobile phones (320px–640px). Preserves 16px body and form-input floors
+   while keeping headings, navigation, tables, and metrics crisp and compact. */
 @media (max-width: 640px) {
+  :root:root {
+    --type-brand-size: 1.38rem;
+    --type-display-size: 1.71rem;
+    --type-h1-size: 1.575rem;
+    --type-h2-size: 1.265rem;
+    --type-h3-size: 1.06875rem;
+    --type-h4-size: 1rem;
+    --type-empty-size: 1.06875rem;
+    --type-metric-size: 1.575rem;
+    --type-body-size: 1rem;
+    --type-secondary-size: .875rem;
+    --type-nav-size: .84375rem;
+    --type-button-size: .875rem;
+    --type-input-size: 1rem;
+    --type-label-size: .84375rem;
+    --type-caption-size: .8125rem;
+    --type-badge-size: .75rem;
+    --type-table-size: .84375rem;
+    --type-alert-size: .875rem;
+    --fs-section: var(--type-h2-size);
+    --fs-card-title: var(--type-h3-size);
+  }
   .type-brand, .app-shell .type-brand { font-size: 1.38rem !important; }
   .type-display, .app-shell .type-display { font-size: 1.71rem !important; }
   .type-h1, .app-shell h1:not(.type-display), .app-shell .type-h1 { font-size: 1.575rem !important; }
@@ -403,6 +531,44 @@ html[data-app-font='active'] .pub-page :where(*) {
   .auth-page-public h3 { font-size: 1.06875rem !important; }
   .typography-live-preview { align-items: flex-start; flex-direction: column; gap: 12px; padding: 14px; }
   .typography-preview-button { width: 100%; }
+}
+
+/* Narrow phones (320px–360px): use the lower end of heading/metric ranges while
+   keeping normal body text and form inputs firmly at 16px (1rem). */
+@media (max-width: 360px) {
+  :root:root {
+    --type-brand-size: 1.3125rem;
+    --type-display-size: 1.625rem;
+    --type-h1-size: 1.5rem;
+    --type-h2-size: 1.1875rem;
+    --type-h3-size: 1.0625rem;
+    --type-h4-size: 1rem;
+    --type-empty-size: 1.0625rem;
+    --type-metric-size: 1.5rem;
+    --type-body-size: 1rem;
+    --type-input-size: 1rem;
+    --type-nav-size: .8125rem;
+    --type-table-size: .8125rem;
+    --type-label-size: .8125rem;
+    --fs-section: var(--type-h2-size);
+    --fs-card-title: var(--type-h3-size);
+  }
+  .type-brand, .app-shell .type-brand { font-size: var(--type-brand-size) !important; }
+  .type-display, .app-shell .type-display { font-size: var(--type-display-size) !important; }
+  .type-h1, .app-shell h1:not(.type-display), .app-shell .type-h1 { font-size: var(--type-h1-size) !important; }
+  .type-h2, .app-shell h2, .app-shell .type-h2 { font-size: var(--type-h2-size) !important; }
+  .type-h3, .type-empty, .app-shell h3, .app-shell .type-h3, .app-shell .type-empty { font-size: var(--type-h3-size) !important; }
+  .type-metric,
+  .app-shell :is(.stat-value, .progress-ring-label, .ring-value, .countdown-number,
+    .streak-number, .streak-number span, .streak-bottom strong, .study-time-value,
+    .test-summary-card > strong, .revision-summary strong, .jee-stat > strong,
+    .jee-track-percent, .exam-mode-days, .jee-split-item strong, .jee-streak-numbers strong,
+    .jee-mini-stats strong, .jee-countdown strong, .jee-weekly-grid strong,
+    .jee-pipeline-count strong, .jee-progress-compare strong) {
+    font-size: var(--type-metric-size) !important;
+  }
+  .auth-page-public h2 { font-size: var(--type-h2-size) !important; }
+  .auth-page-public h3 { font-size: var(--type-h3-size) !important; }
 }
 
 /* Stracker AI chat (compact window and large workspace): empty-state copy and messages are
