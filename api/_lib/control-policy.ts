@@ -8,6 +8,9 @@ import { isControlRole, type ControlRole } from '../../src/lib/control-permissio
 /** Idle sessions expire after this many seconds on the console (mirrors the browser policy). */
 export const CONTROL_IDLE_TIMEOUT_SECONDS = 20 * 60
 
+/** Hard maximum lifetime for any Control Centre session (6 hours), regardless of activity. */
+export const CONTROL_SESSION_MAX_AGE_SECONDS = 6 * 60 * 60
+
 /** A sensitive action needs a TOTP verification no older than this many seconds. */
 export const RECENT_MFA_MAX_AGE_SECONDS = 15 * 60
 
@@ -36,6 +39,34 @@ export function isFreshStepUp(mfaTimestamp: number | null, nowSeconds: number): 
 }
 
 export interface AmrEntry { method?: unknown; timestamp?: unknown }
+
+/**
+ * Returns the earliest valid authentication timestamp (Unix seconds) from the JWT `amr`
+ * claim, representing when the authority originally signed in to this session.
+ */
+export function sessionAuthenticatedAt(amr: unknown): number | null {
+  if (!Array.isArray(amr)) return null
+  let earliest: number | null = null
+  for (const entry of amr as AmrEntry[]) {
+    if (!entry || typeof entry !== 'object') continue
+    if (typeof entry.timestamp !== 'number' || !Number.isFinite(entry.timestamp) || entry.timestamp <= 0) continue
+    earliest = earliest === null ? entry.timestamp : Math.min(earliest, entry.timestamp)
+  }
+  return earliest
+}
+
+/**
+ * True once a Control Centre session has reached or exceeded its hard maximum lifetime
+ * (6 hours by default), regardless of recent activity or step-up MFA.
+ */
+export function isSessionExpired(
+  sessionStartedAt: number | null,
+  nowSeconds: number,
+  maxAgeSeconds = CONTROL_SESSION_MAX_AGE_SECONDS
+): boolean {
+  if (sessionStartedAt === null) return false
+  return nowSeconds - sessionStartedAt >= maxAgeSeconds
+}
 
 /**
  * Returns the newest timestamp (Unix seconds) of a multi-factor method in the JWT `amr`
