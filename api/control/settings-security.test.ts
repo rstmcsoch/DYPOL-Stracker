@@ -301,14 +301,17 @@ describe('roles: assign, governed removal, and hardcore owner protection', () =>
     expect(world.factors[STUDENT]).toEqual([])
   })
 
-  it('single active owner removing a non-owner starts a 7-day IST countdown, and auto-revokes once the 7th IST day arrives', async () => {
+  it('single active owner removing a non-owner starts a 7-day IST countdown, locks them view-only, and auto-revokes once the 7th IST day arrives', async () => {
     world.db.control_member_permissions = [{ user_id: ADMIN, permission: 'audit.view', allowed: true }]
     world.claims = claims(OWNER)
     const res = await call('POST', { action: 'role.remove', userId: ADMIN })
     expect(res.statusCode).toBe(200)
     expect(res.body).toMatchObject({ status: 'countdown', daysRemaining: 7, approvedCount: 1, requiredApprovers: 1 })
-    // Still active until the 7-day IST countdown finishes.
+    // Still active until the 7-day IST countdown finishes, but strictly view-only (all writes blocked).
     expect(world.db.control_roles?.find(r => r.user_id === ADMIN)?.revoked_at).toBeNull()
+    world.claims = claims(ADMIN, { mfaAgo: 5 })
+    expect((await call('GET', undefined, 'session')).body).toMatchObject({ status: 'granted', ownerReadOnly: true, ownerRemovalStatus: 'countdown', removalDaysRemaining: 7 })
+    expect((await call('POST', { action: 'site.update', maintenanceEnabled: true, maintenanceMessage: '', siteDown: false })).body).toMatchObject({ error: 'owner_removal_readonly' })
 
     // Simulate 7 IST days passing.
     world.db.control_role_removals![0]!.effective_on_ist = '2020-01-01'

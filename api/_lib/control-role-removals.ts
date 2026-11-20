@@ -4,6 +4,7 @@ import { logAIEvent } from './diagnostics.js'
 import {
   OPEN_REMOVAL_STATUSES,
   isIstDayReached,
+  istDaysRemaining,
   type RoleRemovalStatus
 } from '../../src/lib/control-role-governance.js'
 
@@ -144,21 +145,25 @@ export async function reconcileRoleRemovals(
 export interface UserRemovalState {
   /** True when the user's countdown just finished and their role has been revoked. */
   finalized: boolean
-  /** True when an owner is in 30-day removal countdown or 2-day restore review (read-only lock). */
+  /** True when ANY authority is in a removal countdown (30d owner / 7d non-owner) or 2d restore review. */
   ownerReadOnly: boolean
   /** Current open removal status for this user, if any. */
   removalStatus: RoleRemovalStatus | null
+  /** Whole IST calendar days remaining in the active countdown or restore review. */
+  removalDaysRemaining: number | null
+  /** IST YYYY-MM-DD date when the active countdown or restore review finishes. */
+  removalTargetDateIst: string | null
 }
 
 /**
  * Checks and reconciles any open removal workflow for the signed-in user during authorizeControl.
- * Enforces read-only lockout for owners in countdown/review_restore and auto-revokes or auto-restores
- * the moment the IST target calendar day is reached.
+ * Enforces read-only lockout for ANY authority in countdown/review_restore and auto-revokes or
+ * auto-restores the moment the IST target calendar day is reached.
  */
 export async function checkUserRemovalState(
   admin: SupabaseClient,
   userId: string,
-  role: string,
+  _role: string,
   requestId: string,
   now = new Date()
 ): Promise<UserRemovalState> {
@@ -168,7 +173,9 @@ export async function checkUserRemovalState(
     .eq('target_user_id', userId)
     .in('status', [...OPEN_REMOVAL_STATUSES])
     .maybeSingle()
-  if (error || !data) return { finalized: false, ownerReadOnly: false, removalStatus: null }
+  if (error || !data) {
+    return { finalized: false, ownerReadOnly: false, removalStatus: null, removalDaysRemaining: null, removalTargetDateIst: null }
+  }
 
   const row = data as RoleRemovalRow
   const nowIso = now.toISOString()
@@ -179,15 +186,25 @@ export async function checkUserRemovalState(
       .update({ status: 'restored', resolved_at: nowIso, updated_at: nowIso })
       .eq('id', row.id)
     if (!restoreError) {
-      return { finalized: false, ownerReadOnly: false, removalStatus: null }
+      return { finalized: false, ownerReadOnly: false, removalStatus: null, removalDaysRemaining: null, removalTargetDateIst: null }
     }
   }
 
   if (row.status === 'countdown' && isIstDayReached(row.effective_on_ist, now)) {
     const done = await finalizeRoleRemoval(admin, row, requestId, nowIso)
-    if (done) return { finalized: true, ownerReadOnly: false, removalStatus: null }
+    if (done) {
+      return { finalized: true, ownerReadOnly: false, removalStatus: null, removalDaysRemaining: null, removalTargetDateIst: null }
+    }
   }
 
-  const ownerReadOnly = role === 'owner' && (row.status === 'countdown' || row.status === 'review_restore')
-  return { finalized: false, ownerReadOnly, removalStatus: row.status }
+  const readOnly = row.status === 'countdown' || row.status === 'review_restore'
+  const targetDate = row.status === 'review_restore' ? row.restore_on_ist : row.status === 'countdown' ? row.effective_on_ist : null
+  const daysRemaining = targetDate ? istDaysRemaining(targetDate, now) : null
+  return {
+    finalized: false,
+    ownerReadOnly: readOnly,
+    removalStatus: row.status,
+    removalDaysRemaining: daysRemaining,
+    removalTargetDateIst: targetDate
+  }
 }

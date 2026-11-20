@@ -34,10 +34,14 @@ export interface ControlContext {
   role: ControlRole
   /** Effective permissions (owner: all; others: role matrix + per-person overrides). */
   permissions: ReadonlySet<Permission>
-  /** True when an owner is in their 30-day removal countdown or 2-day restore review (strict read-only). */
+  /** True when ANY authority is in a removal countdown (30d owner / 7d non-owner) or 2d restore review (strict read-only). */
   ownerReadOnly: boolean
   /** Current open removal workflow status for this user, if any. */
   ownerRemovalStatus: RoleRemovalStatus | null
+  /** Whole IST calendar days remaining in the active countdown or restore review. */
+  removalDaysRemaining: number | null
+  /** IST YYYY-MM-DD date when the active countdown or restore review finishes. */
+  removalTargetDateIst: string | null
   aal: string
   /** How this session completed the console's second step: authenticator code, owner passkey, or not yet. */
   assurance: 'totp' | 'passkey' | null
@@ -195,7 +199,7 @@ export async function loadPermissions(admin: SupabaseClient, userId: string, rol
  *   401 unauthenticated          no bearer token, or the Auth server rejects it
  *   401 session_expired          the 6-hour absolute Control Centre session limit elapsed
  *   403 access_not_granted       a valid account without an active owner role
- *   403 owner_removal_readonly   an owner in 30-day removal countdown attempted a write action
+ *   403 owner_removal_readonly   an authority in removal countdown attempted a write/export action
  *   403 mfa_required             an owner whose session is not aal2 (when required)
  *   429 rate_limited             per-account or per-IP limit exceeded
  *   503 control_unavailable      server configuration or the role lookup is unavailable
@@ -272,16 +276,19 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
     throw new ApiError(403, 'mfa_required', 'Complete two-step verification to continue.', { reason: 'aal2_required' })
   }
 
-  // Hardcore read-only enforcement for owners in 30-day removal countdown or 2-day restore review:
-  // they can view the Control Centre (GET/HEAD) and submit the restore review in Settings → Roles,
-  // but EVERY other mutating request across the entire Control Centre is blocked server-side.
+  // Hardcore read-only enforcement for ANY authority in a removal countdown or 2-day restore review:
+  // they can view the Control Centre (GET/HEAD) and owners can submit the restore review in Settings → Roles,
+  // but EVERY other mutating request or CSV export across the entire Control Centre is blocked server-side.
   const method = (req.method ?? 'GET').toUpperCase()
-  if (removalState.ownerReadOnly && method !== 'GET' && method !== 'HEAD' && !options.allowDuringOwnerReadOnly) {
+  const isCsvExport = new URL(req.url ?? '/', 'http://localhost').searchParams.get('format') === 'csv'
+  if (removalState.ownerReadOnly && ((method !== 'GET' && method !== 'HEAD') || isCsvExport) && !options.allowDuringOwnerReadOnly) {
     await recordDeniedAccess(admin, userId, requestId, 'owner_removal_readonly', role)
     throw new ApiError(
       403,
       'owner_removal_readonly',
-      'Your Control Centre access is read-only during your owner removal countdown. You can only submit a restore review in Settings → Roles.'
+      role === 'owner'
+        ? 'Your Control Centre access is view-only during your owner removal countdown. You can only view pages or submit a restore review in Settings → Roles.'
+        : 'Your Control Centre access is view-only during your 7-day role removal countdown. All settings, edits, and actions are disabled.'
     )
   }
 
@@ -298,6 +305,8 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
     permissions,
     ownerReadOnly: removalState.ownerReadOnly,
     ownerRemovalStatus: removalState.removalStatus,
+    removalDaysRemaining: removalState.removalDaysRemaining,
+    removalTargetDateIst: removalState.removalTargetDateIst,
     aal,
     assurance: assurance.method,
     mfaAt: assurance.verifiedAt,

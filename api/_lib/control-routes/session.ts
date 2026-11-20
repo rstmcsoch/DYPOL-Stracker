@@ -27,6 +27,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       permissions: granted ? [...context.permissions] : [],
       ownerReadOnly: granted ? context.ownerReadOnly : false,
       ownerRemovalStatus: granted ? context.ownerRemovalStatus : null,
+      removalDaysRemaining: granted ? context.removalDaysRemaining : null,
+      removalTargetDateIst: granted ? context.removalTargetDateIst : null,
       aal: context.aal,
       method: context.assurance,
       passkey,

@@ -95,6 +95,7 @@ function passkeyRegistrationErrorMessage(error: unknown): string {
 function useSave() {
   const stepUp = useStepUp()
   const client = useQueryClient()
+  const { refresh } = useControlSession()
   const [state, setState] = useState<{ busy: boolean; message: string | null; tone: 'ok' | 'crit' }>({ busy: false, message: null, tone: 'ok' })
   const run = async (body: Record<string, unknown>, success: string): Promise<boolean> => {
     setState({ busy: true, message: null, tone: 'ok' })
@@ -102,6 +103,7 @@ function useSave() {
       const result = await stepUp(() => controlFetch<Record<string, unknown>>('settings', { method: 'POST', body }))
       if (result === null) { setState({ busy: false, message: 'Cancelled. Nothing was saved.', tone: 'crit' }); return false }
       await client.invalidateQueries({ queryKey: QUERY_KEY })
+      if (typeof refresh === 'function') void refresh()
       setState({ busy: false, message: success, tone: 'ok' })
       return true
     } catch (error) {
@@ -143,17 +145,6 @@ function SettingsTabs({ data }: { data: SettingsResponse }) {
   useCurrentTabInView(navRef)
 
   const ownerReadOnly = data.me.ownerReadOnly === true
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    if (ownerReadOnly) {
-      document.documentElement.dataset.ccOwnerReadonly = 'true'
-    } else {
-      delete document.documentElement.dataset.ccOwnerReadonly
-    }
-    return () => {
-      delete document.documentElement.dataset.ccOwnerReadonly
-    }
-  }, [ownerReadOnly])
 
   return <>
     {ownerReadOnly && (
@@ -164,10 +155,14 @@ function SettingsTabs({ data }: { data: SettingsResponse }) {
             <strong>Read-only mode active.</strong>{' '}
             {data.me.ownerRemovalStatus === 'review_restore'
               ? 'Your 2-day Owner restore review is running (IST). Full Owner access will return automatically when the countdown ends — no one can pause or cancel this process.'
-              : 'Your 30-day Owner removal countdown is active (IST). You can view the entire Control Centre, but all edits are locked. To reclaim your Owner role, open Roles & members and submit a restore review.'}
+              : data.me.role === 'owner'
+                ? 'Your 30-day Owner removal countdown is active (IST). You can view the entire Control Centre, but all edits are locked. To reclaim your Owner role, open Roles & members and submit a restore review.'
+                : 'Your 7-day role removal countdown is active (IST). You can view the Control Centre, but all settings, features, and actions are disabled.'}
           </div>
         </div>
-        <NavLink className="cc-readonly-banner__link" to={`${BASE}/roles`}>Go to Roles &amp; members →</NavLink>
+        {data.me.role === 'owner' && (
+          <NavLink className="cc-readonly-banner__link" to={`${BASE}/roles`}>Go to Roles &amp; members →</NavLink>
+        )}
       </div>
     )}
     <nav className="cc-tabs" aria-label="Settings sections" ref={navRef}>
