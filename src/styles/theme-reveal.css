@@ -3,7 +3,14 @@
    set synchronously BEFORE startViewTransition(). Because the keyframe with `fill-mode: both`
    is already bound at Frame 0, Chromium never paints an unclipped 1-frame flash of the new
    theme while waiting for JS transition.ready — and the clip-path animation stays 100% on the
-   GPU compositor thread for smooth performance on low-spec devices. */
+   GPU compositor thread for smooth performance on low-spec devices.
+
+   Easing note: A circular wipe exits off the farthest viewport corner (bottom-left from the
+   top-right toggle) rather than coming to rest inside the screen. Heavy ease-out curves with
+   y2 = 1 brake to near-zero velocity over the final ~180-200ms, causing a visible pause across
+   the bottom-left corner on every screen size. Using y2 < 1
+   (cubic-bezier(0.30, 0.02, 0.52, 0.72)) launches gently from the toggle and glides cleanly
+   through the farthest corner in one uninterrupted flow. */
 @keyframes theme-reveal-circle {
   from {
     clip-path: circle(0px at var(--theme-reveal-x, 50%) var(--theme-reveal-y, 50%));
@@ -36,8 +43,14 @@
 }
 
 :root.theme-revealing::view-transition-new(root) {
-  animation: theme-reveal-circle var(--theme-reveal-duration, 560ms) cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: theme-reveal-circle var(--theme-reveal-duration, 420ms) cubic-bezier(0.30, 0.02, 0.52, 0.72) both;
   will-change: clip-path;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root.theme-revealing::view-transition-new(root) {
+    animation: none;
+  }
 }
 
 /* Pause element-level CSS transitions (including pseudo-elements) while the snapshot is taken
