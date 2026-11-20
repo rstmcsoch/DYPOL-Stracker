@@ -384,9 +384,9 @@ describe('roles: assign, governed removal, and hardcore owner protection', () =>
     expect(reqRes.body).toMatchObject({ status: 'pending_approval', targetRole: 'owner', requiresTargetConsent: true })
     const removalId = (reqRes.body as { removalId: string }).removalId
 
-    // 2. OWNER cannot approve on OWNER2's behalf.
+    // 2. OWNER already approved by initiating and cannot approve again on OWNER2's behalf.
     world.claims = claims(OWNER, { mfaAgo: 2 })
-    expect((await call('POST', { action: 'role.removal.approve', removalId })).body).toMatchObject({ error: 'target_owner_only' })
+    expect((await call('POST', { action: 'role.removal.approve', removalId })).body).toMatchObject({ error: 'already_approved' })
 
     // 3. OWNER2 confirms their own removal -> 30-day IST countdown + immediate read-only lockout.
     world.claims = claims(OWNER2, { mfaAgo: 5 })
@@ -421,6 +421,34 @@ describe('roles: assign, governed removal, and hardcore owner protection', () =>
     expect(sessionAfter.statusCode).toBe(200)
     expect(sessionAfter.body).toMatchObject({ status: 'granted', role: 'owner', ownerReadOnly: false, ownerRemovalStatus: null })
     expect(world.db.control_role_removals![0]!.status).toBe('restored')
+  })
+
+  it('with 3 active owners, owner removal requires all other owners to approve first before the targeted owner gives final confirmation', async () => {
+    world.db.control_roles!.push(
+      { user_id: OWNER2, role: 'owner', revoked_at: null, granted_at: '2026-10-02T00:00:00Z' },
+      { user_id: OWNER3, role: 'owner', revoked_at: null, granted_at: '2026-10-03T00:00:00Z' }
+    )
+    world.claims = claims(OWNER, { mfaAgo: 5 })
+    const start = await call('POST', { action: 'role.remove', userId: OWNER3 })
+    expect(start.statusCode).toBe(200)
+    expect(start.body).toMatchObject({ status: 'pending_approval', approvedCount: 1, requiredApprovers: 3 })
+    const removalId = (start.body as { removalId: string }).removalId
+
+    // Targeted owner cannot confirm before all other active owners approve.
+    world.claims = claims(OWNER3, { mfaAgo: 2 })
+    expect((await call('POST', { action: 'role.removal.approve', removalId })).body).toMatchObject({ error: 'other_owners_required_first' })
+
+    // OWNER2 approves (2/3).
+    world.claims = claims(OWNER2, { mfaAgo: 5 })
+    const second = await call('POST', { action: 'role.removal.approve', removalId })
+    expect(second.statusCode).toBe(200)
+    expect(second.body).toMatchObject({ status: 'pending_approval', approvedCount: 2, requiredApprovers: 3 })
+
+    // Now targeted OWNER3 gives final confirmation (3/3) -> 30-day IST countdown + read-only lock!
+    world.claims = claims(OWNER3, { mfaAgo: 5 })
+    const finalRes = await call('POST', { action: 'role.removal.approve', removalId })
+    expect(finalRes.statusCode).toBe(200)
+    expect(finalRes.body).toMatchObject({ status: 'countdown', approvedCount: 3, requiredApprovers: 3, daysRemaining: 30, ownerReadOnly: true })
   })
 
   it('a non-owner with roles.manage cannot touch Owner or Admin roles, or grant them', async () => {
