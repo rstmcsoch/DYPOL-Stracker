@@ -1,0 +1,146 @@
+/* Role-removal governance, IST countdown cards, owner self-consent notice, and global read-only lockout */
+
+.cc-readonly-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(235, 165, 65, 0.45);
+  background: rgba(235, 165, 65, 0.12);
+  color: var(--cc-text);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.cc-readonly-banner--global {
+  margin: 0;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+.cc-readonly-banner__body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.cc-readonly-banner__body svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--cc-warn, #e5a040);
+}
+
+.cc-readonly-banner__link {
+  flex: none;
+  font-weight: 600;
+  color: var(--cc-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cc-readonly-banner__link:hover {
+  text-decoration: underline;
+}
+
+/* Global read-only lockout styling when an owner is in their 30-day countdown or 2-day restore review:
+   every editing surface across the Control Centre is visibly greyed out and non-interactive,
+   except the dedicated restore-review zone in Settings → Roles and step-up verification dialogs. */
+html[data-cc-owner-readonly="true"] .cc-main :is(form, .cc-form, .cc-domain-form) :is(input, select, textarea, button, .cc-switch),
+html[data-cc-owner-readonly="true"] .cc-main .cc-panel:not(.cc-restore-zone) :is(button.cc-btn--primary, button.cc-btn--danger, .cc-switch) {
+  opacity: 0.45;
+  filter: grayscale(0.45);
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+html[data-cc-owner-readonly="true"] .cc-main .cc-restore-zone,
+html[data-cc-owner-readonly="true"] .cc-main .cc-restore-zone :is(button, a) {
+  opacity: 1;
+  filter: none;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.cc-removals-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.cc-removal-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--cc-border);
+  background: var(--cc-surface-2, var(--cc-surface));
+}
+
+.cc-removal-card--owner {
+  border-color: rgba(235, 165, 65, 0.45);
+}
+
+.cc-removal-card--restore {
+  border-color: rgba(70, 180, 120, 0.45);
+}
+
+.cc-removal-card__info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.cc-removal-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cc-removal-card__meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--cc-muted);
+  line-height: 1.45;
+}
+
+.cc-removal-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.cc-concern-box {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 80, 80, 0.4);
+  background: rgba(220, 80, 80, 0.08);
+  display: grid;
+  gap: 8px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.cc-concern-box ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 5px;
+}

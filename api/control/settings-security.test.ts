@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * Settings, roles, permissions and step-up against a small in-memory Supabase stand-in.
- * Every test drives the real route code (dispatcher → controlHandler → settings route).
+ * Settings, roles, permissions, step-up, and hardcore role-removal governance against an in-memory
+ * Supabase stand-in. Every test drives the real route code (dispatcher → controlHandler → route).
  */
 type Row = Record<string, unknown>
 const world = vi.hoisted(() => ({
@@ -38,6 +38,13 @@ vi.mock('@supabase/supabase-js', () => {
             if (row.role === 'owner' && !row.revoked_at && (next.role !== 'owner' || next.revoked_at) && otherOwners < 1) return { data: null, error: { message: 'last_owner', code: 'P0001' } }
           }
         }
+        if (table === 'control_role_removals') {
+          for (const row of rows().filter(r => match(r, filters))) {
+            if (row.status === 'review_restore' && patch.status !== 'restored') {
+              return { data: null, error: { message: 'owner_restore_unstoppable', code: 'P0001' } }
+            }
+          }
+        }
         for (const row of rows().filter(r => match(r, filters))) Object.assign(row, patch)
         return { data: null, error: null }
       }
@@ -65,6 +72,14 @@ vi.mock('@supabase/supabase-js', () => {
         if (table === 'control_step_up_uses') {
           for (const row of list) {
             if (rows().some(r => r.user_id === row.user_id && r.session_id === row.session_id && r.mfa_at === row.mfa_at)) return { error: { code: '23505', message: 'duplicate' } }
+          }
+        }
+        if (table === 'control_role_removals') {
+          for (const row of list) {
+            const open = ['pending_approval', 'countdown', 'review_restore']
+            if (open.includes(String(row.status)) && rows().some(r => r.target_user_id === row.target_user_id && open.includes(String(r.status)))) {
+              return { error: { code: '23505', message: 'duplicate_open_removal' } }
+            }
           }
         }
         rows().push(...list.map(row => ({ ...row })))
@@ -111,6 +126,8 @@ vi.stubEnv('SUPABASE_ANON_KEY', 'anon-test-key')
 vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-test-key')
 
 const OWNER = '11111111-1111-4111-8111-111111111111'
+const OWNER2 = '55555555-5555-4555-8555-555555555555'
+const OWNER3 = '66666666-6666-4666-8666-666666666666'
 const ADMIN = '22222222-2222-4222-8222-222222222222'
 const STUDENT = '33333333-3333-4333-8333-333333333333'
 const MANAGER = '44444444-4444-4444-8444-444444444444' // holds the Moderator role
@@ -145,12 +162,21 @@ beforeEach(() => {
   world.passwordUpdates = []
   world.users = {
     [OWNER]: { id: OWNER, email: 'owner@example.org' },
+    [OWNER2]: { id: OWNER2, email: 'owner2@example.org' },
+    [OWNER3]: { id: OWNER3, email: 'owner3@example.org' },
     [ADMIN]: { id: ADMIN, email: 'admin@example.org' },
     [STUDENT]: { id: STUDENT, email: 'student@example.org' },
     [MANAGER]: { id: MANAGER, email: 'manager@example.org' }
   }
-  world.factors = { [OWNER]: [{ id: 'f-owner', status: 'verified' }], [ADMIN]: [{ id: 'f-admin', status: 'verified' }], [STUDENT]: [{ id: 'f-old', status: 'verified' }], [MANAGER]: [{ id: 'f-man', status: 'verified' }] }
-  world.passkeys = { [ADMIN]: [{ id: 'pk-1' }] }
+  world.factors = {
+    [OWNER]: [{ id: 'f-owner', status: 'verified' }],
+    [OWNER2]: [{ id: 'f-owner2', status: 'verified' }],
+    [OWNER3]: [{ id: 'f-owner3', status: 'verified' }],
+    [ADMIN]: [{ id: 'f-admin', status: 'verified' }],
+    [STUDENT]: [{ id: 'f-old', status: 'verified' }],
+    [MANAGER]: [{ id: 'f-man', status: 'verified' }]
+  }
+  world.passkeys = { [ADMIN]: [{ id: 'pk-1' }], [OWNER2]: [{ id: 'pk-owner2' }] }
   world.db = {
     control_roles: [
       { user_id: OWNER, role: 'owner', revoked_at: null, granted_at: '2026-10-01T00:00:00Z' },
@@ -165,6 +191,7 @@ beforeEach(() => {
       { role: 'moderator', permission: 'users.view', allowed: true }
     ],
     control_member_permissions: [],
+    control_role_removals: [],
     control_step_up_uses: [],
     control_audit_events: [],
     site_settings: [{ id: 1, maintenance_enabled: false, maintenance_message: '', site_down: false, signup_enabled: true, signin_enabled: true }],
@@ -264,7 +291,7 @@ describe('step-up: every settings save needs a fresh, single-use authenticator v
   })
 })
 
-describe('roles: assign, remove, and owner protection', () => {
+describe('roles: assign, governed removal, and hardcore owner protection', () => {
   it('gives a role to an existing account by email and clears their old authenticator so they enroll fresh', async () => {
     world.claims = claims(OWNER)
     const res = await call('POST', { action: 'role.assign', email: 'Student@Example.org', role: 'viewer' })
@@ -274,29 +301,126 @@ describe('roles: assign, remove, and owner protection', () => {
     expect(world.factors[STUDENT]).toEqual([])
   })
 
-  it('removing a role revokes it, drops personal permissions, deletes MFA factors and passkeys, and ends sessions', async () => {
+  it('single active owner removing a non-owner starts a 7-day IST countdown, and auto-revokes once the 7th IST day arrives', async () => {
     world.db.control_member_permissions = [{ user_id: ADMIN, permission: 'audit.view', allowed: true }]
     world.claims = claims(OWNER)
     const res = await call('POST', { action: 'role.remove', userId: ADMIN })
     expect(res.statusCode).toBe(200)
+    expect(res.body).toMatchObject({ status: 'countdown', daysRemaining: 7, approvedCount: 1, requiredApprovers: 1 })
+    // Still active until the 7-day IST countdown finishes.
+    expect(world.db.control_roles?.find(r => r.user_id === ADMIN)?.revoked_at).toBeNull()
+
+    // Simulate 7 IST days passing.
+    world.db.control_role_removals![0]!.effective_on_ist = '2020-01-01'
+    world.claims = claims(ADMIN)
+    expect((await call('GET', undefined, 'session')).body).toMatchObject({ error: 'access_not_granted' })
     expect(world.db.control_roles?.find(r => r.user_id === ADMIN)?.revoked_at).toBeTruthy()
     expect(world.db.control_member_permissions).toEqual([])
     expect(world.factors[ADMIN]).toEqual([])
     expect(world.passkeys[ADMIN]).toEqual([])
     expect(world.sessionsRevoked).toEqual([ADMIN])
-    // Their still-unexpired token is now refused by every console route.
-    world.claims = claims(ADMIN)
-    expect((await call('GET', undefined, 'session')).body).toMatchObject({ error: 'access_not_granted' })
   })
 
-  it('re-granting a removed person requires a brand-new authenticator enrollment', async () => {
+  it('re-granting a removed person after countdown completion requires a brand-new authenticator enrollment', async () => {
     world.claims = claims(OWNER)
     await call('POST', { action: 'role.remove', userId: MANAGER })
+    world.db.control_role_removals![0]!.effective_on_ist = '2020-01-01'
+    await call('GET') // reconciles and completes revocation
     world.factors[MANAGER] = [{ id: 'f-new-attempt', status: 'verified' }]
     world.claims = claims(OWNER, { mfaAgo: 5 })
     const res = await call('POST', { action: 'role.assign', email: 'manager@example.org', role: 'moderator' })
     expect(res.body).toMatchObject({ mfaSetupRequired: true })
     expect(world.factors[MANAGER]).toEqual([])
+  })
+
+  it('with 3 active owners, non-owner removal requires ALL 3 owners to approve before the 7-day countdown starts', async () => {
+    world.db.control_roles!.push(
+      { user_id: OWNER2, role: 'owner', revoked_at: null, granted_at: '2026-10-02T00:00:00Z' },
+      { user_id: OWNER3, role: 'owner', revoked_at: null, granted_at: '2026-10-03T00:00:00Z' }
+    )
+    world.claims = claims(OWNER, { mfaAgo: 5 })
+    const start = await call('POST', { action: 'role.remove', userId: ADMIN })
+    expect(start.statusCode).toBe(200)
+    expect(start.body).toMatchObject({ status: 'pending_approval', approvedCount: 1, requiredApprovers: 3 })
+    const removalId = (start.body as { removalId: string }).removalId
+
+    // Duplicate approval by OWNER is refused.
+    world.claims = claims(OWNER, { mfaAgo: 2 })
+    expect((await call('POST', { action: 'role.removal.approve', removalId })).body).toMatchObject({ error: 'already_approved' })
+
+    // Non-owner cannot approve.
+    world.claims = claims(MANAGER, { mfaAgo: 2 })
+    expect((await call('POST', { action: 'role.removal.approve', removalId })).body).toMatchObject({ error: 'owner_only' })
+
+    // Second owner approves -> 2/3, still pending_approval.
+    world.claims = claims(OWNER2, { mfaAgo: 5 })
+    const second = await call('POST', { action: 'role.removal.approve', removalId })
+    expect(second.statusCode).toBe(200)
+    expect(second.body).toMatchObject({ status: 'pending_approval', approvedCount: 2, requiredApprovers: 3 })
+
+    // Third owner approves -> 3/3 unanimous -> 7-day IST countdown starts!
+    world.claims = claims(OWNER3, { mfaAgo: 5 })
+    const third = await call('POST', { action: 'role.removal.approve', removalId })
+    expect(third.statusCode).toBe(200)
+    expect(third.body).toMatchObject({ status: 'countdown', approvedCount: 3, requiredApprovers: 3, daysRemaining: 7 })
+  })
+
+  it('one owner CANNOT change another owner’s role', async () => {
+    world.db.control_roles!.push({ user_id: OWNER2, role: 'owner', revoked_at: null, granted_at: '2026-10-02T00:00:00Z' })
+    world.claims = claims(OWNER, { mfaAgo: 5 })
+    const res = await call('POST', { action: 'role.assign', email: 'owner2@example.org', role: 'administrator' })
+    expect(res.statusCode).toBe(403)
+    expect(res.body).toMatchObject({ error: 'owner_protected' })
+    expect(world.db.control_roles?.find(r => r.user_id === OWNER2)?.role).toBe('owner')
+  })
+
+  it('owner removal requires target owner self-consent, locks them read-only for 30d IST, and supports unstoppable 2d self-restore', async () => {
+    world.db.control_roles!.push({ user_id: OWNER2, role: 'owner', revoked_at: null, granted_at: '2026-10-02T00:00:00Z' })
+
+    // 1. OWNER requests removal of OWNER2 -> pending_approval (no lockout yet).
+    world.claims = claims(OWNER, { mfaAgo: 5 })
+    const reqRes = await call('POST', { action: 'role.remove', userId: OWNER2 })
+    expect(reqRes.statusCode).toBe(200)
+    expect(reqRes.body).toMatchObject({ status: 'pending_approval', targetRole: 'owner', requiresTargetConsent: true })
+    const removalId = (reqRes.body as { removalId: string }).removalId
+
+    // 2. OWNER cannot approve on OWNER2's behalf.
+    world.claims = claims(OWNER, { mfaAgo: 2 })
+    expect((await call('POST', { action: 'role.removal.approve', removalId })).body).toMatchObject({ error: 'target_owner_only' })
+
+    // 3. OWNER2 confirms their own removal -> 30-day IST countdown + immediate read-only lockout.
+    world.claims = claims(OWNER2, { mfaAgo: 5 })
+    const approveRes = await call('POST', { action: 'role.removal.approve', removalId })
+    expect(approveRes.statusCode).toBe(200)
+    expect(approveRes.body).toMatchObject({ status: 'countdown', daysRemaining: 30, ownerReadOnly: true })
+
+    // 4. OWNER2 can still log in and view everything, but EVERY write action is blocked with 403 owner_removal_readonly.
+    world.claims = claims(OWNER2, { mfaAgo: 2 })
+    expect((await call('GET', undefined, 'session')).body).toMatchObject({ status: 'granted', ownerReadOnly: true, ownerRemovalStatus: 'countdown' })
+    expect((await call('GET')).statusCode).toBe(200)
+    expect((await call('POST', { action: 'site.update', maintenanceEnabled: true, maintenanceMessage: '', siteDown: false })).body).toMatchObject({ error: 'owner_removal_readonly' })
+    expect((await call('POST', { action: 'role.assign', email: 'student@example.org', role: 'viewer' })).body).toMatchObject({ error: 'owner_removal_readonly' })
+    expect((await call('POST', { action: 'password.change', password: 'new-long-password-123' })).body).toMatchObject({ error: 'owner_removal_readonly' })
+
+    // 5. OWNER2 submits the 2-day restore review (the ONLY write allowed during read-only lock).
+    world.claims = claims(OWNER2, { mfaAgo: 1 })
+    const restoreRes = await call('POST', { action: 'role.removal.restore_review', removalId })
+    expect(restoreRes.statusCode).toBe(200)
+    expect(restoreRes.body).toMatchObject({ status: 'review_restore', restoreDaysRemaining: 2 })
+
+    // 6. NOBODY (not even OWNER) can cancel, pause, or step down the 2-day restore review!
+    world.claims = claims(OWNER, { mfaAgo: 1 })
+    const cancelRes = await call('POST', { action: 'role.removal.cancel', removalId })
+    expect(cancelRes.statusCode).toBe(409)
+    expect(cancelRes.body).toMatchObject({ error: 'owner_restore_unstoppable' })
+
+    // 7. Once 2 IST days elapse, OWNER2 is automatically restored to full Owner access!
+    world.db.control_role_removals![0]!.restore_on_ist = '2020-01-01'
+    world.claims = claims(OWNER2, { mfaAgo: 1, session: 'restored-sess' })
+    const sessionAfter = await call('GET', undefined, 'session')
+    expect(sessionAfter.statusCode).toBe(200)
+    expect(sessionAfter.body).toMatchObject({ status: 'granted', role: 'owner', ownerReadOnly: false, ownerRemovalStatus: null })
+    expect(world.db.control_role_removals![0]!.status).toBe('restored')
   })
 
   it('a non-owner with roles.manage cannot touch Owner or Admin roles, or grant them', async () => {
