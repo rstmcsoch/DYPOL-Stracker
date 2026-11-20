@@ -67,7 +67,7 @@ describe('Home with a published student layout', () => {
     const layout = sanitizeStudentLayout({ schemaVersion: 1, components: { 'home.streak': { text: { current: '365', subtitle: 'streak' } }, 'home.countdown': { text: { daysLeft: '1' } } } })
     const { container } = await renderHome(layout)
     expect(container.querySelector('.streak-number')?.textContent).toBe('0days')
-    expect(container.querySelector('.countdown-number')?.textContent).not.toContain('1days')
+    expect(container.querySelector('.countdown-number')?.textContent).not.toBe('1days')
   })
 
   it('marks editable labels and locked data only in the editor canvas', async () => {

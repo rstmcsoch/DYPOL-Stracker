@@ -720,6 +720,12 @@ html[data-app-font='active'] .app-shell :is(.study-time-actions, .section-headin
     align-items: flex-start;
     gap: 10px;
     margin-top: 12px;
+    padding-left: 0;
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-copy {
+    border-left: 0;
+    padding-left: 0;
   }
 
   html[data-app-font='active'] .app-shell .countdown-unset .button-marker {
