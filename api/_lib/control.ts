@@ -11,9 +11,11 @@ import {
   DENIED_AUDIT_LIMIT,
   consoleAssurance,
   isRecentMfa,
+  isSessionExpired,
   isUuid,
   roleGrantsConsole,
   sanitizeAuditSummary,
+  sessionAuthenticatedAt,
   cleanText,
   isFreshStepUp,
   type AuditSummaryValue,
@@ -35,6 +37,8 @@ export interface ControlContext {
   assurance: 'totp' | 'passkey' | null
   /** Unix seconds of the newest accepted second-step proof (TOTP; or passkey for the owner), or null. */
   mfaAt: number | null
+  /** Unix seconds when the authority originally authenticated this session (earliest AMR timestamp), or null. */
+  sessionStartedAt: number | null
   /** Supabase Auth session identifier from the JWT (an opaque id, not a credential), or null. */
   sessionId: string | null
   requestId: string
@@ -178,6 +182,7 @@ export async function loadPermissions(admin: SupabaseClient, userId: string, rol
 /**
  * Establishes the trusted control context. Every failure mode is explicit:
  *   401 unauthenticated          no bearer token, or the Auth server rejects it
+ *   401 session_expired          the 6-hour absolute Control Centre session limit elapsed
  *   403 access_not_granted       a valid account without an active owner role
  *   403 mfa_required             an owner whose session is not aal2 (when required)
  *   429 rate_limited             per-account or per-IP limit exceeded
@@ -226,6 +231,13 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
 
   await takeControlRate(admin, `api:${userId}`, CONTROL_API_LIMIT)
 
+  const sessionStartedAt = sessionAuthenticatedAt(claims.amr)
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  if (isSessionExpired(sessionStartedAt, nowSeconds)) {
+    await recordDeniedAccess(admin, userId, requestId, 'session_max_age_exceeded', role)
+    throw new ApiError(401, 'session_expired', 'Your 6-hour Control Centre session has ended. Sign in again to continue.')
+  }
+
   const aal = typeof claims.aal === 'string' ? claims.aal : 'aal1'
   const assurance = consoleAssurance(role, aal, claims.amr)
   if (assurance.passkeyRefused) {
@@ -255,6 +267,7 @@ export async function authorizeControl(req: ApiRequest, options: AuthorizeOption
     aal,
     assurance: assurance.method,
     mfaAt: assurance.verifiedAt,
+    sessionStartedAt,
     sessionId: typeof claims.session_id === 'string' && claims.session_id.length <= 80 ? claims.session_id : null,
     requestId,
     admin

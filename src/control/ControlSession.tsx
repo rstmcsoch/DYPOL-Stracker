@@ -4,6 +4,17 @@ import { supabase } from '../lib/supabase'
 import { controlFetch, ControlApiError, type SessionResponse } from './api'
 import { IDLE_TIMEOUT_MS, idleState } from './policy'
 
+/** Hard maximum lifetime for any Control Centre session (6 hours), regardless of activity. */
+export const CONTROL_SESSION_MAX_AGE_MS = 6 * 60 * 60 * 1000
+
+const SESSION_EXPIRED_NOTICE = 'Your 6-hour Control Centre session has ended. Sign in again to continue.'
+
+type SessionPayload = SessionResponse & {
+  sessionStartedAt?: number | null
+  sessionExpiresAt?: number | null
+  maxSessionSeconds?: number
+}
+
 /**
  * Console session state machine. The server decides every transition: the browser only
  * renders what /api/control/session reports. Nothing here is a privilege.
@@ -35,6 +46,7 @@ const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'touchstart', 'wheel'] as con
 export function ControlSessionProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<ControlPhase>({ kind: 'loading' })
   const [idle, setIdle] = useState<'active' | 'warning' | 'expired'>('active')
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null)
   const activity = useRef(Date.now())
   const mounted = useRef(true)
 
@@ -46,21 +58,35 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
     const { data } = await supabase.auth.getSession()
     if (!mounted.current) return
     if (!data.session) {
+      setSessionExpiresAt(null)
       setPhase(current => (current.kind === 'signed_out' && !current.notice ? current : { kind: 'signed_out' }))
       return
     }
     try {
-      const session = await controlFetch<SessionResponse>('session')
+      const session = await controlFetch<SessionPayload>('session')
       if (!mounted.current) return
+      const maxMs = typeof session.maxSessionSeconds === 'number' && Number.isFinite(session.maxSessionSeconds) && session.maxSessionSeconds > 0
+        ? session.maxSessionSeconds * 1000
+        : CONTROL_SESSION_MAX_AGE_MS
+      const serverExpiresAt = typeof session.sessionExpiresAt === 'number' && Number.isFinite(session.sessionExpiresAt)
+        ? session.sessionExpiresAt * 1000
+        : null
+      setSessionExpiresAt(current => serverExpiresAt ?? current ?? (Date.now() + maxMs))
       setPhase(session.status === 'granted' ? { kind: 'granted', session } : { kind: 'mfa', passkey: session.role === 'owner' && session.passkey === true, owner: session.role === 'owner' })
     } catch (error) {
       if (!mounted.current) return
       if (error instanceof ControlApiError) {
         if (error.status === 401) {
-          setPhase({ kind: 'signed_out', notice: 'Your session has expired. Sign in again to continue.' })
+          setSessionExpiresAt(null)
+          void supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+          const notice = error.code === 'session_expired'
+            ? (error.message || SESSION_EXPIRED_NOTICE)
+            : 'Your session has expired. Sign in again to continue.'
+          setPhase({ kind: 'signed_out', notice })
           return
         }
         if (error.code === 'access_not_granted') {
+          setSessionExpiresAt(null)
           setPhase({ kind: 'denied' })
           return
         }
@@ -79,6 +105,7 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOut = useCallback(async (scope: 'local' | 'global' = 'local') => {
+    setSessionExpiresAt(null)
     if (supabase) await supabase.auth.signOut({ scope })
     if (mounted.current) setPhase({ kind: 'signed_out' })
   }, [])
@@ -91,10 +118,14 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
     }
     const { data: subscription } = supabase.auth.onAuthStateChange(event => {
       if (event === 'SIGNED_OUT') {
-        setPhase({ kind: 'signed_out' })
+        setSessionExpiresAt(null)
+        setPhase(current => (current.kind === 'signed_out' && current.notice ? current : { kind: 'signed_out' }))
         return
       }
-      if (event === 'SIGNED_IN') activity.current = Date.now()
+      if (event === 'SIGNED_IN') {
+        activity.current = Date.now()
+        setSessionExpiresAt(null)
+      }
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'MFA_CHALLENGE_VERIFIED' || event === 'USER_UPDATED') {
         // Deferred so the Auth client is never re-entered from inside its own event callback.
         setTimeout(() => { if (mounted.current) void refresh() }, 0)
@@ -107,26 +138,55 @@ export function ControlSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [refresh])
 
-  // Idle policy: only while a console session is open (granted or mid-MFA).
+  // Idle policy (20m) and hard absolute session cap (6h): only while a console session is open.
+  // User activity resets the idle timer, never the 6-hour absolute limit.
   const active = phase.kind === 'granted' || phase.kind === 'mfa'
   useEffect(() => {
     if (!active) return
+    let signingOut = false
+
+    const enforceMaxSession = () => {
+      if (signingOut || sessionExpiresAt === null) return false
+      if (Date.now() < sessionExpiresAt) return false
+      signingOut = true
+      void signOut('local').then(() => {
+        if (mounted.current) setPhase({ kind: 'signed_out', notice: SESSION_EXPIRED_NOTICE })
+      })
+      return true
+    }
+
+    if (enforceMaxSession()) return
+
     const onActivity = () => { activity.current = Date.now() }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') enforceMaxSession()
+    }
     ACTIVITY_EVENTS.forEach(event => window.addEventListener(event, onActivity, { passive: true }))
+    document.addEventListener('visibilitychange', onVisibility)
+
+    const expiryTimer = sessionExpiresAt !== null
+      ? window.setTimeout(() => { enforceMaxSession() }, Math.max(0, sessionExpiresAt - Date.now()))
+      : null
+
     const timer = window.setInterval(() => {
+      if (enforceMaxSession()) return
       const state = idleState(activity.current, Date.now())
       setIdle(state)
-      if (state === 'expired') {
+      if (state === 'expired' && !signingOut) {
+        signingOut = true
         void signOut('local').then(() => {
           if (mounted.current) setPhase({ kind: 'signed_out', notice: 'You were signed out after 20 minutes without activity.' })
         })
       }
     }, 5_000)
+
     return () => {
       ACTIVITY_EVENTS.forEach(event => window.removeEventListener(event, onActivity))
+      document.removeEventListener('visibilitychange', onVisibility)
+      if (expiryTimer !== null) window.clearTimeout(expiryTimer)
       window.clearInterval(timer)
     }
-  }, [active, signOut])
+  }, [active, sessionExpiresAt, signOut])
 
   const value = useMemo<ControlSessionValue>(() => ({
     phase,

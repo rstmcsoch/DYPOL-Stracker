@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { consoleAssurance, latestPasskeyTimestamp } from './control-policy'
+import {
+  CONTROL_SESSION_MAX_AGE_SECONDS,
+  consoleAssurance,
+  isSessionExpired,
+  latestPasskeyTimestamp,
+  sessionAuthenticatedAt
+} from './control-policy'
 
 const t = 1_800_000_000
 describe('consoleAssurance', () => {
@@ -28,5 +34,29 @@ describe('consoleAssurance', () => {
   it('ignores malformed amr entries', () => {
     expect(latestPasskeyTimestamp([{ method: 'passkey', timestamp: 'x' }, null, 5])).toBeNull()
     expect(consoleAssurance('owner', 'aal2', 'nope').granted).toBe(false)
+  })
+})
+
+describe('Control Centre 6-hour absolute session limit', () => {
+  it('caps authority sessions at 6 hours (21,600 seconds)', () => {
+    expect(CONTROL_SESSION_MAX_AGE_SECONDS).toBe(21_600)
+  })
+
+  it('picks the earliest valid authentication timestamp from amr', () => {
+    expect(sessionAuthenticatedAt([
+      { method: 'totp', timestamp: t - 60 },
+      { method: 'password', timestamp: t - 10_000 },
+      { method: 'passkey', timestamp: t - 500 }
+    ])).toBe(t - 10_000)
+    expect(sessionAuthenticatedAt([{ method: 'oauth', timestamp: 'bad' }, null, { method: 'password', timestamp: 0 }])).toBeNull()
+    expect(sessionAuthenticatedAt('not-an-array')).toBeNull()
+  })
+
+  it('remains active before 6 hours and expires at exactly 6 hours and beyond', () => {
+    const startedAt = t - CONTROL_SESSION_MAX_AGE_SECONDS
+    expect(isSessionExpired(startedAt, t - 1)).toBe(false)
+    expect(isSessionExpired(startedAt, t)).toBe(true)
+    expect(isSessionExpired(startedAt, t + 3_600)).toBe(true)
+    expect(isSessionExpired(null, t)).toBe(false)
   })
 })
