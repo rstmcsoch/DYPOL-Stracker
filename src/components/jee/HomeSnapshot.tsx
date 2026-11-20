@@ -4,7 +4,7 @@ import { ArrowUpRight, Bell, ListChecks } from 'lucide-react'
 import { NotebookCard } from '../ui'
 import { Pct, minutesLabel } from './shared'
 import { useData } from '../../contexts/DataContext'
-import { indiaToday } from '../../lib/date'
+import { indiaDate, indiaToday } from '../../lib/date'
 import { aggregatePractice, pyqCompletion, pyqProgressCounts } from '../../lib/jee/progress'
 import { backlogDueCounts, computeReminders } from '../../lib/jee/reminders'
 import { weekRange } from '../../lib/jee/study-time'
@@ -30,7 +30,7 @@ export function HomeSnapshot({ layoutAttrs, children }: { layoutAttrs?: Record<s
   const week = useMemo(() => weekRange(today), [today])
   const weekMinutes = useMemo(() => data.sessions
     .filter(session => {
-      const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(session.started_at))
+      const day = indiaDate(session.started_at)
       return day >= week.start && day <= today
     })
     .reduce((sum, session) => sum + session.duration_minutes, 0), [data.sessions, week.start, today])
@@ -38,7 +38,7 @@ export function HomeSnapshot({ layoutAttrs, children }: { layoutAttrs?: Record<s
   const pyqCounts = useMemo(() => pyqProgressCounts(data), [data])
   const pyqMain = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Main', data.settings), [data.pyqRecords, data.settings])
   const backlog = useMemo(() => backlogDueCounts(data.backlogItems, today), [data.backlogItems, today])
-  const reminders = computeReminders(data, today)
+  const reminders = useMemo(() => computeReminders(data, today), [data, today])
 
   return <section className="jee-snapshot jee-snapshot-line" aria-label="This week at a glance" {...layoutAttrs}>
     <NotebookCard className="jee-snap-card jee-snap-week">
