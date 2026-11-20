@@ -54,19 +54,27 @@
    every editing surface across the Control Centre is visibly greyed out and non-interactive,
    except the dedicated restore-review zone in Settings → Roles and step-up verification dialogs. */
 html[data-cc-owner-readonly="true"] .cc-main :is(form, .cc-form, .cc-domain-form) :is(input, select, textarea, button, .cc-switch),
-html[data-cc-owner-readonly="true"] .cc-main .cc-panel:not(.cc-restore-zone) :is(button.cc-btn--primary, button.cc-btn--danger, .cc-switch) {
+html[data-cc-owner-readonly="true"] .cc-main .cc-panel :is(button.cc-btn--primary, button.cc-btn--danger, .cc-switch) {
   opacity: 0.45;
   filter: grayscale(0.45);
   pointer-events: none;
   cursor: not-allowed;
 }
 
+/* Explicitly keep the Pending & scheduled removals restore zone and any step-up verification dialog
+   fully interactive and full-contrast even while global read-only mode is active. */
 html[data-cc-owner-readonly="true"] .cc-main .cc-restore-zone,
-html[data-cc-owner-readonly="true"] .cc-main .cc-restore-zone :is(button, a) {
-  opacity: 1;
-  filter: none;
-  pointer-events: auto;
-  cursor: pointer;
+html[data-cc-owner-readonly="true"] .cc-main .cc-restore-zone .cc-panel :is(button, a),
+html[data-cc-owner-readonly="true"] .cc-main .cc-restore-zone :is(button, a),
+html[data-cc-owner-readonly="true"] [role="dialog"] :is(input, select, textarea, button, a) {
+  opacity: 1 !important;
+  filter: none !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+html[data-cc-owner-readonly="true"] [role="dialog"] :is(input, select, textarea) {
+  cursor: text !important;
 }
 
 .cc-removals-list {
