@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ApiRequest, ApiResponse } from '../http.js'
@@ -5,6 +6,11 @@ import { ApiError, readJson, sendJson } from '../http.js'
 import { controlHandler, recordAuditEvent, recordBoundedDenial, requireStepUp, type ControlContext } from '../control.js'
 import { deleteAllPasskeys } from '../control-passkeys.js'
 import { cleanText, isUuid } from '../control-policy.js'
+import {
+  deleteAllFactors,
+  reconcileRoleRemovals,
+  type RoleRemovalRow
+} from '../control-role-removals.js'
 import {
   CONTROL_ROLES,
   EDITABLE_ROLES,
@@ -14,21 +20,58 @@ import {
   type ControlRole,
   type Permission
 } from '../../../src/lib/control-permissions.js'
+import {
+  MEMBER_REMOVAL_COUNTDOWN_DAYS,
+  OWNER_REMOVAL_COUNTDOWN_DAYS,
+  OWNER_RESTORE_REVIEW_DAYS,
+  addIstDays,
+  hasAllOwnerApprovals,
+  istDaysRemaining,
+  type RoleRemovalView
+} from '../../../src/lib/control-role-governance.js'
 import { MIN_PASSWORD_LENGTH } from '../../../src/lib/auth-rules.js'
 import { BUILT_IN_ALLOWED_DOMAINS, isBuiltInAllowedDomain, normalizeDomainInput } from '../../../src/lib/email-domains.js'
 
+export { deleteAllFactors } from '../control-role-removals.js'
+
 /**
- * Control Center → Settings.
+ * Control Centre → Settings.
  *   GET  /api/control/settings      what the signed-in role holder may see (site status, access
- *                                   switches, members, permission matrix, settings activity, passkeys)
+ *                                   switches, email domains, members, pending/scheduled removals,
+ *                                   permission matrix, settings activity, passkeys)
  *   POST /api/control/settings      { action, ... } one change. EVERY save requires:
  *                                   session + active role + aal2 + the action's permission + a
- *                                   fresh single-use authenticator verification (requireStepUp).
+ *                                   fresh single-use confirmation (requireStepUp).
+ *
+ * Owner & role-removal governance:
+ *   - Owners cannot change another owner's role (403 owner_protected).
+ *   - Removing another owner requires explicit self-consent from that targeted owner, which starts
+ *     a 30-day IST countdown with full Control Centre read-only lockout. During those 30 days, the
+ *     locked owner may submit an unstoppable 2-day restore review (`role.removal.restore_review`).
+ *   - Removing any non-owner role requires unanimous approval from every active unrestricted owner,
+ *     then starts a 7-day IST countdown before automatic revocation.
+ *
  * Never returns or logs passwords, codes, tokens or factor secrets.
  */
 
 const SITE_COLUMNS = 'maintenance_enabled, maintenance_message, site_down, signup_enabled, signin_enabled, updated_at'
-const SETTINGS_ACTIVITY = ['settings.site', 'settings.access', 'role.assign', 'role.remove', 'permissions.role', 'permissions.member', 'security.password', 'security.passkey_add', 'security.passkey_remove', 'settings.email_domain']
+const SETTINGS_ACTIVITY = [
+  'settings.site',
+  'settings.access',
+  'role.assign',
+  'role.remove',
+  'role.removal.request',
+  'role.removal.approve',
+  'role.removal.restore_review',
+  'role.removal.restored',
+  'role.removal.cancel',
+  'permissions.role',
+  'permissions.member',
+  'security.password',
+  'security.passkey_add',
+  'security.passkey_remove',
+  'settings.email_domain'
+]
 const DEFAULT_DOWN_MESSAGE = 'Stracker is down for maintenance. Please check back soon.'
 
 const permissionMap = z.partialRecord(z.enum(PERMISSIONS), z.boolean())
@@ -44,6 +87,9 @@ const actionBody = z.discriminatedUnion('action', [
   z.object({ action: z.literal('access.update'), signupEnabled: z.boolean(), signinEnabled: z.boolean() }).strict(),
   z.object({ action: z.literal('role.assign'), email: z.string().trim().min(3).max(320), role: z.enum(CONTROL_ROLES) }).strict(),
   z.object({ action: z.literal('role.remove'), userId: z.uuid() }).strict(),
+  z.object({ action: z.literal('role.removal.approve'), removalId: z.uuid() }).strict(),
+  z.object({ action: z.literal('role.removal.restore_review'), removalId: z.uuid() }).strict(),
+  z.object({ action: z.literal('role.removal.cancel'), removalId: z.uuid() }).strict(),
   z.object({ action: z.literal('permissions.role'), role: z.enum(EDITABLE_ROLES), permissions: permissionMap }).strict(),
   z.object({ action: z.literal('permissions.member'), userId: z.uuid(), overrides: overrideMap }).strict(),
   z.object({ action: z.literal('password.change'), password: z.string().min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters.`).max(72, 'Use at most 72 characters.') }).strict(),
@@ -69,23 +115,26 @@ function ownerOnly(context: ControlContext, action: string): Promise<void> {
   return context.role === 'owner' ? Promise.resolve() : refuse(context, action, 'owner_only', 403, 'Only the owner can change this.')
 }
 
-/** Removes every MFA factor of an account (so a new or removed role holder must enroll again). */
-export async function deleteAllFactors(admin: SupabaseClient, userId: string): Promise<{ removed: number; ok: boolean }> {
-  const { data, error } = await admin.auth.admin.mfa.listFactors({ userId })
-  if (error) return { removed: 0, ok: false }
-  let removed = 0
-  let ok = true
-  for (const factor of data?.factors ?? []) {
-    const { error: deleteError } = await admin.auth.admin.mfa.deleteFactor({ id: factor.id, userId })
-    if (deleteError) ok = false
-    else removed += 1
-  }
-  return { removed, ok }
-}
-
 async function emailOf(admin: SupabaseClient, userId: string): Promise<string> {
   const { data } = await admin.auth.admin.getUserById(userId)
   return data?.user?.email ?? ''
+}
+
+/**
+ * Active owners who are NOT currently locked in a 30-day removal countdown or 2-day restore review.
+ * Only unrestricted active owners can approve non-owner removals or count toward the last-owner floor.
+ */
+async function activeUnrestrictedOwnerIds(admin: SupabaseClient, openRemovals: readonly RoleRemovalRow[]): Promise<string[]> {
+  const { data, error } = await admin.from('control_roles').select('user_id, role, revoked_at')
+  if (error) throw new ApiError(503, 'control_unavailable', 'Owners could not be verified right now.')
+  const restricted = new Set(
+    openRemovals
+      .filter(row => row.target_role === 'owner' && (row.status === 'countdown' || row.status === 'review_restore'))
+      .map(row => row.target_user_id)
+  )
+  return ((data ?? []) as Array<{ user_id: string; role: string; revoked_at: string | null }>)
+    .filter(row => row.role === 'owner' && !row.revoked_at && !restricted.has(row.user_id))
+    .map(row => row.user_id)
 }
 
 async function readSite(admin: SupabaseClient) {
@@ -125,6 +174,55 @@ async function readMembers(admin: SupabaseClient) {
       overrides: Object.fromEntries(((overrides ?? []) as Array<{ user_id: string; permission: string; allowed: boolean }>)
         .filter(item => item.user_id === row.user_id)
         .map(item => [item.permission, item.allowed ? 'allow' : 'deny']))
+    }
+  }))
+}
+
+async function readRemovals(
+  admin: SupabaseClient,
+  context: ControlContext,
+  openRows: readonly RoleRemovalRow[]
+): Promise<RoleRemovalView[]> {
+  if (openRows.length === 0) return []
+  const activeOwnerIds = await activeUnrestrictedOwnerIds(admin, openRows)
+  const now = new Date()
+  return Promise.all(openRows.map(async row => {
+    const isOwnerTarget = row.target_role === 'owner'
+    const approvedBy = Array.isArray(row.approved_by) ? row.approved_by : []
+    const requiredApprovers = isOwnerTarget ? 1 : Math.max(1, activeOwnerIds.length)
+    const approvedCount = isOwnerTarget
+      ? (approvedBy.includes(row.target_user_id) ? 1 : 0)
+      : activeOwnerIds.filter(ownerId => approvedBy.includes(ownerId)).length
+    const canApprove = row.status === 'pending_approval' && (
+      isOwnerTarget
+        ? context.userId === row.target_user_id && !context.ownerReadOnly
+        : context.role === 'owner' && !context.ownerReadOnly && !approvedBy.includes(context.userId)
+    )
+    const canRequestRestore = isOwnerTarget && row.status === 'countdown' && context.userId === row.target_user_id
+    const [targetEmail, initiatedByEmail] = await Promise.all([
+      emailOf(admin, row.target_user_id),
+      row.initiated_by ? emailOf(admin, row.initiated_by) : Promise.resolve('')
+    ])
+    return {
+      id: row.id,
+      targetUserId: row.target_user_id,
+      targetEmail,
+      targetRole: row.target_role,
+      status: row.status,
+      initiatedBy: row.initiated_by,
+      initiatedByEmail,
+      initiatedAt: row.initiated_at,
+      approvedBy,
+      requiredApprovers,
+      approvedCount,
+      canApprove,
+      canRequestRestore,
+      countdownStartedAt: row.countdown_started_at,
+      effectiveOnIst: row.effective_on_ist,
+      daysRemaining: row.status === 'countdown' && row.effective_on_ist ? istDaysRemaining(row.effective_on_ist, now) : null,
+      restoreRequestedAt: row.restore_requested_at,
+      restoreOnIst: row.restore_on_ist,
+      restoreDaysRemaining: row.status === 'review_restore' && row.restore_on_ist ? istDaysRemaining(row.restore_on_ist, now) : null
     }
   }))
 }
@@ -186,18 +284,29 @@ async function readPasskeys(admin: SupabaseClient, userId: string): Promise<{ av
 async function handleGet(context: ControlContext, res: ApiResponse): Promise<void> {
   const can = (permission: Permission) => context.permissions.has(permission)
   const admin = context.admin
-  const [site, members, matrix, activity, passkeys, emailDomains] = await Promise.all([
+  // Reconcile due countdowns & 2-day restores before reading members so UI always reflects reality.
+  const openRemovals = can('roles.manage') ? await reconcileRoleRemovals(admin, context.requestId) : []
+  const [site, members, removals, matrix, activity, passkeys, emailDomains] = await Promise.all([
     readSite(admin),
     can('roles.manage') ? readMembers(admin) : Promise.resolve(null),
+    can('roles.manage') ? readRemovals(admin, context, openRemovals) : Promise.resolve(null),
     can('roles.manage') ? readMatrix(admin) : Promise.resolve(null),
     can('audit.view') ? readActivity(admin) : Promise.resolve(null),
     context.role === 'owner' ? readPasskeys(admin, context.userId) : Promise.resolve(null),
     can('settings.domains') ? readEmailDomains(admin) : Promise.resolve(null)
   ])
   sendJson(res, 200, {
-    me: { userId: context.userId, role: context.role, permissions: [...context.permissions], assignableRoles: can('roles.manage') ? assignableRoles(context.role) : [] },
+    me: {
+      userId: context.userId,
+      role: context.role,
+      permissions: [...context.permissions],
+      assignableRoles: can('roles.manage') ? assignableRoles(context.role) : [],
+      ownerReadOnly: context.ownerReadOnly,
+      ownerRemovalStatus: context.ownerRemovalStatus
+    },
     site,
     members,
+    removals,
     matrix,
     activity,
     passkeys,
@@ -214,6 +323,18 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
   if (!parsed.success) throw new ApiError(400, 'invalid_request', parsed.error.issues[0]?.message ?? 'Check the setting and try again.')
   const body: ActionBody = parsed.data
   const admin = context.admin
+
+  // Hardcore read-only gate: an owner in 30-day removal countdown or 2-day restore review
+  // can ONLY submit `role.removal.restore_review`. Every other Settings mutation is blocked.
+  if (context.ownerReadOnly && body.action !== 'role.removal.restore_review') {
+    await refuse(
+      context,
+      body.action,
+      'owner_removal_readonly',
+      403,
+      'Your Control Centre access is read-only during your owner removal countdown. You can only submit a restore review in Settings → Roles.'
+    )
+  }
 
   switch (body.action) {
     case 'site.update': {
@@ -256,12 +377,20 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
       const targetId = match[0]!.user_id
       if ((await emailOf(admin, targetId)).toLowerCase() !== email) throw new ApiError(404, 'user_not_found', 'No Stracker account uses that email. The person must sign up first.')
       if (targetId === context.userId) await refuse(context, 'role.assign', 'self_action_blocked', 409, 'You cannot change your own role.', targetId)
+      const openRemovals = await reconcileRoleRemovals(admin, context.requestId)
       const { data: existing, error: existingError } = await admin.from('control_roles').select('role, revoked_at').eq('user_id', targetId).maybeSingle()
       if (existingError) throw new ApiError(503, 'control_unavailable', 'Roles could not be checked. Nothing changed.')
       const wasActive = Boolean(existing && !existing.revoked_at)
       const previousRole = wasActive && isControlRole(existing?.role) ? existing!.role as ControlRole : null
+      // Hardcore owner protection: one owner can NEVER change another owner's role.
+      if (previousRole === 'owner') {
+        await refuse(context, 'role.assign', 'owner_protected', 403, 'An owner cannot change another owner’s role.', targetId)
+      }
       if (previousRole === body.role) throw new ApiError(409, 'no_change', 'This person already has that role.')
       if (previousRole && !assignableRoles(context.role).includes(previousRole)) await refuse(context, 'role.assign', 'owner_only', 403, 'Only the owner can change an Owner or Admin.', targetId)
+      if (openRemovals.some(row => row.target_user_id === targetId)) {
+        await refuse(context, 'role.assign', 'removal_in_progress', 409, 'This person has an active removal request or countdown. Resolve it before changing their role.', targetId)
+      }
       await requireStepUp(context, { action: 'role.assign', targetType: 'user', targetId })
       let mfaReset = 0
       if (!wasActive) {
@@ -290,24 +419,256 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
       requirePermission(context, 'roles.manage')
       const targetId = body.userId
       if (targetId === context.userId) await refuse(context, 'role.remove', 'self_action_blocked', 409, 'You cannot remove your own role.', targetId)
+      const openRemovals = await reconcileRoleRemovals(admin, context.requestId)
+      if (openRemovals.some(row => row.target_user_id === targetId)) {
+        throw new ApiError(409, 'removal_already_pending', 'A removal request or countdown is already active for this person.')
+      }
       const { data: existing, error: existingError } = await admin.from('control_roles').select('role, revoked_at').eq('user_id', targetId).maybeSingle()
       if (existingError) throw new ApiError(503, 'control_unavailable', 'Roles could not be checked. Nothing changed.')
       if (!existing || existing.revoked_at || !isControlRole(existing.role)) throw new ApiError(409, 'no_change', 'This person has no active role.')
-      if (!assignableRoles(context.role).includes(existing.role as ControlRole)) await refuse(context, 'role.remove', 'owner_only', 403, 'Only the owner can remove an Owner or Admin.', targetId)
-      await requireStepUp(context, { action: 'role.remove', targetType: 'user', targetId })
-      const now = new Date().toISOString()
-      const { error } = await admin.from('control_roles').update({ revoked_at: now, updated_at: now }).eq('user_id', targetId)
-      if (error) {
-        if (/last_owner/.test(error.message ?? '')) await refuse(context, 'role.remove', 'last_owner', 409, 'Stracker must always keep at least one owner.', targetId)
-        throw new ApiError(502, 'save_failed', 'The role could not be removed. Nothing changed.')
+      const targetRole = existing.role as ControlRole
+      if (!assignableRoles(context.role).includes(targetRole)) await refuse(context, 'role.remove', 'owner_only', 403, 'Only the owner can remove an Owner or Admin.', targetId)
+
+      const activeOwnerIds = await activeUnrestrictedOwnerIds(admin, openRemovals)
+      const now = new Date()
+      const nowIso = now.toISOString()
+      const removalId = randomUUID()
+
+      if (targetRole === 'owner') {
+        if (context.role !== 'owner') await refuse(context, 'role.remove', 'owner_only', 403, 'Only an owner can request removal of another owner.', targetId)
+        if (!activeOwnerIds.includes(targetId)) throw new ApiError(409, 'removal_already_pending', 'This owner already has a removal countdown active.')
+        if (activeOwnerIds.length < 2) {
+          await refuse(context, 'role.remove', 'last_owner', 409, 'Stracker must always keep at least one active owner.', targetId)
+        }
+        await requireStepUp(context, { action: 'role.removal.request', targetType: 'user', targetId })
+        const { error } = await admin.from('control_role_removals').insert({
+          id: removalId,
+          target_user_id: targetId,
+          target_role: 'owner',
+          status: 'pending_approval',
+          initiated_by: context.userId,
+          initiated_at: nowIso,
+          approved_by: [],
+          countdown_started_at: null,
+          effective_on_ist: null,
+          restore_requested_at: null,
+          restore_on_ist: null,
+          resolved_at: null,
+          updated_at: nowIso
+        })
+        if (error) {
+          if (error.code === '23505') throw new ApiError(409, 'removal_already_pending', 'A removal request is already active for this owner.')
+          throw new ApiError(502, 'save_failed', 'The owner removal request could not be created. Nothing changed.')
+        }
+        await audit(context, 'role.removal.request', 'user', targetId, { target_role: 'owner', status: 'pending_approval', removal_id: removalId }, undefined, 'critical')
+        sendJson(res, 200, { ok: true, removalId, userId: targetId, targetRole: 'owner', status: 'pending_approval', requiresTargetConsent: true })
+        return
       }
-      // The role is gone (every console request now answers 403). Then end everything else at once.
-      await admin.from('control_member_permissions').delete().eq('user_id', targetId)
-      const factors = await deleteAllFactors(admin, targetId)
-      const passkeys = await deleteAllPasskeys(admin, targetId)
-      const { data: sessions, error: sessionError } = await admin.rpc('control_revoke_user_sessions', { target: targetId })
-      await audit(context, 'role.remove', 'user', targetId, { before: existing.role, after: 'none', factors_removed: factors.removed, factors_ok: factors.ok, passkeys_removed: passkeys, sessions_ended: typeof sessions === 'number' ? sessions : 0, sessions_ok: !sessionError }, undefined, 'warning')
-      sendJson(res, 200, { ok: true, userId: targetId, factorsRemoved: factors.removed, factorsOk: factors.ok, sessionsEnded: typeof sessions === 'number' ? sessions : 0, sessionsOk: !sessionError })
+
+      // Non-owner authority removal: requires unanimous approval from ALL active unrestricted owners,
+      // then starts a 7-day IST countdown before automatic revocation.
+      await requireStepUp(context, { action: 'role.removal.request', targetType: 'user', targetId })
+      const initialApprovedBy = context.role === 'owner' && !context.ownerReadOnly ? [context.userId] : []
+      const allApproved = hasAllOwnerApprovals(activeOwnerIds, initialApprovedBy)
+      const status = allApproved ? 'countdown' : 'pending_approval'
+      const effectiveOnIst = allApproved ? addIstDays(now, MEMBER_REMOVAL_COUNTDOWN_DAYS) : null
+      const { error } = await admin.from('control_role_removals').insert({
+        id: removalId,
+        target_user_id: targetId,
+        target_role: targetRole,
+        status,
+        initiated_by: context.userId,
+        initiated_at: nowIso,
+        approved_by: initialApprovedBy,
+        countdown_started_at: allApproved ? nowIso : null,
+        effective_on_ist: effectiveOnIst,
+        restore_requested_at: null,
+        restore_on_ist: null,
+        resolved_at: null,
+        updated_at: nowIso
+      })
+      if (error) {
+        if (error.code === '23505') throw new ApiError(409, 'removal_already_pending', 'A removal request is already active for this person.')
+        throw new ApiError(502, 'save_failed', 'The removal request could not be created. Nothing changed.')
+      }
+      await audit(context, 'role.removal.request', 'user', targetId, {
+        target_role: targetRole,
+        status,
+        removal_id: removalId,
+        approved_count: initialApprovedBy.length,
+        required_approvers: Math.max(1, activeOwnerIds.length),
+        ...(effectiveOnIst ? { effective_on_ist: effectiveOnIst, countdown_days: MEMBER_REMOVAL_COUNTDOWN_DAYS } : {})
+      }, undefined, 'warning')
+      sendJson(res, 200, {
+        ok: true,
+        removalId,
+        userId: targetId,
+        targetRole,
+        status,
+        approvedCount: initialApprovedBy.length,
+        requiredApprovers: Math.max(1, activeOwnerIds.length),
+        effectiveOnIst,
+        daysRemaining: allApproved ? MEMBER_REMOVAL_COUNTDOWN_DAYS : null
+      })
+      return
+    }
+    case 'role.removal.approve': {
+      const openRemovals = await reconcileRoleRemovals(admin, context.requestId)
+      const row = openRemovals.find(item => item.id === body.removalId)
+      if (!row) throw new ApiError(404, 'not_found', 'That removal request was not found or is already finished.')
+      if (row.status !== 'pending_approval') throw new ApiError(409, 'no_change', 'This removal request is no longer awaiting approval.')
+
+      const activeOwnerIds = await activeUnrestrictedOwnerIds(admin, openRemovals)
+      const now = new Date()
+      const nowIso = now.toISOString()
+
+      if (row.target_role === 'owner') {
+        if (context.userId !== row.target_user_id) {
+          await refuse(context, 'role.removal.approve', 'target_owner_only', 403, 'Only the targeted owner can approve their own removal.', row.target_user_id)
+        }
+        const otherActiveOwners = activeOwnerIds.filter(id => id !== row.target_user_id)
+        if (otherActiveOwners.length < 1) {
+          await refuse(context, 'role.removal.approve', 'last_owner', 409, 'Stracker must always keep at least one active owner.', row.target_user_id)
+        }
+        await requireStepUp(context, { action: 'role.removal.approve', targetType: 'user', targetId: row.target_user_id })
+        const effectiveOnIst = addIstDays(now, OWNER_REMOVAL_COUNTDOWN_DAYS)
+        const { error } = await admin
+          .from('control_role_removals')
+          .update({
+            status: 'countdown',
+            approved_by: [context.userId],
+            countdown_started_at: nowIso,
+            effective_on_ist: effectiveOnIst,
+            updated_at: nowIso
+          })
+          .eq('id', row.id)
+        if (error) throw new ApiError(502, 'save_failed', 'The removal approval could not be saved. Nothing changed.')
+        await audit(context, 'role.removal.approve', 'user', row.target_user_id, {
+          target_role: 'owner',
+          status: 'countdown',
+          removal_id: row.id,
+          effective_on_ist: effectiveOnIst,
+          countdown_days: OWNER_REMOVAL_COUNTDOWN_DAYS
+        }, undefined, 'critical')
+        sendJson(res, 200, {
+          ok: true,
+          removalId: row.id,
+          status: 'countdown',
+          effectiveOnIst,
+          daysRemaining: OWNER_REMOVAL_COUNTDOWN_DAYS,
+          ownerReadOnly: true
+        })
+        return
+      }
+
+      // Non-owner removal approval: EVERY active unrestricted owner must approve.
+      if (context.role !== 'owner' || context.ownerReadOnly) {
+        await refuse(context, 'role.removal.approve', 'owner_only', 403, 'Only active owners can approve a role removal.', row.target_user_id)
+      }
+      const currentApproved = Array.isArray(row.approved_by) ? row.approved_by : []
+      if (currentApproved.includes(context.userId)) {
+        throw new ApiError(409, 'already_approved', 'You have already approved this removal request.')
+      }
+      await requireStepUp(context, { action: 'role.removal.approve', targetType: 'user', targetId: row.target_user_id })
+      const nextApproved = [...currentApproved, context.userId]
+      const allApproved = hasAllOwnerApprovals(activeOwnerIds, nextApproved)
+      const nextStatus = allApproved ? 'countdown' : 'pending_approval'
+      const effectiveOnIst = allApproved ? addIstDays(now, MEMBER_REMOVAL_COUNTDOWN_DAYS) : null
+      const { error } = await admin
+        .from('control_role_removals')
+        .update({
+          status: nextStatus,
+          approved_by: nextApproved,
+          ...(allApproved ? { countdown_started_at: nowIso, effective_on_ist: effectiveOnIst } : {}),
+          updated_at: nowIso
+        })
+        .eq('id', row.id)
+      if (error) throw new ApiError(502, 'save_failed', 'Your approval could not be saved. Nothing changed.')
+      const approvedCount = activeOwnerIds.filter(ownerId => nextApproved.includes(ownerId)).length
+      await audit(context, 'role.removal.approve', 'user', row.target_user_id, {
+        target_role: row.target_role,
+        status: nextStatus,
+        removal_id: row.id,
+        approved_count: approvedCount,
+        required_approvers: Math.max(1, activeOwnerIds.length),
+        ...(effectiveOnIst ? { effective_on_ist: effectiveOnIst, countdown_days: MEMBER_REMOVAL_COUNTDOWN_DAYS } : {})
+      }, undefined, allApproved ? 'warning' : 'notice')
+      sendJson(res, 200, {
+        ok: true,
+        removalId: row.id,
+        status: nextStatus,
+        approvedCount,
+        requiredApprovers: Math.max(1, activeOwnerIds.length),
+        effectiveOnIst,
+        daysRemaining: allApproved ? MEMBER_REMOVAL_COUNTDOWN_DAYS : null
+      })
+      return
+    }
+    case 'role.removal.restore_review': {
+      const openRemovals = await reconcileRoleRemovals(admin, context.requestId)
+      const row = openRemovals.find(item => item.id === body.removalId)
+      if (!row) throw new ApiError(404, 'not_found', 'That removal countdown was not found or has already finished.')
+      if (row.target_role !== 'owner' || context.userId !== row.target_user_id) {
+        await refuse(context, 'role.removal.restore_review', 'target_owner_only', 403, 'Only the targeted owner can submit a restore review for their own account.', row.target_user_id)
+      }
+      if (row.status === 'review_restore') {
+        throw new ApiError(409, 'no_change', 'Your 2-day restore review is already running and cannot be paused or cancelled.')
+      }
+      if (row.status !== 'countdown') {
+        throw new ApiError(409, 'no_change', 'A restore review can only be submitted during the 30-day removal countdown.')
+      }
+      await requireStepUp(context, { action: 'role.removal.restore_review', targetType: 'user', targetId: row.target_user_id })
+      const now = new Date()
+      const nowIso = now.toISOString()
+      const restoreOnIst = addIstDays(now, OWNER_RESTORE_REVIEW_DAYS)
+      const { error } = await admin
+        .from('control_role_removals')
+        .update({
+          status: 'review_restore',
+          restore_requested_at: nowIso,
+          restore_on_ist: restoreOnIst,
+          updated_at: nowIso
+        })
+        .eq('id', row.id)
+      if (error) throw new ApiError(502, 'save_failed', 'The restore review could not be started. Try again.')
+      await audit(context, 'role.removal.restore_review', 'user', row.target_user_id, {
+        status: 'review_restore',
+        removal_id: row.id,
+        restore_on_ist: restoreOnIst,
+        restore_days: OWNER_RESTORE_REVIEW_DAYS
+      }, undefined, 'critical')
+      sendJson(res, 200, {
+        ok: true,
+        removalId: row.id,
+        status: 'review_restore',
+        restoreOnIst,
+        restoreDaysRemaining: OWNER_RESTORE_REVIEW_DAYS
+      })
+      return
+    }
+    case 'role.removal.cancel': {
+      requirePermission(context, 'roles.manage')
+      const openRemovals = await reconcileRoleRemovals(admin, context.requestId)
+      const row = openRemovals.find(item => item.id === body.removalId)
+      if (!row) throw new ApiError(404, 'not_found', 'That removal request was not found.')
+      if (row.status === 'review_restore') {
+        await refuse(context, 'role.removal.cancel', 'owner_restore_unstoppable', 409, 'An owner restore review cannot be paused, cancelled, or stepped down.', row.target_user_id)
+      }
+      if (row.status !== 'pending_approval') {
+        await refuse(context, 'role.removal.cancel', 'countdown_locked', 409, 'A removal countdown cannot be cancelled once started.', row.target_user_id)
+      }
+      if (context.role !== 'owner' && row.initiated_by !== context.userId) {
+        await refuse(context, 'role.removal.cancel', 'owner_only', 403, 'Only an active owner or the initiator can cancel a pending removal request.', row.target_user_id)
+      }
+      await requireStepUp(context, { action: 'role.removal.cancel', targetType: 'user', targetId: row.target_user_id })
+      const nowIso = new Date().toISOString()
+      const { error } = await admin
+        .from('control_role_removals')
+        .update({ status: 'cancelled', resolved_at: nowIso, updated_at: nowIso })
+        .eq('id', row.id)
+      if (error) throw new ApiError(502, 'save_failed', 'The pending removal request could not be cancelled.')
+      await audit(context, 'role.removal.cancel', 'user', row.target_user_id, { target_role: row.target_role, status: 'cancelled', removal_id: row.id }, undefined, 'notice')
+      sendJson(res, 200, { ok: true, removalId: row.id, status: 'cancelled' })
       return
     }
     case 'permissions.role': {
@@ -407,7 +768,8 @@ async function handlePost(req: ApiRequest, context: ControlContext, res: ApiResp
 export async function settingsHandler(req: ApiRequest, res: ApiResponse): Promise<void> {
   // permission null: any active role holder at aal2 may open Settings (own password, own passkey);
   // every section and every save checks its own permission inside.
-  await controlHandler(req, res, ['GET', 'POST'], { requireAal2: true, permission: null }, async context => {
+  // allowDuringOwnerReadOnly: true lets an owner in removal countdown submit ONLY `role.removal.restore_review`.
+  await controlHandler(req, res, ['GET', 'POST'], { requireAal2: true, permission: null, allowDuringOwnerReadOnly: true }, async context => {
     if (req.method === 'GET') await handleGet(context, res)
     else await handlePost(req, context, res)
   })
