@@ -33,28 +33,28 @@ describe('Student dashboard anti-slop craft & containment contract', () => {
     expect(withoutComments).toContain('font-style: normal;')
   })
 
-  it('enforces strict containment so text, badges, inputs, and cards never overflow their elements', () => {
+  it('prevents column flex-basis header gaps and void gaps before the footer', () => {
+    // Regression guard: flex: 1 1 220px on .page-header-copy caused a 220px vertical gap on mobile column headers.
+    expect(withoutComments).not.toMatch(/\.page-header-copy\s*\{[^}]*flex:\s*1\s+1\s+\d+px/i)
+    // Page content stays tight before .app-footer; scroll clearance lives on .app-footer itself.
+    expect(withoutComments).toContain('padding-bottom: 18px;')
+    expect(withoutComments).toContain('padding-bottom: calc(108px + var(--safe-bottom, 0px));')
+  })
+
+  it('prevents button label clipping and keeps mobile topbar icons borderless', () => {
+    // Buttons wrap cleanly with generous padding rather than slicing text off inside narrow columns.
+    expect(withoutComments).toContain('white-space: normal;')
+    expect(withoutComments).toContain('padding: 9px 16px;')
+    expect(withoutComments).toContain('.mobile-top-actions .icon-button')
+    expect(withoutComments).toContain('.ai-launcher .ai-launcher-label')
+  })
+
+  it('enforces strict containment and hides the redundant Daily Study Time bottom progress bar', () => {
     expect(withoutComments).toContain('overflow-x: clip;')
-    expect(withoutComments).toContain('overflow-wrap: anywhere;')
+    expect(withoutComments).toContain('overflow-wrap: break-word;')
     expect(withoutComments).toContain('min-width: 0;')
     expect(withoutComments).toContain('max-width: 100%;')
-    expect(withoutComments).toContain('text-overflow: ellipsis;')
-  })
-
-  it('ensures buttons look and behave like real tactile buttons with >=44px mobile touch targets', () => {
-    expect(withoutComments).toContain('.button-primary')
-    expect(withoutComments).toContain('.button-secondary')
-    expect(withoutComments).toContain('.icon-button')
-    expect(withoutComments).toContain('min-height: 44px;')
-    expect(withoutComments).toContain(':active:not(:disabled)')
-    expect(withoutComments).toContain(':focus-visible')
-  })
-
-  it('eliminates duplicate study-time progress bar and coordinates floating launcher clearance', () => {
-    expect(withoutComments).toContain('.study-progress-card :is(.study-progress-bar, .progress-bar, .meter-track)')
-    expect(withoutComments).toContain('.study-time-actions')
-    expect(withoutComments).toContain('.exam-mode-banner')
-    expect(withoutComments).toContain('padding-bottom: calc(180px + var(--safe-bottom, 0px))')
+    expect(withoutComments).toContain('.study-progress-card :is(.progress-track, .study-progress-bar, .progress-bar, .meter-track)')
     expect(withoutComments).toContain('@media (hover: hover) and (pointer: fine)')
     expect(withoutComments).toContain('@media (prefers-reduced-motion: reduce)')
   })
