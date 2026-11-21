@@ -1,0 +1,594 @@
+/* ============================================================================
+   STRACKER — Complete Student Dashboard UI/UX Redesign
+   ----------------------------------------------------------------------------
+   Scope: `html[data-app-font='active'] .app-shell` (authenticated student
+   workspace only — public pages, auth pages, and Owner Control Center are
+   untouched).
+
+   Design goals:
+   1. Unified, modern, minimal card-oriented study dashboard across all 18+
+      student pages (Home, Tests, Planner, Profile, Focus, Backlog, Practice,
+      Syllabus, Weak Areas, PYQs, Mock Analysis, Mistake Notebook, Analytics,
+      Revision Desk, Formulas & Flashcards, Study Now, Settings, Backup).
+   2. 100% theme-compatible across all 9 colour palettes x Light / Dark / Auto
+      using exclusively semantic CSS custom properties and color-mix().
+   3. Eliminate visual clutter: tighter card rhythm, compact single-line KPI
+      notes, slim Exam Mode banner, single progress indicator on Daily Study
+      Time, side-by-side study actions, cleaner mobile Tests record cards,
+      compact empty states, and refined low-noise navigation links.
+   4. Coordinated floating controls: generous bottom/edge clearance so Ask
+      Stracker and the Quick Action FAB never overlap the footer, bottom nav,
+      search bars, or card actions on any viewport (320px to 1440px+).
+   5. Native-feeling touch ergonomics: hover effects gated behind
+      (hover: hover) and (pointer: fine), >= 44px mobile touch targets,
+      safe-area insets, and reduced-motion compliance.
+   ============================================================================ */
+
+/* ----------------------------------------------------- 1. Layout & Surfaces */
+
+html[data-app-font='active'] .app-shell {
+  --sr-radius-card: 18px;
+  --sr-radius-tile: 13px;
+  --sr-radius-control: 12px;
+  --sr-radius-pill: 999px;
+  --sr-card-border: 1px solid color-mix(in srgb, var(--line-strong) 72%, var(--line));
+  --sr-card-highlight: inset 0 1px 0 color-mix(in srgb, var(--paper) 65%, transparent);
+  --sr-card-shadow: 0 10px 26px -20px color-mix(in srgb, var(--ink) 32%, transparent), 0 1px 3px color-mix(in srgb, var(--ink) 6%, transparent);
+  --sr-tile-bg: color-mix(in srgb, var(--paper-soft) 84%, var(--paper-muted));
+  --sr-tile-border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+}
+
+html[data-app-font='active'][data-theme='dark'] .app-shell {
+  --sr-card-highlight: inset 0 1px 0 color-mix(in srgb, var(--ink) 7%, transparent);
+  --sr-card-shadow: 0 14px 32px -20px color-mix(in srgb, var(--app-hard) 85%, transparent), 0 1px 3px color-mix(in srgb, var(--app-hard) 36%, transparent);
+}
+
+/* Unified vertical rhythm across all authenticated student pages */
+html[data-app-font='active'] .app-shell :is(.content-page, .dashboard-page) {
+  gap: 18px;
+}
+
+/* Refined, minimal card surface */
+html[data-app-font='active'] .app-shell .notebook-card {
+  border: var(--sr-card-border);
+  border-radius: var(--sr-radius-card);
+  background-color: var(--paper);
+  background-image: none;
+  box-shadow: var(--sr-card-highlight), var(--sr-card-shadow);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+/* Compact, scannable page headers */
+html[data-app-font='active'] .app-shell .page-header {
+  gap: 12px 16px;
+  align-items: flex-end;
+  padding-bottom: 2px;
+}
+
+html[data-app-font='active'] .app-shell .page-header-copy {
+  gap: 4px;
+}
+
+html[data-app-font='active'] .app-shell .page-header-copy h1::after {
+  width: 48px;
+  height: 3px;
+  margin-top: 6px;
+}
+
+html[data-app-font='active'] .app-shell .page-header-copy > p {
+  max-width: 58ch;
+  color: var(--ink-soft);
+  margin: 2px 0 0;
+}
+
+html[data-app-font='active'] .app-shell .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+/* Quiet micro-pill treatment for card header links (Open, See all, etc.) */
+html[data-app-font='active'] .app-shell :is(.jee-link, .section-heading .text-link, .syllabus-mini-foot .text-link, .revisions-head .text-link) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
+  border-radius: var(--sr-radius-pill);
+  background: var(--paper-soft);
+  color: var(--text-accent, var(--accent));
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+/* ------------------------------------------ 2. Home Dashboard Modernization */
+
+/* Tighter Countdown & Streak cards with zero wasted vertical voids */
+html[data-app-font='active'] .app-shell .countdown-card,
+html[data-app-font='active'] .app-shell .streak-card {
+  border-radius: 20px;
+  padding: 16px 18px;
+}
+
+html[data-app-font='active'] .app-shell .countdown-main {
+  gap: 12px;
+  margin-top: 10px;
+}
+
+html[data-app-font='active'] .app-shell .countdown-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+html[data-app-font='active'] .app-shell .streak-bottom {
+  margin: 10px 0;
+}
+
+html[data-app-font='active'] .app-shell .streak-rule {
+  margin: 4px 0 8px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+html[data-app-font='active'] .app-shell :is(.streak-goal, .streak-goal-empty) {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: var(--sr-tile-border);
+  border-radius: var(--sr-radius-tile);
+  background: var(--sr-tile-bg);
+  gap: 8px;
+}
+
+html[data-app-font='active'] .app-shell .streak-goal-empty p {
+  margin: 0;
+  color: var(--ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Sleek, compact Exam Mode strip instead of a bulky multi-line amber box */
+html[data-app-font='active'] .app-shell .exam-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--surface-tip-border, var(--line-strong));
+  border-left: 4px solid var(--app-spark, var(--tint-warm));
+  border-radius: 14px;
+  background: var(--surface-tip, var(--paper-soft));
+  box-shadow: var(--sr-card-shadow);
+}
+
+html[data-app-font='active'] .app-shell .exam-mode-banner > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+html[data-app-font='active'] .app-shell .exam-mode-banner p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+html[data-app-font='active'] .app-shell .exam-mode-days {
+  flex: none;
+  min-width: 44px;
+  min-height: 40px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  display: inline-grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Study Now card: compact priority action card */
+html[data-app-font='active'] .app-shell .study-now-card {
+  padding: 15px 16px;
+  gap: 10px;
+}
+
+html[data-app-font='active'] .app-shell .study-now-card .study-now-reason,
+html[data-app-font='active'] .app-shell .study-now-card p {
+  line-height: 1.4;
+}
+
+/* Daily Study Time: single progress indicator (ring only, hide redundant bar)
+   and clean 2-column action buttons instead of oversized stacked pills */
+html[data-app-font='active'] .app-shell .study-progress-card {
+  padding: 15px 16px;
+}
+
+html[data-app-font='active'] .app-shell .study-progress-card :is(.study-progress-bar, .progress-bar, .meter-track) {
+  display: none;
+}
+
+html[data-app-font='active'] .app-shell .study-time-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+html[data-app-font='active'] .app-shell .study-time-actions > button {
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 12px;
+  justify-content: center;
+}
+
+/* Revision Desk card */
+html[data-app-font='active'] .app-shell .revisions-card {
+  padding: 15px 16px;
+}
+
+html[data-app-font='active'] .app-shell .revision-row {
+  padding: 10px 11px;
+  border-radius: var(--sr-radius-tile);
+  border: var(--sr-tile-border);
+  background: var(--sr-tile-bg);
+}
+
+/* Study Tip card: sleek low-profile callout strip */
+html[data-app-font='active'] .app-shell .smart-tip-card {
+  padding: 13px 15px;
+  border-radius: 16px;
+  border-left: 3px solid var(--app-spark, var(--tint-warm));
+  gap: 8px;
+}
+
+html[data-app-font='active'] .app-shell .smart-tip-card p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* This Week snapshot: clean rounded metric tiles + crisp Backlog pill */
+html[data-app-font='active'] .app-shell .jee-snap-week {
+  padding: 15px 16px;
+  gap: 12px;
+}
+
+html[data-app-font='active'] .app-shell .jee-snap-week .jee-week-facts {
+  gap: 8px;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+html[data-app-font='active'] .app-shell .jee-snap-week .jee-week-fact {
+  padding: 10px 12px;
+  border: var(--sr-tile-border);
+  border-radius: var(--sr-radius-tile);
+  background: var(--sr-tile-bg);
+  gap: 3px;
+}
+
+html[data-app-font='active'] .app-shell .jee-snap-week .jee-week-fact:first-child,
+html[data-app-font='active'] .app-shell .jee-snap-week .jee-week-fact:last-child {
+  padding: 10px 12px;
+  border: var(--sr-tile-border);
+}
+
+html[data-app-font='active'] .app-shell .jee-week-backlog {
+  min-height: 40px;
+  padding: 7px 14px;
+  border: var(--sr-tile-border);
+  border-radius: var(--sr-radius-tile);
+  background: var(--paper-soft);
+}
+
+/* Latest Test & Syllabus Progress */
+html[data-app-font='active'] .app-shell .quick-test-card,
+html[data-app-font='active'] .app-shell .syllabus-mini-card {
+  padding: 15px 16px;
+}
+
+/* ------------------------------------------- 3. Compact KPI & Stat Grids */
+
+html[data-app-font='active'] .app-shell :is(.stat-grid, .jee-stat-grid, .profile-stats, .analytics-kpis) {
+  gap: 10px;
+}
+
+html[data-app-font='active'] .app-shell :is(.stat-card, .jee-stat, .profile-stat-card) {
+  padding: 13px 14px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+
+/* Keep KPI explanatory subtitles compact and single-line so stat cards stay crisp */
+html[data-app-font='active'] .app-shell :is(.stat-card, .jee-stat) :is(small, p, .stat-note, .stat-sub) {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+html[data-app-font='active'] .app-shell :is(.stat-card strong, .jee-stat strong, .stat-value) {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+}
+
+/* ------------------------------------ 4. Filters, Search & Toolbars (All) */
+
+html[data-app-font='active'] .app-shell :is(.test-filter-row, .filter-controls, .mistake-toolbar, .retry-filters, .jee-filter-grid, .syllabus-toolbar, .pyq-toolbar, .backlog-toolbar, .decks-toolbar) {
+  gap: 8px;
+  align-items: center;
+}
+
+html[data-app-font='active'] .app-shell .search-field {
+  min-height: 42px;
+  border-radius: var(--sr-radius-control);
+  background: var(--paper-soft);
+  border: 1.5px solid var(--line-strong);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+html[data-app-font='active'] .app-shell .search-field:focus-within {
+  border-color: var(--app-edge);
+  box-shadow: 2px 2px 0 var(--app-accent-solid);
+}
+
+html[data-app-font='active'] .app-shell :is(.test-filter-row, .filter-controls, .mistake-toolbar, .retry-filters, .jee-filter-grid) :is(select, input[type='date']) {
+  min-height: 42px;
+  border-radius: var(--sr-radius-control);
+  border: 1.5px solid var(--line-strong);
+  background: var(--paper-soft);
+}
+
+/* Segmented tab rails across Settings, Mistake Notebook, Mock Analysis, Decks */
+html[data-app-font='active'] .app-shell :is(.settings-tabs, .mistake-tabs, .jee-tabs) {
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  gap: 4px;
+}
+
+html[data-app-font='active'] .app-shell :is(.settings-tab, .mistake-tab, .jee-tab) {
+  border-radius: 10px;
+}
+
+/* -------------------------------------- 5. Tables, Records & Empty States */
+
+html[data-app-font='active'] .app-shell :is(.test-table, .data-table) th {
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  border-bottom: 1.5px solid var(--line);
+}
+
+html[data-app-font='active'] .app-shell :is(.test-table, .data-table) td {
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Compact, inviting empty states across all 18 pages */
+html[data-app-font='active'] .app-shell .empty-state {
+  padding: 20px 16px;
+  gap: 8px;
+  border-radius: var(--sr-radius-tile);
+  background: var(--sr-tile-bg);
+  border: 1px dashed var(--line-strong);
+}
+
+html[data-app-font='active'] .app-shell .empty-state p {
+  max-width: 38ch;
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+/* Compact Planner tip & day cards */
+html[data-app-font='active'] .app-shell :is(.planner-tip, .planner-note-card) {
+  padding: 11px 14px;
+  border-radius: 14px;
+  min-height: 0;
+}
+
+html[data-app-font='active'] .app-shell .week-day {
+  border-radius: 14px;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+/* Compact Backup, Analytics, Weak Areas, Syllabus, PYQ, Practice cards */
+html[data-app-font='active'] .app-shell :is(.chart-card, .syllabus-subject-card, .weak-card, .backlog-item, .pyq-card, .deck-card, .settings-section, .backup-card) {
+  border-radius: var(--sr-radius-card);
+}
+
+/* -------------------------------- 6. Coordinated Floating Controls & Footer */
+
+/* Guarantee footer & final page controls always clear the floating launcher + FAB */
+html[data-app-font='active'] .app-shell .app-footer {
+  padding-top: 16px;
+  padding-bottom: 24px;
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 961px) {
+  html[data-app-font='active'] .app-shell .page-wrap {
+    padding-bottom: calc(108px + var(--safe-bottom, 0px));
+  }
+
+  html[data-app-font='active'] .app-shell .app-footer {
+    padding-right: 112px;
+  }
+}
+
+/* Compact, non-intrusive floating dock on mobile & portrait tablets (<= 960px) */
+@media (max-width: 960px) {
+  html[data-app-font='active'] .app-shell {
+    --fab-size: 48px;
+    --fab-right: 14px;
+  }
+
+  /* Generous scroll clearance so footer + last card buttons scroll cleanly above
+     both the floating bottom nav bar AND the right-edge FAB stack */
+  html[data-app-font='active'] .app-shell .page-wrap {
+    padding-bottom: calc(176px + var(--safe-bottom, 0px));
+  }
+
+  html[data-app-font='active'] .app-shell .app-footer {
+    padding-right: 72px;
+    padding-bottom: 28px;
+    text-align: left;
+  }
+
+  html[data-app-font='active'] .app-shell .quick-action-fab {
+    width: var(--fab-size);
+    height: var(--fab-size);
+    border-radius: 16px;
+    transform: none;
+    box-shadow: 3px 3px 0 var(--app-hard);
+  }
+
+  html[data-app-font='active'] .app-shell .ai-launcher {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 11px;
+    border: 1.5px solid var(--app-edge);
+    border-radius: var(--sr-radius-pill);
+    background: color-mix(in srgb, var(--paper) 94%, var(--paper-soft));
+    box-shadow: 2px 2px 0 var(--app-hard);
+    gap: 6px;
+  }
+
+  html[data-app-font='active'] .app-shell .ai-launcher-wrap:not(.ai-launcher-expanded) .ai-launcher {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+/* --------------------------------- 7. Responsive Grids (320px to 1440px+) */
+
+/* Tablet & intermediate screens (641px - 1024px) */
+@media (min-width: 641px) and (max-width: 1024px) {
+  html[data-app-font='active'] .app-shell :is(.stat-grid, .jee-stat-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html[data-app-font='active'] .app-shell .dashboard-grid {
+    gap: 16px;
+  }
+}
+
+/* Mobile phones (<= 760px): sleek mobile record cards for Tests & tables */
+@media (max-width: 760px) {
+  html[data-app-font='active'] .app-shell :is(.content-page, .dashboard-page) {
+    gap: 14px;
+  }
+
+  html[data-app-font='active'] .app-shell .notebook-card {
+    border-radius: 16px;
+  }
+
+  html[data-app-font='active'] .app-shell :is(.stat-grid, .jee-stat-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  html[data-app-font='active'] .app-shell :is(.stat-card, .jee-stat) {
+    padding: 12px 13px;
+    border-radius: 15px;
+  }
+
+  /* Clean mobile test record cards without sprawling stacked label rows */
+  html[data-app-font='active'] .app-shell .test-table tbody tr {
+    border: var(--sr-tile-border);
+    border-radius: 14px;
+    padding: 12px 13px;
+    background: var(--sr-tile-bg);
+    gap: 6px;
+  }
+
+  html[data-app-font='active'] .app-shell .test-table tbody td {
+    border-bottom: 0;
+    padding: 3px 0;
+  }
+
+  html[data-app-font='active'] .app-shell .test-table tbody td::before {
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  html[data-app-font='active'] .app-shell .jee-snap-week .jee-week-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  html[data-app-font='active'] .app-shell .jee-snap-week .jee-week-fact:nth-child(n + 3) {
+    padding-top: 10px;
+    border-top: var(--sr-tile-border);
+  }
+}
+
+/* Narrow mobile phones (<= 380px): prevent squeezed action buttons */
+@media (max-width: 380px) {
+  html[data-app-font='active'] .app-shell .study-time-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-app-font='active'] .app-shell .exam-mode-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* Short-height / phone landscape viewports */
+@media (max-width: 960px) and (max-height: 500px) {
+  html[data-app-font='active'] .app-shell .page-wrap {
+    padding-bottom: calc(148px + var(--safe-bottom, 0px));
+  }
+}
+
+/* ---------------------------------- 8. Pointer-Fine Hover & Touch Hygiene */
+
+/* Gate visual hover lifts strictly to true hover-capable pointers so mobile
+   taps never leave sticky hover states behind */
+@media (hover: hover) and (pointer: fine) {
+  html[data-app-font='active'] .app-shell .notebook-card:hover {
+    border-color: var(--line-strong);
+  }
+
+  html[data-app-font='active'] .app-shell :is(.jee-link, .section-heading .text-link, .syllabus-mini-foot .text-link, .revisions-head .text-link):hover {
+    border-color: var(--app-edge);
+    background: var(--paper);
+  }
+
+  html[data-app-font='active'] .app-shell .jee-week-backlog:hover {
+    border-color: var(--accent);
+    background: var(--paper);
+  }
+}
+
+/* Native touch ergonomics for drawers & modals */
+html[data-app-font='active'] .app-shell :is(.mobile-drawer, .dialog-panel, .ai-message-scroll) {
+  overscroll-behavior-y: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-app-font='active'] .app-shell .notebook-card,
+  html[data-app-font='active'] .app-shell :is(.jee-link, .section-heading .text-link, .syllabus-mini-foot .text-link, .revisions-head .text-link),
+  html[data-app-font='active'] .app-shell .search-field,
+  html[data-app-font='active'] .app-shell .week-day {
+    transition: none;
+  }
+}
