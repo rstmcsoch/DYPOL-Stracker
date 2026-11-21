@@ -334,8 +334,9 @@ html[data-app-font='active'] .app-shell :is(.subject-badge, .status-badge, .jee-
 /* Highlighted, bold side-by-side Exam Countdown redesign:
    - Dual-exam tracks (e.g. JEE Main + JEE Advanced): both countdowns sit
      prominently side by side in equal-weight highlighted tiles with bold
-     geometric tabular numerals (var(--font-body)), and Chapters covered sits
-     cleanly underneath across the full width.
+     geometric tabular numerals (var(--font-body) !important to override
+     typography.css's !important Patrick Hand metric rule), and Chapters
+     covered sits cleanly underneath across the full width.
    - Single-exam tracks (e.g. NEET, UPSC, GATE): the primary countdown spans
      full width as a bold highlighted centerpiece above Chapters covered. */
 html[data-app-font='active'] .app-shell .countdown-card {
@@ -381,19 +382,19 @@ html[data-app-font='active'] .app-shell .countdown-card .countdown-number {
   align-items: baseline;
   flex-wrap: wrap;
   gap: 6px;
-  font-family: var(--font-body);
-  font-size: clamp(2.25rem, 7vw, 3.35rem);
-  font-weight: 800;
-  line-height: 0.98;
-  letter-spacing: -0.04em;
+  font-family: var(--font-body) !important;
+  font-size: clamp(2rem, 6.4vw, 3rem) !important;
+  font-weight: 800 !important;
+  line-height: 1.02 !important;
+  letter-spacing: -0.04em !important;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 
 html[data-app-font='active'] .app-shell .countdown-card .countdown-number > span {
-  font-family: var(--font-body);
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-family: var(--font-body) !important;
+  font-size: 0.9rem !important;
+  font-weight: 700 !important;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-accent, var(--accent));
@@ -418,7 +419,7 @@ html[data-app-font='active'] .app-shell .countdown-card .countdown-copy > span {
 }
 
 html[data-app-font='active'] .app-shell .countdown-card .countdown-copy > strong {
-  font-family: var(--font-body);
+  font-family: var(--font-body) !important;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.25;
@@ -460,7 +461,7 @@ html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .co
 
 html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) > span:not(.mini-exam-dot) {
   order: 2;
-  font-family: var(--font-body);
+  font-family: var(--font-body) !important;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.25;
@@ -469,11 +470,11 @@ html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .co
 
 html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) > strong {
   order: 1;
-  font-family: var(--font-body);
-  font-size: clamp(2rem, 6.4vw, 3rem);
-  font-weight: 800;
-  line-height: 1.02;
-  letter-spacing: -0.04em;
+  font-family: var(--font-body) !important;
+  font-size: clamp(2rem, 6.4vw, 3rem) !important;
+  font-weight: 800 !important;
+  line-height: 1.02 !important;
+  letter-spacing: -0.04em !important;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -510,7 +511,7 @@ html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .co
 
 html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:last-child > strong {
   margin-left: auto;
-  font-family: var(--font-body);
+  font-family: var(--font-body) !important;
   font-size: 15px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -1017,11 +1018,11 @@ html[data-app-font='active'] .app-shell:not(.focus-app-shell) .app-footer {
   }
 
   html[data-app-font='active'] .app-shell .countdown-card .countdown-number {
-    font-size: clamp(1.85rem, 8.2vw, 2.35rem);
+    font-size: clamp(1.65rem, 7.2vw, 2.15rem) !important;
   }
 
   html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) > strong {
-    font-size: clamp(1.65rem, 7.2vw, 2.15rem);
+    font-size: clamp(1.65rem, 7.2vw, 2.15rem) !important;
   }
 
   html[data-app-font='active'] .app-shell .exam-mode-banner {
