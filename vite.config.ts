@@ -48,17 +48,21 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/favicon-32.png', 'icons/icon-192.png', 'icons/icon-maskable-512.png'],
       manifest: {
-        name: 'Stracker — JEE 2027 Study Notebook',
+        name: 'Stracker — Exam Study Notebook',
         short_name: 'Stracker',
-        description: 'A private study notebook for JEE 2027 plans, revision, tests and focus sessions — by DYPOL LABS.',
+        description: 'A private study notebook for exam plans, revision, tests and focus sessions — by DYPOL LABS.',
         theme_color: '#f7f4ec',
         background_color: '#f7f4ec',
         display: 'standalone',
+        // The installed app is usable in either orientation: the layout adapts to the
+        // available width and height instead of assuming portrait.
+        orientation: 'any',
         start_url: '/',
         scope: '/',
         icons: [
-          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       },
       workbox: {
