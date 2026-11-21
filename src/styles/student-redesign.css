@@ -19,7 +19,10 @@
       node and its enclosing card, button, badge, pill, or form field.
    4. Strict element containment across 320px-1440px+ (overflow-x: clip on
       root, min-width: 0 + max-width: 100% on containers, safe word wrapping).
-   5. Zero AI-slop tells: no thick side-tab left borders on rounded cards, no
+   5. Prominent, highlighted side-by-side Exam Countdowns on Home using crisp
+      bold geometric tabular numerals (var(--font-body)) for JEE Main/Advanced
+      and all other exams.
+   6. Zero AI-slop tells: no thick side-tab left borders on rounded cards, no
       nested double-bordered cards inside cards, no italic headings, 100%
       theme-locked CSS custom properties (all 9 palettes x Light/Dark/Auto).
    ============================================================================ */
@@ -140,9 +143,6 @@ html[data-app-font='active'] .app-shell .section-heading {
 
 /* ------------------------------------------- 3. Buttons Must Be Real, Clean Buttons */
 
-/* Standard primary, secondary, quiet, danger, and marker buttons:
-   generous inner padding so text always has comfortable breathing room from
-   borders, height: auto so wrapped text never clips, and clear tactile depth */
 html[data-app-font='active'] .app-shell .button,
 html[data-app-font='active'] .dialog-panel .button {
   display: inline-flex;
@@ -205,9 +205,6 @@ html[data-app-font='active'] .app-shell .button-marker {
   box-shadow: var(--sr-btn-shadow);
 }
 
-/* Compact inline action buttons (Open, See all chapters, Log a chapter test,
-   Edit, Retry, Set goal, Week arrows, Backlog): well-proportioned tactile
-   buttons with crisp padding — never bloated giant boxes and never clipped */
 html[data-app-font='active'] .app-shell :is(
   .jee-link,
   .text-button,
@@ -260,8 +257,6 @@ html[data-app-font='active'] .app-shell :is(
   background: color-mix(in srgb, var(--accent-light) 55%, var(--paper));
 }
 
-/* Keep icon buttons inside cards/dialogs clearly framed, while leaving the
-   mobile topbar search icon clean and consistent with the menu icon */
 html[data-app-font='active'] .app-shell .icon-button,
 html[data-app-font='active'] .dialog-panel .icon-button {
   display: inline-grid;
@@ -282,7 +277,6 @@ html[data-app-font='active'] .app-shell .mobile-top-actions .icon-button {
   box-shadow: none;
 }
 
-/* Tactile press state across all buttons */
 html[data-app-font='active'] .app-shell :is(
   .button,
   .jee-link,
@@ -310,7 +304,6 @@ html[data-app-font='active'] .app-shell :is(button, .button):disabled {
   cursor: not-allowed;
 }
 
-/* Instant keyboard focus ring — never animated */
 html[data-app-font='active'] .app-shell :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible,
 html[data-app-font='active'] .dialog-panel :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: 3px solid var(--app-accent-solid);
@@ -336,21 +329,198 @@ html[data-app-font='active'] .app-shell :is(.subject-badge, .status-badge, .jee-
   vertical-align: middle;
 }
 
-/* ------------------------------------------- 5. Home Dashboard Craft */
+/* ------------------------------------------- 5. Home Exam Countdown Showcase */
 
-html[data-app-font='active'] .app-shell .countdown-card,
-html[data-app-font='active'] .app-shell .streak-card {
+/* Highlighted, bold side-by-side Exam Countdown redesign:
+   - Dual-exam tracks (e.g. JEE Main + JEE Advanced): both countdowns sit
+     prominently side by side in equal-weight highlighted tiles with bold
+     geometric tabular numerals (var(--font-body)), and Chapters covered sits
+     cleanly underneath across the full width.
+   - Single-exam tracks (e.g. NEET, UPSC, GATE): the primary countdown spans
+     full width as a bold highlighted centerpiece above Chapters covered. */
+html[data-app-font='active'] .app-shell .countdown-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 12px;
   border-radius: var(--sr-radius-card);
   padding: var(--sr-space-4) var(--sr-space-5);
 }
 
-html[data-app-font='active'] .app-shell .countdown-main {
-  gap: var(--sr-space-3);
-  margin-top: var(--sr-space-3);
+html[data-app-font='active'] .app-shell .countdown-card .countdown-top,
+html[data-app-font='active'] .app-shell .countdown-card .countdown-unset {
+  grid-column: 1 / -1;
 }
 
-html[data-app-font='active'] .app-shell .countdown-footer {
-  margin-top: var(--sr-space-3);
+html[data-app-font='active'] .app-shell .countdown-card .countdown-scribble {
+  display: none;
+}
+
+/* Primary countdown tile (left column in dual-exam, full span in single-exam) */
+html[data-app-font='active'] .app-shell .countdown-card .countdown-main {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 16px 16px 14px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 44%, var(--line-strong));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent-light) 52%, var(--paper-soft));
+  min-width: 0;
+}
+
+html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-footer > .mini-exam:nth-child(2)) .countdown-main {
+  grid-column: span 1;
+}
+
+html[data-app-font='active'] .app-shell .countdown-card .countdown-number {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: clamp(2.25rem, 7vw, 3.35rem);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+html[data-app-font='active'] .app-shell .countdown-card .countdown-number > span {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-accent, var(--accent));
+}
+
+html[data-app-font='active'] .app-shell .countdown-card .countdown-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+html[data-app-font='active'] .app-shell .countdown-card .countdown-copy > span {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+html[data-app-font='active'] .app-shell .countdown-card .countdown-copy > strong {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+html[data-app-font='active'] .app-shell .countdown-card .countdown-copy > small {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Promote .countdown-footer children directly into .countdown-card's 2-column
+   grid when a primary countdown exists, so the secondary exam sits right
+   beside the primary exam and Chapters covered spans cleanly underneath */
+html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer {
+  display: contents;
+}
+
+/* Secondary countdown tile (right column beside primary countdown) */
+html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) {
+  grid-column: span 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 16px 16px 14px;
+  border: 1.5px solid color-mix(in srgb, var(--app-spark, var(--tint-warm)) 56%, var(--line-strong));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-warm, var(--surface-tip)) 66%, var(--paper-soft));
+  min-width: 0;
+}
+
+html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) > .mini-exam-dot {
+  display: none;
+}
+
+html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) > span:not(.mini-exam-dot) {
+  order: 2;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) > strong {
+  order: 1;
+  font-family: var(--font-body);
+  font-size: clamp(2rem, 6.4vw, 3rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) > button {
+  order: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 7px 13px;
+  border: 1.5px solid var(--app-edge);
+  border-radius: var(--sr-radius-control);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--sr-btn-shadow);
+}
+
+/* Chapters covered row: crisp full-width strip underneath the countdowns */
+html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:last-child {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 14px;
+  border: var(--sr-border-subtle);
+  border-radius: 12px;
+  background: var(--paper-soft);
+}
+
+html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:last-child > strong {
+  margin-left: auto;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* Unset countdown state: keep standard footer spacing */
+html[data-app-font='active'] .app-shell .countdown-card:not(:has(.countdown-main)) .countdown-footer {
+  grid-column: 1 / -1;
+  margin-top: 4px;
   padding-top: var(--sr-space-3);
   border-top: var(--sr-border-subtle);
 }
@@ -360,6 +530,12 @@ html[data-app-font='active'] .app-shell .countdown-footer .mini-exam {
   min-width: 0;
   white-space: normal;
   overflow-wrap: break-word;
+}
+
+/* Streak card */
+html[data-app-font='active'] .app-shell .streak-card {
+  border-radius: var(--sr-radius-card);
+  padding: var(--sr-space-4) var(--sr-space-5);
 }
 
 html[data-app-font='active'] .app-shell .streak-bottom {
@@ -395,7 +571,7 @@ html[data-app-font='active'] .app-shell .streak-goal-empty p {
   flex: 1 1 180px;
 }
 
-/* Exam Mode Banner: uniform crisp border (no AI-slop thick side-tab stripe) */
+/* Exam Mode Banner */
 html[data-app-font='active'] .app-shell .exam-mode-banner {
   display: flex;
   flex-wrap: wrap;
@@ -434,14 +610,12 @@ html[data-app-font='active'] .app-shell .exam-mode-days {
   font-variant-numeric: tabular-nums;
 }
 
-/* Study Now card */
 html[data-app-font='active'] .app-shell .study-now-card {
   padding: var(--sr-space-4);
   gap: var(--sr-space-3);
 }
 
-/* Daily Study Time: hide redundant bottom progress bar (ring already shows %),
-   and give action buttons full comfortable width so labels never clip */
+/* Daily Study Time: hide redundant bottom progress bar, crisp buttons */
 html[data-app-font='active'] .app-shell .study-progress-card {
   padding: var(--sr-space-4);
 }
@@ -467,7 +641,6 @@ html[data-app-font='active'] .app-shell .study-time-actions > button {
   box-shadow: var(--sr-btn-shadow);
 }
 
-/* Revision Desk: clean hairline dividers (no nested cards inside cards) */
 html[data-app-font='active'] .app-shell .revisions-card {
   padding: var(--sr-space-4);
 }
@@ -480,7 +653,6 @@ html[data-app-font='active'] .app-shell .revision-row {
   background: transparent;
 }
 
-/* Study Tip card: clean uniform border */
 html[data-app-font='active'] .app-shell .smart-tip-card {
   padding: var(--sr-space-4);
   border: 1.5px solid var(--surface-tip-border, var(--line-strong));
@@ -493,7 +665,6 @@ html[data-app-font='active'] .app-shell .smart-tip-card p {
   line-height: 1.45;
 }
 
-/* This Week snapshot: crisp hairline ledger */
 html[data-app-font='active'] .app-shell .jee-snap-week {
   padding: var(--sr-space-4);
   gap: var(--sr-space-3);
@@ -677,8 +848,6 @@ html[data-app-font='active'] .app-shell .week-day {
 
 /* ------------------------------------------- 7. Zero-Gap Footer & Compact Floating Dock */
 
-/* Keep .page-wrap tight (18px) before .app-footer so there is NEVER a dead void
-   between the last card and the footer. Place scroll clearance AFTER the footer. */
 html[data-app-font='active'] .app-shell:not(.focus-app-shell) .page-wrap {
   padding-bottom: 18px;
 }
@@ -703,8 +872,6 @@ html[data-app-font='active'] .app-shell:not(.focus-app-shell) .app-footer {
     --fab-right: 14px;
   }
 
-  /* Footer sits directly below the last card (18px gap) and clears the floating
-     bottom bar + compact right-edge FAB stack cleanly underneath */
   html[data-app-font='active'] .app-shell:not(.focus-app-shell) .page-wrap {
     padding-bottom: 16px;
   }
@@ -724,8 +891,6 @@ html[data-app-font='active'] .app-shell:not(.focus-app-shell) .app-footer {
     box-shadow: var(--sr-btn-shadow);
   }
 
-  /* Compact 44x44 icon launcher on phones so Ask Stracker NEVER stretches over
-     footer links ("Contact") or card text while remaining 100% accessible */
   html[data-app-font='active'] .app-shell .ai-launcher {
     width: 44px;
     min-width: 44px;
@@ -766,6 +931,17 @@ html[data-app-font='active'] .app-shell:not(.focus-app-shell) .app-footer {
     padding: 14px 16px;
   }
 
+  html[data-app-font='active'] .app-shell .countdown-card {
+    gap: 10px;
+    padding: 14px 14px;
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-card .countdown-main,
+  html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) {
+    padding: 14px 12px 12px;
+    gap: 8px;
+  }
+
   html[data-app-font='active'] .app-shell .page-header {
     flex-direction: column;
     align-items: stretch;
@@ -777,8 +953,6 @@ html[data-app-font='active'] .app-shell:not(.focus-app-shell) .app-footer {
     width: 100%;
   }
 
-  /* Stack Daily Study Time actions full-width inside the narrow right column
-     beside the ring so labels never clip or crowd */
   html[data-app-font='active'] .app-shell .study-time-actions {
     flex-direction: column;
     align-items: stretch;
@@ -832,6 +1006,24 @@ html[data-app-font='active'] .app-shell:not(.focus-app-shell) .app-footer {
 }
 
 @media (max-width: 380px) {
+  html[data-app-font='active'] .app-shell .countdown-card {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-card .countdown-main,
+  html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) {
+    padding: 12px 10px;
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-card .countdown-number {
+    font-size: clamp(1.85rem, 8.2vw, 2.35rem);
+  }
+
+  html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) > strong {
+    font-size: clamp(1.65rem, 7.2vw, 2.15rem);
+  }
+
   html[data-app-font='active'] .app-shell .exam-mode-banner {
     flex-direction: column;
     align-items: flex-start;

@@ -23,9 +23,20 @@ describe('Student dashboard anti-slop craft & containment contract', () => {
     expect(withoutComments).not.toMatch(/\brgba?\s*\(/i)
   })
 
-  it('introduces no new font-family declarations and no sub-12px font sizes', () => {
-    expect(withoutComments).not.toMatch(/font-family\s*:/i)
+  it('uses only existing CSS font tokens (never hardcoded font families) and zero sub-12px font sizes', () => {
+    const fontFamilies = [...withoutComments.matchAll(/font-family\s*:\s*([^;]+);/gi)].map(match => match[1]?.trim())
+    for (const value of fontFamilies) {
+      expect(value).toMatch(/^var\(--font-(body|heading|identity|number|label|ui)\)$/)
+    }
     expect(withoutComments).not.toMatch(/font-size\s*:\s*(?:[0-9]|1[01])(?:\.\d+)?px\b/i)
+  })
+
+  it('highlights both exam countdowns side by side with large bold geometric numerals', () => {
+    expect(withoutComments).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));')
+    expect(withoutComments).toContain('.countdown-card:has(.countdown-main) .countdown-footer')
+    expect(withoutComments).toContain('display: contents;')
+    expect(withoutComments).toContain('font-weight: 800;')
+    expect(withoutComments).toContain('font-variant-numeric: tabular-nums;')
   })
 
   it('avoids AI-slop tells: no thick side-tab borders on rounded cards and no italic headings', () => {
@@ -34,15 +45,12 @@ describe('Student dashboard anti-slop craft & containment contract', () => {
   })
 
   it('prevents column flex-basis header gaps and void gaps before the footer', () => {
-    // Regression guard: flex: 1 1 220px on .page-header-copy caused a 220px vertical gap on mobile column headers.
     expect(withoutComments).not.toMatch(/\.page-header-copy\s*\{[^}]*flex:\s*1\s+1\s+\d+px/i)
-    // Page content stays tight before .app-footer; scroll clearance lives on .app-footer itself.
     expect(withoutComments).toContain('padding-bottom: 18px;')
     expect(withoutComments).toContain('padding-bottom: calc(108px + var(--safe-bottom, 0px));')
   })
 
   it('prevents button label clipping and keeps mobile topbar icons borderless', () => {
-    // Buttons wrap cleanly with generous padding rather than slicing text off inside narrow columns.
     expect(withoutComments).toContain('white-space: normal;')
     expect(withoutComments).toContain('padding: 9px 16px;')
     expect(withoutComments).toContain('.mobile-top-actions .icon-button')
