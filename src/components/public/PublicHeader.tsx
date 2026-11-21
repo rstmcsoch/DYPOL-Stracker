@@ -71,6 +71,9 @@ export function PublicHeader({ theme, onThemeToggle, sectionPrefix = '', signedI
   const t = useSiteText
   const panelRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const sections = PUBLIC_SECTIONS.map(section => ({ ...section, label: t(section.key) }))
+  const loginLabel = t('public.header.login.label')
+  const signupLabel = t('public.header.signup.label')
 
   useEffect(() => {
     if (!open) return
@@ -99,15 +102,15 @@ export function PublicHeader({ theme, onThemeToggle, sectionPrefix = '', signedI
     <div className="pub-header-inner">
       <PublicBrand />
       <nav className="pub-nav" aria-label="Stracker sections">
-        {PUBLIC_SECTIONS.map(section => <a key={section.href} className={section.href === '#why-stracker' ? 'pub-nav-link pub-nav-link-loop' : 'pub-nav-link'} href={`${sectionPrefix}${section.href}`}>{t(section.key)}</a>)}
+        {sections.map(section => <a key={section.href} className={section.href === '#why-stracker' ? 'pub-nav-link pub-nav-link-loop' : 'pub-nav-link'} href={`${sectionPrefix}${section.href}`}>{section.label}</a>)}
       </nav>
       <PublicThemeToggle theme={theme} onToggle={onThemeToggle} />
       <div className="pub-header-actions">
         {signedIn
           ? <Link className="button button-primary button-sm" to="/">Open notebook</Link>
           : <>
-            <Link className="button button-quiet button-sm" to="/login">{t('public.header.login.label')}</Link>
-            <Link className="button button-primary button-sm" to="/signup">{t('public.header.signup.label')}</Link>
+            <Link className="button button-quiet button-sm" to="/login">{loginLabel}</Link>
+            <Link className="button button-primary button-sm" to="/signup">{signupLabel}</Link>
           </>}
       </div>
       <button
@@ -124,7 +127,7 @@ export function PublicHeader({ theme, onThemeToggle, sectionPrefix = '', signedI
     </div>
     {open && <div className="pub-menu" id="stracker-public-menu" ref={panelRef}>
       <nav className="pub-menu-nav" aria-label="Stracker sections">
-        {PUBLIC_SECTIONS.map(section => <a key={section.href} className="pub-menu-link" href={`${sectionPrefix}${section.href}`} onClick={() => setOpen(false)}>{t(section.key)}</a>)}
+        {sections.map(section => <a key={section.href} className="pub-menu-link" href={`${sectionPrefix}${section.href}`} onClick={() => setOpen(false)}>{section.label}</a>)}
       </nav>
       <div className="pub-menu-actions">
         {signedIn

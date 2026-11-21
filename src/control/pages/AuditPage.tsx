@@ -188,12 +188,12 @@ export default function AuditPage() {
             <Button type="submit" variant="primary" disabled={query.isFetching && !draftDirty}>Apply filters</Button>
             <Button type="button" variant="ghost" onClick={clear} disabled={!filtered && !draftDirty}><FilterX size={15} aria-hidden="true" /> Clear filters</Button>
           </div>
-          <p className="cc-filters__summary" role="status">
+          <div className="cc-filters__summary" role="status">
             {filters.from || filters.to
               ? <>Dates are whole calendar days in {longLabel}{filters.from && filters.to ? `: ${formatDayRange(filters.from, filters.to)}` : filters.from ? ` from ${formatDayRange(filters.from, filters.from)}` : ` up to ${formatDayRange(filters.to, filters.to)}`}.</>
               : <>Dates and times are shown in {longLabel}.</>}
             {' '}<TimeZoneSwitch />
-          </p>
+          </div>
         </form>
 
         {query.isPending && <Skeleton rows={8} />}
