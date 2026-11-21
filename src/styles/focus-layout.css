@@ -1,3 +1,5 @@
+@import './student-redesign.css';
+
 /* Focus session details: stable field grid and consistent control alignment. */
 .focus-page .focus-context-card {
   width: min(100%, 700px);
