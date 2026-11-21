@@ -277,6 +277,51 @@ html[data-app-font='active'] .app-shell .mobile-top-actions .icon-button {
   box-shadow: none;
 }
 
+/* Stracker AI header tool buttons (desktop, tablet, mobile — floating & large workspace):
+   15% shorter than 38px/45px with crisp separation so buttons never stick together */
+html[data-app-font='active'] .app-shell :is(.ai-floating-window, .ai-large-workspace) .ai-window-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+html[data-app-font='active'] .app-shell :is(.ai-floating-window, .ai-large-workspace) .ai-window-tools .icon-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper-soft);
+  color: var(--ink);
+}
+
+html[data-app-font='active'] .app-shell :is(.ai-floating-window, .ai-large-workspace) .ai-window-tools .icon-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 520px) {
+  html[data-app-font='active'] .app-shell :is(.ai-floating-window, .ai-large-workspace) .ai-window-tools {
+    gap: 5px;
+  }
+
+  html[data-app-font='active'] .app-shell :is(.ai-floating-window, .ai-large-workspace) .ai-window-tools .icon-button {
+    width: 32px;
+    min-width: 32px;
+    height: 38px;
+    min-height: 38px;
+    border-radius: 9px;
+  }
+
+  html[data-app-font='active'] .app-shell :is(.ai-floating-window, .ai-large-workspace) .ai-window-tools .icon-button svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
 html[data-app-font='active'] .app-shell :is(
   .button,
   .jee-link,
@@ -331,14 +376,6 @@ html[data-app-font='active'] .app-shell :is(.subject-badge, .status-badge, .jee-
 
 /* ------------------------------------------- 5. Home Exam Countdown Showcase */
 
-/* Highlighted, bold side-by-side Exam Countdown redesign:
-   - Dual-exam tracks (e.g. JEE Main + JEE Advanced): both countdowns sit
-     prominently side by side in equal-weight highlighted tiles with bold
-     geometric tabular numerals (var(--font-body) !important to override
-     typography.css's !important Patrick Hand metric rule), and Chapters
-     covered sits cleanly underneath across the full width.
-   - Single-exam tracks (e.g. NEET, UPSC, GATE): the primary countdown spans
-     full width as a bold highlighted centerpiece above Chapters covered. */
 html[data-app-font='active'] .app-shell .countdown-card {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -357,7 +394,6 @@ html[data-app-font='active'] .app-shell .countdown-card .countdown-scribble {
   display: none;
 }
 
-/* Primary countdown tile (left column in dual-exam, full span in single-exam) */
 html[data-app-font='active'] .app-shell .countdown-card .countdown-main {
   grid-column: 1 / -1;
   display: flex;
@@ -432,14 +468,10 @@ html[data-app-font='active'] .app-shell .countdown-card .countdown-copy > small 
   font-variant-numeric: tabular-nums;
 }
 
-/* Promote .countdown-footer children directly into .countdown-card's 2-column
-   grid when a primary countdown exists, so the secondary exam sits right
-   beside the primary exam and Chapters covered spans cleanly underneath */
 html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer {
   display: contents;
 }
 
-/* Secondary countdown tile (right column beside primary countdown) */
 html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:first-child:not(:last-child) {
   grid-column: span 1;
   display: flex;
@@ -494,7 +526,6 @@ html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .co
   box-shadow: var(--sr-btn-shadow);
 }
 
-/* Chapters covered row: crisp full-width strip underneath the countdowns */
 html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .countdown-footer > .mini-exam:last-child {
   grid-column: 1 / -1;
   display: flex;
@@ -518,7 +549,6 @@ html[data-app-font='active'] .app-shell .countdown-card:has(.countdown-main) .co
   color: var(--ink);
 }
 
-/* Unset countdown state: keep standard footer spacing */
 html[data-app-font='active'] .app-shell .countdown-card:not(:has(.countdown-main)) .countdown-footer {
   grid-column: 1 / -1;
   margin-top: 4px;
@@ -616,7 +646,6 @@ html[data-app-font='active'] .app-shell .study-now-card {
   gap: var(--sr-space-3);
 }
 
-/* Daily Study Time: hide redundant bottom progress bar, crisp buttons */
 html[data-app-font='active'] .app-shell .study-progress-card {
   padding: var(--sr-space-4);
 }

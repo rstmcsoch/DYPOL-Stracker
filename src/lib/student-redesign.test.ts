@@ -40,6 +40,15 @@ describe('Student dashboard anti-slop craft & containment contract', () => {
     expect(withoutComments).toContain('font-variant-numeric: tabular-nums;')
   })
 
+  it('spaces Stracker AI header tool buttons cleanly and sizes them 15% shorter across all viewports', () => {
+    expect(withoutComments).toContain(':is(.ai-floating-window, .ai-large-workspace) .ai-window-tools')
+    expect(withoutComments).toContain('gap: 6px;')
+    expect(withoutComments).toContain('width: 32px;')
+    expect(withoutComments).toContain('height: 32px;')
+    expect(withoutComments).toContain('gap: 5px;')
+    expect(withoutComments).toContain('height: 38px;')
+  })
+
   it('avoids AI-slop tells: no thick side-tab borders on rounded cards and no italic headings', () => {
     expect(withoutComments).not.toMatch(/border-left\s*:\s*[3-9]px\s+solid/i)
     expect(withoutComments).toContain('font-style: normal;')
