@@ -2,29 +2,26 @@
    ============================================================================
    STRACKER — Anti-Slop Craft, Button Discipline & Strict Containment System
    ----------------------------------------------------------------------------
-   Informed by Hallmark (Nutlope/hallmark), Anti-Slop (miqdadbadjuber/anti-slop),
-   Impeccable (pbakaus/impeccable), Stop-Slop, and No-AI-Slop principles.
-
    Scope: `html[data-app-font='active'] .app-shell` (authenticated student
    workspace only — public pages, auth pages, and Owner Control Center are
    untouched).
 
-   Non-negotiable design contract:
-   1. Everything is defined: clear 4-tier visual hierarchy — Canvas (--bg),
-      Defined Card (--paper + crisp border), Hairline Divider (--line),
-      Tactile Button (explicit border + fill + press depth), and Compact Badge.
-   2. Zero AI-slop tells: no thick side-tab left borders on rounded boxes, no
-      cards nested inside cards, no invisible text pretending to be a button,
-      no italic headings, no decorative noise.
-   3. Buttons are real Buttons: every actionable button/link-control has clear
-      boundaries, defined surface fill, tactile press feedback, instant
-      :focus-visible ring, and >= 44px touch targets on mobile.
-   4. Strict containment: nothing ever overflows its element (overflow-x: clip
-      on root, min-width: 0 + max-width: 100% on grid/flex children, safe
-      overflow-wrap on headings/copy, bounded badges/inputs/SVGs) across
-      320px, 375px, 414px, 768px, 1024px, and 1440px+.
-   5. 100% theme-locked tokens: zero hardcoded hex/rgb colors, zero new
-      font-family declarations, zero sub-12px font sizes.
+   Core guarantees:
+   1. Zero unnecessary vertical gaps: never apply a px flex-basis in column
+      flex headers, and keep page-wrap tight before .app-footer (putting mobile
+      nav/FAB scroll clearance AFTER the footer, never between content and
+      footer).
+   2. Real, well-proportioned Buttons: every button has generous inner padding
+      so text never touches or clips against edges; never slice button labels
+      with centered nowrap+overflow:hidden; keep topbar icons clean and
+      consistent.
+   3. Slight, consistent breathing room (margins/padding) between every text
+      node and its enclosing card, button, badge, pill, or form field.
+   4. Strict element containment across 320px-1440px+ (overflow-x: clip on
+      root, min-width: 0 + max-width: 100% on containers, safe word wrapping).
+   5. Zero AI-slop tells: no thick side-tab left borders on rounded cards, no
+      nested double-bordered cards inside cards, no italic headings, 100%
+      theme-locked CSS custom properties (all 9 palettes x Light/Dark/Auto).
    ============================================================================ */
 
 /* ------------------------------------------- 1. Root Containment & Tokens */
@@ -57,7 +54,7 @@ html[data-app-font='active'][data-theme='dark'] .app-shell {
   --sr-card-shadow: 0 4px 14px -6px color-mix(in srgb, var(--app-hard) 78%, transparent);
 }
 
-/* Global containment inside the authenticated shell: no child leaks past its box */
+/* Global containment: no structural box or text node ever leaks outside its parent */
 html[data-app-font='active'] .app-shell :is(main, section, article, aside, header, footer, ul, ol, li, dl, dd, dt, form, fieldset) {
   min-width: 0;
   max-width: 100%;
@@ -67,10 +64,10 @@ html[data-app-font='active'] .app-shell :is(main, section, article, aside, heade
 html[data-app-font='active'] .app-shell :is(h1, h2, h3, h4, p, li, strong, small, dt, dd, label, figcaption) {
   min-width: 0;
   max-width: 100%;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
-/* Typography purity: upright roman headings only (no italic display headers) */
+/* Upright roman headings only */
 html[data-app-font='active'] .app-shell :is(h1, h2, h3, h4) {
   font-style: normal;
 }
@@ -79,41 +76,44 @@ html[data-app-font='active'] .app-shell :is(img, svg, canvas, video, iframe) {
   max-width: 100%;
 }
 
-/* ------------------------------------------- 2. Defined Surfaces & Rhythm */
+/* ------------------------------------------- 2. Defined Surfaces & Tight Rhythm */
 
 html[data-app-font='active'] .app-shell :is(.content-page, .dashboard-page) {
-  gap: var(--sr-space-5);
+  gap: var(--sr-space-4);
   min-width: 0;
   max-width: 100%;
 }
 
-/* Every top-level card has a crisp, unmistakable boundary and clips inner overflow */
+/* Top-level cards: crisp border, consistent inner padding, zero overflow */
 html[data-app-font='active'] .app-shell .notebook-card {
   border: var(--sr-border-card);
   border-radius: var(--sr-radius-card);
   background-color: var(--paper);
   background-image: none;
   box-shadow: var(--sr-card-shadow);
+  padding: var(--sr-space-4) var(--sr-space-5);
   overflow: hidden;
   min-width: 0;
   max-width: 100%;
   transition: border-color 140ms var(--sr-ease-out);
 }
 
-/* Defined page headers */
+/* Compact page headers — NEVER use a px flex-basis on .page-header-copy (causes
+   massive vertical dead space when stacked in flex-direction: column on mobile) */
 html[data-app-font='active'] .app-shell .page-header {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--sr-space-3) var(--sr-space-4);
-  padding-bottom: var(--sr-space-2);
-  border-bottom: var(--sr-border-subtle);
+  gap: var(--sr-space-2) var(--sr-space-4);
+  margin: 0;
+  padding: 0;
+  border-bottom: 0;
 }
 
 html[data-app-font='active'] .app-shell .page-header-copy {
   min-width: 0;
-  flex: 1 1 220px;
+  flex: 1 1 auto;
   gap: var(--sr-space-1);
 }
 
@@ -135,31 +135,38 @@ html[data-app-font='active'] .app-shell .section-heading {
   align-items: center;
   justify-content: space-between;
   gap: var(--sr-space-2) var(--sr-space-3);
-  margin-bottom: var(--sr-space-3);
+  margin-bottom: var(--sr-space-2);
 }
 
-/* ------------------------------------------- 3. Buttons Must Be Real Buttons */
+/* ------------------------------------------- 3. Buttons Must Be Real, Clean Buttons */
 
-/* Primary, secondary, danger, and marker buttons: crisp defined borders, clear
-   surface contrast, tactile press, zero text overflow outside button bounds */
+/* Standard primary, secondary, quiet, danger, and marker buttons:
+   generous inner padding so text always has comfortable breathing room from
+   borders, height: auto so wrapped text never clips, and clear tactile depth */
 html[data-app-font='active'] .app-shell .button,
 html[data-app-font='active'] .dialog-panel .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--sr-space-2);
+  gap: 8px;
   min-height: 40px;
+  height: auto;
   max-width: 100%;
-  padding: var(--sr-space-2) var(--sr-space-4);
+  padding: 9px 16px;
   border-radius: var(--sr-radius-control);
   border: var(--sr-border-control);
   font-weight: 600;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: break-word;
   box-sizing: border-box;
   transition: transform 110ms var(--sr-ease-out), box-shadow 110ms var(--sr-ease-out), background-color 140ms var(--sr-ease-out), border-color 140ms var(--sr-ease-out), color 140ms var(--sr-ease-out);
+}
+
+html[data-app-font='active'] .app-shell .button svg,
+html[data-app-font='active'] .dialog-panel .button svg {
+  flex: none;
 }
 
 html[data-app-font='active'] .app-shell .button-primary,
@@ -198,13 +205,16 @@ html[data-app-font='active'] .app-shell .button-marker {
   box-shadow: var(--sr-btn-shadow);
 }
 
-/* Turn every inline action trigger (Open, See all, Set goal, Edit, Retry, etc.)
-   into an unmistakable, defined compact Button instead of bare floating text */
+/* Compact inline action buttons (Open, See all chapters, Log a chapter test,
+   Edit, Retry, Set goal, Week arrows, Backlog): well-proportioned tactile
+   buttons with crisp padding — never bloated giant boxes and never clipped */
 html[data-app-font='active'] .app-shell :is(
   .jee-link,
   .text-button,
   .text-link,
   .tip-link,
+  .syllabus-mini-card a,
+  .syllabus-mini-card button,
   .mistake-stat-cta,
   .mistake-action,
   .mistake-board-footer button,
@@ -218,32 +228,40 @@ html[data-app-font='active'] .app-shell :is(
   justify-content: center;
   gap: 6px;
   min-height: 36px;
+  height: auto;
   max-width: 100%;
-  padding: 6px 12px;
+  padding: 7px 13px;
   border: 1.5px solid var(--line-strong);
   border-radius: var(--sr-radius-control);
   background: var(--paper-soft);
   color: var(--ink);
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.25;
   text-decoration: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: break-word;
   box-sizing: border-box;
   box-shadow: 0 1px 0 var(--line-strong);
   cursor: pointer;
   transition: transform 110ms var(--sr-ease-out), box-shadow 110ms var(--sr-ease-out), background-color 140ms var(--sr-ease-out), border-color 140ms var(--sr-ease-out), color 140ms var(--sr-ease-out);
 }
 
-/* Accent-tinted action buttons inside cards (Open, See all, Log test, etc.) */
-html[data-app-font='active'] .app-shell :is(.jee-link, .tip-link, .section-heading .text-link, .syllabus-mini-foot .text-link, .revisions-head .text-link) {
+html[data-app-font='active'] .app-shell :is(
+  .jee-link,
+  .tip-link,
+  .syllabus-mini-card a,
+  .syllabus-mini-card button,
+  .section-heading .text-link,
+  .revisions-head .text-link
+) {
   color: var(--text-accent, var(--accent));
   border-color: color-mix(in srgb, var(--accent) 42%, var(--line-strong));
   background: color-mix(in srgb, var(--accent-light) 55%, var(--paper));
 }
 
-/* Icon-only buttons also have a clear defined frame */
+/* Keep icon buttons inside cards/dialogs clearly framed, while leaving the
+   mobile topbar search icon clean and consistent with the menu icon */
 html[data-app-font='active'] .app-shell .icon-button,
 html[data-app-font='active'] .dialog-panel .icon-button {
   display: inline-grid;
@@ -258,13 +276,21 @@ html[data-app-font='active'] .dialog-panel .icon-button {
   transition: transform 110ms var(--sr-ease-out), background-color 140ms var(--sr-ease-out), border-color 140ms var(--sr-ease-out);
 }
 
-/* Tactile press state across all buttons (all 8 states discipline) */
+html[data-app-font='active'] .app-shell .mobile-top-actions .icon-button {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Tactile press state across all buttons */
 html[data-app-font='active'] .app-shell :is(
   .button,
   .jee-link,
   .text-button,
   .text-link,
   .tip-link,
+  .syllabus-mini-card a,
+  .syllabus-mini-card button,
   .mistake-stat-cta,
   .mistake-action,
   .streak-rest-button,
@@ -277,7 +303,6 @@ html[data-app-font='active'] .app-shell :is(
   box-shadow: none;
 }
 
-/* Disabled buttons: unmistakable muted state */
 html[data-app-font='active'] .app-shell :is(button, .button):disabled {
   opacity: 0.48;
   box-shadow: none;
@@ -293,7 +318,7 @@ html[data-app-font='active'] .dialog-panel :is(button, a, input, select, textare
   transition: none;
 }
 
-/* ------------------------------------------- 4. Bounded Badges & Chips */
+/* ------------------------------------------- 4. Bounded Badges & Pills */
 
 html[data-app-font='active'] .app-shell :is(.subject-badge, .status-badge, .jee-chip, .countdown-badge, .mistake-type-chip, .preview-chip, .score-pill, .priority-pill) {
   display: inline-flex;
@@ -301,6 +326,7 @@ html[data-app-font='active'] .app-shell :is(.subject-badge, .status-badge, .jee-
   gap: 5px;
   max-width: 100%;
   min-width: 0;
+  padding: 4px 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -312,7 +338,6 @@ html[data-app-font='active'] .app-shell :is(.subject-badge, .status-badge, .jee-
 
 /* ------------------------------------------- 5. Home Dashboard Craft */
 
-/* Hero Countdown & Streak: crisp structure, zero vertical bloat */
 html[data-app-font='active'] .app-shell .countdown-card,
 html[data-app-font='active'] .app-shell .streak-card {
   border-radius: var(--sr-radius-card);
@@ -330,7 +355,13 @@ html[data-app-font='active'] .app-shell .countdown-footer {
   border-top: var(--sr-border-subtle);
 }
 
-/* Flat hairline separation inside Streak instead of nested bordered cards */
+html[data-app-font='active'] .app-shell .countdown-footer .mini-exam {
+  padding: 10px 12px;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
 html[data-app-font='active'] .app-shell .streak-bottom {
   margin: var(--sr-space-3) 0;
   padding: var(--sr-space-3) 0;
@@ -361,10 +392,10 @@ html[data-app-font='active'] .app-shell :is(.streak-goal, .streak-goal-empty) {
 html[data-app-font='active'] .app-shell .streak-goal-empty p {
   margin: 0;
   color: var(--ink-soft);
-  flex: 1 1 200px;
+  flex: 1 1 180px;
 }
 
-/* Exam Mode Banner: uniform crisp border (NO side-tab left border on rounded box) */
+/* Exam Mode Banner: uniform crisp border (no AI-slop thick side-tab stripe) */
 html[data-app-font='active'] .app-shell .exam-mode-banner {
   display: flex;
   flex-wrap: wrap;
@@ -409,33 +440,34 @@ html[data-app-font='active'] .app-shell .study-now-card {
   gap: var(--sr-space-3);
 }
 
-/* Daily Study Time: single progress ring (hide duplicate bottom bar),
-   two crisp equal-width tactile buttons */
+/* Daily Study Time: hide redundant bottom progress bar (ring already shows %),
+   and give action buttons full comfortable width so labels never clip */
 html[data-app-font='active'] .app-shell .study-progress-card {
   padding: var(--sr-space-4);
 }
 
-html[data-app-font='active'] .app-shell .study-progress-card :is(.study-progress-bar, .progress-bar, .meter-track) {
+html[data-app-font='active'] .app-shell .study-progress-card :is(.progress-track, .study-progress-bar, .progress-bar, .meter-track) {
   display: none;
 }
 
 html[data-app-font='active'] .app-shell .study-time-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
   gap: var(--sr-space-2);
   width: 100%;
   margin-top: var(--sr-space-3);
 }
 
 html[data-app-font='active'] .app-shell .study-time-actions > button {
-  width: 100%;
+  flex: 1 1 160px;
   min-height: 40px;
-  padding: var(--sr-space-2) var(--sr-space-3);
+  padding: 9px 14px;
   border-color: var(--app-edge);
   box-shadow: var(--sr-btn-shadow);
 }
 
-/* Revision Desk: hairline row dividers (no nested cards inside cards) */
+/* Revision Desk: clean hairline dividers (no nested cards inside cards) */
 html[data-app-font='active'] .app-shell .revisions-card {
   padding: var(--sr-space-4);
 }
@@ -448,12 +480,12 @@ html[data-app-font='active'] .app-shell .revision-row {
   background: transparent;
 }
 
-/* Study Tip card: clean uniform border (no AI-slop thick left stripe) */
+/* Study Tip card: clean uniform border */
 html[data-app-font='active'] .app-shell .smart-tip-card {
   padding: var(--sr-space-4);
   border: 1.5px solid var(--surface-tip-border, var(--line-strong));
   border-radius: var(--sr-radius-card);
-  gap: var(--sr-space-2);
+  gap: var(--sr-space-3);
 }
 
 html[data-app-font='active'] .app-shell .smart-tip-card p {
@@ -461,7 +493,7 @@ html[data-app-font='active'] .app-shell .smart-tip-card p {
   line-height: 1.45;
 }
 
-/* This Week snapshot: clean hairline-divided ledger (no nested cards inside card) */
+/* This Week snapshot: crisp hairline ledger */
 html[data-app-font='active'] .app-shell .jee-snap-week {
   padding: var(--sr-space-4);
   gap: var(--sr-space-3);
@@ -493,7 +525,7 @@ html[data-app-font='active'] .app-shell .jee-week-backlog {
   width: 100%;
   justify-content: space-between;
   min-height: 40px;
-  padding: var(--sr-space-2) var(--sr-space-3);
+  padding: 9px 14px;
   border-color: var(--app-edge);
   background: var(--paper-soft);
   box-shadow: var(--sr-btn-shadow);
@@ -527,7 +559,7 @@ html[data-app-font='active'] .app-shell :is(.stat-card, .jee-stat) :is(small, p,
   margin: 0;
   color: var(--muted);
   line-height: 1.4;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 html[data-app-font='active'] .app-shell :is(.stat-card strong, .jee-stat strong, .stat-value) {
@@ -535,7 +567,6 @@ html[data-app-font='active'] .app-shell :is(.stat-card strong, .jee-stat strong,
   letter-spacing: -0.015em;
 }
 
-/* Bounded, clearly defined form controls and toolbars across all 18 pages */
 html[data-app-font='active'] .app-shell :is(.test-filter-row, .filter-controls, .mistake-toolbar, .retry-filters, .jee-filter-grid, .syllabus-toolbar, .pyq-toolbar, .backlog-toolbar, .decks-toolbar) {
   display: flex;
   flex-wrap: wrap;
@@ -549,6 +580,7 @@ html[data-app-font='active'] .app-shell .search-field {
   min-height: 42px;
   max-width: 100%;
   min-width: 0;
+  padding-inline: 10px;
   border: 1.5px solid var(--line-strong);
   border-radius: var(--sr-radius-control);
   background: var(--paper-soft);
@@ -561,6 +593,7 @@ html[data-app-font='active'] .app-shell .search-field input {
   min-width: 0;
   width: 100%;
   max-width: 100%;
+  padding: 8px 6px;
 }
 
 html[data-app-font='active'] .app-shell .search-field:focus-within {
@@ -576,13 +609,13 @@ html[data-app-font='active'] .app-shell :is(input, select, textarea) {
 
 html[data-app-font='active'] .app-shell :is(.test-filter-row, .filter-controls, .mistake-toolbar, .retry-filters, .jee-filter-grid) :is(select, input[type='date']) {
   min-height: 42px;
+  padding: 8px 12px;
   border: 1.5px solid var(--line-strong);
   border-radius: var(--sr-radius-control);
   background: var(--paper-soft);
   color: var(--ink);
 }
 
-/* Defined segmented tab rails */
 html[data-app-font='active'] .app-shell :is(.settings-tabs, .mistake-tabs, .jee-tabs) {
   padding: var(--sr-space-1);
   border: var(--sr-border-card);
@@ -594,17 +627,12 @@ html[data-app-font='active'] .app-shell :is(.settings-tabs, .mistake-tabs, .jee-
 
 html[data-app-font='active'] .app-shell :is(.settings-tab, .mistake-tab, .jee-tab) {
   border-radius: 8px;
-  white-space: nowrap;
+  padding: 8px 12px;
 }
 
-/* Tables: safe horizontal containment & crisp tabular cells */
 html[data-app-font='active'] .app-shell :is(.table-wrap, .test-table-wrap) {
   max-width: 100%;
   overflow-x: auto;
-}
-
-html[data-app-font='active'] .app-shell :is(.test-table, .data-table) {
-  max-width: 100%;
 }
 
 html[data-app-font='active'] .app-shell :is(.test-table, .data-table) th {
@@ -616,10 +644,9 @@ html[data-app-font='active'] .app-shell :is(.test-table, .data-table) th {
 html[data-app-font='active'] .app-shell :is(.test-table, .data-table) td {
   border-bottom: var(--sr-border-subtle);
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
-/* Clean, flat empty states (no nested dashed box inside a card) */
 html[data-app-font='active'] .app-shell .empty-state {
   padding: var(--sr-space-5) var(--sr-space-4);
   gap: var(--sr-space-2);
@@ -635,7 +662,6 @@ html[data-app-font='active'] .app-shell .empty-state p {
   line-height: 1.45;
 }
 
-/* Planner tip & day cards */
 html[data-app-font='active'] .app-shell :is(.planner-tip, .planner-note-card) {
   padding: var(--sr-space-3) var(--sr-space-4);
   border: var(--sr-border-card);
@@ -649,57 +675,44 @@ html[data-app-font='active'] .app-shell .week-day {
   transition: border-color 140ms var(--sr-ease-out), background-color 140ms var(--sr-ease-out);
 }
 
-/* ------------------------------------------- 7. Floating Dock & Footer Clearance */
+/* ------------------------------------------- 7. Zero-Gap Footer & Compact Floating Dock */
 
-html[data-app-font='active'] .app-shell .app-footer {
+/* Keep .page-wrap tight (18px) before .app-footer so there is NEVER a dead void
+   between the last card and the footer. Place scroll clearance AFTER the footer. */
+html[data-app-font='active'] .app-shell:not(.focus-app-shell) .page-wrap {
+  padding-bottom: 18px;
+}
+
+html[data-app-font='active'] .app-shell:not(.focus-app-shell) .app-footer {
+  margin-top: 0;
   padding-top: var(--sr-space-4);
-  padding-bottom: var(--sr-space-5);
+  padding-bottom: 36px;
   border-top: var(--sr-border-subtle);
 }
 
 @media (min-width: 961px) {
-  html[data-app-font='active'] .app-shell .page-wrap {
-    padding-bottom: calc(112px + var(--safe-bottom, 0px));
-  }
-
-  html[data-app-font='active'] .app-shell .app-footer {
+  html[data-app-font='active'] .app-shell:not(.focus-app-shell) .app-footer {
     padding-right: 120px;
+    padding-bottom: 48px;
   }
 }
 
 @media (max-width: 960px) {
   html[data-app-font='active'] .app-shell {
-    --fab-size: 48px;
+    --fab-size: 46px;
     --fab-right: 14px;
   }
 
-  /* Guarantee footer and final card controls always scroll clear of bottom nav + FAB stack */
-  html[data-app-font='active'] .app-shell .page-wrap {
-    padding-bottom: calc(180px + var(--safe-bottom, 0px));
+  /* Footer sits directly below the last card (18px gap) and clears the floating
+     bottom bar + compact right-edge FAB stack cleanly underneath */
+  html[data-app-font='active'] .app-shell:not(.focus-app-shell) .page-wrap {
+    padding-bottom: 16px;
   }
 
-  html[data-app-font='active'] .app-shell .app-footer {
-    padding-right: 76px;
-    padding-bottom: 28px;
+  html[data-app-font='active'] .app-shell:not(.focus-app-shell) .app-footer {
+    padding-right: 68px;
+    padding-bottom: calc(108px + var(--safe-bottom, 0px));
     text-align: left;
-  }
-
-  /* Real 44px+ touch targets on mobile buttons */
-  html[data-app-font='active'] .app-shell :is(
-    .button,
-    .jee-link,
-    .text-button,
-    .text-link,
-    .tip-link,
-    .mistake-stat-cta,
-    .mistake-action,
-    .streak-rest-button,
-    .study-time-actions button,
-    .jee-week-backlog,
-    .week-arrows button,
-    .icon-button
-  ) {
-    min-height: 44px;
   }
 
   html[data-app-font='active'] .app-shell .quick-action-fab {
@@ -711,26 +724,28 @@ html[data-app-font='active'] .app-shell .app-footer {
     box-shadow: var(--sr-btn-shadow);
   }
 
+  /* Compact 44x44 icon launcher on phones so Ask Stracker NEVER stretches over
+     footer links ("Contact") or card text while remaining 100% accessible */
   html[data-app-font='active'] .app-shell .ai-launcher {
+    width: 44px;
     min-width: 44px;
+    height: 44px;
     min-height: 44px;
-    padding: 0 var(--sr-space-3);
+    padding: 0;
+    justify-content: center;
     border: var(--sr-border-control);
     border-radius: var(--sr-radius-pill);
     background: var(--paper);
     color: var(--ink);
     box-shadow: var(--sr-btn-shadow);
-    gap: 6px;
   }
 
-  html[data-app-font='active'] .app-shell .ai-launcher-wrap:not(.ai-launcher-expanded) .ai-launcher {
-    width: 44px;
-    padding: 0;
-    justify-content: center;
+  html[data-app-font='active'] .app-shell .ai-launcher .ai-launcher-label {
+    display: none;
   }
 }
 
-/* ------------------------------------------- 8. Responsive Containment (320px-1440px+) */
+/* ------------------------------------------- 8. Responsive Breakpoints (320px-1440px+) */
 
 @media (min-width: 641px) and (max-width: 1024px) {
   html[data-app-font='active'] .app-shell :is(.stat-grid, .jee-stat-grid) {
@@ -744,28 +759,49 @@ html[data-app-font='active'] .app-shell .app-footer {
 
 @media (max-width: 760px) {
   html[data-app-font='active'] .app-shell :is(.content-page, .dashboard-page) {
-    gap: var(--sr-space-4);
+    gap: 14px;
+  }
+
+  html[data-app-font='active'] .app-shell .notebook-card {
+    padding: 14px 16px;
   }
 
   html[data-app-font='active'] .app-shell .page-header {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
+  }
+
+  html[data-app-font='active'] .app-shell .page-header-copy {
+    flex: none;
+    width: 100%;
+  }
+
+  /* Stack Daily Study Time actions full-width inside the narrow right column
+     beside the ring so labels never clip or crowd */
+  html[data-app-font='active'] .app-shell .study-time-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  html[data-app-font='active'] .app-shell .study-time-actions > button {
+    flex: none;
+    width: 100%;
   }
 
   html[data-app-font='active'] .app-shell :is(.stat-grid, .jee-stat-grid) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--sr-space-2);
+    gap: 10px;
   }
 
   html[data-app-font='active'] .app-shell :is(.stat-card, .jee-stat) {
-    padding: var(--sr-space-3);
+    padding: 12px 14px;
   }
 
-  /* Clean hairline-separated mobile test records (no nested card sprawl) */
   html[data-app-font='active'] .app-shell .test-table tbody tr {
     border: var(--sr-border-subtle);
     border-radius: 12px;
-    padding: var(--sr-space-3);
+    padding: 12px 14px;
     background: var(--paper-soft);
     gap: 6px;
     max-width: 100%;
@@ -781,7 +817,7 @@ html[data-app-font='active'] .app-shell .app-footer {
 
   html[data-app-font='active'] .app-shell .jee-snap-week .jee-week-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--sr-space-3) var(--sr-space-2);
+    gap: 12px 10px;
   }
 
   html[data-app-font='active'] .app-shell .jee-snap-week .jee-week-fact:nth-child(odd) {
@@ -790,17 +826,12 @@ html[data-app-font='active'] .app-shell .app-footer {
   }
 
   html[data-app-font='active'] .app-shell .jee-snap-week .jee-week-fact:nth-child(n + 3) {
-    padding-top: var(--sr-space-3);
+    padding-top: 12px;
     border-top: var(--sr-border-subtle);
   }
 }
 
-/* Ultra-narrow phones (320px-380px): prevent button or metric squeeze */
 @media (max-width: 380px) {
-  html[data-app-font='active'] .app-shell .study-time-actions {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   html[data-app-font='active'] .app-shell .exam-mode-banner {
     flex-direction: column;
     align-items: flex-start;
@@ -808,14 +839,13 @@ html[data-app-font='active'] .app-shell .app-footer {
   }
 
   html[data-app-font='active'] .app-shell .jee-week-backlog {
-    white-space: normal;
     justify-content: flex-start;
   }
 }
 
 @media (max-width: 960px) and (max-height: 500px) {
-  html[data-app-font='active'] .app-shell .page-wrap {
-    padding-bottom: calc(152px + var(--safe-bottom, 0px));
+  html[data-app-font='active'] .app-shell:not(.focus-app-shell) .app-footer {
+    padding-bottom: calc(92px + var(--safe-bottom, 0px));
   }
 }
 
@@ -831,12 +861,14 @@ html[data-app-font='active'] .app-shell .app-footer {
     .text-button,
     .text-link,
     .tip-link,
+    .syllabus-mini-card a,
+    .syllabus-mini-card button,
     .mistake-stat-cta,
     .mistake-action,
     .streak-rest-button,
     .jee-week-backlog,
     .week-arrows button,
-    .icon-button
+    .icon-button:not(.mobile-top-actions .icon-button)
   ):hover:not(:disabled) {
     border-color: var(--app-edge);
     background: var(--paper);
