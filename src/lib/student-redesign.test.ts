@@ -26,16 +26,17 @@ describe('Student dashboard anti-slop craft & containment contract', () => {
   it('uses only existing CSS font tokens (never hardcoded font families) and zero sub-12px font sizes', () => {
     const fontFamilies = [...withoutComments.matchAll(/font-family\s*:\s*([^;]+);/gi)].map(match => match[1]?.trim())
     for (const value of fontFamilies) {
-      expect(value).toMatch(/^var\(--font-(body|heading|identity|number|label|ui)\)$/)
+      expect(value).toMatch(/^var\(--font-(body|heading|identity|number|label|ui)\)(\s*!important)?$/)
     }
     expect(withoutComments).not.toMatch(/font-size\s*:\s*(?:[0-9]|1[01])(?:\.\d+)?px\b/i)
   })
 
-  it('highlights both exam countdowns side by side with large bold geometric numerals', () => {
+  it('highlights both exam countdowns side by side with matching bold geometric numerals overriding Patrick Hand', () => {
     expect(withoutComments).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));')
     expect(withoutComments).toContain('.countdown-card:has(.countdown-main) .countdown-footer')
     expect(withoutComments).toContain('display: contents;')
-    expect(withoutComments).toContain('font-weight: 800;')
+    expect(withoutComments).toContain('font-family: var(--font-body) !important;')
+    expect(withoutComments).toContain('font-weight: 800 !important;')
     expect(withoutComments).toContain('font-variant-numeric: tabular-nums;')
   })
 
