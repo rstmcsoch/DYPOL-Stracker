@@ -197,3 +197,86 @@ export async function revokeTurnstileClearance(): Promise<void> {
     // Local state is already cleared.
   }
 }
+
+/**
+ * Click-path plan for obtaining a Turnstile token.
+ *
+ * During an active 15-minute break, a pre-warmed silent token is returned immediately
+ * so Control Centre passkey / step-up does not wait on a new Cloudflare execute or a
+ * clearance fetch (those happen when the widget mounts, not on the button click).
+ * Outside the break, the visible widget path is unchanged.
+ */
+export type TurnstileTokenPlan =
+  | { action: 'return'; token: string }
+  | { action: 'execute' }
+  | { action: 'challenge' }
+  | { action: 'reopen-visible' }
+
+export function planTurnstileTokenRequest(input: {
+  mode: 'visible' | 'cleared'
+  locallyCleared: boolean
+  token: string | null
+}): TurnstileTokenPlan {
+  if (input.mode === 'cleared') {
+    if (input.locallyCleared && input.token) return { action: 'return', token: input.token }
+    if (input.locallyCleared) return { action: 'execute' }
+    return { action: 'reopen-visible' }
+  }
+  if (input.token) return { action: 'return', token: input.token }
+  return { action: 'challenge' }
+}
+
+export interface ResolveTurnstileTokenInput {
+  mode: 'visible' | 'cleared'
+  token: string | null
+  failed: boolean
+  executeStarted: boolean
+  verifyClearance: () => Promise<boolean>
+  execute: () => void
+  reset: () => void
+  onClearanceLost: () => void
+}
+
+/**
+ * Resolves a Turnstile token for a submit / passkey click.
+ *
+ * Fast path (no network, no execute): the 15-minute break is still locally active
+ * and a silent token was already pre-warmed. Clearance itself is server-validated
+ * when the widget mounts, not on this click, so Chrome's user-activation window
+ * is not spent on a round-trip before WebAuthn starts.
+ *
+ * If the break is active but no token is ready yet, the server clearance cookie
+ * is re-checked, then a silent execute may run. If the break has ended or the
+ * cookie is gone, the visible widget is reopened.
+ */
+export async function resolveTurnstileToken(
+  input: ResolveTurnstileTokenInput
+): Promise<{ token?: string; wait: boolean }> {
+  const plan = planTurnstileTokenRequest({
+    mode: input.mode,
+    locallyCleared: isTurnstileClearedLocally(),
+    token: input.token
+  })
+
+  if (plan.action === 'return') return { token: plan.token, wait: false }
+
+  if (input.mode === 'cleared') {
+    const stillCleared = await input.verifyClearance()
+    if (!stillCleared) {
+      input.onClearanceLost()
+      return { wait: true }
+    }
+    if (input.token) return { token: input.token, wait: false }
+    if (!input.executeStarted) input.execute()
+    return { wait: true }
+  }
+
+  if (input.token) return { token: input.token, wait: false }
+  if (input.failed) input.reset()
+  return { wait: true }
+}
+
+/** Silent widgets in the 15-minute break should execute as soon as they render. */
+export function shouldPrewarmSilentTurnstile(mode: 'visible' | 'cleared'): boolean {
+  return mode === 'cleared'
+}
