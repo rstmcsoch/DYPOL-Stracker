@@ -6,6 +6,7 @@ import { createMasterToolRegistry, MasterToolError, type ToolRegistry } from './
 import type { AuditSink } from './audit.js'
 import { MemoryAuditSink } from './audit.js'
 import { SupabaseAuditSink } from './audit.js'
+import { SupabaseConfirmationStore } from './confirmations.js'
 import { masterServiceClient } from './auth.js'
 import {
   JSON_RPC,
@@ -33,7 +34,7 @@ export function productionHandlerOptions(): McpHandlerOptions {
   const admin = masterServiceClient()
   return {
     clients,
-    registry: createMasterToolRegistry(undefined, { admin }),
+    registry: createMasterToolRegistry(undefined, { admin, confirmations: new SupabaseConfirmationStore(admin) }),
     audit: new SupabaseAuditSink(admin)
   }
 }

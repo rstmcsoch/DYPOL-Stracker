@@ -6,6 +6,10 @@ import { FORBIDDEN_SCOPE_MESSAGE, isForbiddenTool, normalizeToolName } from './c
 import { GET_MASTER_PERMISSIONS_DESCRIPTION, GET_MASTER_PERMISSIONS_SCHEMA, getMasterPermissions, getMasterPermissionsInput } from './tools/permissions.js'
 import { overviewTools } from './tools/overview.js'
 import { directoryTools } from './tools/directory.js'
+import { moderationTools } from './tools/moderation.js'
+import { recordTools } from './tools/records.js'
+import { insightTools } from './tools/insights.js'
+import type { ConfirmationStore } from './confirmations.js'
 import type { ToolListItem } from './protocol.js'
 
 export class MasterToolError extends Error {
@@ -47,11 +51,23 @@ export const IMPLEMENTED_MASTER_TOOL_NAMES = [
   'get_student_activity',
   'get_student_study_overview',
   'update_student_display_profile',
-  'get_student_moderation_history'
+  'get_student_moderation_history',
+  'warn_student',
+  'ban_student',
+  'unban_student',
+  'manage_student_chapters',
+  'manage_student_tests',
+  'manage_student_subject_scores',
+  'manage_student_test_chapter_links',
+  'manage_student_mistakes',
+  'get_student_dashboard',
+  'get_student_settings',
+  'get_student_analytics'
 ] as const
 
 export interface MasterToolDependencies {
   admin?: SupabaseClient
+  confirmations?: ConfirmationStore
 }
 
 export function createMasterToolRegistry(tools?: RegisteredTool[], deps: MasterToolDependencies = {}): ToolRegistry {
@@ -68,7 +84,13 @@ export function defaultImplementedTools(deps: MasterToolDependencies = {}): Regi
     execute: async (actor) => getMasterPermissions(actor, IMPLEMENTED_MASTER_TOOL_NAMES)
   })
   const admin = deps.admin ?? unavailableAdmin()
-  tools.push(...overviewTools(admin), ...directoryTools(admin))
+  tools.push(
+    ...overviewTools(admin),
+    ...directoryTools(admin),
+    ...moderationTools(admin, deps.confirmations),
+    ...recordTools(admin, deps.confirmations),
+    ...insightTools(admin)
+  )
   return tools
 }
 

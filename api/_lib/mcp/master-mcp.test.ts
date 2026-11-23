@@ -248,7 +248,7 @@ describe('POST /api/mcp', () => {
     const unknown = await callMcp(issued.token, { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'execute_sql', arguments: { sql: 'drop schema public' } } }, options)
     expect((unknown.body as { result: { isError: boolean; structuredContent: { error: string } } }).result.structuredContent.error).toBe('forbidden_tool')
 
-    const missing = await callMcp(issued.token, { jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'ban_student', arguments: {} } }, options)
+    const missing = await callMcp(issued.token, { jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'manage_student_tasks', arguments: {} } }, options)
     expect((missing.body as { result: { structuredContent: { error: string } } }).result.structuredContent.error).toBe('unknown_tool')
 
     expect(audit.events.some(event => event.result === 'denied' && event.errorCategory === 'forbidden_tool')).toBe(true)
