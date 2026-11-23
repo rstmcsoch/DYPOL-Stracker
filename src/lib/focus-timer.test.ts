@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFocusSession, defaultTimerState, formatClock, hasUnsavedFocus, liveElapsedSeconds, safeCustomMinutes, sanitizeTimerState, type TimerState } from './focus-timer'
+import { buildFocusSession, canSaveFocusBlock, defaultTimerState, formatClock, hasUnsavedFocus, liveElapsedSeconds, loggableMinutes, safeCustomMinutes, sanitizeTimerState, type TimerState } from './focus-timer'
 
 describe('custom focus minutes', () => {
   it('rejects non-finite and fractional values without creating invalid timer state', () => {
@@ -83,8 +83,21 @@ describe('live elapsed time and partial focus sessions', () => {
 
   it('marks a natural completion as completed and refuses sub-minute or break rows', () => {
     expect(buildFocusSession(running(), true, T0 + 25 * 60_000, 'x')?.completion_state).toBe('completed')
-    expect(buildFocusSession(running(), false, T0 + 20_000, 'x')).toBeNull()
     expect(buildFocusSession({ ...running(), mode: 'Long Break' }, false, T0 + 10 * 60_000, 'x')).toBeNull()
+    expect(buildFocusSession(running(), false, T0, 'x')).toBeNull()
+  })
+
+  it('saves a sub-minute block with zero logged minutes so study hours stay accurate', () => {
+    expect(canSaveFocusBlock(12)).toBe(true)
+    expect(canSaveFocusBlock(0)).toBe(false)
+    expect(loggableMinutes(12)).toBe(0)
+    expect(loggableMinutes(29)).toBe(0)
+    expect(loggableMinutes(59)).toBe(0)
+    expect(loggableMinutes(60)).toBe(1)
+    const session = buildFocusSession(running(), false, T0 + 20_000, 'x')
+    expect(session).toMatchObject({ duration_minutes: 0, completion_state: 'interrupted' })
+    expect(session?.started_at).toBe(new Date(T0).toISOString())
+    expect(session?.ended_at).toBe(new Date(T0 + 20_000).toISOString())
   })
 
   it('reuses the block id so repeated saves of one block upsert one row', () => {

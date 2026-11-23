@@ -195,7 +195,7 @@ const PAGE_PARTS: ComponentDef[] = STUDENT_PAGES
       id: `${page.id}.header`, page: page.id, label: 'Page header', kind: 'section', parent: page.id, caps: caps({ required: true, hideable: false, reorderable: false, interactive: true }),
       text: {
         title: text('Page title', spec.header.title, 40),
-        ...(spec.header.subtitle ? { subtitle: text('Info tip text', spec.header.subtitle, 160) } : {}),
+        ...(spec.header.subtitle ? { subtitle: text('Subtitle', spec.header.subtitle, 160) } : {}),
         ...(spec.header.eyebrow ? { eyebrow: text('Eyebrow', spec.header.eyebrow, 40) } : {})
       },
       note: 'Its action button keeps its real behaviour.'

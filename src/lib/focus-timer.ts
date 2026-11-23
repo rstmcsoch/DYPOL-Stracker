@@ -115,9 +115,16 @@ export function formatStudiedDuration(seconds: number): string {
   return [h ? `${h}h` : '', m ? `${m}m` : '', s ? `${s}s` : ''].filter(Boolean).join(' ')
 }
 
-/** Whole minutes that a save would record (the integer-minute study_sessions format). */
+/** Whole minutes that a save records (integer-minute study_sessions). Sub-minute blocks store 0 so hours are not rounded up. */
 export function loggableMinutes(seconds: number): number {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0
+  if (seconds < 60) return 0
   return Math.max(0, Math.min(MAX_TIMER_MINUTES, Math.round(seconds / 60)))
+}
+
+/** Any positive elapsed time can be saved; 0-second blocks cannot. */
+export function canSaveFocusBlock(seconds: number): boolean {
+  return Number.isFinite(seconds) && seconds > 0
 }
 
 /** True when the current focus block holds studied time that has not been saved yet. */
@@ -137,16 +144,17 @@ export function formatClock(totalSeconds: number): string {
 
 /**
  * Builds the study_sessions row for a focus block through the existing session shape.
- * Returns null for breaks and for blocks under the one-minute recording threshold, so
- * no meaningless zero-minute rows are written. `completed` marks a naturally finished
- * block; an ended-early block is stored as 'interrupted' (the schema's partial state),
- * which still counts as study time everywhere sessions are summed.
+ * Returns null for breaks and for zero-duration blocks. A short (under 1 minute)
+ * block is still saved with duration_minutes 0: started_at/ended_at keep the real
+ * duration, and hour or streak totals only count duration_minutes > 0.
+ * `completed` marks a naturally finished block; an ended-early block is stored as
+ * 'interrupted' (the schema's partial state).
  */
 export function buildFocusSession(state: TimerState, completed: boolean, endedAt: number, fallbackId: string): StudySession | null {
   if (!isFocusMode(state.mode)) return null
   const elapsed = liveElapsedSeconds(state, endedAt)
+  if (!canSaveFocusBlock(elapsed)) return null
   const minutes = loggableMinutes(elapsed)
-  if (minutes < 1) return null
   const effectiveEnd = state.running && state.endsAt !== null ? Math.min(endedAt, state.endsAt) : endedAt
   const endIso = new Date(effectiveEnd).toISOString()
   return {

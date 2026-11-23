@@ -134,8 +134,9 @@ export function chapterHasTestEvidence(data: Pick<AppData, 'tests' | 'testChapte
   return data.tests.some(test => test.chapter_id === chapterId) || data.testChapterLinks.some(link => link.chapter_id === chapterId)
 }
 
-function byMostRecentTest(a: TestRecord, b: TestRecord): number {
-  return b.test_date.localeCompare(a.test_date) || (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '') || b.id.localeCompare(a.id)
+/** Newest test first: exam date, then when it was created/saved, then last edit, then id. */
+export function byMostRecentTest(a: TestRecord, b: TestRecord): number {
+  return b.test_date.localeCompare(a.test_date) || (b.created_at || '').localeCompare(a.created_at || '') || (b.updated_at || '').localeCompare(a.updated_at || '') || b.id.localeCompare(a.id)
 }
 
 /** The most recently saved test dated `date` (an IST yyyy-MM-dd), or null when none exists. */

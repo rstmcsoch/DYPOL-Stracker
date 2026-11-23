@@ -310,7 +310,6 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
   const isJee = (currentExam?.id ?? 'jee') === 'jee'
   const mockSubjects = useExamSubjects()
   const formSubjects = useExamSubjects(initial?.subject)
-  const { notify } = useToast()
   const [stableId] = useState(() => initial?.id ?? createId())
   const oldScores = initial ? data.testSubjectScores.filter(score => score.test_id === initial.id) : []
   const presetChapter = !initial && presetChapterId ? data.chapters.find(chapter => chapter.id === presetChapterId) ?? null : null
@@ -375,7 +374,7 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
     try {
       const result = await onSave(values, stableId)
       setErrors(result ?? {})
-      if (result && Object.keys(result).length) notify('Please correct the highlighted test fields.', 'error')
+      // Field and _form errors already show inline. A toast on top of them was a second, blocking alert.
     } finally {
       savingRef.current = false
       setSaving(false)

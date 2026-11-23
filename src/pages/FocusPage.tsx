@@ -9,7 +9,7 @@ import { indiaToday } from '../lib/date'
 import type { StudyActivity, Subject } from '../types'
 import { STUDY_ACTIVITIES } from '../types'
 import { useExamSubjects } from '../lib/exams/useExamSubjects'
-import { formatClock, formatStudiedDuration, isFocusMode, loggableMinutes } from '../lib/focus-timer'
+import { canSaveFocusBlock, formatClock, formatStudiedDuration, isFocusMode, loggableMinutes } from '../lib/focus-timer'
 import { T } from '../lib/student-layout/T'
 import { labelSlug } from '../lib/student-layout/label-key'
 import { usePageSlots } from '../lib/student-layout/use-layout'
@@ -204,16 +204,23 @@ function EndBlockDialog({ seconds, onSave, onDiscard, onKeep, exiting }: { secon
   const [notes, setNotes] = useState('')
   const minutes = loggableMinutes(seconds)
   const studied = formatStudiedDuration(seconds)
-  const title = minutes >= 1 ? `Save ${studied} of study time?` : `Only ${studied} studied`
+  const canSave = canSaveFocusBlock(seconds)
+  const shortBlock = canSave && minutes < 1
+  const title = shortBlock ? `Save this ${studied} block?` : minutes >= 1 ? `Save ${studied} of study time?` : `Only ${studied} studied`
+  const copy = !canSave
+    ? 'Nothing to save yet. Keep studying, or discard this block.'
+    : shortBlock
+      ? `You studied ${studied}. That is under 1 minute, so it will not be added to your study hours. Save the block anyway, discard it, or keep studying.`
+      : `You studied ${studied} in this block. ${Math.floor(seconds) % 60 === 0 ? 'Save it to your study time, or discard it.' : `Study time is logged in whole minutes, so saving adds ${minutes} min.`}`
   return <Dialog title={title} onClose={onKeep} className="dialog-narrow focus-end-dialog">
     <div className="focus-end-body">
-      <p>{minutes >= 1 ? `You studied ${studied} in this block. ${Math.floor(seconds) % 60 === 0 ? 'Save it to your study time, or discard it.' : `Study time is logged in whole minutes, so saving adds ${minutes} min.`}` : 'Blocks under 30 seconds aren’t saved. Discard it or keep studying.'}</p>
+      <p>{copy}</p>
       <label className="focus-end-note">
         <span><T k="focus:what-did-you-actually-do">{"What did you actually do?"}</T> <small className="field-hint inline">Optional, but it is what the weekly report quotes.</small></span>
         <textarea rows={2} maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)} placeholder="Finished 12 DPP questions, still shaky on sign conventions" />
       </label>
       <div className="focus-end-actions">
-        <Button variant="marker" onClick={() => onSave(notes)} disabled={minutes < 1}><Check size={15} /> {exiting ? 'Save & exit' : 'Save & end'}</Button>
+        <Button variant="marker" onClick={() => onSave(notes)} disabled={!canSave}><Check size={15} /> {exiting ? 'Save & exit' : 'Save & end'}</Button>
         <Button variant="secondary" onClick={onDiscard}><X size={15} /> {exiting ? 'Discard & exit' : 'Discard & end'}</Button>
         <Button variant="quiet" onClick={onKeep}><Play size={15} />{' '}<T k="focus:keep-studying">{"Keep studying"}</T></Button>
       </div>

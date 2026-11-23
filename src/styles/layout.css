@@ -152,6 +152,14 @@
 .app-shell select option, .dialog-backdrop select option { color: var(--ink); background: var(--paper); }
 :where(.app-shell, .dialog-backdrop, .onboarding-backdrop) input:where([type='checkbox'], [type='radio']) { accent-color: var(--accent); width: 18px; height: 18px; cursor: pointer; }
 :where(.app-shell, .dialog-backdrop, .onboarding-backdrop) input:where([type='date'], [type='time'])::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .65; }
+/* Native date calendars paint in the input’s stacking context. A sticky dialog head
+   (z-index: 2) otherwise covers the month arrows, including the Add-task picker. */
+.dialog-panel:has(input:where([type='date'], [type='time']):focus) .dialog-head { z-index: 1; }
+.dialog-panel :is(.field, .planner-date-field, .date-input-wrap):has(input:where([type='date'], [type='time']):focus),
+.dialog-panel input:where([type='date'], [type='time']):focus {
+  position: relative;
+  z-index: 5;
+}
 
 /* Settings: stacked cards in one tab keep the standard card gap; AI footnote reads as a footnote. */
 .settings-form-fields { display: grid; gap: var(--space-4, 16px); }

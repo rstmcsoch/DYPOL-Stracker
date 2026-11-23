@@ -9,6 +9,7 @@ import { useAuth } from './AuthContext'
 import { useProviderManager, type AIPreference, type AIProviderDraft, type DiscoverResult, type ProviderManager, type StrackerAIStatus } from '../components/ai/useProviderManager'
 import { useData } from './DataContext'
 import { progressAfterDelta, RESTART_PROGRESS } from '../lib/ai/task-progress'
+import { clearLastConversationId, readLastConversationId, writeLastConversationId } from '../lib/ai/last-conversation'
 
 export interface AIConversationSummary { id:string; title:string; created_at:string; updated_at:string }
 export interface AIRecentTask { id:string; conversation_id:string; provider_id:string|null; model_id:string|null; task_type:string; status:AITaskState['status']; progress:string; started_at:string; completed_at:string|null }
@@ -158,6 +159,7 @@ export function AIProvider({ children }: { children:ReactNode }) {
   const controllerRef = useRef<AbortController|null>(null)
   const inflightRequestIdRef = useRef<string|null>(null)
   const conversationRef = useRef<string|null>(null)
+  const openConversationRef = useRef<(id:string, options?:{activatePanel?:boolean})=>Promise<void>>(async() => {})
   const requestLockRef = useRef(false)
   const actionConfirmLocksRef = useRef(new Set<string>())
   conversationRef.current = conversationId
@@ -258,10 +260,15 @@ export function AIProvider({ children }: { children:ReactNode }) {
       return
     }
     void checkBackendHealth()
-    void Promise.all([refreshProviders(),loadConversations(),loadTasks()])
+    const uid = user.id
+    void Promise.all([refreshProviders(),loadConversations(),loadTasks()]).then(() => {
+      const saved = readLastConversationId(uid)
+      if (!saved) return
+      return openConversationRef.current(saved, { activatePanel: false }).catch(() => { clearLastConversationId(uid) })
+    })
   },[user?.id,user?.isLocal,checkBackendHealth,refreshProviders,loadConversations,loadTasks,user,resetProviders])
 
-  const openConversation = useCallback(async (id:string) => {
+  const openConversation = useCallback(async (id:string, options?:{activatePanel?:boolean}) => {
     if (requestLockRef.current) return
     const result = await apiFetch<{conversation:Record<string,unknown>;messages:Record<string,unknown>[];pendingActions?:Record<string,unknown>[] }>(`/api/ai/conversations?id=${encodeURIComponent(id)}`,{method:'GET'})
     conversationRef.current = String(result.conversation.id)
@@ -280,24 +287,27 @@ export function AIProvider({ children }: { children:ReactNode }) {
     setMessages([...storedMessages,...pendingMessages].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)))
     setActiveTask(null)
     setLastRequest(null)
-    setPanelOpen(true); setMinimized(false)
+    if (options?.activatePanel !== false) { setPanelOpen(true); setMinimized(false) }
   },[apiFetch])
+  openConversationRef.current = openConversation
 
   const newConversation = useCallback(() => {
     if (requestLockRef.current) return
     conversationRef.current = null
+    if (user && !user.isLocal) clearLastConversationId(user.id)
     setConversationId(null); setConversationTitle('New conversation'); setMessages([]); setActiveTask(null); setLastRequest(null)
     setPanelOpen(true); setMinimized(false)
-  },[])
+  },[user])
 
   const clearConversation = useCallback(async () => {
     if (requestLockRef.current) throw new Error('Wait for the current AI task to finish before clearing this conversation.')
     const current = conversationRef.current
     if (current) await apiFetch('/api/ai/conversations',{method:'DELETE',body:JSON.stringify({id:current})})
     conversationRef.current = null
+    if (user && !user.isLocal) clearLastConversationId(user.id)
     setConversationId(null); setConversationTitle('New conversation'); setMessages([]); setActiveTask(null); setLastRequest(null)
     await loadConversations()
-  },[apiFetch,loadConversations])
+  },[apiFetch,loadConversations,user])
 
   const sendMessage = useCallback(async (rawMessage:string,pageContext:string|null=null,retry?:LastRequest) => {
     if (requestLockRef.current) return
@@ -535,7 +545,17 @@ export function AIProvider({ children }: { children:ReactNode }) {
     }
   },[messages,apiFetch,refresh,loadConversations,loadTasks])
 
-  const openPanel = useCallback(() => { setPanelOpen(true); setMinimized(false); setLargeOpen(false) },[])
+  useEffect(() => {
+    if (!user || user.isLocal || !conversationId) return
+    writeLastConversationId(user.id, conversationId)
+  },[user,conversationId])
+
+  const openPanel = useCallback(() => {
+    setPanelOpen(true); setMinimized(false); setLargeOpen(false)
+    if (conversationRef.current || !user || user.isLocal) return
+    const saved = readLastConversationId(user.id)
+    if (saved) void openConversation(saved, { activatePanel: false }).catch(() => { clearLastConversationId(user.id) })
+  },[user,openConversation])
   const minimizePanel = useCallback(() => { setPanelOpen(false); setMinimized(true); setLargeOpen(false) },[])
   const closePanel = useCallback(() => { setPanelOpen(false); setMinimized(false); setLargeOpen(false) },[])
   const restorePanel = useCallback(() => { setPanelOpen(true); setMinimized(false) },[])

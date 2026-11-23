@@ -8,7 +8,7 @@ import { useToast } from '../contexts/ToastContext'
 import { createId } from '../lib/id'
 import { createFormulaSheet } from '../lib/report'
 import { indiaToday, prettyDate } from '../lib/date'
-import { reviewCard, dueCards, ratingPreview, RATING_LABELS } from '../lib/jee/cards'
+import { reviewCard, dueCards, dueInChapterDisplay, defaultDeckChapter, ratingPreview, RATING_LABELS } from '../lib/jee/cards'
 import { CARD_RATINGS, type CardKind, type CardRating, type Chapter, type StudyCard } from '../types'
 import { useReportSubjects } from '../lib/exams/useExamSubjects'
 import { T } from '../lib/student-layout/T'
@@ -24,8 +24,10 @@ export default function DecksPage() {
   const [params] = useSearchParams()
   const today = indiaToday()
   const allDue = useMemo(() => dueCards(data.studyCards, today), [data.studyCards, today])
-  const defaultChapter = params.get('chapter') ?? allDue[0]?.chapter_id ?? data.chapters.find(chapter => chapter.formula_notes.trim())?.id ?? data.chapters[0]?.id ?? ''
-  const [chapterId, setChapterId] = useState(defaultChapter)
+  const [chapterId, setChapterId] = useState(params.get('chapter') ?? '')
+  const defaultChapter = defaultDeckChapter(data.chapters, allDue, params.get('chapter'))
+  // Data often arrives after the first render; keep the user's pick, otherwise follow the default.
+  const activeChapterId = chapterId && data.chapters.some(item => item.id === chapterId) ? chapterId : defaultChapter
   const [subject, setSubjectState] = useState<string>('all')
   // A card's subject is its chapter's subject; cards whose chapter is gone match no subject.
   const subjectOfChapter = useMemo(() => new Map(data.chapters.map(item => [item.id, item.subject])), [data.chapters])
@@ -33,13 +35,13 @@ export default function DecksPage() {
   // Soonest future card in the open chapter, so "nothing due" can say when to come back
   // instead of leaving the student with a dead button and no plan.
   const nextDue = useMemo(() => {
-    const chapter = data.chapters.find(item => item.id === chapterId)
+    const chapter = data.chapters.find(item => item.id === activeChapterId)
     if (!chapter) return null
     return data.studyCards.filter(card => card.chapter_id === chapter.id).map(card => card.next_review_at?.slice(0, 10)).filter((date): date is string => Boolean(date) && date! > today).sort()[0] ?? null
-  }, [data.chapters, data.studyCards, chapterId, today])
+  }, [data.chapters, data.studyCards, activeChapterId, today])
   const setSubject = (next: string) => {
     setSubjectState(next)
-    if (next === 'all' || subjectOfChapter.get(chapterId) === next) return
+    if (next === 'all' || subjectOfChapter.get(activeChapterId) === next) return
     // The open chapter belongs to another subject: switch to this subject's chapter with the
     // most due cards (then the first one), or show the empty state when it has none.
     const inSubject = data.chapters.filter(item => item.subject === next)
@@ -51,9 +53,9 @@ export default function DecksPage() {
   const [reviewQueue, setReviewQueue] = useState<'chapter' | 'all' | null>(null)
   const [pasting, setPasting] = useState(false)
   const [editing, setEditing] = useState<StudyCard | 'new' | null>(null)
-  const chapter = data.chapters.find(item => item.id === chapterId)
-  const cards = useMemo(() => data.studyCards.filter(card => card.chapter_id === chapterId && (kind === 'all' || card.kind === kind)).sort((a, b) => a.kind.localeCompare(b.kind) || a.position - b.position), [data.studyCards, chapterId, kind])
-  const chapterDue = dueCards(data.studyCards, today, chapterId)
+  const chapter = data.chapters.find(item => item.id === activeChapterId)
+  const cards = useMemo(() => data.studyCards.filter(card => card.chapter_id === activeChapterId && (kind === 'all' || card.kind === kind)).sort((a, b) => a.kind.localeCompare(b.kind) || a.position - b.position), [data.studyCards, activeChapterId, kind])
+  const chapterDue = dueCards(data.studyCards, today, activeChapterId)
   const gaps = data.settings.revision_gaps
 
   const remover = async (card: StudyCard) => {
@@ -96,14 +98,14 @@ export default function DecksPage() {
 
     {!sl.hidden('summary') && <section {...sl.attrs('summary')} className="jee-stat-grid" aria-label="Due cards">
       <NotebookCard className="jee-stat"><span><T k="decks:due-overall">{"Due overall"}</T></span><strong>{dueOverall.length}</strong><small>{subject === 'all' ? 'across all chapters' : `across ${subject}`}</small></NotebookCard>
-      <NotebookCard className="jee-stat"><span><T k="decks:due-in-this-chapter">{"Due in this chapter"}</T></span><strong>{chapterDue.length}</strong><small>{chapter?.name ?? 'Pick a chapter'}</small></NotebookCard>
+      <NotebookCard className="jee-stat"><span><T k="decks:due-in-this-chapter">{"Due in this chapter"}</T></span><strong>{dueInChapterDisplay(activeChapterId, chapterDue.length)}</strong><small>{chapter?.name ?? 'Pick a chapter'}</small></NotebookCard>
       <NotebookCard className="jee-stat"><span><T k="decks:cards">{"Cards"}</T></span><strong>{data.studyCards.length}</strong><small><T k="decks:formulas-and-flashcards">{"formulas and flashcards"}</T></small></NotebookCard>
     </section>}
 
     <NotebookCard {...sl.attrs('filters')} className="jee-filter-card">
       <div className="jee-filter-grid">
         <label className="jee-select"><span><T k="decks:subject">{"Subject"}</T></span><select value={subject} onChange={event => setSubject(event.target.value)}><option value="all">All subjects</option>{deckSubjects.map(item => <option key={item}>{item}</option>)}</select></label>
-        <ChapterSelect chapters={data.chapters} value={chapterId} onChange={setChapterId} subject={subject} label="Chapter" />
+        <ChapterSelect chapters={data.chapters} value={activeChapterId} onChange={setChapterId} subject={subject} label="Chapter" />
       </div>
       <ChipFilter<KindFilter> lk="decks" label="Deck" value={kind} onChange={setKind} options={[{ value: 'all', label: 'Both' }, { value: 'formula', label: 'Formulas' }, { value: 'flashcard', label: 'Flashcards' }]} />
     </NotebookCard>
@@ -158,12 +160,12 @@ export default function DecksPage() {
       await upsert('study_cards', updated)
       return updated
     }} />}
-    {editing && <CardDialog key={editing === 'new' ? 'new' : editing.id} card={editing === 'new' ? undefined : editing} chapters={data.chapters} subjects={deckSubjects} initialChapterId={editing === 'new' ? chapterId : editing.chapter_id} positionFor={target => data.studyCards.filter(item => item.chapter_id === target).length} onClose={() => setEditing(null)} onSave={async value => {
+    {editing && <CardDialog key={editing === 'new' ? 'new' : editing.id} card={editing === 'new' ? undefined : editing} chapters={data.chapters} subjects={deckSubjects} initialChapterId={editing === 'new' ? activeChapterId : editing.chapter_id} positionFor={target => data.studyCards.filter(item => item.chapter_id === target).length} onClose={() => setEditing(null)} onSave={async value => {
       const now = new Date().toISOString()
       if (editing === 'new') await upsert('study_cards', { ...value, id: createId(), reviews: 0, last_reviewed_at: null, next_review_at: null, difficulty: null, last_rating: null, created_at: now, updated_at: now })
       else await upsert('study_cards', { ...editing, ...value, updated_at: now })
       // Follow the card to the chapter it was saved in so it is visible straight away.
-      if (value.chapter_id !== chapterId) {
+      if (value.chapter_id !== activeChapterId) {
         setChapterId(value.chapter_id)
         const savedSubject = subjectOfChapter.get(value.chapter_id)
         if (subject !== 'all' && savedSubject !== subject) setSubjectState(savedSubject ?? 'all')

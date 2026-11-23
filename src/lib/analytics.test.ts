@@ -200,4 +200,14 @@ describe('latest logged test', () => {
     expect(latestTestOn(data, '2026-11-23')).toBeNull()
     expect(latestTest(emptyData())).toBeNull()
   })
+
+  it('breaks a same-day tie by created/saved time, not a later edit of an older test', () => {
+    const data = emptyData()
+    data.tests = [
+      testRecord('first-edited', '2026-11-23', 48, 90, { title: 'Chem morning', created_at: '2026-11-23T04:00:00.000Z', updated_at: '2026-11-23T18:00:00.000Z' }),
+      testRecord('saved-later', '2026-11-23', 30, 60, { title: 'Chem evening', created_at: '2026-11-23T12:00:00.000Z', updated_at: '2026-11-23T12:00:00.000Z' })
+    ]
+    expect(latestTest(data)?.id).toBe('saved-later')
+    expect(latestTestOn(data, '2026-11-23')?.id).toBe('saved-later')
+  })
 })

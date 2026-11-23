@@ -110,6 +110,7 @@ describe('Subject tests need a chapter', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save test' }))
     expect(await within(dialog).findByText('Choose a chapter so this result can appear in Weak areas.')).toBeTruthy()
     expect(harness.upsert).not.toHaveBeenCalled()
+    expect(harness.notify).not.toHaveBeenCalled()
   })
 
   it('still lists an existing Subject Test that has no chapter', async () => {
