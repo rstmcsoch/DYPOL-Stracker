@@ -1,12 +1,16 @@
 import { z, ZodError } from 'zod'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MasterActor } from './types.js'
+import { ApiError } from '../http.js'
 import { FORBIDDEN_SCOPE_MESSAGE, isForbiddenTool, normalizeToolName } from './capabilities.js'
 import { GET_MASTER_PERMISSIONS_DESCRIPTION, GET_MASTER_PERMISSIONS_SCHEMA, getMasterPermissions, getMasterPermissionsInput } from './tools/permissions.js'
+import { overviewTools } from './tools/overview.js'
+import { directoryTools } from './tools/directory.js'
 import type { ToolListItem } from './protocol.js'
 
 export class MasterToolError extends Error {
   constructor(
-    readonly code: 'forbidden_tool' | 'unknown_tool' | 'invalid_arguments' | 'not_implemented',
+    readonly code: 'forbidden_tool' | 'unknown_tool' | 'invalid_arguments' | 'not_implemented' | 'not_found' | 'forbidden' | 'unavailable',
     message: string
   ) {
     super(message)
@@ -29,13 +33,32 @@ function emptyArgs(schema: z.ZodType<object>) {
   }
 }
 
-export const IMPLEMENTED_MASTER_TOOL_NAMES = ['get_master_permissions'] as const
+export const IMPLEMENTED_MASTER_TOOL_NAMES = [
+  'get_master_permissions',
+  'get_master_overview',
+  'get_site_health',
+  'get_account_overview',
+  'get_daily_activity',
+  'get_recent_errors',
+  'get_audit_events',
+  'list_students',
+  'search_students',
+  'get_student_account',
+  'get_student_activity',
+  'get_student_study_overview',
+  'update_student_display_profile',
+  'get_student_moderation_history'
+] as const
 
-export function createMasterToolRegistry(tools: RegisteredTool[] = defaultImplementedTools()): ToolRegistry {
-  return new ToolRegistry(tools)
+export interface MasterToolDependencies {
+  admin?: SupabaseClient
 }
 
-export function defaultImplementedTools(): RegisteredTool[] {
+export function createMasterToolRegistry(tools?: RegisteredTool[], deps: MasterToolDependencies = {}): ToolRegistry {
+  return new ToolRegistry(tools ?? defaultImplementedTools(deps))
+}
+
+export function defaultImplementedTools(deps: MasterToolDependencies = {}): RegisteredTool[] {
   const tools: RegisteredTool[] = []
   tools.push({
     name: 'get_master_permissions',
@@ -44,7 +67,17 @@ export function defaultImplementedTools(): RegisteredTool[] {
     parse: emptyArgs(getMasterPermissionsInput),
     execute: async (actor) => getMasterPermissions(actor, IMPLEMENTED_MASTER_TOOL_NAMES)
   })
+  const admin = deps.admin ?? unavailableAdmin()
+  tools.push(...overviewTools(admin), ...directoryTools(admin))
   return tools
+}
+
+function unavailableAdmin(): SupabaseClient {
+  return new Proxy({} as SupabaseClient, {
+    get() {
+      throw new ApiError(503, 'master_mcp_unavailable', 'The Master MCP backend is not configured for this deployment yet.')
+    }
+  })
 }
 
 export class ToolRegistry {
@@ -81,6 +114,10 @@ export class ToolRegistry {
       if (error instanceof MasterToolError) throw error
       if (error instanceof ZodError) {
         throw new MasterToolError('invalid_arguments', 'The tool arguments were not valid. Check the required fields and try again.')
+      }
+      if (error instanceof ApiError) {
+        const code = error.status === 400 ? 'invalid_arguments' : error.status === 403 ? 'forbidden' : error.status === 404 ? 'not_found' : 'unavailable'
+        throw new MasterToolError(code, error.message)
       }
       throw error
     }

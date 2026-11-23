@@ -14,7 +14,7 @@ import { testHandlerOptions, handleMasterMcp } from './handler.js'
 import { MCP_MAX_REQUEST_BYTES, MASTER_ACTOR_TYPE } from './types.js'
 import { DEFAULT_PROTOCOL_VERSION, MCP_INSTRUCTIONS, SUPPORTED_PROTOCOL_VERSIONS, parseJsonRpcBody, assertRequestSize, McpProtocolError, initializeResult, negotiateProtocolVersion } from './protocol.js'
 import { MemoryRateLimiter, MASTER_API_LIMIT } from './rate-limit.js'
-import { createMasterToolRegistry } from './registry.js'
+import { IMPLEMENTED_MASTER_TOOL_NAMES, createMasterToolRegistry } from './registry.js'
 import { generateMasterToken, hashMasterSecret, hashesEqual, isMasterTokenShape, presentedTokenLooksLikeJwt, tokenHint } from './token.js'
 
 const STUDENT_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.signature'
@@ -207,7 +207,7 @@ describe('POST /api/mcp', () => {
 
     const listed = await callMcp(issued.token, { jsonrpc: '2.0', id: 3, method: 'tools/list' }, options)
     const tools = (listed.body as { result: { tools: Array<{ name: string }> } }).result.tools
-    expect(tools.map(tool => tool.name)).toEqual(['get_master_permissions'])
+    expect(tools.map(tool => tool.name)).toEqual([...IMPLEMENTED_MASTER_TOOL_NAMES])
     for (const name of FORBIDDEN_TOOL_NAMES) expect(tools.some(tool => tool.name === name)).toBe(false)
 
     const permissions = await callMcp(issued.token, { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'get_master_permissions', arguments: {} } }, options)
@@ -215,7 +215,7 @@ describe('POST /api/mcp', () => {
     expect(payload.isError).toBeFalsy()
     expect(payload.structuredContent).toMatchObject({
       actor: { type: MASTER_ACTOR_TYPE, isOwner: false, authenticationMethod: 'bearer_token' },
-      implementedTools: ['get_master_permissions']
+      implementedTools: [...IMPLEMENTED_MASTER_TOOL_NAMES]
     })
     const serialized = JSON.stringify(permissions.body)
     expect(serialized).not.toContain(issued.token)

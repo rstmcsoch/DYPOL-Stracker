@@ -30,10 +30,11 @@ export interface McpHandlerOptions {
 
 export function productionHandlerOptions(): McpHandlerOptions {
   const clients = productionClients()
+  const admin = masterServiceClient()
   return {
     clients,
-    registry: createMasterToolRegistry(),
-    audit: new SupabaseAuditSink(masterServiceClient())
+    registry: createMasterToolRegistry(undefined, { admin }),
+    audit: new SupabaseAuditSink(admin)
   }
 }
 
@@ -108,13 +109,19 @@ async function callTool(params: unknown, actor: MasterActor, options: McpHandler
   const name = typeof record.name === 'string' ? record.name : ''
   try {
     const result = await options.registry.call(actor, record.name, record.arguments)
+    const args = isRecord(record.arguments) ? record.arguments : {}
+    const studentId = typeof args.studentId === 'string' ? args.studentId : undefined
     await options.audit.write({
       requestId: actor.requestId,
       credentialId: actor.credentialId,
       credentialLabel: actor.credentialLabel,
       toolName: name,
       action: `mcp.${name || 'unknown'}`,
-      result: 'success'
+      targetType: studentId ? 'student' : undefined,
+      targetId: studentId,
+      targetStudentId: studentId,
+      result: 'success',
+      changedFields: name === 'update_student_display_profile' ? ['displayName'] : undefined
     })
     return toolTextResult(result)
   } catch (error) {

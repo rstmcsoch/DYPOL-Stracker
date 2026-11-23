@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { authenticateCredential, SupabaseCredentialStore } from '../_lib/mcp/credentials.js'
+import { IMPLEMENTED_MASTER_TOOL_NAMES } from '../_lib/mcp/registry.js'
 
 /**
  * Owner-only Master MCP connection management against an in-memory Supabase stand-in.
@@ -176,7 +177,7 @@ describe('GET /api/control/master-mcp', () => {
     const body = res.body as Record<string, unknown>
     expect(body.endpointUrl).toBe('https://stracker-git-feat-master-mcp-dypollabs.vercel.app/api/mcp')
     expect(body.transport).toBe('Streamable HTTP (JSON-RPC)')
-    expect(body.implementedTools).toEqual(['get_master_permissions'])
+    expect(body.implementedTools).toEqual([...IMPLEMENTED_MASTER_TOOL_NAMES])
     expect(body.capabilities).toEqual(expect.objectContaining({ studentData: expect.any(String) }))
     expect(body.restricted).toEqual(expect.objectContaining({ rolesAndPermissions: expect.any(String) }))
     expect(Array.isArray(body.securityNotes)).toBe(true)
