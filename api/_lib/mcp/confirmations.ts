@@ -105,7 +105,11 @@ export async function consumeConfirmation(
   const verdict = confirmationMatches(existing, request, now)
   if (verdict !== 'ok') throw new ApiError(400, 'confirmation_invalid', CONFIRMATION_MESSAGES[verdict])
   const consumed = await store.consume(tokenHash, now.toISOString())
-  if (!consumed || consumed.consumedAt !== now.toISOString()) {
+  // The atomic UPDATE already required consumed_at IS NULL. Do not compare the
+  // stored timestamptz to now.toISOString() — Postgres/PostgREST often returns
+  // the same instant as 2026-11-23T12:00:00.000+00:00 instead of ...Z, which
+  // would burn the one-use token and still tell the caller it was already used.
+  if (!consumed || !consumed.consumedAt) {
     throw new ApiError(400, 'confirmation_invalid', CONFIRMATION_MESSAGES.replayed)
   }
   return consumed

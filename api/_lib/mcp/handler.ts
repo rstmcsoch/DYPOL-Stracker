@@ -147,8 +147,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+function invalidJson(): McpProtocolError {
+  return new McpProtocolError(400, 'invalid_json', 'The Master MCP request could not be read as JSON.')
+}
+
+function parseJsonText(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    throw invalidJson()
+  }
+}
+
 async function readMcpJson(req: ApiRequest, maxBytes = MCP_MAX_REQUEST_BYTES): Promise<unknown> {
-  if (req.body !== undefined && req.body !== null && !Buffer.isBuffer(req.body)) return req.body
+  try {
+    if (req.body !== undefined && req.body !== null && !Buffer.isBuffer(req.body)) {
+      if (typeof req.body === 'string') return parseJsonText(req.body)
+      return req.body
+    }
+  } catch (error) {
+    // Some hosts (including Vercel) throw SyntaxError when application/json
+    // cannot be parsed, lazily, on first access of req.body.
+    if (error instanceof McpProtocolError) throw error
+    if (error instanceof SyntaxError) throw invalidJson()
+    throw error
+  }
   const chunks: Buffer[] = []
   let length = 0
   for await (const chunk of req) {
@@ -158,11 +181,7 @@ async function readMcpJson(req: ApiRequest, maxBytes = MCP_MAX_REQUEST_BYTES): P
     chunks.push(buffer)
   }
   if (!chunks.length) throw new McpProtocolError(400, 'invalid_json', 'The Master MCP request body was empty.')
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
-  } catch {
-    throw new McpProtocolError(400, 'invalid_json', 'The Master MCP request could not be read as JSON.')
-  }
+  return parseJsonText(Buffer.concat(chunks).toString('utf8'))
 }
 
 /** Exposed for tests that want a complete in-process runtime without Supabase. */

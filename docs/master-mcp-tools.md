@@ -64,7 +64,7 @@ Sign-up, sign-in, domain, authentication and security settings are not reachable
 - `create_exam` — Add a new exam to the catalogue using the same validation as the Control Center exam editor. Fails if the id already exists. updated_by is left empty because Master MCP is not an Owner account.
 - `update_exam` — Replace an existing exam definition using the same validation as the Control Center exam editor. The id cannot be reused for a different exam. updated_by is left empty.
 - `hide_exam` — Hide an exam from new student pickers. Students already on the exam keep it. The catalogue row is not physically deleted. Requires confirmation.
-- `restore_exam` — Restore a hidden exam so it appears in new student pickers again. The catalogue row was never deleted.
+- `restore_exam` — Restore a hidden exam so it appears in new student pickers again. The catalogue row was never deleted. Requires confirmation because this change is visible to students.
 - `reorder_exams` — Rewrite exam sort_order from the given id list (first id is first). Unknown ids are rejected and no rows are deleted.
 - `update_exam_marking_scheme` — Set or clear the marking defaults for one exam using the shared marking-scheme validator. Null clears the stored scheme so built-in defaults apply.
 - `update_exam_ai_model_preferences` — Update the global AI model preference lists used when ranking models. Providers are limited to Gemini, OpenAI, Anthropic, DeepSeek and Qwen.

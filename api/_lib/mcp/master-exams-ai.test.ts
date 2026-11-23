@@ -289,15 +289,24 @@ describe('Master MCP exam catalogue and site AI', () => {
     expect(world.db.app_settings!.find(row => row.user_id === STUDENT_A)?.exam_id).toBe('jee')
     expect((hidden.payload.structuredContent as { physicallyDeleted: boolean }).physicallyDeleted).toBe(false)
 
-    const restored = await callTool(issued.token, 'restore_exam', { examId: 'jee' }, options)
+    const restorePreview = await callTool(issued.token, 'restore_exam', { examId: 'jee' }, options)
+    expect(restorePreview.payload.structuredContent.needsConfirmation).toBe(true)
+    const restored = await callTool(issued.token, 'restore_exam', {
+      examId: 'jee',
+      confirmationToken: (restorePreview.payload.structuredContent as { confirmationToken: string }).confirmationToken
+    }, options)
     expect(world.db.exam_catalog!.find(row => row.id === 'jee')?.hidden).toBe(false)
     expect(restored.payload.isError).toBeFalsy()
+
+    const emptyPrefs = await callTool(issued.token, 'update_exam_ai_model_preferences', { preferences: {} }, options)
+    expect(emptyPrefs.payload.isError).toBeTruthy()
+    expect(String(emptyPrefs.payload.structuredContent.message ?? emptyPrefs.payload.structuredContent.error)).toMatch(/at least one provider|not valid|Check the AI model/i)
 
     const forbidden = await callTool(issued.token, 'delete_exam', { examId: 'jee' }, options)
     expect(forbidden.payload.structuredContent.error).toBe('forbidden_tool')
     expect(world.db.exam_catalog!.some(row => row.id === 'jee')).toBe(true)
 
-    assertNoKeyMaterial(listed.raw, definition.raw, created.raw, marking.raw, preview.raw, hidden.raw, restored.raw, forbidden.raw, audit.events, world.logs)
+    assertNoKeyMaterial(listed.raw, definition.raw, created.raw, marking.raw, preview.raw, hidden.raw, restorePreview.raw, restored.raw, emptyPrefs.raw, forbidden.raw, audit.events, world.logs)
   })
 
   it('masks site AI keys in every tool result, log and audit event, and never reads student BYOK rows', async () => {
