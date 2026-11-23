@@ -11,7 +11,7 @@ import { createId } from '../lib/id'
 import { goalSchema, MAX_COUNT_GOAL, MAX_WEEKLY_STUDY_HOURS } from '../lib/goal-validation'
 import { goalProgress } from '../lib/jee/goals'
 import { taskInputSchema } from '../lib/task-validation'
-import { indiaToday, prettyDate } from '../lib/date'
+import { indiaToday, plusDays, prettyDate } from '../lib/date'
 import { MAX_INPUT_DATE, MIN_INPUT_DATE, isValidInputDate } from '../lib/date-input'
 import { fmtDuration, fmtNumber } from '../lib/format'
 import type { DailyTask, GoalType, Priority, Subject, WeeklyGoal } from '../types'
@@ -240,7 +240,7 @@ function TaskDialog({ initial, defaultDate, data, onClose, onSave }: { initial: 
   const clearError = (key: string) => setErrors(current => { const next = { ...current }; delete next[key]; return next })
   return <Dialog title={initial ? 'Edit your task' : 'Plan a study task'}  onClose={onClose}>
     <form className="form-stack" noValidate onSubmit={submit}><Field lk="planner:l-task" label="Task" required error={errors.title}><input autoFocus required maxLength={200} value={title} onChange={event => { setTitle(event.target.value); clearError('title') }} placeholder="e.g. Practice 15 integration problems" /></Field>
-      <div className="form-grid two"><Field lk="planner:l-date" label="Date" error={errors.task_date}><input type="date" required value={date} onChange={event => { setDate(event.target.value); clearError('task_date') }} /></Field><Field lk="planner:estimated-minutes" label="Estimated minutes" error={errors.estimated_minutes}><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => { setMinutes(event.target.value); clearError('estimated_minutes') }} /></Field></div>
+      <div className="form-grid two"><div className="planner-date-field"><DateQuickChips value={date} onChange={value => { setDate(value); clearError('task_date') }} /><Field lk="planner:l-date" label="Date" error={errors.task_date}><input type="date" required value={date} min={MIN_INPUT_DATE} max={MAX_INPUT_DATE} onChange={event => { setDate(event.target.value); clearError('task_date') }} /></Field></div><Field lk="planner:estimated-minutes" label="Estimated minutes" error={errors.estimated_minutes}><input type="number" min="0" max="1440" step="1" value={minutes} onChange={event => { setMinutes(event.target.value); clearError('estimated_minutes') }} /></Field></div>
       <div className="form-grid three"><Field lk="planner:subject" label="Subject"><select value={subject} onChange={event => { setSubject(event.target.value as Subject | ''); setChapterId('') }}><option value="">General</option>{taskSubjects.map(item => <option key={item}>{item}</option>)}</select></Field><Field lk="planner:chapter" label="Chapter" error={errors.chapter_id}><select value={chapterId} onChange={event => { setChapterId(event.target.value); clearError('chapter_id') }}><option value="">None</option>{subject ? chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>) : <GroupedChapterOptions chapters={chapters} subjectOrder={taskSubjects} />}</select></Field><Field lk="planner:priority" label="Priority"><select value={priority} onChange={event => setPriority(event.target.value as Priority)}><option>High</option><option>Medium</option><option>Low</option></select></Field></div>
       <Field lk="planner:topic-subtopic" lk2="planner:optional-e-g-gausss-law-or-integration-b" label="Topic / subtopic" hint="Optional, e.g. a topic name." error={errors.topic}><input maxLength={TOPIC_MAX} value={topic} onChange={event => { setTopic(event.target.value); clearError('topic') }} placeholder="Optional" /><span className={`char-counter ${topic.length >= TOPIC_MAX ? 'is-full' : topic.length >= TOPIC_MAX - 20 ? 'is-near' : ''}`} aria-live="polite" data-testid="topic-counter">{topicCounterText(topic.length)}</span></Field>
       <div className="dialog-actions"><Button variant="secondary" onClick={onClose} disabled={saving}><T k="planner:cancel">{"Cancel"}</T></Button><Button type="submit" loading={saving}>{initial ? 'Save task' : 'Add task'}</Button></div>
@@ -285,3 +285,16 @@ function GoalDialog({ weekStart, onClose, onSave }: { weekStart: string; onClose
 
 /** Kept as the page-local name; the counting lives in lib/jee/goals so Home shows the same number. */
 const getGoalProgress = (goal: WeeklyGoal, data: ReturnType<typeof useData>['data']): number => goalProgress(goal, data)
+
+function DateQuickChips({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const today = indiaToday()
+  const chips = [
+    { label: 'Today', date: today },
+    { label: 'Tomorrow', date: plusDays(today, 1) },
+    { label: '+1 week', date: plusDays(today, 7) }
+  ]
+  return <div className="jee-chip-row" role="group" aria-label="Quick dates">
+    {chips.map(chip => <button key={chip.label} type="button" className={`jee-chip ${value === chip.date ? 'active' : ''}`} aria-pressed={value === chip.date} onClick={() => onChange(chip.date)}>{chip.label}</button>)}
+  </div>
+}
+

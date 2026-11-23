@@ -20,6 +20,8 @@ import { useExit } from '../../lib/ui/use-exit'
 import { isSafeAppPath } from '../../lib/safe-path'
 import { clearAIDraft, useAIDraft } from './aiDraft'
 import { useOutsideMinimize } from './outsideMinimize'
+import { visibleFallbackSwitch } from '../../lib/ai/fallback-notice'
+import { CONTINUE_ANSWER_PROMPT } from '../../lib/ai/output-truncate'
 
 const SUGGESTIONS = [
   'How am I doing in each subject?',
@@ -101,20 +103,23 @@ function ActionConfirmationCard({ action,messageId }: { action:AIActionConfirmat
 }
 
 function AssistantMessage({ message }: { message:AIMessage }) {
-  const { providers,retryLast,activeTask } = useAI()
+  const { providers,retryLast,sendMessage,activeTask,isBusy } = useAI()
   const ownAdded = hasOwnModel(providers)
   const navigate = useNavigate()
+  const location = useLocation()
   const resultRoute = typeof message.result?.route === 'string' && isSafeAppPath(message.result.route) ? message.result.route : null
   const providerId = message.providerId ?? null
   const providerName = activeProviderLabel(providerId,providers)
   const fallbackName = message.fallbackFrom?.providerName || activeProviderLabel(message.fallbackFrom?.providerId,providers)
+  const showFallback = visibleFallbackSwitch(message.fallbackFrom, { providerId, providerName, modelId: message.modelId ?? null })
   return <article className={`ai-message ai-message-assistant ${message.status === 'failed' ? 'is-error' : ''}`}>
     <div className="ai-message-avatar"><AIProviderMark provider={providerId || 'custom'} small /></div>
     <div className="ai-message-main">
       {message.content && <MessageBody content={message.content} streaming={message.status === 'running'} />}
       {message.status === 'running' && !message.content && <div className="ai-typing-indicator" aria-label="Assistant is responding"><i /><i /><i />{activeTask?.progress && <span className="ai-typing-progress" aria-hidden="true">{activeTask.progress}</span>}</div>}
       {message.confirmation && <ActionConfirmationCard action={message.confirmation} messageId={message.id} />}
-      {message.fallbackFrom && message.status === 'completed' && <div className="ai-fallback-note"><ArrowUpRight size={13} /><span>Switched from {fallbackName} to {providerName}; this answer came from the displayed model.</span></div>}
+      {message.truncated && message.status === 'completed' && <div className="ai-continue-row"><span>This answer was cut short.</span><Button size="sm" variant="secondary" disabled={isBusy} onClick={() => void sendMessage(CONTINUE_ANSWER_PROMPT, location.pathname)}><ArrowUpRight size={14} /> Continue</Button></div>}
+      {showFallback && message.status === 'completed' && <div className="ai-fallback-note"><ArrowUpRight size={13} /><span>Switched from {fallbackName} to {providerName}; this answer came from the displayed model.</span></div>}
       {message.result && message.status === 'completed' && <div className="ai-result-proof"><span><Check size={14} /> Saved and verified in Stracker</span>{resultRoute && <button onClick={() => navigate(resultRoute)}>View in Stracker <ArrowUpRight size={13} /></button>}</div>}
       {message.status === 'failed' && <div className="ai-retry-row"><span><CircleAlert size={14} /> {message.error ?? 'The request did not complete.'}</span>{message.errorCode?.startsWith('stracker_ai') && !ownAdded && <Button size="sm" variant="secondary" onClick={() => navigate(ADD_OWN_MODEL_PATH)}><Plus size={14} /> Add your own model</Button>}{(message.errorCode === 'stracker_ai_unavailable' || (ownAdded && message.errorCode?.startsWith('stracker_ai'))) && <Button size="sm" variant="quiet" onClick={() => navigate(AI_SETTINGS_PATH)}><SettingsIcon size={14} /> {ownAdded ? 'Check your model' : 'AI settings'}</Button>}{message.retryable !== false && <Button size="sm" variant="secondary" onClick={() => void retryLast()}><RotateCcw size={14} /> Retry</Button>}</div>}
       {message.status === 'cancelled' && <div className="ai-cancelled-note"><Square size={12} /> Request stopped. No Stracker change was made.</div>}
@@ -165,7 +170,7 @@ function ConversationMessages({ compact=false }: { compact?:boolean }) {
 function KeyRoundIcon() { return <span className="ai-connect-icon"><ShieldCheck size={17} /></span> }
 
 function ChatComposer({ compact=false }: { compact?:boolean }) {
-  const { isBusy,activeTask,lastRequest,sendMessage,stopTask,retryLast } = useAI()
+  const { isBusy,activeTask,sendMessage,stopTask } = useAI()
   const { configured,active,ownAdded } = useActiveAI()
   const location = useLocation()
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -175,7 +180,7 @@ function ChatComposer({ compact=false }: { compact?:boolean }) {
     event?.preventDefault()
     if (isBusy) { if (activeTask?.cancellable !== false) stopTask(); return }
     const text = value
-    if (!text.trim()) { if (lastRequest) void retryLast(); return }
+    if (!text.trim()) return
     setValue('')
     void sendMessage(text,location.pathname)
     window.setTimeout(() => inputRef.current?.focus(),0)
@@ -192,7 +197,7 @@ function ChatComposer({ compact=false }: { compact?:boolean }) {
   return <div className={`ai-composer-wrap ${compact ? 'ai-composer-compact' : ''}`}>
     <form className="ai-composer" onSubmit={send}>
       <textarea ref={inputRef} rows={1} maxLength={4000} value={value} onChange={event => { setValue(event.target.value); fit() }} onKeyDown={keyDown} placeholder={configured ? 'Ask about your study progress…' : ownAdded ? 'Check your AI model in Settings to keep going' : 'Add your own AI model to keep going'} aria-label="Message Stracker AI" disabled={!configured || isBusy} />
-      <div className="ai-composer-footer"><span>Enter to send · Shift + Enter for a new line</span><div><span className="ai-message-limit">{value.length}/4000</span><button type="submit" className={`ai-send-button ${isBusy && activeTask?.cancellable !== false ? 'ai-stop-button' : ''}`} disabled={isBusy ? activeTask?.cancellable === false : !value.trim() && !lastRequest} aria-label={isBusy ? activeTask?.cancellable === false ? 'Confirmed change is being saved' : 'Stop the current AI task' : value.trim() ? 'Send message' : 'Retry last request'} title={isBusy ? activeTask?.cancellable === false ? 'Saving the confirmed change' : 'Stop this task' : 'Send message'}>{isBusy ? activeTask?.cancellable === false ? <LoaderCircle size={15} className="spin" /> : <Square size={15} fill="currentColor" /> : value.trim() ? <Send size={16} /> : lastRequest ? <RotateCcw size={15} /> : <Send size={16} />}</button></div></div>
+      <div className="ai-composer-footer"><span>Enter to send · Shift + Enter for a new line</span><div><span className="ai-message-limit">{value.length}/4000</span><button type="submit" className={`ai-send-button ${isBusy && activeTask?.cancellable !== false ? 'ai-stop-button' : ''}`} disabled={isBusy ? activeTask?.cancellable === false : !value.trim()} aria-label={isBusy ? activeTask?.cancellable === false ? 'Confirmed change is being saved' : 'Stop the current AI task' : 'Send'} title={isBusy ? activeTask?.cancellable === false ? 'Saving the confirmed change' : 'Stop this task' : 'Send'}>{isBusy ? activeTask?.cancellable === false ? <LoaderCircle size={15} className="spin" /> : <Square size={15} fill="currentColor" /> : <Send size={16} />}</button></div></div>
     </form>
     <div className="ai-composer-disclaimer"><ShieldCheck size={12} /> {active?.providerId === 'stracker' ? 'Stracker AI is included with your account.' : 'Your provider handles AI processing and billing.'} Review before changes are saved.</div>
   </div>

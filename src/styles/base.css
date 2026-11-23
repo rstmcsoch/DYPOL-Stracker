@@ -456,6 +456,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .chart-empty-hint { flex: 1 1 200px; font-size: 13px; }
 /* Favourites area */
 .favourites-section { display: grid; gap: 9px; }
+.favourites-section.is-flash { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 14px; }
 .favourites-heading { padding: 2px 2px 0; }
 .favourites-grid { gap: 15px; }
 /* Combined marks-trend + subject-balance card */
@@ -650,3 +651,8 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 /* Analytics: readable fractions on the syllabus card and list. */
 .analytics-kpi .kpi-denominator { font-size: max(1rem, .62em); color: var(--ink-soft); }
 .subject-syllabus-list > div > div:first-child { color: var(--ink-soft); font-size: max(.875rem, calc(12px * var(--body-scale, 1))); }
+
+.ai-continue-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; color: var(--muted); font-size: 0.92rem; }
+
+.planner-date-field { display: grid; gap: 8px; }
+.planner-date-field .jee-chip-row { flex-wrap: wrap; }

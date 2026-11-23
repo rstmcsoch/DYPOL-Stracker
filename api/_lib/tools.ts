@@ -8,9 +8,10 @@ import { goalSchema } from '../../src/lib/goal-validation.js'
 import { settingsSchema } from '../../src/lib/settings-validation.js'
 import { defaultSettings } from '../../src/lib/defaults.js'
 import { indiaToday, plusDays } from '../../src/lib/date.js'
+import { listBacklogForAI } from '../../src/lib/jee/backlog-ai.js'
 import { createId } from '../../src/lib/id.js'
 import { redactPotentialSecrets } from '../../src/lib/ai/sanitize.js'
-import { SUBJECTS, type AppData, type AppSettings, type Chapter, type DailyTask, type Mistake, type Revision, type StudySession, type TestRecord, type TestSubjectScore, type TestChapterLink, type WeeklyGoal, type Subject } from '../../src/types/index.js'
+import { SUBJECTS, type AppData, type AppSettings, type Chapter, type DailyTask, type Mistake, type Revision, type StudySession, type TestRecord, type TestSubjectScore, type TestChapterLink, type WeeklyGoal, type Subject, type BacklogItem } from '../../src/types/index.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ModelTool, NormalizedToolCall } from './provider-adapters.js'
 import { ApiError } from './http.js'
@@ -40,6 +41,7 @@ const toolSchemas = {
   get_chapter_performance: z.object({ subject: subjectSchema.optional(), limit: z.number().int().min(1).max(30).default(15) }).strict(),
   get_weak_areas: z.object({ subject: subjectSchema.optional(), limit: z.number().int().min(1).max(20).default(10) }).strict(),
   get_revision_due: z.object({ days: z.number().int().min(0).max(90).default(14), limit: z.number().int().min(1).max(40).default(20) }).strict(),
+  get_backlog: z.object({ include_snoozed: z.boolean().default(true) }).strict(),
   get_mistake_summary: z.object({ subject: subjectSchema.optional(), limit: z.number().int().min(1).max(50).default(20) }).strict(),
   get_daily_tasks: z.object({ date: z.iso.date().optional() }).strict(),
   get_study_time_summary: z.object({ days: z.number().int().min(1).max(90).default(7) }).strict(),
@@ -132,7 +134,8 @@ const descriptions: Record<ToolName, { description: string; kind: ToolKind; prog
   get_subject_performance: { description: 'Get canonical per-subject test averages and counts.', kind: 'read', progress: 'Analyzing subject performance…' },
   get_chapter_performance: { description: 'Read canonical chapter averages, trend, and weak/strong/dropping classifications.', kind: 'read', progress: 'Analyzing chapter performance…' },
   get_weak_areas: { description: 'Find tested weak or currently dropping chapters using saved thresholds.', kind: 'read', progress: 'Finding your weak areas…' },
-  get_revision_due: { description: 'Read due and overdue revision items with chapter names.', kind: 'read', progress: 'Checking your revision queue…' },
+  get_revision_due: { description: 'Read due and overdue chapter revisions. Not the leftover-work backlog (use get_backlog for that).', kind: 'read', progress: 'Checking your revision queue…' },
+  get_backlog: { description: 'Read the /backlog leftover-work list (open lectures, topics and practice). Mark snoozed items as snoozed. Not the revision schedule.', kind: 'read', progress: 'Reading your backlog…' },
   get_mistake_summary: { description: 'Summarize mistake types, repeated chapters, and a small number of relevant note samples.', kind: 'read', progress: 'Reviewing your mistake patterns…' },
   get_daily_tasks: { description: 'Read tasks for a calendar date (defaults to today in Stracker’s India time zone).', kind: 'read', progress: 'Reading your study plan…' },
   get_study_time_summary: { description: 'Summarize logged study minutes over a bounded number of recent days.', kind: 'read', progress: 'Summarizing your study time…' },
@@ -254,7 +257,8 @@ const TOOL_ALIASES: Record<string, ToolName> = {
   edit_test: 'update_test', edit_task: 'update_task', remove_test: 'delete_test', remove_task: 'delete_task', remove_mistake: 'delete_mistake',
   get_dashboard: 'get_dashboard_summary', get_summary: 'get_dashboard_summary', get_tests: 'get_test_history', list_tests: 'get_test_history',
   get_tasks: 'get_daily_tasks', list_tasks: 'get_daily_tasks', search_chapters: 'find_chapters', find_chapter: 'find_chapters', get_chapters: 'find_chapters',
-  get_mistakes: 'get_mistake_summary', get_revisions: 'get_revision_due', get_weak_chapters: 'get_weak_areas'
+  get_mistakes: 'get_mistake_summary', get_revisions: 'get_revision_due', get_weak_chapters: 'get_weak_areas',
+  get_backlogs: 'get_backlog', list_backlog: 'get_backlog', list_backlog_items: 'get_backlog'
 }
 
 export function resolveToolName(raw: string): ToolName | null {
@@ -429,7 +433,7 @@ async function analyticsData(client: SupabaseClient, userId: string, includeChap
   ])
   return {
     chapters, revisions, tests, testSubjectScores, testChapterLinks, mistakes, tasks, goals, sessions,
-    // Practice/PYQ/backlog collections are not exposed to the AI analytics tools yet.
+    // Practice/PYQ collections are not exposed to the AI analytics tools yet. Backlog is read by get_backlog and the dashboard counts, not through this bundle.
     practiceSessions: [], pyqRecords: [], chapterStages: [], backlogItems: [], studyCards: [],
     testErrorLogs: [], testTimeEntries: [], examTracks: [],
     settings: settingsRows[0] ?? defaultSettings(userId), profile: null
@@ -453,6 +457,8 @@ async function readTool(client: SupabaseClient, userId: string, name: ToolName, 
     case 'get_dashboard_summary': {
       const data = await analyticsData(client, userId, true)
       const overall = getOverallTestAverage(data)
+      const backlogItems = await queryAll<BacklogItem>(client, 'backlog_items', userId, 'id,user_id,title,type,subject,chapter_id,priority,due_on,status,snoozed_until,completed_at,created_at,updated_at', 2000)
+      const backlog = listBacklogForAI(backlogItems, data.chapters, indiaToday())
       return {
         test_count: data.tests.length,
         scored_tests: overall.count,
@@ -464,7 +470,9 @@ async function readTool(client: SupabaseClient, userId: string, name: ToolName, 
         tasks_today: data.tasks.filter(task => task.task_date === indiaToday()).length,
         completed_tasks_today: data.tasks.filter(task => task.task_date === indiaToday() && task.is_completed).length,
         study_minutes_today: getTodayStudyMinutes(data),
-        study_streak: getStudyStreak(data)
+        study_streak: getStudyStreak(data),
+        backlog_open: backlog.open_count,
+        backlog_snoozed: backlog.snoozed_count
       }
     }
     case 'get_test_history': {
@@ -518,6 +526,15 @@ async function readTool(client: SupabaseClient, userId: string, name: ToolName, 
       const cutoff = futureDate(indiaToday(), input.days as number)
       return revisions.filter(revision => !revision.completed_at && revision.due_on <= cutoff).sort((a, b) => a.due_on.localeCompare(b.due_on)).slice(0, input.limit as number)
         .map(revision => { const chapter = chapters.find(item => item.id === revision.chapter_id); return { id: revision.id, revision_number: revision.revision_number, due_on: revision.due_on, overdue: revision.due_on < indiaToday(), chapter_id: revision.chapter_id, chapter: chapter?.name ?? 'Unknown chapter', subject: chapter?.subject ?? null } })
+    }
+    case 'get_backlog': {
+      const [items, chapters] = await Promise.all([
+        queryAll<BacklogItem>(client, 'backlog_items', userId, 'id,user_id,title,type,subject,chapter_id,priority,due_on,status,snoozed_until,completed_at,created_at,updated_at', 2000),
+        queryAll<Chapter>(client, 'chapters', userId, 'id,user_id,name,subject', 1000)
+      ])
+      const listed = listBacklogForAI(items, chapters, indiaToday())
+      if (input.include_snoozed === false) return { ...listed, snoozed: [], snoozed_count: 0 }
+      return listed
     }
     case 'get_mistake_summary': {
       const [mistakes, chapters] = await Promise.all([

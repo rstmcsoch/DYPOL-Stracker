@@ -36,8 +36,8 @@ describe('Stracker AI data intent', () => {
   it('every turn gets the full catalog, read and write: greetings, long notes and study questions too', () => {
     const all = MODEL_TOOLS.map(tool => tool.name)
     expect(toolsForTurn().map(tool => tool.name)).toEqual(all)
-    expect(all.length).toBe(29)
-    for (const name of ['create_test', 'update_test', 'delete_test', 'create_task', 'create_mistake', 'create_weekly_goal', 'mark_revision_complete', 'update_settings', 'get_subject_performance']) expect(all).toContain(name)
+    expect(all.length).toBe(30)
+    for (const name of ['create_test', 'update_test', 'delete_test', 'create_task', 'create_mistake', 'create_weekly_goal', 'mark_revision_complete', 'update_settings', 'get_subject_performance', 'get_backlog']) expect(all).toContain(name)
     expect(essay.length).toBeGreaterThan(800)
   })
 })
@@ -69,6 +69,13 @@ describe('Stracker AI system prompt', () => {
 
   it('tells a tool-enabled turn that an earlier refusal is outdated', () => {
     expect(variants[1]).toMatch(/that is outdated: read it now/)
+  })
+
+  it('tells the model the backlog is not the revision schedule', () => {
+    for (const prompt of variants) {
+      expect(prompt).toMatch(/use get_backlog/)
+      expect(prompt).toMatch(/not the chapter revision schedule/)
+    }
   })
 })
 
@@ -117,7 +124,7 @@ describe('Stracker AI write intent across turns (add a test)', () => {
     expect(tool.description).toMatch(/never ask the student for an ID/i)
     // Compact: no regex patterns or numeric bounds, and the whole catalog stays small.
     expect(JSON.stringify(MODEL_TOOLS)).not.toContain('"pattern"')
-    expect(JSON.stringify(MODEL_TOOLS).length).toBeLessThan(12_000)
+    expect(JSON.stringify(MODEL_TOOLS).length).toBeLessThan(13_500)
   })
 })
 

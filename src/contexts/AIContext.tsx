@@ -34,6 +34,8 @@ export interface AIMessage {
   /** Server error code, e.g. stracker_ai_unavailable (shows the "Add your own model" action). */
   errorCode?:string|null
   retryable?:boolean
+  /** True when the model hit its output token limit and the answer was cut off. */
+  truncated?:boolean
   createdAt:string
 }
 export interface AITaskState {
@@ -134,7 +136,7 @@ function mapStoredMessage(value:Record<string,unknown>):AIMessage {
     modelId:typeof value.model_id === 'string' ? value.model_id : null,
     status:(value.status as AIMessage['status']) ?? 'completed',
     fallbackFrom:fallback ? { providerId:String(fallback.provider_id ?? ''),providerName:String(fallback.provider_name ?? fallback.provider_id ?? 'AI'),modelId:String(fallback.model_id ?? '') } : null,
-    result:actionResult,retryable:metadata.action_failed === true ? false : undefined,createdAt:String(value.created_at ?? new Date().toISOString())
+    result:actionResult,retryable:metadata.action_failed === true ? false : undefined,truncated:metadata.truncated === true,createdAt:String(value.created_at ?? new Date().toISOString())
   }
 }
 
@@ -425,7 +427,7 @@ export function AIProvider({ children }: { children:ReactNode }) {
         flushDelta(); finalEventSeen = true
         const fallbackFrom = payload.fallbackFrom && typeof payload.fallbackFrom === 'object' ? payload.fallbackFrom as Record<string,unknown> : null
         const content = typeof payload.content === 'string' ? payload.content : responseText
-        setAssistant({content,status:'completed',providerId:typeof payload.providerId === 'string' ? payload.providerId : null,modelId:typeof payload.modelId === 'string' ? payload.modelId : null,fallbackFrom:fallbackFrom ? { providerId:String(fallbackFrom.providerId ?? ''),providerName:String(fallbackFrom.providerName ?? fallbackFrom.providerId ?? 'AI'),modelId:String(fallbackFrom.modelId ?? '') } : null})
+        setAssistant({content,status:'completed',providerId:typeof payload.providerId === 'string' ? payload.providerId : null,modelId:typeof payload.modelId === 'string' ? payload.modelId : null,fallbackFrom:fallbackFrom ? { providerId:String(fallbackFrom.providerId ?? ''),providerName:String(fallbackFrom.providerName ?? fallbackFrom.providerId ?? 'AI'),modelId:String(fallbackFrom.modelId ?? '') } : null,truncated:payload.truncated === true})
         setActiveTask(current => current ? { ...current,status:'completed',progress:'Completed.',providerId:typeof payload.providerId === 'string' ? payload.providerId : current.providerId,modelId:typeof payload.modelId === 'string' ? payload.modelId : current.modelId,fallbackFrom:fallbackFrom ? { providerId:String(fallbackFrom.providerId ?? ''),providerName:String(fallbackFrom.providerName ?? 'AI'),modelId:String(fallbackFrom.modelId ?? '') } : null } : current)
         setLastRequest(null)
         void loadConversations(); void loadTasks()

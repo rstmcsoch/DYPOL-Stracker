@@ -248,7 +248,7 @@ describe('chat reliability', () => {
     expect(result.status).toBe('completed')
     expect(result.content).toContain('one chapter')
     expect(bodies[0]).toContain('functionDeclarations')
-    expect(bodies[0]).toContain('2200')
+    expect(bodies[0]).toContain('4096')
   })
 })
 
@@ -306,7 +306,7 @@ describe('Stracker AI never refuses supported work (three.dev transcripts)', () 
     const result = await runAssistant(input('Sorry, 40, 45, 35, 30'))
     // Every tool was offered on a turn that has no write words in it.
     const names = declared(bodies[0]!).map(tool => tool.name)
-    expect(names).toHaveLength(29)
+    expect(names).toHaveLength(30)
     for (const name of ['create_test', 'update_test', 'create_task', 'create_mistake', 'update_settings']) expect(names).toContain(name)
     expect(result.status).toBe('waiting')
     expect(result.action?.toolName).toBe('create_test')

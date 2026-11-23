@@ -7,6 +7,7 @@ import {
 } from './ai-errors.js'
 import { logAIEvent } from './diagnostics.js'
 import { isThreeDevFailure, threeDevRoute, type ThreeDevRoute, type ThreeDevTrace } from './three-dev.js'
+import { isOutputTruncated } from '../../src/lib/ai/output-truncate.js'
 
 export interface AgentMessage {
   role: 'user' | 'assistant' | 'tool'
@@ -59,6 +60,7 @@ export interface ProviderCall {
 export interface ProviderCompletion {
   text: string
   toolCalls: NormalizedToolCall[]
+  truncated?: boolean
   providerData?: ProviderTurnData
 }
 
@@ -268,6 +270,7 @@ async function callOpenAICompatible(config: ProviderCall): Promise<ProviderCompl
     method: 'POST', headers: jsonHeaders(config), body: JSON.stringify(body), signal: config.signal
   }, config.providerId === 'custom')
   let text = ''
+  let finishReason: string | null = null
   const calls = new Map<number, { id: string; name: string; arguments: string }>()
   await forEachSSE(response, (_event, data) => {
     if (data === '[DONE]') return
@@ -276,6 +279,7 @@ async function callOpenAICompatible(config: ProviderCall): Promise<ProviderCompl
     if (packet.error) throw streamFailure(config, packet)
     const choices = Array.isArray(packet.choices) ? packet.choices : []
     const choice = choices[0] as Record<string, unknown> | undefined
+    if (typeof choice?.finish_reason === 'string' && choice.finish_reason) finishReason = choice.finish_reason
     const delta = choice?.delta as Record<string, unknown> | undefined
     if (typeof delta?.content === 'string' && delta.content) {
       text += delta.content
@@ -298,7 +302,7 @@ async function callOpenAICompatible(config: ProviderCall): Promise<ProviderCompl
     arguments: parseArguments(call.arguments, config)
   }))
   if (!text && !toolCalls.length) throw new AIError('MALFORMED_RESPONSE', { provider: config.providerId, model: config.modelId, providerMessage: 'empty answer' })
-  return { text, toolCalls }
+  return { text, toolCalls, truncated: isOutputTruncated(finishReason) }
 }
 
 function anthropicTranscript(messages: AgentMessage[], providerId: AIProviderId): Array<Record<string, unknown>> {
@@ -342,10 +346,14 @@ async function callAnthropic(config: ProviderCall): Promise<ProviderCompletion> 
   type Block = { kind: 'text' | 'tool' | 'thinking' | 'other'; raw: Record<string, unknown>; text: string; partial: string; id?: string; name?: string; signature?: string }
   const blocks = new Map<number, Block>()
   let text = ''
+  let stopReason: string | null = null
   await forEachSSE(response, (event, data) => {
     let packet: Record<string, unknown>
     try { packet = JSON.parse(data) as Record<string, unknown> } catch { return }
     if (event === 'error' || packet.type === 'error') throw streamFailure(config, packet)
+    const deltaStop = packet.delta && typeof packet.delta === 'object' ? (packet.delta as Record<string, unknown>).stop_reason : undefined
+    if (typeof packet.stop_reason === 'string') stopReason = packet.stop_reason
+    if (typeof deltaStop === 'string') stopReason = deltaStop
     const index = typeof packet.index === 'number' ? packet.index : -1
     if (event === 'content_block_start') {
       const block = (packet.content_block ?? {}) as Record<string, unknown>
@@ -390,6 +398,7 @@ async function callAnthropic(config: ProviderCall): Promise<ProviderCompletion> 
   return {
     text,
     toolCalls,
+    truncated: isOutputTruncated(stopReason),
     providerData: thinkingBlocks.length ? { providerId: config.providerId, anthropicBlocks: thinkingBlocks as Array<Record<string, unknown>> } : undefined
   }
 }
@@ -486,6 +495,7 @@ async function callGoogle(config: ProviderCall): Promise<ProviderCompletion> {
     method: 'POST', headers: jsonHeaders(config), body: JSON.stringify(body), signal: config.signal
   })
   let text = ''
+  let finishReason: string | null = null
   const toolCalls: NormalizedToolCall[] = []
   const rawParts: Record<string, unknown>[] = []
   await forEachSSE(response, (_event, data) => {
@@ -493,6 +503,7 @@ async function callGoogle(config: ProviderCall): Promise<ProviderCompletion> {
     try { packet = JSON.parse(data) as Record<string, unknown> } catch { return }
     if (packet.error) throw streamFailure(config, packet)
     const candidates = Array.isArray(packet.candidates) ? packet.candidates as Record<string, unknown>[] : []
+    if (typeof candidates[0]?.finishReason === 'string') finishReason = candidates[0].finishReason as string
     const content = candidates[0]?.content as Record<string, unknown> | undefined
     const parts = Array.isArray(content?.parts) ? content.parts as Record<string, unknown>[] : []
     for (const part of parts) {
@@ -511,7 +522,7 @@ async function callGoogle(config: ProviderCall): Promise<ProviderCompletion> {
   if (!text && !toolCalls.length) throw new AIError('MALFORMED_RESPONSE', { provider: config.providerId, model: config.modelId, providerMessage: 'empty answer' })
   // Keep the exact parts (including thought signatures) only when a tool call must be continued.
   const googleParts = toolCalls.length ? rawParts.filter(part => !part.thought) : undefined
-  return { text, toolCalls, providerData: googleParts?.length ? { providerId: config.providerId, googleParts } : undefined }
+  return { text, toolCalls, truncated: isOutputTruncated(finishReason), providerData: googleParts?.length ? { providerId: config.providerId, googleParts } : undefined }
 }
 
 export async function completeWithProvider(config: ProviderCall): Promise<ProviderCompletion> {

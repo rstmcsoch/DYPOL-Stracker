@@ -7,7 +7,7 @@ import { indiaDate, indiaToday, prettyDate } from '../../lib/date'
 import type { Mistake, MistakeType, Subject } from '../../types'
 import { useReportSubjects } from '../../lib/exams/useExamSubjects'
 import { T } from '../../lib/student-layout/T'
-import { advanceRetry, retryDueOn } from '../../lib/mistake-cause'
+import { advanceRetry, retryDueOn, retryIsDue, retryQueue } from '../../lib/mistake-cause'
 
 const TYPES: MistakeType[] = ['Concept', 'Silly', 'Calculation', 'Time', 'Guess']
 
@@ -32,10 +32,10 @@ export function RetryPanel({ layout = 'card', onBrowseNotebook }: { layout?: 'ca
   const [deleting, setDeleting] = useState(false)
   const deletingRef = useRef(false)
   const today = indiaToday()
-  // "Ready" means due, not merely on the list: a note scheduled for next week should not
-  // appear as work today. Notes with no schedule yet (saved before retry_due_on existed)
-  // fall back to their created date through `retryDueOn`.
-  const ready = data.mistakes.filter(item => item.retry_later && item.retry_status === 'pending' && (retryDueOn(item) ?? '0000-00-00') <= today)
+  // The tab count and this list share one source: every pending "Retry later" note,
+  // including ones whose spaced due date is still in the future (those are labelled).
+  const ready = retryQueue(data.mistakes)
+  const dueNow = ready.filter(item => retryIsDue(item, today)).length
   const filtered = useMemo(() => ready.filter(mistake => {
     const chapter = data.chapters.find(item => item.id === mistake.chapter_id)
     if (subject !== 'all' && chapter?.subject !== subject) return false
@@ -73,7 +73,7 @@ export function RetryPanel({ layout = 'card', onBrowseNotebook }: { layout?: 'ca
   }
 
   const body = <>
-    <div className="retry-intro-row"><NotebookCard className="retry-intro-card"><div className="retry-circle-doodle"><RotateCcw size={22} /></div><div><span className="eyebrow"><T k="mistakes:a-second-look">{"READY TO RETRY"}</T></span><h2>{ready.length} question{ready.length === 1 ? '' : 's'} waiting for you</h2><p><T k="retry:try-again-before-reading-the-solution-re">{"Try it before you read the solution."}</T></p></div><div className="retry-spark" aria-hidden="true">✦</div></NotebookCard></div>
+    <div className="retry-intro-row"><NotebookCard className="retry-intro-card"><div className="retry-circle-doodle"><RotateCcw size={22} /></div><div><span className="eyebrow"><T k="mistakes:a-second-look">{"READY TO RETRY"}</T></span><h2>{ready.length} question{ready.length === 1 ? '' : 's'} on your retry list</h2>{dueNow < ready.length ? <p>{dueNow} due now, {ready.length - dueNow} come back later.</p> : null}<p><T k="retry:try-again-before-reading-the-solution-re">{"Try it before you read the solution."}</T></p></div><div className="retry-spark" aria-hidden="true">✦</div></NotebookCard></div>
     <div className="retry-filters"><div className="search-field"><Search size={16} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search retry notes…" aria-label="Search retry notes" />{search && <button aria-label="Clear search" onClick={() => setSearch('')}><X size={14} /></button>}</div><select aria-label="Filter retry subject" value={subject} onChange={event => { setSubject(event.target.value as 'all' | Subject); setChapterId('all') }}><option value="all">All subjects</option>{subjectList.map(item => <option key={item}>{item}</option>)}</select><select aria-label="Filter retry chapter" value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="all">All chapters</option>{chapters.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Filter mistake type" value={type} onChange={event => setType(event.target.value as 'all' | MistakeType)}><option value="all">All types</option>{TYPES.map(item => <option key={item}>{item}</option>)}</select></div>
     {filtered.length === 0 ? <EmptyState icon={<CircleCheck size={25} />} title={ready.length ? 'Nothing in this view.' : 'Nothing waiting to retry.'} description={ready.length ? undefined : 'Mark a mistake “Retry later” to add it here.'} action={!ready.length ? <Button variant="secondary" size="sm" onClick={onBrowseNotebook}><T k="retry:open-mistake-notebook">{"Open mistake notebook"}</T></Button> : <Button variant="secondary" size="sm" onClick={clearFilters}><T k="retry:clear-filters">{"Clear filters"}</T></Button>} /> : <div className="retry-list">{filtered.map(mistake => {
       const chapter = data.chapters.find(item => item.id === mistake.chapter_id)
