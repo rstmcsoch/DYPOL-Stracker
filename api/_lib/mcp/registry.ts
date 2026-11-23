@@ -14,6 +14,10 @@ import { examTools } from './tools/exams.js'
 import { siteAiTools } from './tools/site-ai.js'
 import { siteContentTools } from './tools/site-content.js'
 import { studentLayoutTools } from './tools/student-layout.js'
+import { siteMediaTools } from './tools/site-media.js'
+import { contactMessageTools } from './tools/contact-messages.js'
+import { analyticsTools } from './tools/analytics.js'
+import { operationalSettingsTools } from './tools/operational-settings.js'
 import type { ConfirmationStore } from './confirmations.js'
 import type { ToolListItem } from './protocol.js'
 
@@ -131,7 +135,36 @@ export const IMPLEMENTED_MASTER_TOOL_NAMES = [
   'validate_student_dashboard_layout',
   'publish_student_dashboard_layout',
   'list_student_layout_versions',
-  'restore_student_dashboard_layout_version'
+  'restore_student_dashboard_layout_version',
+  'list_site_media',
+  'get_site_media',
+  'upload_site_media',
+  'update_site_media',
+  'get_media_usage',
+  'delete_site_media',
+  'list_contact_messages',
+  'get_contact_message',
+  'update_contact_message_status',
+  'archive_contact_message',
+  'delete_contact_message',
+  'get_analytics_overview',
+  'get_analytics_report',
+  'get_analytics_timeseries',
+  'get_account_analytics',
+  'get_student_activity_analytics',
+  'get_feature_usage',
+  'get_traffic_sources',
+  'get_error_groups',
+  'update_error_group',
+  'get_analytics_alerts',
+  'update_analytics_alert',
+  'update_analytics_configuration',
+  'export_analytics_report',
+  'get_operational_settings',
+  'update_operational_settings',
+  'set_maintenance_mode',
+  'update_maintenance_message',
+  'get_operational_status'
 ] as const
 
 export interface MasterToolDependencies {
@@ -163,7 +196,11 @@ export function defaultImplementedTools(deps: MasterToolDependencies = {}): Regi
     ...examTools(admin, deps.confirmations),
     ...siteAiTools(admin, deps.confirmations),
     ...siteContentTools(admin, deps.confirmations),
-    ...studentLayoutTools(admin, deps.confirmations)
+    ...studentLayoutTools(admin, deps.confirmations),
+    ...siteMediaTools(admin, deps.confirmations),
+    ...contactMessageTools(admin, deps.confirmations),
+    ...analyticsTools(admin),
+    ...operationalSettingsTools(admin, deps.confirmations)
   )
   return tools
 }

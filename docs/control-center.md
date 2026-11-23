@@ -207,6 +207,15 @@ Sidebar → **Settings** (`/control-panel/settings/*`) has horizontal tabs. Each
 | Roles & members | `roles.manage` | Give a role by email, change it, remove it. |
 | Permissions | owner only | Role × permission matrix and per-person allow/deny overrides. |
 | Activity | `audit.view` | Last 50 settings and role changes. |
+| Master MCP | Owner only | Issue, inspect and revoke dedicated Master MCP credentials for an external operations agent. The token is shown once. The Master principal cannot create or revoke credentials itself, and it is not an Owner session. See [master-mcp-connection.md](master-mcp-connection.md). |
+
+### Master MCP (Owner only)
+
+Sidebar → **Settings → Master MCP**. Only the Owner can open this tab or call `/api/control/master-mcp`.
+
+The tab shows the Streamable HTTP endpoint (`/api/mcp`, production `https://dypol-stracker.vercel.app/api/mcp`), named credentials, last activity, revocation status and a summary of backend-enforced capabilities. Creating, rotating or revoking a credential requires Owner MFA / step-up. The plaintext token is shown once and is stored only as a hash.
+
+The Master MCP agent authenticates with `Authorization: Bearer <MASTER_MCP_TOKEN>` and has 118 operational tools. It cannot change roles, Owner identity, authentication, sign-up/sign-in switches, or delete user accounts. Full documentation lives in [master-mcp.md](master-mcp.md), [master-mcp-tools.md](master-mcp-tools.md), [master-mcp-connection.md](master-mcp-connection.md), [master-mcp-security.md](master-mcp-security.md) and [master-mcp-migration.md](master-mcp-migration.md).
 
 Roles: Owner, Admin (`administrator`), Moderator (`moderator`), Viewer (`viewer`). Migration `20261114160000` renamed Manager to Moderator and moved the retired Support and old `analyst` keys to Viewer (0 holders were affected in production). Defaults live in `control_role_permissions` (seeded by migration `20261114120000_control_settings_rbac`) and follow least privilege: Viewer reads, Moderator handles messages, account lookup, content drafts and exams, Admin everything except permission editing. **The owner always has every permission** and cannot be changed, demoted or removed by anyone; only the owner can grant Owner/Admin or edit the matrix and overrides.
 

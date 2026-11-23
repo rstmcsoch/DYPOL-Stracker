@@ -213,7 +213,31 @@ export const FORBIDDEN_TOOL_NAMES = [
   'update_email_domains',
   'create_master_credential',
   'rotate_master_credential',
-  'revoke_master_credential'
+  'revoke_master_credential',
+  'delete_storage_bucket',
+  'delete_storage_infrastructure',
+  'destroy_infrastructure',
+  'drop_storage',
+  'run_javascript',
+  'eval_javascript',
+  'run_code',
+  'list_security_factors',
+  'read_security_factors',
+  'read_deployment_secrets',
+  'read_env',
+  'delete_audit_events',
+  'rewrite_audit_events',
+  'modify_permission_matrix',
+  'modify_member_permission_overrides',
+  'change_owner_identity',
+  'change_owner_email',
+  'update_owner_password',
+  'disable_owner_mfa',
+  'delete_user_account',
+  'auth_admin_delete_user',
+  'revoke_all_sessions',
+  'dump_secrets',
+  'drop_database'
 ] as const
 
 export const FORBIDDEN_TOOL_NAME_SET: ReadonlySet<string> = new Set(FORBIDDEN_TOOL_NAMES)
@@ -248,8 +272,27 @@ export function isMasterCatalogueTool(name: string): name is MasterToolName {
   return MASTER_TOOL_NAME_SET.has(name)
 }
 
+const FORBIDDEN_TOOL_PATTERNS: readonly RegExp[] = [
+  /^(assign|remove|change|update|manage|promote|demote|create|modify)_?(roles?|permissions?|permission_matrix|member_permissions?)/,
+  /^(change|update|delete|ban|suspend|remove|set)_owner/,
+  /^(change|reset|update|remove|add|list|replace)_?(passwords?|passkeys?|totps?)$/,
+  /^(change|disable|enable|reset|list|add|remove)_?(mfa|mfa_factors?|auth_factors?|security_factors?)/,
+  /^(update|revoke|change)_?(sessions?|session_lifetime|control_session)/,
+  /^(read|list|dump|export|get)_(secrets?|deployment_secrets?|service_role(?:_key)?|encryption_key|env(?:_vars?)?)$/,
+  /^(execute|run|eval)_(sql|javascript|js|shell|code|query)$/,
+  /^(delete|drop|destroy)_(supabase(?:_project)?|vercel(?:_project)?|database|schema|storage(?:_bucket|_infrastructure)?|infrastructure|project)$/,
+  /^(create|rotate|revoke)_master_credential$/,
+  /^(set|update)_(signup|signin)_enabled$/,
+  /^update_email_domains$/,
+  /^(delete|rewrite)_audit(_events|_records)?$/,
+  /^auth_admin_delete_user$/
+]
+
 export function isForbiddenTool(name: string): boolean {
-  return FORBIDDEN_TOOL_NAME_SET.has(name)
+  const normalised = name.trim().toLowerCase()
+  if (FORBIDDEN_TOOL_NAME_SET.has(name) || FORBIDDEN_TOOL_NAME_SET.has(normalised)) return true
+  if (normalised.startsWith('delete_auth') || normalised.includes('execute_sql') || normalised.includes('execute_shell')) return true
+  return FORBIDDEN_TOOL_PATTERNS.some(pattern => pattern.test(normalised))
 }
 
 export function normalizeToolName(value: unknown): string | null {

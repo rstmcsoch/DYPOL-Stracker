@@ -200,3 +200,18 @@ No license has been selected for this repository yet. Add a `LICENSE` file befor
 ## Stracker Control Center
 
 A private administration console lives at `/control-panel/`. It is for the DYPOL LABS operator team, is not linked from the public site or the student dashboard, and is marked `noindex`. Access requires an existing account granted a server-side admin role plus a verified authenticator (TOTP). See [docs/control-center.md](docs/control-center.md) for provisioning, MFA recovery, the audit-event catalogue, the time-zone policy, required environment variables and current limits.
+
+## Stracker Master MCP
+
+The Owner can issue a dedicated operations-agent credential from Control Center → Settings → Master MCP. The agent is a separate `master_mcp` principal: it is not the Owner, not a Control Center role, and not the student-facing Stracker AI. It speaks Streamable HTTP JSON-RPC at `POST /api/mcp` with `Authorization: Bearer <MASTER_MCP_TOKEN>`.
+
+The implemented catalogue is 118 tools covering student data, moderation, exams, global Stracker AI, the public site and student-dashboard editors, media, contact messages, analytics and maintenance. It cannot manage roles, Owner identity, security settings, sign-up/sign-in switches, user-account deletion, secrets or infrastructure.
+
+Documentation:
+
+- [Architecture](docs/master-mcp.md)
+- [Tool reference](docs/master-mcp-tools.md)
+- [Connection guide](docs/master-mcp-connection.md)
+- [Security and permissions](docs/master-mcp-security.md)
+- [Migration notes](docs/master-mcp-migration.md)
+- [Compatibility review](docs/master-mcp-compatibility.md)
