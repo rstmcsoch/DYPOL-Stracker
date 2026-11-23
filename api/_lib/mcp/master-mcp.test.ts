@@ -181,6 +181,23 @@ describe('Master MCP invalid JSON bodies', () => {
     expect(res.statusCode).toBe(400)
     expect(res.body).toMatchObject({ error: 'invalid_json' })
   })
+
+  it('returns 400 invalid_json when the host throws a non-SyntaxError while reading a JSON body', async () => {
+    const { issued, options } = await runtime()
+    const headers: Record<string, string> = { authorization: `Bearer ${issued.token}`, 'content-type': 'application/json' }
+    const req = {
+      method: 'POST',
+      headers,
+      url: '/api/mcp',
+      get body() {
+        throw new Error('Failed to parse body as JSON')
+      }
+    } as unknown as ApiRequest
+    const res = fakeRes()
+    await handleMasterMcp(req, res, options)
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toMatchObject({ error: 'invalid_json' })
+  })
 })
 
 describe('Master MCP audit sanitization', () => {

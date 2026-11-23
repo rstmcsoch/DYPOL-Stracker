@@ -166,11 +166,11 @@ async function readMcpJson(req: ApiRequest, maxBytes = MCP_MAX_REQUEST_BYTES): P
       return req.body
     }
   } catch (error) {
-    // Some hosts (including Vercel) throw SyntaxError when application/json
-    // cannot be parsed, lazily, on first access of req.body.
+    // Vercel parses application/json before the handler. Invalid JSON may throw
+    // SyntaxError or a host-specific error on first access of req.body. Either
+    // way this is a client body problem, not an internal 500.
     if (error instanceof McpProtocolError) throw error
-    if (error instanceof SyntaxError) throw invalidJson()
-    throw error
+    throw invalidJson()
   }
   const chunks: Buffer[] = []
   let length = 0
