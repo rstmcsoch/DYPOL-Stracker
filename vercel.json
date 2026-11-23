@@ -116,6 +116,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/mcp",
+      "destination": "/api/control/system?route=mcp"
+    },
+    {
       "source": "/api/control/users",
       "destination": "/api/control/accounts?route=users"
     },
