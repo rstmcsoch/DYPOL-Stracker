@@ -137,6 +137,50 @@ describe('Master MCP confirmation tokens', () => {
     await store.insert(expired.record)
     await expect(consumeConfirmation(store, expired.token, base, new Date(now.getTime() + 1000))).rejects.toMatchObject({ code: 'confirmation_invalid' })
   })
+
+  it('accepts a confirmation whose stored consumed_at uses a +00:00 offset instead of Z', async () => {
+    const now = new Date('2026-11-23T10:00:00.000Z')
+    const issued = issueConfirmation(base, now)
+    const store = {
+      async insert() {},
+      async findByHash(tokenHash: string) {
+        return tokenHash === issued.record.tokenHash ? { ...issued.record } : null
+      },
+      async consume(tokenHash: string) {
+        if (tokenHash !== issued.record.tokenHash) return null
+        return { ...issued.record, consumedAt: '2026-11-23T10:00:00.000+00:00' }
+      }
+    }
+    const consumed = await consumeConfirmation(store, issued.token, base, now)
+    expect(consumed.consumedAt).toBe('2026-11-23T10:00:00.000+00:00')
+  })
+})
+
+
+describe('Master MCP invalid JSON bodies', () => {
+  it('returns 400 invalid_json when the JSON body is truncated', async () => {
+    const { issued, options } = await runtime()
+    const res = await callMcp(issued.token, '{', options)
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toMatchObject({ error: 'invalid_json' })
+  })
+
+  it('returns 400 invalid_json when accessing req.body throws SyntaxError', async () => {
+    const { issued, options } = await runtime()
+    const headers: Record<string, string> = { authorization: `Bearer ${issued.token}`, 'content-type': 'application/json' }
+    const req = {
+      method: 'POST',
+      headers,
+      url: '/api/mcp',
+      get body() {
+        throw new SyntaxError('Unexpected end of JSON input')
+      }
+    } as unknown as ApiRequest
+    const res = fakeRes()
+    await handleMasterMcp(req, res, options)
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toMatchObject({ error: 'invalid_json' })
+  })
 })
 
 describe('Master MCP audit sanitization', () => {

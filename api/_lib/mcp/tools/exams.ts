@@ -20,7 +20,7 @@ const createArgs = examInputSchema
 const updateArgs = examInputSchema
 const reorderArgs = z.object({ order: z.array(examIdSchema).min(1).max(500) }).strict()
 const markingArgs = z.object({ examId: examIdSchema, markingScheme: markingSchemeBody.nullable() }).strict()
-const preferencesArgs = z.object({ preferences: z.record(z.string(), z.array(z.string()).min(1).max(12)) }).strict()
+const preferencesArgs = z.object({ preferences: z.record(z.string(), z.array(z.string()).min(1).max(12)).refine(value => Object.keys(value).length > 0, 'Send at least one provider list to update.') }).strict()
 
 export function examTools(admin: SupabaseClient, confirmations?: ConfirmationStore) {
   return [
@@ -49,7 +49,27 @@ export function examTools(admin: SupabaseClient, confirmations?: ConfirmationSto
       if (preview) return preview
       return exams.hideExam(admin, examId, true)
     }),
-    tool('restore_exam', 'Restore a hidden exam so it appears in new student pickers again. The catalogue row was never deleted.', jsonSchema({ examId: { type: 'string' } }, ['examId']), args => z.object({ examId: examIdSchema }).strict().parse(args ?? {}) as Record<string, unknown>, async (_actor, args) => exams.hideExam(admin, String(args.examId), false)),
+    tool('restore_exam', 'Restore a hidden exam so it appears in new student pickers again. The catalogue row was never deleted. Requires confirmation because this change is visible to students.', jsonSchema({ examId: { type: 'string' }, confirmationToken: { type: 'string' } }, ['examId']), args => examIdArgs.parse(args ?? {}) as Record<string, unknown>, async (actor, args) => {
+      const examId = String(args.examId)
+      const current = await exams.getExamDefinition(admin, examId)
+      const preview = await previewOrConfirm(confirmations, actor, 'restore_exam', withoutConfirmationToken(args), { type: 'exam', id: examId, version: current.exam.hidden ? 'hidden' : 'visible' }, args.confirmationToken, async () => ({
+        operation: 'restore_exam',
+        targetType: 'exam',
+        targetId: examId,
+        existing: { hidden: current.exam.hidden, name: current.exam.name },
+        proposed: { hidden: false },
+        effects: [
+          'The exam will appear in new student pickers again.',
+          'Students already on this exam are unchanged.',
+          'The catalogue row was never physically deleted.'
+        ],
+        relatedRecords: { studentsUsingExam: current.inUseCount },
+        irreversible: false,
+        validation: 'Restore is a soft flag only. There is no Master MCP tool that permanently deletes an exam row.'
+      }))
+      if (preview) return preview
+      return exams.hideExam(admin, examId, false)
+    }),
     tool('reorder_exams', 'Rewrite exam sort_order from the given id list (first id is first). Unknown ids are rejected and no rows are deleted.', jsonSchema({ order: { type: 'array', items: { type: 'string' } } }, ['order']), args => reorderArgs.parse(args ?? {}) as Record<string, unknown>, async (_actor, args) => exams.reorderExams(admin, args.order)),
     tool('update_exam_marking_scheme', 'Set or clear the marking defaults for one exam using the shared marking-scheme validator. Null clears the stored scheme so built-in defaults apply.', jsonSchema({ examId: { type: 'string' }, markingScheme: { type: ['object', 'null'] } }, ['examId', 'markingScheme']), args => markingArgs.parse(args ?? {}) as Record<string, unknown>, async (_actor, args) => exams.updateExamMarkingScheme(admin, String(args.examId), args.markingScheme)),
     tool('update_exam_ai_model_preferences', 'Update the global AI model preference lists used when ranking models. Providers are limited to Gemini, OpenAI, Anthropic, DeepSeek and Qwen.', jsonSchema({ preferences: { type: 'object' } }, ['preferences']), args => preferencesArgs.parse(args ?? {}) as Record<string, unknown>, async (_actor, args) => exams.updateExamAiModelPreferences(admin, args.preferences))

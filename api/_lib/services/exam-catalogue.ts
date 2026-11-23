@@ -167,6 +167,7 @@ export async function updateExamAiModelPreferences(admin: SupabaseClient, prefer
   const parsed = aiPreferencesSchema.safeParse(preferences)
   if (!parsed.success) throw new ApiError(400, 'invalid_request', 'Check the AI model preference lists.')
   const providers = Object.keys(parsed.data)
+  if (!providers.length) throw new ApiError(400, 'invalid_request', 'Send at least one provider list to update. An empty object is refused so existing lists are not overwritten.')
   if (providers.some(provider => !(AI_MODEL_PROVIDERS as string[]).includes(provider))) {
     throw new ApiError(400, 'invalid_request', 'AI model preferences can only be set for Gemini, OpenAI, Anthropic, DeepSeek and Qwen.')
   }
