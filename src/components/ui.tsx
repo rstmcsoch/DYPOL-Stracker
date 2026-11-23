@@ -36,7 +36,8 @@ export function PageHeader({
   return <div className="page-header" {...attrs}>
     <div className="page-header-copy">
       {eyebrow && <div className="eyebrow">{layoutId ? slot.text('eyebrow', eyebrow) : eyebrow}</div>}
-      <h1 className="type-h1">{layoutId ? slot.text('title', title) : title}{doodle && <span className="title-doodle" aria-hidden="true">{doodle}</span>}{subtitle && <InfoTip text={layoutId ? slot.t('subtitle', subtitle) : subtitle} />}</h1>
+      <h1 className="type-h1">{layoutId ? slot.text('title', title) : title}{doodle && <span className="title-doodle" aria-hidden="true">{doodle}</span>}</h1>
+      {subtitle ? <p>{layoutId ? slot.text('subtitle', subtitle) : subtitle}</p> : null}
     </div>
     {action && <div className="page-header-action">{action}</div>}
   </div>

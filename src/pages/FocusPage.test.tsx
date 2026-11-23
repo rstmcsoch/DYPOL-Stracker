@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { AppData, StudySession } from '../types'
 import { defaultExamTracks, defaultSettings } from '../lib/defaults'
@@ -146,5 +146,20 @@ describe('Focus End / Exit flow', () => {
     await click(/Save & end/)
     expect(sessionsWritten()).toHaveLength(1)
     expect(screen.getByRole('button', { name: /Short break/ }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('lets a sub-minute block be saved after confirm, with 0 minutes logged', async () => {
+    await mount()
+    await click(/Begin focus/)
+    await advance(20_000)
+    await click(/End focus block/)
+    const dialog = screen.getByRole('dialog', { name: /Save this 20s block\?/ })
+    expect(dialog.textContent).toMatch(/will not be added to your study hours/)
+    expect(within(dialog).getByRole('button', { name: /Save & end/ }).hasAttribute('disabled')).toBe(false)
+    await click(/Save & end/)
+    await act(async () => { await Promise.resolve() })
+    const written = sessionsWritten()
+    expect(written).toHaveLength(1)
+    expect(written[0]).toMatchObject({ duration_minutes: 0, completion_state: 'interrupted' })
   })
 })

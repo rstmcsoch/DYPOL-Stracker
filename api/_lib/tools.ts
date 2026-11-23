@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getChapterPerformance, getOverallTestAverage, getOverallTestPercentage, getStudyStreak, getSubjectPerformance, getTodayStudyMinutes, getWeekStart } from '../../src/lib/analytics.js'
+import { byMostRecentTest, getChapterPerformance, getOverallTestAverage, getOverallTestPercentage, getStudyStreak, getSubjectPerformance, getTodayStudyMinutes, getWeekStart } from '../../src/lib/analytics.js'
 import { completeRevision } from '../../src/lib/revision-actions.js'
 import { testFormSchema, subjectScoreInputSchema, POSTGRES_INTEGER_MAX } from '../../src/lib/test-validation.js'
 import { validatePersistedRecords } from '../../src/lib/record-validation.js'
@@ -478,7 +478,7 @@ async function readTool(client: SupabaseClient, userId: string, name: ToolName, 
     case 'get_test_history': {
       const limit = input.limit as number
       const data = await analyticsData(client, userId)
-      const list = [...data.tests].sort((a, b) => b.test_date.localeCompare(a.test_date)).slice(0, limit)
+      const list = [...data.tests].sort(byMostRecentTest).slice(0, limit)
       return list.map(test => ({ id: test.id, title: test.title, date: test.test_date, type: test.test_type, subject: test.subject, marks: test.marks_obtained, total: test.total_marks, percent: getOverallTestPercentage(test, data.testSubjectScores) }))
     }
     case 'get_test_details': {

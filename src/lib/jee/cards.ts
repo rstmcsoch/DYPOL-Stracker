@@ -9,10 +9,14 @@ export type { CardRating } from '../../types/index.js'
  * from Settings (`revision_gaps`, default [1, 7, 30]); `reviews` is how far up the ladder
  * the card has climbed. Every rating is deterministic for a given card, ladder and day:
  *
- * - Again: back to the bottom rung and due again today.
- * - Hard:  stays on its rung and returns tomorrow.
- * - Good:  waits the current rung's gap, then moves up one rung.
- * - Easy:  waits the next rung's gap, then moves up two rungs.
+ * - Again: back to the bottom rung and due again today (0 days).
+ * - Hard:  stays on its rung and returns tomorrow (always 1 day).
+ * - Good:  waits the current rung's gap, at least 3 days, then moves up one rung.
+ * - Easy:  waits the next rung's gap, always later than Good, then moves up two rungs.
+ *
+ * The four ratings stay strictly increasing (Again < Hard < Good < Easy) on any
+ * ladder, including a single 1-day rung. Stored next_review_at is left alone
+ * until the card is reviewed again.
  *
  * Days are counted from the review's India (IST) calendar date, so a late-night review is
  * scheduled from the day the student actually studied.
@@ -37,8 +41,15 @@ export function scheduleFor(reviews: number, rating: CardRating, gaps: number[])
   switch (rating) {
     case 'again': return { days: 0, reviews: 0 }
     case 'hard': return { days: 1, reviews: current }
-    case 'good': return { days: nextIntervalDays(current, gaps), reviews: current + 1 }
-    case 'easy': return { days: nextIntervalDays(current + 1, gaps), reviews: current + 2 }
+    case 'good': {
+      const days = Math.max(3, nextIntervalDays(current, gaps))
+      return { days, reviews: current + 1 }
+    }
+    case 'easy': {
+      const goodDays = Math.max(3, nextIntervalDays(current, gaps))
+      const days = Math.max(goodDays + 1, nextIntervalDays(current + 1, gaps))
+      return { days, reviews: current + 2 }
+    }
   }
 }
 
@@ -78,7 +89,31 @@ export function isCardDue(card: StudyCard, today: string): boolean {
 }
 
 export function dueCards(cards: StudyCard[], today: string, chapterId?: string): StudyCard[] {
+  // Omitted chapterId means every chapter; an empty string matches no chapter (not "all").
   return cards
-    .filter(card => (chapterId ? card.chapter_id === chapterId : true) && isCardDue(card, today))
+    .filter(card => (chapterId === undefined || card.chapter_id === chapterId) && isCardDue(card, today))
     .sort((a, b) => (a.next_review_at ?? '').localeCompare(b.next_review_at ?? '') || a.position - b.position)
+}
+
+/** The number to show on "Due in this chapter", or an em dash until a chapter is chosen. */
+export function dueInChapterDisplay(chapterId: string, count: number): string {
+  return chapterId ? String(count) : '—'
+}
+
+/**
+ * Chapter to open first on Formulas & flashcards: a URL/query choice, otherwise the
+ * chapter with the most due cards, then one with formula notes, then the first chapter.
+ */
+export function defaultDeckChapter(
+  chapters: ReadonlyArray<{ id: string; formula_notes: string }>,
+  due: ReadonlyArray<{ chapter_id: string }>,
+  preferredId?: string | null
+): string {
+  if (preferredId && chapters.some(chapter => chapter.id === preferredId)) return preferredId
+  const ranked = chapters
+    .map(chapter => ({ id: chapter.id, due: due.filter(card => card.chapter_id === chapter.id).length }))
+    .sort((a, b) => b.due - a.due)
+  const mostDue = ranked.find(item => item.due > 0)
+  if (mostDue) return mostDue.id
+  return chapters.find(chapter => chapter.formula_notes.trim())?.id ?? chapters[0]?.id ?? ''
 }

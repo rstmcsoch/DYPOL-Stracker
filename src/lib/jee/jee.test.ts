@@ -350,14 +350,14 @@ describe('reminders and flashcards', () => {
     expect(shouldFireToday('22:00', new Date('2026-10-09T03:00:00.000Z'), storage)).toBe(false)
   })
 
-  it('schedules known cards along R1 → R7 → R30 and returns difficult cards tomorrow', () => {
+  it('schedules known (Good) cards at least 3 days out on the R1 → R7 → R30 ladder and returns difficult cards tomorrow', () => {
     const gaps = [1, 7, 30]
     expect(nextIntervalDays(0, gaps)).toBe(1)
     expect(nextIntervalDays(1, gaps)).toBe(7)
     expect(nextIntervalDays(5, gaps)).toBe(30)
     const card: StudyCard = { id: 'k', user_id: USER, chapter_id: 'c', kind: 'formula', front: 'F', back: 'B', hint: '', position: 0, difficulty: null, reviews: 0, last_reviewed_at: null, next_review_at: null, created_at: NOW, updated_at: NOW }
     const reviewed = reviewCard(card, 'known', gaps, new Date('2026-10-08T06:00:00.000Z'))
-    expect(reviewed.next_review_at?.slice(0, 10)).toBe('2026-10-09')
+    expect(reviewed.next_review_at?.slice(0, 10)).toBe('2026-10-11')
     expect(reviewed.reviews).toBe(1)
     const difficult = reviewCard(reviewed, 'difficult', gaps, new Date('2026-10-08T06:00:00.000Z'))
     expect(difficult.next_review_at?.slice(0, 10)).toBe('2026-10-09')

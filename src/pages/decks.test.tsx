@@ -88,10 +88,39 @@ describe('Four-button review', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /Reveal answer/ }))
     const group = within(dialog).getByRole('group', { name: 'Rate this card' })
     expect(within(group).getAllByRole('button').map(button => button.getAttribute('aria-label'))).toEqual([
-      'Again — next review today', 'Hard — next review 1 day', 'Good — next review 1 day', 'Easy — next review 7 days'
+      'Again — next review today', 'Hard — next review 1 day', 'Good — next review 3 days', 'Easy — next review 7 days'
     ])
     fireEvent.click(within(group).getByRole('button', { name: /^Easy/ }))
     await vi.waitFor(() => expect(harness.upsert).toHaveBeenCalled())
     expect(harness.upsert).toHaveBeenCalledWith('study_cards', expect.objectContaining({ id: 'k1', last_rating: 'easy', difficulty: 'easy', reviews: 2 }))
+  })
+})
+
+describe('Default chapter and due tile', () => {
+  it('opens the chapter with the most due cards and does not show a chapter due count before that', async () => {
+    harness.data = data()
+    harness.data.studyCards = [
+      ...harness.data.studyCards,
+      card('k4', 'chem', 'Mole fraction'),
+      card('k5', 'chem', 'Empirical formula')
+    ]
+    await renderDecks('/decks')
+    const chapterSelect = screen.getAllByRole('combobox')[1] as HTMLSelectElement
+    expect(chapterSelect.value).toBe('chem')
+    expect(screen.getByText('Avogadro number')).toBeTruthy()
+    const due = screen.getByText('Due in this chapter').closest('.jee-stat') as HTMLElement
+    expect(within(due).getByText('3')).toBeTruthy()
+    expect(within(due).getByText('Mole Concept')).toBeTruthy()
+  })
+
+  it('shows a dash for due-in-chapter when there is no chapter to open', async () => {
+    harness.data = data()
+    harness.data.chapters = []
+    harness.data.studyCards = []
+    await renderDecks('/decks')
+    const due = screen.getByText('Due in this chapter').closest('.jee-stat') as HTMLElement
+    expect(within(due).getByText('—')).toBeTruthy()
+    expect(within(due).queryByText(/^\d+$/)).toBeNull()
+    expect(screen.getByText('Pick a chapter to open its decks.')).toBeTruthy()
   })
 })

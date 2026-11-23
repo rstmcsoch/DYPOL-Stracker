@@ -25,4 +25,19 @@ describe('PageHeader with a registered layout id', () => {
     expect(container.querySelector('h1')?.textContent).toBe('My mocks')
     expect(container.querySelector('[data-sl="tests.header"]')).not.toBeNull()
   })
+
+  it('renders the page subtitle once, outside the heading, including Live Editor wording', () => {
+    const subtitle = 'Rate each card. Good and Easy push it further out.'
+    const { container, rerender } = render(<PageHeader title="Formula & flashcards" subtitle={subtitle} layoutId="decks.header" />)
+    expect(container.querySelector('h1')?.textContent).toBe('Formula & flashcards')
+    expect(container.querySelector('.info-tip')).toBeNull()
+    expect(container.querySelector('.page-header-copy p')?.textContent).toBe(subtitle)
+    expect((container.textContent?.split(subtitle).length ?? 1) - 1).toBe(1)
+
+    const layout = sanitizeStudentLayout({ schemaVersion: 1, components: { 'decks.header': { text: { title: 'Cards', subtitle: 'Edited subtitle' } } } })
+    rerender(<StudentLayoutProvider document={layout}><PageHeader title="Formula & flashcards" subtitle={subtitle} layoutId="decks.header" /></StudentLayoutProvider>)
+    expect(container.querySelector('h1')?.textContent).toBe('Cards')
+    expect(container.querySelector('.page-header-copy p')?.textContent).toBe('Edited subtitle')
+    expect((container.textContent?.match(/Edited subtitle/g) ?? []).length).toBe(1)
+  })
 })
