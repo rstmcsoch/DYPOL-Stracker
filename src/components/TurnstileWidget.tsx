@@ -4,6 +4,8 @@ import {
   clearLocalTurnstileClearance,
   grantTurnstileClearance,
   isTurnstileClearedLocally,
+  resolveTurnstileToken,
+  shouldPrewarmSilentTurnstile,
   subscribeTurnstileClearance,
   verifyTurnstileClearance
 } from '../lib/turnstile-clearance'
@@ -11,8 +13,9 @@ import {
 export interface TurnstileHandle {
   /**
    * A fresh single-use token, waiting briefly while Cloudflare finishes its check.
-   * During an active 15-minute server-verified break, no visible verification box is shown;
-   * a silent background token is still obtained on submit when needed by Supabase Auth.
+   * During an active 15-minute server-verified break, no visible verification box is shown.
+   * A silent token is pre-warmed when the widget mounts, so passkey / submit does not wait
+   * on a new Cloudflare execute or a clearance fetch when that token is already ready.
    * Resolves `undefined` when the widget is unavailable; Supabase Auth then decides.
    */
   getToken: () => Promise<string | undefined>
@@ -66,8 +69,9 @@ const HIDDEN_SLOT_STYLE = {
  *    after 15 minutes expire: renders visibly (`appearance: "always"`) above the submit button.
  *  - After passing verification: grants a server-signed 15-minute break (HttpOnly cookie +
  *    in-memory tab nonce). During those 15 minutes, subsequent forms and Control Centre
- *    passkey/step-up prompts hide the Turnstile box completely and only obtain a silent
- *    background token on submit so Supabase Auth never rejects the request.
+ *    passkey/step-up prompts hide the Turnstile box completely. A silent token is pre-warmed
+ *    on mount (and after reset) so the passkey click path can start WebAuthn immediately
+ *    without waiting on Cloudflare. Supabase Auth still receives a real captcha token.
  *  - Disabled under Vitest (no network in jsdom).
  */
 export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(function TurnstileWidget({ action }, ref) {
@@ -77,9 +81,10 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
     id: string | null
     token: string | null
     failed: boolean
+    executeStarted: boolean
     waiters: Array<(token: string | undefined) => void>
   }>({
-    api: null, id: null, token: null, failed: false, waiters: []
+    api: null, id: null, token: null, failed: false, executeStarted: false, waiters: []
   })
   const disabled = import.meta.env.MODE === 'test'
   const theme = usePageTheme(container)
@@ -134,6 +139,7 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
     const current = state.current
     let active = true
     const settle = (token: string | undefined) => {
+      current.executeStarted = false
       const waiters = current.waiters.splice(0)
       waiters.forEach(resolve => resolve(token))
     }
@@ -166,10 +172,20 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
         'after-interactive-callback': () => {
           if (active) setInteractiveRequired(false)
         },
-        'expired-callback': () => { current.token = null },
-        'timeout-callback': () => { current.token = null },
+        'expired-callback': () => { current.token = null; current.executeStarted = false },
+        'timeout-callback': () => { current.token = null; current.executeStarted = false },
         'error-callback': () => { current.token = null; current.failed = true; settle(undefined); return true }
       }) ?? null
+      // Pre-warm a silent token while the passkey / form UI is on screen, so the
+      // click path can reuse it without waiting on Cloudflare.
+      if (shouldPrewarmSilentTurnstile(mode) && current.id && typeof api.execute === 'function') {
+        try {
+          current.executeStarted = true
+          api.execute(current.id)
+        } catch {
+          current.executeStarted = false
+        }
+      }
     }).catch(() => { current.failed = true; settle(undefined) })
     return () => {
       active = false
@@ -179,6 +195,7 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
       current.api = null
       current.id = null
       current.token = null
+      current.executeStarted = false
     }
   }, [action, disabled, theme, mode])
 
@@ -187,41 +204,37 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
       const current = state.current
       if (disabled) return undefined
 
-      if (modeRef.current === 'cleared') {
-        // Re-verify with the server before using the 15-minute break:
-        // catches cookie/cache deletion or exact 15-minute expiry in real time.
-        const stillCleared = await verifyTurnstileClearance()
-        if (!stillCleared) {
-          clearLocalTurnstileClearance()
-          setInteractiveRequired(false)
-          setMode('visible')
-          return new Promise<string | undefined>(resolve => {
-            const timer = window.setTimeout(() => {
-              current.waiters = current.waiters.filter(waiter => waiter !== done)
-              resolve(undefined)
-            }, TOKEN_WAIT_MS)
-            const done = (token: string | undefined) => { window.clearTimeout(timer); resolve(token) }
-            current.waiters.push(done)
-          })
-        }
-        if (current.token) return current.token
-        if (current.api && current.id && typeof current.api.execute === 'function') {
-          try {
-            current.api.execute(current.id)
-          } catch {
-            try { current.api.reset(current.id) } catch { /* ignore */ }
+      const resolved = await resolveTurnstileToken({
+        mode: modeRef.current,
+        token: current.token,
+        failed: current.failed,
+        executeStarted: current.executeStarted,
+        verifyClearance: verifyTurnstileClearance,
+        execute: () => {
+          if (current.executeStarted) return
+          if (current.api && current.id && typeof current.api.execute === 'function') {
+            try {
+              current.executeStarted = true
+              current.api.execute(current.id)
+            } catch {
+              current.executeStarted = false
+              try { current.api.reset(current.id) } catch { /* ignore */ }
+            }
           }
-        }
-      } else {
-        if (current.token) return current.token
-        if (current.failed) {
-          // One retry after an error, then let the server decide.
+        },
+        reset: () => {
           current.failed = false
           if (current.api && current.id) {
             try { current.api.reset(current.id) } catch { /* ignore */ }
           }
+        },
+        onClearanceLost: () => {
+          clearLocalTurnstileClearance()
+          setInteractiveRequired(false)
+          setMode('visible')
         }
-      }
+      })
+      if (!resolved.wait) return resolved.token
 
       return new Promise<string | undefined>(resolve => {
         const timer = window.setTimeout(() => {
@@ -235,6 +248,7 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
     reset: () => {
       const current = state.current
       current.token = null
+      current.executeStarted = false
       if (isTurnstileClearedLocally()) {
         // Transition to hidden cleared mode after the first verified attempt so the
         // visible Turnstile box does not re-spin during the 15-minute break.
@@ -243,6 +257,20 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { action: string }>(f
           setMode('cleared')
           return
         }
+        // Stay hidden: reset the silent widget and pre-warm a fresh token for the
+        // next passkey / submit so the click path stays wait-free.
+        if (current.api && current.id) {
+          try { current.api.reset(current.id) } catch { /* ignore */ }
+          if (typeof current.api.execute === 'function') {
+            try {
+              current.executeStarted = true
+              current.api.execute(current.id)
+            } catch {
+              current.executeStarted = false
+            }
+          }
+        }
+        return
       }
       if (current.api && current.id) {
         try { current.api.reset(current.id) } catch { /* ignore */ }

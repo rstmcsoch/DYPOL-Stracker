@@ -34,7 +34,9 @@ export function GateFrame({ children, title, subtitle }: { children: React.React
  * Owner's "Use passkey" option. Shown only when the server says this session belongs to the
  * owner AND a passkey is registered; the server separately refuses passkeys for every other role.
  * Includes the Cloudflare Turnstile widget because Supabase Auth enforces project-wide CAPTCHA
- * protection on `signInWithPasskey()` as well as password/signup endpoints.
+ * protection on `signInWithPasskey()` as well as password/signup endpoints. During the 15-minute
+ * Turnstile break the box stays hidden and getToken reuses a pre-warmed silent token, so this
+ * click starts the passkey ceremony without waiting on a new Cloudflare check.
  */
 export function PasskeyOption({ onVerified, label = 'Use passkey' }: { onVerified: () => void | Promise<void>; label?: string }) {
   const [busy, setBusy] = useState(false)
