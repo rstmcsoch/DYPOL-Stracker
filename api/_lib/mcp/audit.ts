@@ -7,7 +7,7 @@ export interface AuditSink {
   write(event: MasterAuditEvent): Promise<boolean>
 }
 
-const EXTRA_BLOCKED = /note|notes|mark|marks|payload|body|content|message_body|question|solution/i
+const EXTRA_BLOCKED = /note|notes|mark|marks|payload|body|content|message_body|question|solution|api[_-]?key|encrypted|credential|secret|password|authorization|token_hash/i
 
 function sanitizeMasterSummary(input: Record<string, unknown> | undefined): Record<string, AuditSummaryValue> | null {
   if (!input) return null

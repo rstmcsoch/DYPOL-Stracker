@@ -10,6 +10,8 @@ import { moderationTools } from './tools/moderation.js'
 import { recordTools } from './tools/records.js'
 import { insightTools } from './tools/insights.js'
 import { studyTools } from './tools/study.js'
+import { examTools } from './tools/exams.js'
+import { siteAiTools } from './tools/site-ai.js'
 import type { ConfirmationStore } from './confirmations.js'
 import type { ToolListItem } from './protocol.js'
 
@@ -75,7 +77,36 @@ export const IMPLEMENTED_MASTER_TOOL_NAMES = [
   'manage_student_study_cards',
   'manage_student_mock_analysis',
   'manage_student_exam_tracks',
-  'export_student_notebook'
+  'export_student_notebook',
+  'list_exam_catalogue',
+  'get_exam_definition',
+  'create_exam',
+  'update_exam',
+  'hide_exam',
+  'restore_exam',
+  'reorder_exams',
+  'update_exam_marking_scheme',
+  'update_exam_ai_model_preferences',
+  'get_site_ai_status',
+  'list_site_ai_providers',
+  'add_site_ai_provider',
+  'update_site_ai_provider',
+  'replace_site_ai_api_key',
+  'discover_site_ai_models',
+  'test_site_ai_provider',
+  'enable_site_ai_provider',
+  'disable_site_ai_provider',
+  'set_default_site_ai_provider',
+  'reorder_site_ai_providers',
+  'remove_site_ai_provider',
+  'update_site_ai_limits',
+  'get_ai_model_preferences',
+  'update_ai_model_preferences',
+  'get_ai_usage',
+  'get_ai_provider_health',
+  'list_ai_tasks',
+  'get_ai_task',
+  'cancel_ai_task'
 ] as const
 
 export interface MasterToolDependencies {
@@ -103,7 +134,9 @@ export function defaultImplementedTools(deps: MasterToolDependencies = {}): Regi
     ...moderationTools(admin, deps.confirmations),
     ...recordTools(admin, deps.confirmations),
     ...insightTools(admin),
-    ...studyTools(admin, deps.confirmations)
+    ...studyTools(admin, deps.confirmations),
+    ...examTools(admin, deps.confirmations),
+    ...siteAiTools(admin, deps.confirmations)
   )
   return tools
 }
