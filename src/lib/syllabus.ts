@@ -1,4 +1,4 @@
-import type { Subject } from '../types/index.js'
+import type { Chapter, Subject } from '../types/index.js'
 
 export const SYLLABUS: Record<Subject, string[]> = {
   Physics: [
@@ -21,4 +21,10 @@ export const SYLLABUS: Record<Subject, string[]> = {
     'Differential Equations', 'Straight Lines', 'Circles', 'Conic Sections', '3D Geometry', 'Vectors',
     'Probability', 'Statistics', 'Mathematical Reasoning'
   ]
+}
+
+
+/** A chapter has a note when study notes or formula notes contain any non-space text. */
+export function hasChapterNote(chapter: Pick<Chapter, 'notes' | 'formula_notes'>): boolean {
+  return Boolean(chapter.notes?.trim() || chapter.formula_notes?.trim())
 }

@@ -5,7 +5,8 @@ import { NotebookCard } from '../ui'
 import { Pct, minutesLabel } from './shared'
 import { useData } from '../../contexts/DataContext'
 import { indiaDate, indiaToday } from '../../lib/date'
-import { aggregatePractice, pyqCompletion, pyqProgressCounts } from '../../lib/jee/progress'
+import { pyqCompletion, pyqProgressCounts } from '../../lib/jee/progress'
+import { weekPractice } from '../../lib/jee/weekly-report'
 import { backlogDueCounts, computeReminders } from '../../lib/jee/reminders'
 import { weekRange } from '../../lib/jee/study-time'
 import { isJeeSettings } from '../../lib/jee/exam'
@@ -34,7 +35,7 @@ export function HomeSnapshot({ layoutAttrs, children }: { layoutAttrs?: Record<s
       return day >= week.start && day <= today
     })
     .reduce((sum, session) => sum + session.duration_minutes, 0), [data.sessions, week.start, today])
-  const practice = useMemo(() => aggregatePractice(data.practiceSessions), [data.practiceSessions])
+  const practice = useMemo(() => weekPractice(data, today), [data, today])
   const pyqCounts = useMemo(() => pyqProgressCounts(data), [data])
   const pyqMain = useMemo(() => pyqCompletion(data.pyqRecords, null, 'Main', data.settings), [data.pyqRecords, data.settings])
   const backlog = useMemo(() => backlogDueCounts(data.backlogItems, today), [data.backlogItems, today])

@@ -1,6 +1,6 @@
 import { addDays, format, parseISO, startOfWeek } from 'date-fns'
 import { indiaDate } from '../date.js'
-import type { AppData, WeeklyGoal } from '../../types/index.js'
+import type { AppData, DailyTask, WeeklyGoal } from '../../types/index.js'
 
 /**
  * Weekly-goal progress, shared by the Study plan (where goals are set) and Home (where the
@@ -15,12 +15,17 @@ export const goalWeekEnd = (weekStart: string): string =>
   format(addDays(parseISO(`${weekStart}T12:00:00`), 6), 'yyyy-MM-dd')
 
 /** Live progress for one goal, from the same records every other page reads. */
-export function goalProgress(goal: WeeklyGoal, data: Pick<AppData, 'sessions' | 'tests' | 'chapters' | 'revisions'>): number {
+export function goalProgress(goal: WeeklyGoal, data: Pick<AppData, 'sessions' | 'tests' | 'chapters' | 'revisions' | 'tasks'>): number {
   const end = goalWeekEnd(goal.week_start)
   if (goal.goal_type === 'study_hours') {
-    return data.sessions
+    // Completing a planner task does not write a study_sessions row, so the two
+    // sources never describe the same minutes and can be added without overlap.
+    const sessionMinutes = data.sessions
       .filter(session => indiaDate(session.started_at) >= goal.week_start && indiaDate(session.started_at) <= end)
-      .reduce((sum, session) => sum + session.duration_minutes, 0) / 60
+      .reduce((sum, session) => sum + session.duration_minutes, 0)
+    const taskMinutes = (data.tasks ?? []).filter((task: DailyTask) => task.is_completed && task.task_date >= goal.week_start && task.task_date <= end)
+      .reduce((sum, task) => sum + task.estimated_minutes, 0)
+    return (sessionMinutes + taskMinutes) / 60
   }
   if (goal.goal_type === 'tests') return data.tests.filter(test => test.test_date >= goal.week_start && test.test_date <= end).length
   if (goal.goal_type === 'chapters') return data.chapters.filter(chapter => chapter.completed_on && chapter.completed_on >= goal.week_start && chapter.completed_on <= end).length
@@ -35,7 +40,7 @@ export function goalProgress(goal: WeeklyGoal, data: Pick<AppData, 'sessions' | 
  */
 export function currentWeekGoal(
   goals: readonly WeeklyGoal[],
-  data: Pick<AppData, 'sessions' | 'tests' | 'chapters' | 'revisions'>,
+  data: Pick<AppData, 'sessions' | 'tests' | 'chapters' | 'revisions' | 'tasks'>,
   today: string
 ): { goal: WeeklyGoal; current: number; percent: number } | null {
   const weekStart = goalWeekStart(today)
