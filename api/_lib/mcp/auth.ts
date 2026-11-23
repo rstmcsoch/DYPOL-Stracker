@@ -46,6 +46,16 @@ function bearerToken(req: ApiRequest): string | null {
 
 const UNAUTHENTICATED = 'A valid Master MCP token is required.'
 
+/** Unauthenticated requests must still return 401 when the Master rate-limit RPC is not migrated yet. */
+async function takeAnonymousLimit(clients: MasterRuntimeClients, ipKey: string): Promise<void> {
+  try {
+    await clients.rateLimiter.take(ipKey, MASTER_ANON_LIMIT)
+  } catch (error) {
+    if (error instanceof ApiError && (error.code === 'master_mcp_unavailable' || error.code === 'rate_limit_unavailable')) return
+    throw error
+  }
+}
+
 /**
  * Authenticate a Master MCP request. Student JWTs and Control Center sessions are
  * not accepted as Master authority. A revoked credential fails on the next request.
@@ -56,20 +66,20 @@ export async function authorizeMaster(req: ApiRequest, clients: MasterRuntimeCli
   const token = bearerToken(req)
 
   if (!token) {
-    await clients.rateLimiter.take(ipKey, MASTER_ANON_LIMIT)
+    await takeAnonymousLimit(clients, ipKey)
     throw new ApiError(401, 'unauthenticated', UNAUTHENTICATED)
   }
 
   // A session JWT is never a Master credential. Reject it before a hash lookup so a
   // student or Control Center bearer cannot be confused with Master authority.
   if (presentedTokenLooksLikeJwt(token) || !isMasterTokenShape(token)) {
-    await clients.rateLimiter.take(ipKey, MASTER_ANON_LIMIT)
+    await takeAnonymousLimit(clients, ipKey)
     throw new ApiError(401, 'unauthenticated', UNAUTHENTICATED)
   }
 
   const record = await authenticateCredential(clients.credentials, token)
   if (!record) {
-    await clients.rateLimiter.take(ipKey, MASTER_ANON_LIMIT)
+    await takeAnonymousLimit(clients, ipKey)
     throw new ApiError(401, 'unauthenticated', UNAUTHENTICATED)
   }
 

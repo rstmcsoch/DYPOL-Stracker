@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ApiRequest, ApiResponse } from '../http.js'
+import { ApiError } from '../http.js'
 import { MemoryAuditSink, sanitizeMasterAuditEvent } from './audit.js'
 import { FORBIDDEN_SCOPE_MESSAGE, FORBIDDEN_TOOL_NAMES, isForbiddenTool } from './capabilities.js'
 import {
@@ -234,6 +235,23 @@ describe('POST /api/mcp', () => {
     expect((await callMcp(CONTROL_JWT, body, options)).statusCode).toBe(401)
     await revokeCredential(credentials, issued.id, null)
     expect((await callMcp(issued.token, body, options)).statusCode).toBe(401)
+  })
+
+  it('still returns 401 without a token when the Master rate-limit tables have not been migrated', async () => {
+    const credentials = new MemoryCredentialStore()
+    const unavailable = {
+      async take() {
+        throw new ApiError(503, 'master_mcp_unavailable', 'The Master MCP backend is not configured for this deployment yet.')
+      }
+    }
+    const options = testHandlerOptions(
+      { credentials, rateLimiter: unavailable, now: () => new Date() },
+      createMasterToolRegistry(),
+      new MemoryAuditSink()
+    )
+    const res = await callMcp(null, { jsonrpc: '2.0', id: 1, method: 'ping' }, options)
+    expect(res.statusCode).toBe(401)
+    expect(res.body).toMatchObject({ error: 'unauthenticated' })
   })
 
   it('refuses forbidden and unknown tools and does not advertise them', async () => {

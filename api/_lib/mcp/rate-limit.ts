@@ -69,7 +69,12 @@ export class SupabaseRateLimiter implements RateLimiter {
     })
     if (error) {
       logAIEvent('error', 'master_mcp_rate_limit_unavailable', { code: error.code ?? '' })
-      throw new ApiError(503, 'rate_limit_unavailable', 'The Master MCP could not check the request limit. Try again in a moment.')
+      const missing = error.code === '42P01' || error.code === 'PGRST202' || error.code === 'PGRST205' || /does not exist|schema cache|could not find the function/i.test(error.message ?? '')
+      throw new ApiError(
+        503,
+        missing ? 'master_mcp_unavailable' : 'rate_limit_unavailable',
+        missing ? 'The Master MCP backend is not configured for this deployment yet.' : 'The Master MCP could not check the request limit. Try again in a moment.'
+      )
     }
     if (data !== true) throw limited()
   }
