@@ -47,7 +47,7 @@ describe('Settings', () => {
     settings = base('owner', ['settings.site', 'settings.access', 'roles.manage', 'audit.view'])
     renderAt('/control-panel/settings')
     const nav = await screen.findByRole('navigation', { name: 'Settings sections' })
-    expect([...nav.querySelectorAll('a')].map(a => a.textContent)).toEqual(['Site status', 'Sign-up & sign-in', 'Security', 'Roles & members', 'Permissions', 'Activity'])
+    expect([...nav.querySelectorAll('a')].map(a => a.textContent)).toEqual(['Site status', 'Sign-up & sign-in', 'Security', 'Master MCP', 'Roles & members', 'Permissions', 'Activity'])
   })
 
   it('hides tabs outside the role (an admin without roles.manage sees no Roles or Permissions)', async () => {

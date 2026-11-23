@@ -29,6 +29,8 @@ function emptyArgs(schema: z.ZodType<object>) {
   }
 }
 
+export const IMPLEMENTED_MASTER_TOOL_NAMES = ['get_master_permissions'] as const
+
 export function createMasterToolRegistry(tools: RegisteredTool[] = defaultImplementedTools()): ToolRegistry {
   return new ToolRegistry(tools)
 }
@@ -40,7 +42,7 @@ export function defaultImplementedTools(): RegisteredTool[] {
     description: GET_MASTER_PERMISSIONS_DESCRIPTION,
     inputSchema: { ...GET_MASTER_PERMISSIONS_SCHEMA },
     parse: emptyArgs(getMasterPermissionsInput),
-    execute: async (actor) => getMasterPermissions(actor, tools.map(tool => tool.name))
+    execute: async (actor) => getMasterPermissions(actor, IMPLEMENTED_MASTER_TOOL_NAMES)
   })
   return tools
 }

@@ -25,6 +25,7 @@ import { formatIstDaysLeft, type RoleRemovalView } from '../../lib/control-role-
 import { describeAuditEvent } from '../../lib/control-audit-catalog'
 import { MIN_PASSWORD_LENGTH } from '../../lib/auth-rules'
 import { DISPOSABLE_LIST_SOURCES, normalizeDomainInput } from '../../lib/email-domains'
+import MasterMcpTab from './MasterMcpTab'
 import './role-governance.css'
 
 export interface SiteSettings { maintenanceEnabled: boolean; maintenanceMessage: string; siteDown: boolean; signupEnabled: boolean; signinEnabled: boolean; updatedAt: string | null }
@@ -53,13 +54,14 @@ export interface EmailDomains {
   list: { count: number; refreshedAt: string | null }
 }
 
-type TabId = 'site' | 'access' | 'domains' | 'security' | 'roles' | 'permissions' | 'activity'
+type TabId = 'site' | 'access' | 'domains' | 'security' | 'master-mcp' | 'roles' | 'permissions' | 'activity'
 interface TabDef { id: TabId; label: string; visible: (me: SettingsResponse['me']) => boolean }
 const SETTINGS_TABS: TabDef[] = [
   { id: 'site', label: 'Site status', visible: me => me.permissions.includes('settings.site') },
   { id: 'access', label: 'Sign-up & sign-in', visible: me => me.permissions.includes('settings.access') },
   { id: 'domains', label: 'Email domains', visible: me => me.permissions.includes('settings.domains') },
   { id: 'security', label: 'Security', visible: () => true },
+  { id: 'master-mcp', label: 'Master MCP', visible: me => me.role === 'owner' },
   { id: 'roles', label: 'Roles & members', visible: me => me.permissions.includes('roles.manage') },
   { id: 'permissions', label: 'Permissions', visible: me => me.role === 'owner' },
   { id: 'activity', label: 'Activity', visible: me => me.permissions.includes('audit.view') }
@@ -131,7 +133,7 @@ const STEP_UP_NOTE = 'Saving asks you to confirm again: a fresh authenticator co
 export default function SettingsPage() {
   const query = useQuery({ queryKey: QUERY_KEY, queryFn: () => controlFetch<SettingsResponse>('settings'), staleTime: 15_000 })
   return <>
-    <PageHeader title="Settings" description="Site status, sign-up and sign-in, your security, team roles and permissions. Every save is confirmed again before it is applied." />
+    <PageHeader title="Settings" description="Site status, sign-up and sign-in, your security, the Master MCP connection, team roles and permissions. Every save is confirmed again before it is applied." />
     <QueryFrame query={query} errorLabel="Settings could not be loaded.">
       {data => <SettingsTabs data={data} />}
     </QueryFrame>
@@ -182,6 +184,7 @@ function TabBody({ id, data, readOnly }: { id: TabId; data: SettingsResponse; re
     case 'access': return <AccessTab site={data.site} readOnly={readOnly} />
     case 'domains': return <EmailDomainsTab domains={data.emailDomains ?? null} readOnly={readOnly} />
     case 'security': return <SecurityTab data={data} readOnly={readOnly} />
+    case 'master-mcp': return <MasterMcpTab readOnly={readOnly} />
     case 'roles': return <RolesTab data={data} readOnly={readOnly} />
     case 'permissions': return <PermissionsTab data={data} readOnly={readOnly} />
     case 'activity': return <ActivityTab data={data} />

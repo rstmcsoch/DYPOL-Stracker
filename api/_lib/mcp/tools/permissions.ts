@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { MasterActor } from '../types.js'
-import { CAPABILITY_SUMMARY, FORBIDDEN_TOOL_NAMES, MASTER_TOOL_CATALOGUE } from '../capabilities.js'
+import { masterCapabilityOverview } from '../capabilities.js'
 import { MASTER_ACTOR_TYPE } from '../types.js'
 
 export const getMasterPermissionsInput = z.object({}).strict()
@@ -23,11 +23,7 @@ export function getMasterPermissions(actor: MasterActor, implementedTools: reado
       credentialLabel: actor.credentialLabel,
       authenticationMethod: actor.authenticationMethod
     },
-    implementedTools: [...implementedTools],
-    authorizedCatalogue: [...MASTER_TOOL_CATALOGUE],
-    capabilities: CAPABILITY_SUMMARY.allowed,
-    restricted: CAPABILITY_SUMMARY.restricted,
-    forbiddenToolNames: [...FORBIDDEN_TOOL_NAMES],
+    ...masterCapabilityOverview(implementedTools),
     notes: [
       `This principal is ${MASTER_ACTOR_TYPE} and is not the Owner.`,
       'tools/list only advertises implemented tools.',

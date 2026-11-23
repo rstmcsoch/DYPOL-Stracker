@@ -152,6 +152,10 @@
       "destination": "/api/control/security?route=settings"
     },
     {
+      "source": "/api/control/master-mcp",
+      "destination": "/api/control/security?route=master-mcp"
+    },
+    {
       "source": "/api/control/audit",
       "destination": "/api/control/operations?route=audit"
     },

@@ -9,6 +9,7 @@ export interface CredentialStore {
   insert(record: MasterCredentialRecord): Promise<void>
   findByHash(tokenHash: string): Promise<MasterCredentialRecord | null>
   list(): Promise<MasterCredentialRecord[]>
+  findById(id: string): Promise<MasterCredentialRecord | null>
   revoke(id: string, revokedAt: string, revokedBy: string | null): Promise<boolean>
   touchLastUsed(id: string, usedAt: string): Promise<void>
 }
@@ -105,6 +106,11 @@ export class MemoryCredentialStore implements CredentialStore {
     return [...this.rows.values()].map(row => ({ ...row }))
   }
 
+  async findById(id: string): Promise<MasterCredentialRecord | null> {
+    const row = this.rows.get(id)
+    return row ? { ...row } : null
+  }
+
   async revoke(id: string, revokedAt: string, revokedBy: string | null): Promise<boolean> {
     const row = this.rows.get(id)
     if (!row || row.status === 'revoked') return false
@@ -164,6 +170,19 @@ export class SupabaseCredentialStore implements CredentialStore {
       throw new ApiError(503, 'master_mcp_unavailable', 'Master MCP connections could not be loaded. Try again in a moment.')
     }
     return (data ?? []).map(row => mapRow(row as Record<string, unknown>))
+  }
+
+  async findById(id: string): Promise<MasterCredentialRecord | null> {
+    const { data, error } = await this.admin
+      .from('master_mcp_credentials')
+      .select('id, display_name, token_hash, token_hint, status, created_at, created_by, last_used_at, revoked_at, revoked_by')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) {
+      logAIEvent('error', 'master_mcp_credential_lookup_failed', { code: error.code ?? '' })
+      throw new ApiError(503, 'master_mcp_unavailable', 'The Master MCP connection could not be loaded. Try again in a moment.')
+    }
+    return data ? mapRow(data as Record<string, unknown>) : null
   }
 
   async revoke(id: string, revokedAt: string, revokedBy: string | null): Promise<boolean> {

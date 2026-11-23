@@ -255,3 +255,13 @@ export function normalizeToolName(value: unknown): string | null {
   if (!name || name.length > 80) return null
   return name
 }
+
+export function masterCapabilityOverview(implementedTools: readonly string[]) {
+  return {
+    implementedTools: [...implementedTools],
+    authorizedCatalogue: [...MASTER_TOOL_CATALOGUE],
+    capabilities: CAPABILITY_SUMMARY.allowed,
+    restricted: CAPABILITY_SUMMARY.restricted,
+    forbiddenToolNames: [...FORBIDDEN_TOOL_NAMES]
+  }
+}
