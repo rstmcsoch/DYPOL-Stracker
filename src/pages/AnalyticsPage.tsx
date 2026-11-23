@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { loadHiddenSeries, saveHiddenSeries } from '../lib/analytics-legend'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -13,6 +13,7 @@ import { Meter } from '../components/jee/shared'
 import type { Subject } from '../types'
 import { WeeklyReportCard } from '../components/jee/WeeklyReportCard'
 import { LearningPipelineCard } from '../components/jee/LearningPipelineCard'
+import { loadHoursView, saveHoursView, type HoursView } from '../lib/analytics-prefs'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
@@ -93,6 +94,8 @@ export default function AnalyticsPage() {
   const { notify } = useToast()
   const navigate = useNavigate()
   const [pinned, setPinned] = useState<ChartId[]>(() => loadPinned(user?.id ?? 'session'))
+  const [favFlash, setFavFlash] = useState(false)
+  const favouritesRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => { savePinned(user?.id ?? 'session', pinned) }, [pinned, user?.id])
 
@@ -104,6 +107,11 @@ export default function AnalyticsPage() {
         return current
       }
       notify(`${CHART_TITLES[id]} pinned to your favourites.`)
+      window.requestAnimationFrame(() => {
+        favouritesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        setFavFlash(true)
+        window.setTimeout(() => setFavFlash(false), 1200)
+      })
       return [...current, id]
     })
   }
@@ -140,6 +148,7 @@ export default function AnalyticsPage() {
 
   const chartProps = { data, trends, subjects, mistakeCounts, heatmap, chapterRows, totalChapters, doneChapters, targetComparison, hasTestScore, hasSubjectScores, hasMistakes, hasSessions, accuracy, attempt, negativeMetrics, negativeImpact, onPin: togglePin, pinned }
 
+  const inMainGrid = (id: ChartId) => !pinned.includes(id)
   const renderCard = (id: ChartId, key?: string) => {
     switch (id) {
       case 'performance': return <PerformanceCard key={key ?? id} {...chartProps} />
@@ -159,12 +168,12 @@ export default function AnalyticsPage() {
 
     {data.tests.length === 0 && <SamplePreviewCard onAddTest={() => navigate('/tests?add=1')} />}
 
-    {pinned.length > 0 && <section className="favourites-section" aria-label="Favourite charts">
+    {pinned.length > 0 && <section ref={favouritesRef} className={`favourites-section${favFlash ? ' is-flash' : ''}`} aria-label="Favourite charts">
       <div className="section-heading favourites-heading"><div><h2><T k="analytics:favourites">{"Favourites"}</T></h2><p>Pinned charts stay on top. Pin up to {PIN_LIMIT}.</p></div><StatusBadge tone="muted">{pinned.length}/{PIN_LIMIT} pinned</StatusBadge></div>
       <div className="analytics-grid two-col favourites-grid">{pinned.map(id => renderCard(id, `fav-${id}`))}</div>
     </section>}
 
-    {renderCard('performance')}
+    {inMainGrid('performance') && renderCard('performance')}
 
     <section className="section-heading analytics-section-title"><div><h2><T k="analytics:how-the-attempts-are-landing">{"How the attempts are landing"}</T></h2><p><T k="analytics:every-calculation-is-based-only-on-the-f">{"Based on the fields you filled in."}</T></p></div></section>
     {hasAttemptData ? <div className="analytics-metric-grid">
@@ -175,11 +184,11 @@ export default function AnalyticsPage() {
     </div> : <NotebookCard className="chart-card chart-card-flat"><NoDataLine label="Attempt metrics" hint="Log correct and wrong counts with a test." /></NotebookCard>}
 
     <div className="analytics-grid two-col analytics-lower-grid">
-      {renderCard('mistakes')}
-      {renderCard('study-hours')}
+      {inMainGrid('mistakes') && renderCard('mistakes')}
+      {inMainGrid('study-hours') && renderCard('study-hours')}
     </div>
 
-    {renderCard('heatmap')}
+    {inMainGrid('heatmap') && renderCard('heatmap')}
 
     {hasSessions && <section className="section-heading analytics-section-title"><div><h2><T k="analytics:where-the-hours-go">{"Where the hours go"}</T></h2><p>Study time and marks, side by side, from your own records.</p></div></section>}
     {hasSessions && <div className="analytics-grid two-col analytics-alloc-grid">
@@ -188,8 +197,8 @@ export default function AnalyticsPage() {
     </div>}
 
     <div className="analytics-grid two-col analytics-final-grid">
-      {renderCard('syllabus')}
-      {renderCard('target')}
+      {inMainGrid('syllabus') && renderCard('syllabus')}
+      {inMainGrid('target') && renderCard('target')}
     </div>
 
     {!sl.hidden('insights') && <div {...sl.attrs('insights')} className="analytics-insight-row"><NotebookCard className="analytics-insight-card"><span className="insight-pencil">✎</span><div><span className="eyebrow"><T k="analytics:chapter-signals">{"CHAPTER SIGNALS"}</T></span><p><strong>{chapterRows.filter(item => item.classification === 'Untested').length}</strong>{' '}<T k="analytics:untested">{"untested ·"}</T>{' '}<strong>{chapterRows.filter(item => item.classification === 'Weak').length}</strong>{' '}<T k="analytics:weak">{"weak ·"}</T>{' '}<strong>{chapterRows.filter(item => item.dropping).length}</strong>{' '}<T k="analytics:dropping">{"dropping"}</T></p></div><button onClick={() => navigate('/weak-areas')}><T k="analytics:see-weak-areas">{"See weak areas ↗"}</T></button></NotebookCard></div>}
@@ -350,7 +359,10 @@ function MistakeBreakdownCard({ mistakeCounts, hasMistakes, pinned, onPin }: Cha
 }
 
 function StudyHoursCard({ data, hasSessions, pinned, onPin }: ChartCardProps) {
-  const [hoursView, setHoursView] = useState<'day' | 'week' | 'month'>('day')
+  const { user } = useAuth()
+  const owner = user?.id ?? 'session'
+  const [hoursView, setHoursViewState] = useState<HoursView>(() => loadHoursView(owner))
+  const setHoursView = (view: HoursView) => { setHoursViewState(view); saveHoursView(owner, view) }
   const studyBars = useMemo(() => makeStudyBars(data.sessions, hoursView), [data.sessions, hoursView])
   return <NotebookCard className={`chart-card study-chart-card ${hasSessions ? '' : 'chart-card-flat'}`}>
     <div className="chart-card-head"><div><span className="eyebrow"><T k="analytics:showing-up-counts">{"STUDY TIME"}</T></span><h2>{CHART_TITLES['study-hours']}</h2><p><T k="analytics:logged-focus-sessions-only">{"Logged focus sessions only."}</T></p></div><div className="chart-head-actions"><div className="segmented-control" role="group" aria-label="Study hours grouping">{(['day','week','month'] as const).map(item => <button className={hoursView === item ? 'active' : ''} key={item} onClick={() => setHoursView(item)}>{item}</button>)}</div><PinButton id="study-hours" pinned={pinned.includes('study-hours')} onPin={onPin} /></div></div>

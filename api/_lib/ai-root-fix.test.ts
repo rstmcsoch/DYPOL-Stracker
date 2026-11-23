@@ -60,11 +60,11 @@ describe('arguments are accepted in the shapes models send', () => {
 
 describe('compact catalog with the student\u2019s subjects', () => {
   it('keeps every tool and every write tool, without regex patterns or bounds', () => {
-    expect(MODEL_TOOLS).toHaveLength(29)
+    expect(MODEL_TOOLS).toHaveLength(30)
     expect(MODEL_TOOLS.filter(tool => /^(create|update|delete|complete|mark)_/.test(tool.name))).toHaveLength(17)
     const text = JSON.stringify(MODEL_TOOLS)
     expect(text).not.toMatch(/"(pattern|maximum|minLength|maxLength|multipleOf)"/)
-    expect(text.length).toBeLessThan(12_000)
+    expect(text.length).toBeLessThan(13_500)
     expect(compactSchema({ type: 'string', pattern: 'x', format: 'uuid' })).toEqual({ type: 'string', format: 'uuid' })
   })
 

@@ -132,3 +132,8 @@ export function advanceRetry(today: string, count: number): { retry_count: numbe
 export function startRetry(today: string, count: number): { retry_due_on: string; retry_count: number } {
   return { retry_due_on: addDays(today, RETRY_GAP_DAYS[count] ?? RETRY_GAP_DAYS[0]), retry_count: count }
 }
+
+/** Every note marked Retry later and still pending, whether or not its spaced due date has arrived. */
+export function retryQueue<T extends { retry_later: boolean; retry_status: string }>(mistakes: readonly T[]): T[] {
+  return mistakes.filter(item => item.retry_later && item.retry_status === 'pending')
+}

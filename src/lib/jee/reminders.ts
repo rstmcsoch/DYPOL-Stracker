@@ -4,7 +4,7 @@ import { pyqCompletion } from './progress.js'
 import type { AppData, BacklogItem, ReminderKind } from '../../types/index.js'
 
 /** An active item, or a snoozed one whose wake-up date has arrived. Done items never wake. */
-export function isAwake(item: BacklogItem, today: string): boolean {
+export function isAwake(item: Pick<BacklogItem, 'status' | 'snoozed_until'>, today: string): boolean {
   if (item.status === 'active') return true
   return item.status === 'snoozed' && item.snoozed_until !== null && item.snoozed_until <= today
 }

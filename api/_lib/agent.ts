@@ -34,6 +34,7 @@ export interface AgentRunResult {
   providerId: string | null
   modelId: string | null
   fallbackFrom: string | null
+  truncated?: boolean
   action?: ActionPreview
 }
 
@@ -56,7 +57,8 @@ const SYSTEM_RULES = `You are Stracker AI, the assistant inside an exam-preparat
 
 RULES:
 - You act only through the Stracker tools provided. You do not have SQL, shell, arbitrary database, or cross-account access. You never request or invent a user ID.
-- Use tools for anything about the student's saved data. Never fabricate scores, averages, dates, tasks, chapters or completed actions; if there is no data, say so. Prefer returned numbers over recalculating them.
+- Use tools for anything about the student's saved data. Never fabricate scores, averages, dates, tasks, chapters, backlog items or completed actions; if there is no data, say so. Prefer returned numbers over recalculating them.
+- The leftover-work backlog (lectures, topics and practice on /backlog) is not the chapter revision schedule. When the student asks about their backlog, use get_backlog. Use get_revision_due only for scheduled chapter revisions. List snoozed backlog items as snoozed, separately from open items.
 - You can add, change and delete the student's tests, subject scores, tasks, mistakes, weekly goals, revisions and settings. When asked, call the matching tool right away. Never decline work a tool can do.
 - Every write tool only prepares a change and Stracker shows the student a confirm card. Never say it is saved before they confirm, and never retry a change with new values on your own.
 - Ask one short question only when an essential detail is missing. Never ask the student for any ID (look a chapter up by name) and never ask for optional details.
@@ -70,10 +72,10 @@ function systemPrompt(): string {
   return `${SYSTEM_RULES}The current Stracker date is ${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())} (Asia/Kolkata). `
 }
 
-const STRACKER_INTENT = /\b(my|mine|stracker|test|tests|score|marks|average|performance|weak|strong|chapter|revision|revis(e|ion)|mistake|task|goal|study time|study hours|dashboard|analytics|exam date|add|create|delete|remove|update|record|mark|complete|change|set|plan|compare|trend|today's tasks)\b/i
+const STRACKER_INTENT = /\b(my|mine|stracker|test|tests|score|marks|average|performance|weak|strong|chapter|revision|revis(e|ion)|mistake|task|goal|backlog|study time|study hours|dashboard|analytics|exam date|add|create|delete|remove|update|record|mark|complete|change|set|plan|compare|trend|today's tasks)\b/i
 const COMPLEX_INTENT = /\b(analy[sz]|compare|trend|why|plan|recommend|strategy|historical|performance|weakest|repeated|drop(ping)?|month|week)\b/i
 /** Words that mean the student is talking about saved notebook data, not just their life. */
-const NOTEBOOK_TOPIC = /\b(analytics|dashboard|scores?|marks|average|weak|mistakes?|revisions?|revis(?:e|ion)|today'?s tasks|study time|study hours|performance|progress|subjects?|accuracy|streak|chapters?|syllabus|pyq|mocks?|tests?|tasks?|goals?|exam date|settings?|stracker)\b/i
+const NOTEBOOK_TOPIC = /\b(analytics|dashboard|scores?|marks|average|weak|mistakes?|revisions?|revis(?:e|ion)|today'?s tasks|study time|study hours|performance|progress|subjects?|accuracy|streak|chapters?|syllabus|pyq|mocks?|tests?|tasks?|goals?|backlog|exam date|settings?|stracker)\b/i
 /**
  * Plain-language questions about the student's own record that name no notebook keyword:
  * "How am I doing in each subject?", "what should I study next?", "am I on track?", and the
@@ -168,9 +170,24 @@ export function modelTier(modelId: string): ModelTier {
   return 'standard'
 }
 const TIER_LIMITS: Record<ModelTier, { history: number; rounds: number; general: number; data: number }> = {
-  fast: { history: 12, rounds: 4, general: 700, data: 1200 },
-  standard: { history: 24, rounds: 6, general: 1000, data: 1800 },
-  rich: { history: 32, rounds: 7, general: 1600, data: 2600 }
+  fast: { history: 12, rounds: 4, general: 2048, data: 3072 },
+  standard: { history: 24, rounds: 6, general: 4096, data: 5120 },
+  rich: { history: 32, rounds: 7, general: 6144, data: 8192 }
+}
+
+/** Per-provider output cap: enough for a long table, without unbounded cost. */
+export function providerOutputCap(providerId: string, modelId: string): number {
+  const id = modelId.toLowerCase()
+  if (/(^|[-_.])(lite|mini|nano|haiku|8b|turbo|small)([-_.]|$)/.test(id)) return 4096
+  if (providerId === 'anthropic' || providerId === 'openai' || providerId === 'google' || providerId === 'gemini') return 8192
+  return 6144
+}
+
+/** Output token budget for this model, question type and provider. */
+export function outputTokenLimit(providerId: string, modelId: string, kind: 'action' | 'analytics' | 'general', message = ''): number {
+  const limits = TIER_LIMITS[modelTier(modelId)]
+  const base = answerTokenLimit(message, kind, limits)
+  return Math.min(providerOutputCap(providerId, modelId), base)
 }
 
 function dropLeadingNonUser(messages: AgentMessage[]): AgentMessage[] {
@@ -328,10 +345,11 @@ export function providerDeadlineMs(hasStreamedText: boolean, modelHasProgress: b
   return providerStepTimeoutMs(false, moreCandidatesWaiting, remainingMs, MODEL_TIMEOUT_MS, silenceCap)
 }
 
-function answerTokenLimit(message: string, kind: 'action' | 'analytics' | 'general', limits: { general: number; data: number }): number {
+export function answerTokenLimit(message: string, kind: 'action' | 'analytics' | 'general', limits: { general: number; data: number }): number {
   const base = kind === 'general' ? limits.general : limits.data
+  // Short prompts can still need a long answer (a table, a revision plan). Always use the tier base.
   if (message.length < 800) return base
-  return Math.min(3_200, Math.max(base, kind === 'general' ? 2_200 : 2_600))
+  return Math.max(base, kind === 'general' ? 4_096 : 5_120)
 }
 
 export function candidateScore(row: ProviderConfigRow, requiresReasoning: boolean, preference: AIPreference = 'own'): number {
@@ -593,15 +611,16 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
   let strackerSlot = false
   let strackerBlocked = false
 
-  const finish = async (selected: ProviderConfigRow, text: string): Promise<AgentRunResult> => {
+  const finish = async (selected: ProviderConfigRow, text: string, truncated = false): Promise<AgentRunResult> => {
     const guarded = withoutToolTalk(text, requestContext).trim() || (refusesSupportedWork(text, requestContext) ? REFUSAL_FALLBACK : EMPTY_FALLBACK)
     const safeText = redactPotentialSecrets(guarded).slice(0, 20_000)
-    await input.adminClient.from('ai_messages').insert({ user_id:input.userId,conversation_id:input.conversationId,role:'assistant',content:safeText,provider_id:pid(selected),model_id:mid(selected),status:'completed',metadata:{ fallback_from:fallbackFrom ? {provider_id:pid(fallbackFrom),model_id:mid(fallbackFrom)} : null } })
+    const fallbackMeta = fallbackFrom ? {provider_id:pid(fallbackFrom),provider_name:providerName(fallbackFrom),model_id:mid(fallbackFrom)} : null
+    await input.adminClient.from('ai_messages').insert({ user_id:input.userId,conversation_id:input.conversationId,role:'assistant',content:safeText,provider_id:pid(selected),model_id:mid(selected),status:'completed',metadata:{ fallback_from:fallbackMeta, truncated: truncated || undefined } })
     if (await stopRequested(input.adminClient,input.userId,input.taskId)) return { status:'cancelled',content:'',providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
-    await input.adminClient.from('ai_tasks').update({ status:'completed',provider_id:pid(selected),model_id:mid(selected),progress:'Completed.',completed_at:new Date().toISOString(),metadata:{ fallback_from:fallbackFrom ? pid(fallbackFrom) : null } }).eq('user_id',input.userId).eq('id',input.taskId)
+    await input.adminClient.from('ai_tasks').update({ status:'completed',provider_id:pid(selected),model_id:mid(selected),progress:'Completed.',completed_at:new Date().toISOString(),metadata:{ fallback_from:fallbackFrom ? pid(fallbackFrom) : null, truncated: truncated || undefined } }).eq('user_id',input.userId).eq('id',input.taskId)
     await input.adminClient.from('ai_conversations').update({ updated_at:new Date().toISOString() }).eq('user_id',input.userId).eq('id',input.conversationId)
-    input.emit('done',{ content:safeText,...humanTaskState(selected,fallbackFrom),taskId:input.taskId })
-    return { status:'completed',content:safeText,providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null }
+    input.emit('done',{ content:safeText,...humanTaskState(selected,fallbackFrom),taskId:input.taskId, truncated })
+    return { status:'completed',content:safeText,providerId:pid(selected),modelId:mid(selected),fallbackFrom:fallbackFrom ? pid(fallbackFrom) : null, truncated }
   }
 
   // A bare "add a test" gets its checklist at once: no model call, no wait, no daily slot used.
@@ -656,7 +675,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
         offerTools ? offeredTools : [],
         signal,
         text => { onProviderDelta.push(text); noteActivity(); input.emit('delta',{ text }) },
-        Math.min(4_000, Math.round(answerTokenLimit(input.message, kind, limits) * tokenBoost)),
+        Math.round(outputTokenLimit(selected.provider_id, selected.model_id, kind, input.message) * tokenBoost),
         // three.dev (only used when THREE_DEV_API_KEY is set): hashed conversation as the session,
         // plus enum tags. No user id, email or message text.
         { sessionId:threeDevSessionId(input.conversationId),tags:{ 'model-source':isSiteRow(selected) ? 'stracker-default' : 'own-model','task-type':kind,'tools':offerTools ? 'offered' : 'none' } }
@@ -671,7 +690,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
       const streamed = onProviderDelta.join('').trim()
       if (failure.aiCode === 'TIMEOUT' && keepStreamedAnswer(streamed)) {
         logAIEvent('info','kept_partial_answer',{ taskId:input.taskId,userId:input.userId,provider:selected.provider_id,model:selected.model_id,chars:streamed.length })
-        return finish(selected, streamed)
+        return finish(selected, streamed, true)
       }
       if (offerTools && (failure.aiCode === 'UNSUPPORTED_CAPABILITY' || failure.aiCode === 'REQUEST_INVALID') && !onProviderDelta.length) {
         // The model (or its schema dialect) rejects tool calling: answer once more without tools.
@@ -729,7 +748,7 @@ async function runAssistantCore(input: AgentRunInput, state: { site: boolean; ha
         agentMessages.push({ role:'user',content:REFUSAL_NUDGE })
         continue
       }
-      return finish(selected, finalText)
+      return finish(selected, finalText, Boolean(completion.truncated))
     }
 
     const room = TOOL_CALL_LIMIT - toolCalls

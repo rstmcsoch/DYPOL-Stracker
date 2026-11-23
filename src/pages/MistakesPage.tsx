@@ -11,7 +11,7 @@ import { createId } from '../lib/id'
 import type { ErrorCategory, Mistake, Subject } from '../types'
 import { useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
 import { mistakeSubjectOptions } from '../lib/exams/subjects'
-import { MISTAKE_CAUSES, causeOf, startRetry, typeForCause } from '../lib/mistake-cause'
+import { MISTAKE_CAUSES, causeOf, retryQueue, startRetry, typeForCause } from '../lib/mistake-cause'
 import { RetryPanel } from '../components/jee/RetryPanel'
 import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
@@ -105,7 +105,7 @@ export default function MistakesPage() {
     catch (error) { notify(error instanceof Error ? error.message : 'Could not update retry status.', 'error') }
   }
 
-  const readyCount = data.mistakes.filter(item => item.retry_later && item.retry_status === 'pending').length
+  const readyCount = retryQueue(data.mistakes).length
   const retriedCount = data.mistakes.filter(item => item.retry_status === 'retried').length
 
   return <div className="content-page mistakes-page">

@@ -132,7 +132,7 @@ describe('every audited page renders without throwing', () => {
     expect(screen.getByTitle('Turn this note into a flashcard')).toBeTruthy()
   })
 
-  it('the retry tab lists only what is actually due', async () => {
+  it('the retry tab lists every Retry later note, including ones not yet due', async () => {
     harness.data = baseData({
       mistakes: [
         mistake('due', { question_note: 'Due question', retry_due_on: '2026-10-01' }),
@@ -142,7 +142,8 @@ describe('every audited page renders without throwing', () => {
     const { default: MistakesPage } = await import('./MistakesPage')
     renderAt(<MistakesPage />, '/mistakes?tab=retry')
     expect(screen.getByText('Due question')).toBeTruthy()
-    expect(screen.queryByText('Scheduled question')).toBeNull()
+    expect(screen.getByText('Scheduled question')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /2 questions on your retry list/i })).toBeTruthy()
   })
 
   it('Weak areas shows the cause tally and the repeating-mistake cards', async () => {
