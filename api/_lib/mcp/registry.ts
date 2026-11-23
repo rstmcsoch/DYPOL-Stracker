@@ -12,6 +12,8 @@ import { insightTools } from './tools/insights.js'
 import { studyTools } from './tools/study.js'
 import { examTools } from './tools/exams.js'
 import { siteAiTools } from './tools/site-ai.js'
+import { siteContentTools } from './tools/site-content.js'
+import { studentLayoutTools } from './tools/student-layout.js'
 import type { ConfirmationStore } from './confirmations.js'
 import type { ToolListItem } from './protocol.js'
 
@@ -106,7 +108,30 @@ export const IMPLEMENTED_MASTER_TOOL_NAMES = [
   'get_ai_provider_health',
   'list_ai_tasks',
   'get_ai_task',
-  'cancel_ai_task'
+  'cancel_ai_task',
+  'get_site_content',
+  'get_site_published_version',
+  'get_site_draft',
+  'update_site_content_draft',
+  'update_site_page',
+  'update_site_blocks',
+  'update_site_navigation_labels',
+  'update_site_design_tokens',
+  'preview_site_content',
+  'validate_site_content',
+  'publish_site_content',
+  'list_site_content_versions',
+  'restore_site_content_version',
+  'get_student_dashboard_layout',
+  'get_student_dashboard_layout_draft',
+  'update_student_dashboard_layout',
+  'update_student_dashboard_component',
+  'reorder_student_dashboard_components',
+  'preview_student_dashboard_layout',
+  'validate_student_dashboard_layout',
+  'publish_student_dashboard_layout',
+  'list_student_layout_versions',
+  'restore_student_dashboard_layout_version'
 ] as const
 
 export interface MasterToolDependencies {
@@ -136,7 +161,9 @@ export function defaultImplementedTools(deps: MasterToolDependencies = {}): Regi
     ...insightTools(admin),
     ...studyTools(admin, deps.confirmations),
     ...examTools(admin, deps.confirmations),
-    ...siteAiTools(admin, deps.confirmations)
+    ...siteAiTools(admin, deps.confirmations),
+    ...siteContentTools(admin, deps.confirmations),
+    ...studentLayoutTools(admin, deps.confirmations)
   )
   return tools
 }
