@@ -34,9 +34,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const notify = useCallback((text: string, kind: ToastKind = 'success') => {
-    const id = ++toastId
-    setToasts(items => [...items.slice(-2), { id, text, kind }])
-    timers.current.set(id, window.setTimeout(() => dismiss(id), 4800))
+    setToasts(items => {
+      const existing = items.find(item => !item.leaving && item.text === text && item.kind === kind)
+      if (existing) {
+        const timer = timers.current.get(existing.id)
+        if (timer !== undefined) window.clearTimeout(timer)
+        timers.current.set(existing.id, window.setTimeout(() => dismiss(existing.id), 4800))
+        return items.map(item => item.id === existing.id ? { ...item, leaving: undefined } : item)
+      }
+      const id = ++toastId
+      timers.current.set(id, window.setTimeout(() => dismiss(id), 4800))
+      return [...items.slice(-2), { id, text, kind }]
+    })
   }, [dismiss])
 
   useEffect(() => () => {

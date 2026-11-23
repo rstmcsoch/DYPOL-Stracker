@@ -6,6 +6,7 @@ import { Button, Dialog, Field, InfoTip, NotebookCard, PageHeader, StatusBadge }
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import { useAppearancePreview, useReadingFontPreview } from '../contexts/AppearanceContext'
+import { rhythmTextsDirty, sameSettingValue } from '../lib/settings-dirty'
 import { useToast } from '../contexts/ToastContext'
 import { clearLocalUserData, OWNER_DATA_TABLES, ownerDataCounts } from '../lib/database'
 import { supabase } from '../lib/supabase'
@@ -47,10 +48,6 @@ const TAB_FIELDS: Record<Exclude<SettingsTab, 'data'>, (keyof AppSettings)[]> = 
   appearance: ['theme', 'interface_font', 'color_theme'],
   rhythm: ['weak_threshold', 'strong_threshold', 'dropping_threshold', 'revision_gaps', 'daily_study_goal_minutes', 'sound_enabled', 'reminders_enabled', 'reminder_time', 'reminder_types', 'streak_rest_days', 'subject_daily_targets', 'focus_minutes', 'short_break_minutes', 'long_break_minutes']
 }
-
-/** Field-level equality for persisted values, including arrays such as revision gaps. */
-const sameSettingValue = (left: unknown, right: unknown): boolean =>
-  Object.is(left, right) || JSON.stringify(left) === JSON.stringify(right)
 
 export default function SettingsPage() {
   const sl = usePageSlots('settings')
@@ -103,7 +100,7 @@ export default function SettingsPage() {
       // Keep this user's unsaved edits; adopt external updates for untouched fields.
       const keys = Object.keys(next) as (keyof AppSettings)[]
       for (const key of keys) {
-        if (current[key] !== previous[key]) (next as Record<string, unknown>)[key] = current[key]
+        if (!sameSettingValue(current[key], previous[key])) (next as Record<string, unknown>)[key] = current[key]
       }
       return next
     })
@@ -128,11 +125,9 @@ export default function SettingsPage() {
     })
   }
 
-  const rhythmTextsDirty = () => gapsText !== data.settings.revision_gaps.join(', ') || dailyGoalText !== String(data.settings.daily_study_goal_minutes / 60)
-
   const isTabDirty = (tab: SettingsTab): boolean => {
     if (tab === 'data') return false
-    if (tab === 'rhythm') return TAB_FIELDS.rhythm.some(key => !sameSettingValue(draft[key], data.settings[key])) || rhythmTextsDirty()
+    if (tab === 'rhythm') return TAB_FIELDS.rhythm.some(key => !sameSettingValue(draft[key], data.settings[key])) || rhythmTextsDirty(gapsText, dailyGoalText, data.settings)
     return TAB_FIELDS[tab].some(key => !sameSettingValue(draft[key], data.settings[key]))
   }
 
@@ -220,10 +215,18 @@ export default function SettingsPage() {
           : { id: user.id, user_id: user.id, display_name: saved.owner_name, email: user.email, created_at: now, updated_at: now }
         await upsert('profiles', profile)
       }
+      setDraft(current => {
+        const next = { ...current }
+        for (const key of TAB_FIELDS[tab]) (next as Record<string, unknown>)[key] = saved[key]
+        return next
+      })
       if (tab === 'rhythm') {
         setGapsText(saved.revision_gaps.join(', '))
         setDailyGoalText(String(saved.daily_study_goal_minutes / 60))
+        savedGapsRef.current = saved.revision_gaps.join(', ')
+        savedGoalRef.current = String(saved.daily_study_goal_minutes / 60)
       }
+      savedRef.current = saved
       setErrors({})
       flashSaved(tab)
       notify(`${TABS.find(item => item.id === tab)?.label} settings saved to your notebook.`)

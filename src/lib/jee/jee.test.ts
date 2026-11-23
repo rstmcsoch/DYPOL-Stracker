@@ -9,7 +9,7 @@ import { currentExamMode, daysUntilExam, trackReadiness } from './exam.js'
 import { recommendStudyNow } from './recommend.js'
 import { computeStreaks, studyMinutesByActivity } from './study-time.js'
 import { mockInsights, categoryTotals, subjectTimeRows } from './mock-analysis.js'
-import { buildWeeklyReport } from './weekly-report.js'
+import { buildWeeklyReport, weekPractice } from './weekly-report.js'
 import { computeReminders, shouldFireToday } from './reminders.js'
 import { nextIntervalDays, reviewCard, dueCards } from './cards.js'
 
@@ -486,5 +486,48 @@ describe('one password rule across sign-up, reset and settings', () => {
     expect(MIN_PASSWORD_LENGTH).toBe(8)
     expect(passwordLengthError('1234567')).toMatch(/at least 8/)
     expect(passwordLengthError('12345678')).toBeNull()
+  })
+})
+
+describe('chapter status syncs learning stages', () => {
+  it('counts Studying as Theory evidence so the pipeline tile and chips move off “not yet”', () => {
+    const studying = chapter('c1', { status: 'Studying' })
+    const stages = chapterStages(emptyData({ chapters: [studying] }), studying)
+    const theory = stages.find(stage => stage.key === 'theory')!
+    expect(theory.done).toBe(true)
+    expect(theory.source).toBe('evidence')
+    const idle = chapter('c2', { status: 'Not Started' })
+    const idleTheory = chapterStages(emptyData({ chapters: [idle] }), idle).find(stage => stage.key === 'theory')!
+    expect(idleTheory.done).toBe(false)
+    expect(idleTheory.source).toBe('none')
+  })
+
+  it('treats written chapter notes as Notes evidence and Revised status as Revised evidence', () => {
+    const noted = chapter('c1', { status: 'Studying', notes: 'Integration by parts' })
+    const notes = chapterStages(emptyData({ chapters: [noted] }), noted).find(stage => stage.key === 'notes')!
+    expect(notes.done).toBe(true)
+    expect(notes.source).toBe('evidence')
+    const revised = chapter('c2', { status: 'Revised' })
+    const stages = chapterStages(emptyData({ chapters: [revised] }), revised)
+    expect(stages.find(stage => stage.key === 'theory')?.done).toBe(true)
+    expect(stages.find(stage => stage.key === 'revised')?.done).toBe(true)
+    expect(stages.find(stage => stage.key === 'revised')?.source).toBe('evidence')
+  })
+})
+
+describe('this-week practice is shared by Home and Analytics', () => {
+  it('counts only practice dated this IST week, matching the weekly report', () => {
+    const data = emptyData({
+      practiceSessions: [
+        practice('this-week', { practice_date: TODAY, attempted: 20, correct: 15, incorrect: 5 }),
+        practice('older', { practice_date: '2026-09-01', attempted: 75, correct: 50, incorrect: 25 })
+      ]
+    })
+    const week = weekPractice(data, TODAY)
+    const report = buildWeeklyReport(data, TODAY)
+    expect(week.attempted).toBe(20)
+    expect(report.questionsAttempted).toBe(20)
+    expect(week.accuracy).toBe(report.practiceAccuracy)
+    expect(week.attempted).not.toBe(95)
   })
 })

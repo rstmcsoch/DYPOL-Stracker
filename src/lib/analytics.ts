@@ -134,11 +134,20 @@ export function chapterHasTestEvidence(data: Pick<AppData, 'tests' | 'testChapte
   return data.tests.some(test => test.chapter_id === chapterId) || data.testChapterLinks.some(link => link.chapter_id === chapterId)
 }
 
+function byMostRecentTest(a: TestRecord, b: TestRecord): number {
+  return b.test_date.localeCompare(a.test_date) || (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '') || b.id.localeCompare(a.id)
+}
+
 /** The most recently saved test dated `date` (an IST yyyy-MM-dd), or null when none exists. */
 export function latestTestOn(data: Pick<AppData, 'tests'>, date: string): TestRecord | null {
   return data.tests
     .filter(test => test.test_date === date)
-    .sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '') || b.id.localeCompare(a.id))[0] ?? null
+    .sort(byMostRecentTest)[0] ?? null
+}
+
+/** The student's most recently dated test, regardless of day. Used when Home has tests but none today. */
+export function latestTest(data: Pick<AppData, 'tests'>): TestRecord | null {
+  return [...data.tests].sort(byMostRecentTest)[0] ?? null
 }
 
 /** Chapters with no saved test at all. */

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowDown, ArrowUp, Check, ChevronDown, CircleDot, ClipboardPaste, Edit3, Filter, GripVertical, Plus, Search, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, CircleDot, ClipboardPaste, Edit3, Filter, GripVertical, NotebookPen, Plus, Search, Trash2, X } from 'lucide-react'
 import { Button, ConfirmDialog, Dialog, EmptyState, Field, NotebookCard, OverflowMenu, PageHeader, ProgressBar, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
@@ -12,10 +12,12 @@ import { ChapterStageEditor } from '../components/jee/ChapterStageEditor'
 import { useExamSubjects, useReportSubjects } from '../lib/exams/useExamSubjects'
 import { subjectColor, subjectSlug } from '../lib/exams/subjects'
 import { stableChapterOrder } from '../lib/syllabus-order'
+import { hasChapterNote } from '../lib/syllabus'
 import { T } from '../lib/student-layout/T'
 import { usePageSlots } from '../lib/student-layout/use-layout'
 
 const STATUSES: ChapterStatus[] = ['Not Started', 'Studying', 'Done', 'Revised']
+
 const PRIORITIES: Priority[] = ['High', 'Medium', 'Low']
 
 type StrengthFilter = 'all' | 'Weak' | 'Okay' | 'Strong'
@@ -274,23 +276,24 @@ export default function SyllabusPage() {
   const subjectCounts = subjectList.map(subject => {
     const rows = data.chapters.filter(item => item.subject === subject)
     const complete = rows.filter(item => item.status === 'Done' || item.status === 'Revised').length
-    return { subject, total: rows.length, complete, color: subjectColor(subject) }
+    const studying = rows.filter(item => item.status === 'Studying').length
+    return { subject, total: rows.length, complete, studying, color: subjectColor(subject) }
   })
   // Summary cards only for subjects with chapters; long catalogues (CUET, school) would otherwise show every option.
   const stripCounts = subjectCounts.filter(item => item.total > 0)
 
   return <div className="content-page syllabus-page">
     <PageHeader layoutId="syllabus.header" title="Syllabus" doodle={<span>✎</span>} action={<div className="syllabus-header-actions"><Button variant="secondary" onClick={() => setPasting(true)}><ClipboardPaste size={16} />{' '}<T k="syllabus:paste-list">{"Paste list"}</T></Button><Button onClick={() => setCreateSubject(examSubjectList[0] ?? 'Physics')}><Plus size={17} />{' '}<T k="syllabus:add-chapter">{"Add chapter"}</T></Button></div>} />
-    {stripCounts.length > 0 && <div className="syllabus-progress-strip">{stripCounts.map(item => <NotebookCard key={item.subject} className={`subject-progress-card subject-progress-${subjectSlug(item.subject)}`}><div className="subject-progress-top"><SubjectBadge subject={item.subject} withMark /><span><strong>{item.complete}</strong> / {item.total} done</span></div><ProgressBar value={item.total ? item.complete / item.total * 100 : 0} color={item.color} /><span className="subject-progress-foot">{item.total ? Math.round(item.complete / item.total * 100) : 0}% mapped</span></NotebookCard>)}</div>}
+    {stripCounts.length > 0 && <div className="syllabus-progress-strip">{stripCounts.map(item => <NotebookCard key={item.subject} className={`subject-progress-card subject-progress-${subjectSlug(item.subject)}`}><div className="subject-progress-top"><SubjectBadge subject={item.subject} withMark /><span><strong>{item.complete}</strong> / {item.total} done{item.studying > 0 ? ` · ${item.studying} studying` : ''}</span></div><ProgressBar value={item.total ? item.complete / item.total * 100 : 0} color={item.color} /><span className="subject-progress-foot">{item.total ? Math.round(item.complete / item.total * 100) : 0}% mapped</span></NotebookCard>)}</div>}
     <NotebookCard {...sl.attrs('board')} className="syllabus-board">
       <div className="board-heading"><div><span className="handwriting-label"><T k="syllabus:your-study-map">{"Your chapters"}</T></span><p>{data.chapters.length} chapter{data.chapters.length === 1 ? '' : 's'} across {stripCounts.length} subject{stripCounts.length === 1 ? '' : 's'}.</p></div><span className="board-doodle" aria-hidden="true">✳</span></div>
       <div className="syllabus-filters">
-        <div className="search-field syllabus-search"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Find a chapter or note…" aria-label="Search chapters and notes" />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div>
+        <div className="search-field syllabus-search"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} onInput={event => setSearch((event.target as HTMLInputElement).value)} placeholder="Find a chapter or note…" aria-label="Search chapters and notes" />{search.trim() ? <button type="button" onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button> : null}</div>
         <div className="filter-controls">
           <select aria-label="Filter subject" value={subjectFilter} onChange={event => setSubjectFilter(event.target.value as 'all' | Subject)}><option value="all">All subjects</option>{subjectList.map(subject => <option key={subject}>{subject}</option>)}</select>
           <select aria-label="Filter status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as 'all' | ChapterStatus)}><option value="all">All statuses</option>{STATUSES.map(status => <option key={status}>{status}</option>)}</select>
           <details className="filter-popover"><summary><Filter size={15} />{' '}<T k="syllabus:more-filters">{"More filters"}</T>{' '}<ChevronDown size={13} /></summary><div className="filter-popover-body"><label><T k="syllabus:priority">{"Priority"}</T><select value={priorityFilter} onChange={event => setPriorityFilter(event.target.value as 'all' | Priority)}><option value="all">Any priority</option>{PRIORITIES.map(item => <option key={item}>{item}</option>)}</select></label><label><T k="syllabus:performance">{"Performance"}</T><select value={strengthFilter} onChange={event => setStrengthFilter(event.target.value as StrengthFilter)}><option value="all">Any performance</option><option>Weak</option><option>Okay</option><option>Strong</option></select></label><label><T k="syllabus:test-history">{"Test history"}</T><select value={testedFilter} onChange={event => setTestedFilter(event.target.value as 'all' | 'tested' | 'untested')}><option value="all">Any</option><option value="tested">Tested</option><option value="untested">Untested</option></select></label></div></details>
-          {(search || subjectFilter !== 'all' || statusFilter !== 'all' || priorityFilter !== 'all' || strengthFilter !== 'all' || testedFilter !== 'all') && <button className="clear-filter" onClick={clearFilters}><T k="syllabus:clear">{"Clear"}</T></button>}
+          {(search.trim() || subjectFilter !== 'all' || statusFilter !== 'all' || priorityFilter !== 'all' || strengthFilter !== 'all' || testedFilter !== 'all') && <button className="clear-filter" onClick={clearFilters}><T k="syllabus:clear">{"Clear"}</T></button>}
         </div>
       </div>
       <div className="syllabus-table-head"><span><T k="syllabus:chapter-subject">{"CHAPTER / SUBJECT"}</T></span><span><T k="syllabus:status">{"STATUS"}</T></span><span><T k="syllabus:priority-2">{"PRIORITY"}</T></span><span><T k="syllabus:test-signal">{"TEST SIGNAL"}</T></span><span><T k="syllabus:order">{"ORDER"}</T></span></div>
@@ -364,7 +367,7 @@ function ChapterRow({ item, highlighted = false, dragged, dropTarget, busy, canM
         }}
       ><GripVertical size={15} /></span>
       <span className="chapter-subject-mark" aria-hidden="true" />
-      <div className="chapter-title-group"><strong>{chapter.name}</strong><div className="chapter-inline-meta"><SubjectBadge subject={chapter.subject} /><span className={`priority-label label-${chapter.priority.toLowerCase()}`}>{chapter.priority} priority</span>{chapter.weightage && <span className="weightage-label">{chapter.weightage}</span>}</div></div>
+      <div className="chapter-title-group"><div className="chapter-title-heading"><strong>{chapter.name}</strong>{hasChapterNote(chapter) && <span className="chapter-note-mark" title="Has a note" aria-label="Has a note"><NotebookPen size={12} aria-hidden="true" /></span>}</div><div className="chapter-inline-meta"><SubjectBadge subject={chapter.subject} /><span className={`priority-label label-${chapter.priority.toLowerCase()}`}>{chapter.priority} priority</span>{chapter.weightage && <span className="weightage-label">{chapter.weightage}</span>}</div></div>
     </div>
     <div className="chapter-status-cell"><select aria-label={`Status for ${chapter.name}`} value={chapter.status} disabled={busy} onChange={event => onStatus(event.target.value as ChapterStatus)}>{STATUSES.map(status => <option key={status}>{status}</option>)}</select></div>
     <div className="chapter-priority-cell"><span className={`priority-indicator priority-${chapter.priority.toLowerCase()}`}><CircleDot size={13} />{chapter.priority}</span></div>

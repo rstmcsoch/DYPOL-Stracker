@@ -66,22 +66,28 @@ export default function TestsPage() {
   const [editing, setEditing] = useState<TestRecord | null>(null)
   const [creating, setCreating] = useState(false)
   const [presetChapterId, setPresetChapterId] = useState<string | null>(null)
-  const [viewing, setViewing] = useState<TestRecord | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TestRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
   const deletingRef = useRef(false)
 
+  const viewId = searchParams.get('view')
+  const viewing = viewId ? data.tests.find(test => test.id === viewId) ?? null : null
+
+  const openView = (test: TestRecord) => {
+    const params = new URLSearchParams(searchParams)
+    if (params.get('view') === test.id) return
+    params.set('view', test.id)
+    setSearchParams(params)
+  }
+
+  const closeView = () => {
+    if (!searchParams.get('view')) return
+    const params = new URLSearchParams(searchParams)
+    params.delete('view')
+    setSearchParams(params, { replace: true })
+  }
+
   useEffect(() => {
-    // Home's "View it" opens one test's details directly.
-    const viewId = searchParams.get('view')
-    if (viewId) {
-      const target = data.tests.find(test => test.id === viewId)
-      if (target) setViewing(target)
-      const params = new URLSearchParams(searchParams)
-      params.delete('view')
-      setSearchParams(params, { replace: true })
-      return
-    }
     if (searchParams.get('add') === '1') {
       // A chapter preselect (e.g. from Weak areas) opens the same dialog with that
       // chapter already chosen, so the user never has to pick it twice.
@@ -136,8 +142,12 @@ export default function TestsPage() {
     if (!isFullMock && values.chapter_id && (!selectedChapter || (values.subject && selectedChapter.subject !== values.subject))) {
       errors.chapter_id = 'Choose a chapter that belongs to the selected subject.'
     }
-    // A Chapter Test is about one chapter: without it the result cannot reach chapter analytics.
-    if (values.test_type === 'Chapter Test' && !values.chapter_id) errors.chapter_id = 'Choose the chapter this test covered.'
+    // Chapter and Subject tests must name a chapter, or Weak areas never sees the result.
+    if ((values.test_type === 'Chapter Test' || values.test_type === 'Subject Test') && !values.chapter_id) {
+      errors.chapter_id = values.test_type === 'Subject Test'
+        ? 'Choose a chapter so this result can appear in Weak areas.'
+        : 'Choose the chapter this test covered.'
+    }
 
     const now = new Date().toISOString()
     const testId = current?.id ?? stableId
@@ -260,13 +270,13 @@ export default function TestsPage() {
       <div className="table-scroll-wrap">
         {sortedTests.length === 0 ? <EmptyState icon={<ListFilter size={25} />} title={data.tests.length ? 'No tests match those filters.' : 'No tests logged yet.'} action={<Button variant="secondary" size="sm" onClick={() => data.tests.length ? (setSearch(''), setFrom(''), setTo(''), setSubjectFilter('all'), setTypeFilter('all')) : setCreating(true)}>{data.tests.length ? 'Clear filters' : <><Plus size={15} /> Add your first test</>}</Button>} /> : <table className="test-table">
           <thead><tr>{sortHeader('date', 'Date')}{sortHeader('title', 'Title')}<th><T k="tests:type-subject">{"TYPE / SUBJECT"}</T></th>{sortHeader('score', 'Score')}<th><T k="tests:accuracy">{"ACCURACY"}</T></th><th><T k="tests:actions">{"ACTIONS"}</T></th></tr></thead>
-          <tbody>{sortedTests.map(test => <TestRow key={test.id} test={test} onView={() => setViewing(test)} onEdit={() => { setEditing(test); setCreating(true) }} onDelete={() => setDeleteTarget(test)} />)}</tbody>
+          <tbody>{sortedTests.map(test => <TestRow key={test.id} test={test} onView={() => openView(test)} onEdit={() => { setEditing(test); setCreating(true) }} onDelete={() => setDeleteTarget(test)} />)}</tbody>
         </table>}
       </div>
       <div className="test-board-footer"><span><Filter size={14} />{' '}<T k="tests:full-mocks-match-every-subject-filter-an">{"Full mocks show under every subject, as one combined result."}</T></span><button onClick={() => navigate('/backup')}><T k="tests:export-options-are-in-backup">{"Export options are in Backup"}</T>{' '}<ArrowRightIcon /></button></div>
     </NotebookCard>
     {creating && <TestDialog key={editing?.id ?? presetChapterId ?? 'new-test'} initial={editing} presetChapterId={presetChapterId} data={data} onClose={() => { setCreating(false); setEditing(null); setPresetChapterId(null) }} onSave={(values, stableId) => saveTest(values, editing ?? undefined, stableId)} />}
-    {viewing && <TestDetails test={viewing} onClose={() => setViewing(null)} onEdit={() => { setEditing(viewing); setViewing(null); setCreating(true) }} />}
+    {viewing && <TestDetails test={viewing} onClose={closeView} onEdit={() => { setEditing(viewing); closeView(); setCreating(true) }} />}
     {deleteTarget && <ConfirmDialog title={`Delete “${deleteTarget.title}”?`} message="This test and its subject scores will be removed. You can undo briefly." onCancel={() => setDeleteTarget(null)} onConfirm={() => void deleteTest()} loading={deleting} />}
   </div>
 }
@@ -377,7 +387,7 @@ function TestDialog({ initial, presetChapterId, data, onClose, onSave }: { initi
       <div className="form-grid two"><Field lk="tests:test-title" label="Test title" required error={errors.title} hint={values.title.length >= 120 ? `${values.title.length}/160 characters — long titles are trimmed with an ellipsis in lists` : undefined}><input autoFocus required maxLength={160} value={values.title} onChange={event => patch('title', event.target.value)} placeholder="e.g. Electrostatics weekly test" /></Field><Field lk="tests:l-date" label="Date" required error={errors.test_date}><input type="date" required value={values.test_date} onChange={event => patch('test_date', event.target.value)} /></Field></div>
       <div className="form-grid two"><Field lk="tests:test-type" label="Test type"><select value={values.test_type} onChange={event => changeTestType(event.target.value as TestType)}>{TEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field>{!fullMock && <Field lk="tests:subject" label="Subject"><select value={values.subject} onChange={event => changeSubject(event.target.value as Subject | '')}><option value="">— choose subject —</option>{formSubjects.map(subject => <option key={subject}>{subject}</option>)}</select></Field>}</div>
       {presetChapter && !fullMock && <div className="preset-chapter-note" role="status"><BookOpen size={15} aria-hidden="true" /><span><T k="tests:chapter-preselected-from-weak-areas">{"Chapter preselected from Weak areas:"}</T>{' '}<strong>{presetChapter.name}</strong><SubjectBadge subject={presetChapter.subject} /></span></div>}
-      {!fullMock && <Field label={values.test_type === 'Chapter Test' ? 'Chapter' : 'Chapter (optional)'} required={values.test_type === 'Chapter Test'} error={errors.chapter_id} hint={values.test_type === 'Chapter Test' && chapterOptions.length === 0 ? 'No chapters for this subject yet. Add one in Syllabus, or pick another test type.' : undefined}><select value={values.chapter_id} onChange={event => patch('chapter_id', event.target.value)}><option value="">— choose chapter —</option>{chapterOptions.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field>}
+      {!fullMock && <Field label={values.test_type === 'Chapter Test' || values.test_type === 'Subject Test' ? 'Chapter' : 'Chapter (optional)'} required={values.test_type === 'Chapter Test' || values.test_type === 'Subject Test'} error={errors.chapter_id} hint={(values.test_type === 'Chapter Test' || values.test_type === 'Subject Test') && chapterOptions.length === 0 ? 'No chapters for this subject yet. Add one in Syllabus, or pick another test type.' : values.test_type === 'Subject Test' ? 'Needed so this result can appear in Weak areas.' : undefined}><select value={values.chapter_id} onChange={event => patch('chapter_id', event.target.value)}><option value="">— choose chapter —</option>{chapterOptions.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.name}</option>)}</select></Field>}
       {isJee && values.test_type === 'Full Mock' && <Field lk="tests:jee-paper-pattern" label="JEE paper pattern"><select value={values.jeePattern} onChange={event => changeJeePattern(event.target.value as JeeFullPattern)} aria-label="JEE paper pattern"><option value="main">JEE Main — 300 total</option><option value="advanced-paper-1">JEE Advanced — Paper 1 only (180)</option><option value="advanced-both">JEE Advanced — Both papers (360 combined)</option></select></Field>}
       {schemeValue && values.test_type === 'Full Mock' && <p className="field-hint">Marking defaults: {schemeValue.source}. Totals are pre-filled and can be edited.{schemeValue.notes ? ` ${schemeValue.notes}` : ''}</p>}
       {values.test_type === 'Full Mock' ? <div className="mock-score-section"><div><span className="field-label"><T k="tests:subject-scores">{"Subject scores"}</T>{' '}<small><T k="tests:enter-each-result-that-you-have">{"(enter each result that you have)"}</T></small></span><span className="field-hint mock-scope-hint">{FULL_MOCK_SCOPE_HINT}</span><span className="field-hint"><T k="tests:the-overall-result-sums-every-subject-ea">{"The total adds up every subject. Leave unknown scores blank."}</T></span></div><div className="mock-score-grid">{Object.entries(values.mockScores).map(([subject, part]) => {

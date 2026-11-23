@@ -60,6 +60,16 @@ export interface WeeklyReport {
  * (the catch-up for anyone who closed the app on Sunday). Every other day the card is
  * absent, so it never turns into a permanent block competing for attention.
  */
+/**
+ * Practice totals for the current IST week (Monday through `today`). Home's
+ * "THIS WEEK / Questions" figure and Analytics' weekly report both call this,
+ * so the two pages cannot drift apart.
+ */
+export function weekPractice(data: Pick<AppData, 'practiceSessions'>, today: string) {
+  const range = weekRange(today)
+  return aggregatePractice(data.practiceSessions.filter(item => item.practice_date >= range.start && item.practice_date <= range.end))
+}
+
 export function digestVisibleOn(today: string): boolean {
   const day = new Date(`${today}T12:00:00+05:30`).getUTCDay()
   return day === 0 || day === 1
@@ -69,7 +79,7 @@ export function buildWeeklyReport(data: AppData, today: string): WeeklyReport {
   const range = weekRange(today)
   const previous = previousWeekRange(today)
   const activity = studyMinutesByActivity(data, range.start, range.end)
-  const practice = aggregatePractice(data.practiceSessions.filter(item => item.practice_date >= range.start && item.practice_date <= range.end))
+  const practice = weekPractice(data, today)
   const tests = data.tests.filter(test => test.test_date >= range.start && test.test_date <= range.end)
   // Same rule and window as Home's rhythm card, so both always show the same number.
   const activeDays = activeDaysThisWeek(data, today)

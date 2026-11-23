@@ -229,6 +229,12 @@ export function chapterStages(data: AppData, chapter: Chapter): StageState[] {
   const pyqDone = pyqTotals.reduce((sum, row) => sum + row.done, 0)
   const hasRevision = data.revisions.some(revision => revision.chapter_id === chapter.id && revision.completed_at)
   const hasTest = data.tests.some(test => test.chapter_id === chapter.id) || data.testChapterLinks.some(link => link.chapter_id === chapter.id)
+  // Chapter status is itself evidence: Studying/Done/Revised means theory has started,
+  // Revised means a revision pass happened, and non-empty notes mean notes exist.
+  // This keeps the learning-pipeline tile and the per-chapter chips in sync with the syllabus status.
+  const theoryFromStatus = chapter.status === 'Studying' || chapter.status === 'Done' || chapter.status === 'Revised'
+  const revisedFromStatus = chapter.status === 'Revised'
+  const notesFromChapter = Boolean(chapter.notes?.trim() || chapter.formula_notes?.trim())
 
   return CHAPTER_STAGE_KEYS.map(key => {
     const claimed = manual.get(key) === true
@@ -239,12 +245,21 @@ export function chapterStages(data: AppData, chapter: Chapter): StageState[] {
       return { key, label, progress, done, source: done ? 'manual' : pyqDone > 0 ? 'partial' : 'none' }
     }
     if (key === 'revised') {
-      const done = claimed || hasRevision
-      return { key, label, progress: done ? 1 : 0, done, source: claimed ? 'manual' : hasRevision ? 'evidence' : 'none' }
+      const fromRecords = hasRevision || revisedFromStatus
+      const done = claimed || fromRecords
+      return { key, label, progress: done ? 1 : 0, done, source: claimed ? 'manual' : fromRecords ? 'evidence' : 'none' }
     }
     if (key === 'tested') {
       const done = claimed || hasTest
       return { key, label, progress: done ? 1 : 0, done, source: claimed ? 'manual' : hasTest ? 'evidence' : 'none' }
+    }
+    if (key === 'theory') {
+      const done = claimed || theoryFromStatus
+      return { key, label, progress: done ? 1 : 0, done, source: claimed ? 'manual' : theoryFromStatus ? 'evidence' : 'none' }
+    }
+    if (key === 'notes') {
+      const done = claimed || notesFromChapter
+      return { key, label, progress: done ? 1 : 0, done, source: claimed ? 'manual' : notesFromChapter ? 'evidence' : 'none' }
     }
     return { key, label, progress: claimed ? 1 : 0, done: claimed, source: claimed ? 'manual' : 'none' }
   })

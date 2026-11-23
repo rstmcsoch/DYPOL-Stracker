@@ -10,7 +10,7 @@ import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { Button, EmptyState, NotebookCard, PageHeader, ProgressBar, ProgressRing, SectionHeading, StatusBadge, SubjectBadge } from '../components/ui'
 import { useData } from '../contexts/DataContext'
 import { useToast } from '../contexts/ToastContext'
-import { latestTestOn, getOverallTestPercentage, getOverallTestScore, getSmartTipAction, getTodayStudyMinutes } from '../lib/analytics'
+import { latestTest, latestTestOn, getOverallTestPercentage, getOverallTestScore, getSmartTipAction, getTodayStudyMinutes } from '../lib/analytics'
 import { computeStreaks, hasSubjectTargets, subjectTargetRows, takeFreezeDay, takeRestDay } from '../lib/jee/study-time'
 import { currentWeekGoal } from '../lib/jee/goals'
 import { StudyNowCard } from '../components/jee/StudyNowCard'
@@ -260,7 +260,8 @@ const HOME_SECTIONS = ['home.header', 'home.focus', 'home.hero', 'home.exam-mode
 type HomeSection = (typeof HOME_SECTIONS)[number]
 
 function CheckpointCard({ data, today, onView, onAdd, slot }: { data: AppData; today: string; onView: (id: string) => void; onAdd: () => void; slot: ReturnType<typeof useLayoutSlot> }) {
-  const latest = latestTestOn(data, today)
+  const todays = latestTestOn(data, today)
+  const latest = todays ?? latestTest(data)
   if (!latest) {
     return <NotebookCard className="quick-test-card" {...slot.attrs}>
       <div className="quick-test-illustration" aria-hidden="true"><NotebookPen size={25} /><span>✦</span></div>
@@ -272,9 +273,11 @@ function CheckpointCard({ data, today, onView, onAdd, slot }: { data: AppData; t
   const percent = score ? getOverallTestPercentage(latest, data.testSubjectScores) : null
   const result = score ? `${fmtNumber(score.marks, 1)} / ${fmtNumber(score.total, 1)}${percent === null ? '' : ` · ${Math.round(percent)}%`}` : 'Score not recorded'
   const countToday = data.tests.filter(test => test.test_date === today).length
+  const fromToday = latest.test_date === today
+  const eyebrow = fromToday ? (countToday > 1 ? `TODAY’S CHECKPOINTS · ${countToday}` : 'TODAY’S CHECKPOINT') : 'LATEST TEST'
   return <NotebookCard className="quick-test-card checkpoint-logged" {...slot.attrs}>
     <div className="quick-test-illustration" aria-hidden="true"><Check size={25} /><span>✦</span></div>
-    <div><span className="eyebrow" {...slot.dataAttrs('count')}>{countToday > 1 ? `TODAY’S CHECKPOINTS · ${countToday}` : 'TODAY’S CHECKPOINT'}</span><h2 {...slot.dataAttrs('test')}>{latest.title}</h2><p {...slot.dataAttrs('marks')}>{latest.test_type} · {result}</p></div>
+    <div><span className="eyebrow" {...slot.dataAttrs('count')}>{eyebrow}</span><h2 {...slot.dataAttrs('test')}>{latest.title}</h2><p {...slot.dataAttrs('marks')}>{latest.test_type} · {result}</p></div>
     <div className="checkpoint-actions">
       <Button variant="secondary" onClick={() => onView(latest.id)}><ArrowUpRight size={16} /> {slot.t('view', 'View it')}</Button>
       <Button variant="quiet" onClick={onAdd}><Plus size={16} /> {slot.t('addAnother', 'Add another test')}</Button>

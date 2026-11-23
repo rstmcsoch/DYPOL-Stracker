@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   getAccuracy, getAttemptRate, getChapterPerformance, getNegativeMarkImpact, getOverallTestAverage,
-  getOverallTestPercentage, getSubjectPerformance, getFullMockAggregate, testPercentage, validPercentage
+  getOverallTestPercentage, getSubjectPerformance, getFullMockAggregate, latestTest, latestTestOn,
+  testPercentage, validPercentage
 } from './analytics'
 import { defaultSettings } from './defaults'
 import type { AppData, Chapter, TestRecord, TestSubjectScore } from '../types'
@@ -183,5 +184,20 @@ describe('question and penalty metrics', () => {
     expect(getNegativeMarkImpact(data)).toEqual({
       totalNegativeMarks: 3.5, comparableNegativeMarks: 3, totalMarks: 200, percentage: 1.5, testsIncluded: 2
     })
+  })
+})
+
+
+describe('latest logged test', () => {
+  it('returns the most recent test by date, not only a test dated today', () => {
+    const data = emptyData()
+    data.tests = [
+      testRecord('old', '2026-11-01', 40),
+      testRecord('newer', '2026-11-20', 62, 100, { title: 'Maths subject test' }),
+      testRecord('mid', '2026-11-10', 50)
+    ]
+    expect(latestTest(data)?.id).toBe('newer')
+    expect(latestTestOn(data, '2026-11-23')).toBeNull()
+    expect(latestTest(emptyData())).toBeNull()
   })
 })
