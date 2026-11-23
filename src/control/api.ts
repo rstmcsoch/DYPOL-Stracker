@@ -206,3 +206,57 @@ export interface HealthResponse {
   deployment: { commit: string | null; environment: string }
   checkedAt: string
 }
+
+export interface MasterMcpConnection {
+  id: string
+  displayName: string
+  tokenHint: string
+  status: 'active' | 'revoked'
+  createdAt: string
+  createdBy: string | null
+  lastUsedAt: string | null
+  revokedAt: string | null
+  revokedBy: string | null
+}
+
+export interface MasterMcpActivityEvent {
+  createdAt: string | null
+  credentialId: string | null
+  credentialLabel: string | null
+  action: string
+  toolName: string | null
+  targetType: string | null
+  targetId: string | null
+  result: 'success' | 'denied' | 'failed'
+  errorCategory: string | null
+  reason: string | null
+}
+
+export interface MasterMcpStatus {
+  endpointUrl: string
+  transport: string
+  connections: MasterMcpConnection[]
+  implementedTools: string[]
+  authorizedCatalogue: string[]
+  capabilities: Record<string, string>
+  restricted: Record<string, string>
+  forbiddenToolNames: string[]
+  rateLimits: {
+    authenticatedPerMinute: number
+    anonymousPerMinute: number
+    recentRateLimited: number
+  }
+  lastUsedAt: string | null
+  toolUsage: Array<{ toolName: string; count: number }>
+  recentActions: MasterMcpActivityEvent[]
+  recentFailures: MasterMcpActivityEvent[]
+  securityNotes: string[]
+}
+
+export interface MasterMcpMutationResult {
+  ok: true
+  token?: string
+  tokenHint?: string
+  connection: MasterMcpConnection
+  revokedId?: string
+}

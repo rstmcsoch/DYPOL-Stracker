@@ -109,6 +109,9 @@ export const AUDIT_ACTIONS: readonly AuditActionDefinition[] = [
   { action: 'security.password', label: 'Console password changed', group: 'Settings', sentence: { success: 'Changed their own password', denied: 'Password change refused', failed: 'Password change failed' } },
   { action: 'security.passkey_add', label: 'Passkey setup authorized', group: 'Settings', sentence: { success: 'Started adding a passkey', denied: 'Adding a passkey refused', failed: 'Adding a passkey failed' } },
   { action: 'security.passkey_remove', label: 'Passkey removed', group: 'Settings', sentence: { success: 'Removed a passkey', denied: 'Removing a passkey refused', failed: 'Removing a passkey failed' } },
+  { action: 'master_mcp.create', label: 'Master MCP connection created', group: 'Settings', sentence: { success: 'Created a Master MCP connection', denied: 'Creating a Master MCP connection refused', failed: 'Creating a Master MCP connection failed' } },
+  { action: 'master_mcp.revoke', label: 'Master MCP connection revoked', group: 'Settings', sentence: { success: 'Revoked a Master MCP connection', denied: 'Revoking a Master MCP connection refused', failed: 'Revoking a Master MCP connection failed' } },
+  { action: 'master_mcp.rotate', label: 'Master MCP connection rotated', group: 'Settings', sentence: { success: 'Rotated a Master MCP connection', denied: 'Rotating a Master MCP connection refused', failed: 'Rotating a Master MCP connection failed' } },
   {
     action: 'owner.provisioned',
     label: 'Owner role provisioned',

@@ -3,12 +3,14 @@ import { sendJson } from '../_lib/http.js'
 import sessionHandler from '../_lib/control-routes/session.js'
 import rolesHandler from '../_lib/control-routes/roles.js'
 import { settingsHandler } from '../_lib/control-routes/settings.js'
+import { masterMcpHandler } from '../_lib/control-routes/master-mcp.js'
 
 type Handler = (req: ApiRequest, res: ApiResponse) => Promise<void>
 const handlers: Record<string, Handler> = {
   'session': sessionHandler,
   'roles': rolesHandler,
   'settings': settingsHandler,
+  'master-mcp': masterMcpHandler,
 }
 
 /** Dispatch related Control Center endpoints through one Vercel serverless function. */

@@ -116,6 +116,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/mcp",
+      "destination": "/api/control/system?route=mcp"
+    },
+    {
       "source": "/api/control/users",
       "destination": "/api/control/accounts?route=users"
     },
@@ -146,6 +150,10 @@
     {
       "source": "/api/control/settings",
       "destination": "/api/control/security?route=settings"
+    },
+    {
+      "source": "/api/control/master-mcp",
+      "destination": "/api/control/security?route=master-mcp"
     },
     {
       "source": "/api/control/audit",
