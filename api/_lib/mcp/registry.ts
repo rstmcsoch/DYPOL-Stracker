@@ -9,6 +9,7 @@ import { directoryTools } from './tools/directory.js'
 import { moderationTools } from './tools/moderation.js'
 import { recordTools } from './tools/records.js'
 import { insightTools } from './tools/insights.js'
+import { studyTools } from './tools/study.js'
 import type { ConfirmationStore } from './confirmations.js'
 import type { ToolListItem } from './protocol.js'
 
@@ -62,7 +63,19 @@ export const IMPLEMENTED_MASTER_TOOL_NAMES = [
   'manage_student_mistakes',
   'get_student_dashboard',
   'get_student_settings',
-  'get_student_analytics'
+  'get_student_analytics',
+  'manage_student_revisions',
+  'manage_student_tasks',
+  'manage_student_weekly_goals',
+  'manage_student_study_sessions',
+  'manage_student_practice_records',
+  'manage_student_pyq_records',
+  'manage_student_chapter_stages',
+  'manage_student_backlog',
+  'manage_student_study_cards',
+  'manage_student_mock_analysis',
+  'manage_student_exam_tracks',
+  'export_student_notebook'
 ] as const
 
 export interface MasterToolDependencies {
@@ -89,7 +102,8 @@ export function defaultImplementedTools(deps: MasterToolDependencies = {}): Regi
     ...directoryTools(admin),
     ...moderationTools(admin, deps.confirmations),
     ...recordTools(admin, deps.confirmations),
-    ...insightTools(admin)
+    ...insightTools(admin),
+    ...studyTools(admin, deps.confirmations)
   )
   return tools
 }

@@ -46,7 +46,7 @@ export async function assertStudent(admin: SupabaseClient, studentId: string): P
   return id
 }
 
-async function loadOwned(admin: SupabaseClient, table: string, id: string, studentId: string, notFound: string): Promise<Record<string, unknown>> {
+export async function loadOwned(admin: SupabaseClient, table: string, id: string, studentId: string, notFound: string): Promise<Record<string, unknown>> {
   const { data, error } = await admin.from(table).select('*').eq('id', id).maybeSingle()
   if (error) throw new ApiError(503, 'records_unavailable', `${notFound} could not be loaded. Try again shortly.`)
   if (!data) throw new ApiError(404, 'not_found', notFound)
@@ -54,39 +54,39 @@ async function loadOwned(admin: SupabaseClient, table: string, id: string, stude
   return data as Record<string, unknown>
 }
 
-async function assertOwnedChapter(admin: SupabaseClient, chapterId: string, studentId: string) {
+export async function assertOwnedChapter(admin: SupabaseClient, chapterId: string, studentId: string) {
   await loadOwned(admin, 'chapters', chapterId, studentId, 'That chapter was not found.')
 }
 
-async function assertOwnedTest(admin: SupabaseClient, testId: string, studentId: string) {
+export async function assertOwnedTest(admin: SupabaseClient, testId: string, studentId: string) {
   await loadOwned(admin, 'tests', testId, studentId, 'That test was not found.')
 }
 
-function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown, fallback: string): T {
+export function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown, fallback: string): T {
   const parsed = schema.safeParse(value)
   if (!parsed.success) throw new ApiError(400, 'invalid_request', parsed.error.issues[0]?.message ?? fallback)
   return parsed.data
 }
 
-async function insertRow(admin: SupabaseClient, table: string, row: Record<string, unknown>, unavailable: string) {
+export async function insertRow(admin: SupabaseClient, table: string, row: Record<string, unknown>, unavailable: string) {
   const { data, error } = await admin.from(table).insert(row).select('*').maybeSingle()
   if (error || !data) throw new ApiError(503, 'records_unavailable', unavailable)
   return data as Record<string, unknown>
 }
 
-async function updateRow(admin: SupabaseClient, table: string, id: string, studentId: string, patch: Record<string, unknown>, unavailable: string) {
+export async function updateRow(admin: SupabaseClient, table: string, id: string, studentId: string, patch: Record<string, unknown>, unavailable: string) {
   const { data, error } = await admin.from(table).update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).eq('user_id', studentId).select('*').maybeSingle()
   if (error || !data) throw new ApiError(503, 'records_unavailable', unavailable)
   return data as Record<string, unknown>
 }
 
-async function deleteOwned(admin: SupabaseClient, table: string, id: string, studentId: string, unavailable: string) {
+export async function deleteOwned(admin: SupabaseClient, table: string, id: string, studentId: string, unavailable: string) {
   const { data, error } = await admin.from(table).delete().eq('id', id).eq('user_id', studentId).select('id').maybeSingle()
   if (error) throw new ApiError(503, 'records_unavailable', unavailable)
   if (!data) throw new ApiError(404, 'not_found', 'That record was not found for this student.')
 }
 
-async function listOwned(admin: SupabaseClient, table: string, studentId: string, options: { q?: string; columns?: string; page?: unknown; pageSize?: unknown; order?: string; extra?: (query: { ilike: (c: string, v: string) => unknown; eq: (c: string, v: unknown) => unknown }) => void; searchColumn?: string; eq?: Record<string, unknown> }) {
+export async function listOwned(admin: SupabaseClient, table: string, studentId: string, options: { q?: string; columns?: string; page?: unknown; pageSize?: unknown; order?: string; extra?: (query: { ilike: (c: string, v: string) => unknown; eq: (c: string, v: unknown) => unknown }) => void; searchColumn?: string; eq?: Record<string, unknown> }) {
   const { limit, offset, page } = parsePage(options.page, options.pageSize)
   let query = admin.from(table).select(options.columns ?? '*', { count: 'exact' }).eq('user_id', studentId).order(options.order ?? 'created_at', { ascending: false }).range(offset, offset + limit - 1)
   if (options.searchColumn && options.q) query = query.ilike(options.searchColumn, `%${options.q}%`)
@@ -98,6 +98,13 @@ async function listOwned(admin: SupabaseClient, table: string, studentId: string
   const { data, error, count } = await query
   if (error) throw new ApiError(503, 'records_unavailable', 'Study records could not be loaded. Try again shortly.')
   return { records: (data ?? []) as unknown as Record<string, unknown>[], total: count ?? 0, page, pageSize: limit }
+}
+
+export async function listAllOwned(admin: SupabaseClient, table: string, studentId: string, cap = 20_000) {
+  const { data, error, count } = await admin.from(table).select('*', { count: 'exact' }).eq('user_id', studentId).range(0, cap - 1)
+  if (error) throw new ApiError(503, 'records_unavailable', 'Study records could not be loaded. Try again shortly.')
+  const records = (data ?? []) as unknown as Record<string, unknown>[]
+  return { records, total: count ?? records.length, truncated: (count ?? 0) > records.length }
 }
 
 export async function relatedChapterCounts(admin: SupabaseClient, chapterId: string, studentId: string) {
@@ -340,4 +347,3 @@ export async function deleteMistake(admin: SupabaseClient, studentId: string, mi
   return { ok: true, studentId: id, mistakeId }
 }
 
-export { loadOwned }
